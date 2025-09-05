@@ -1,6 +1,5 @@
 <template>
   <v-container fluid class="pa-4 pa-md-6">
-    <!-- Header Card - Mobile Optimized -->
     <div class="header-card mb-4 mb-md-6">
       <div class="d-flex flex-column align-center gap-4">
         <div class="d-flex align-center header-info">
@@ -121,7 +120,6 @@
         </v-chip>
       </div>
       
-      <!-- Selection Toolbar -->
       <v-expand-transition>
         <div v-if="selectedPelanggan.length > 0" class="selection-toolbar">
           <span class="font-weight-bold text-primary">{{ selectedPelanggan.length }} pelanggan terpilih</span>
@@ -139,9 +137,7 @@
         </div>
       </v-expand-transition>
 
-      <!-- Mobile-First Data Display -->
       <div class="d-block d-md-none">
-        <!-- Mobile Card List -->
         <div v-if="loading" class="text-center py-12">
           <v-progress-circular color="primary" indeterminate size="48"></v-progress-circular>
           <p class="mt-4 text-medium-emphasis">Memuat data pelanggan...</p>
@@ -170,7 +166,6 @@
             elevation="2"
           >
             <v-card-text class="pa-4">
-              <!-- Customer Header -->
               <div class="d-flex align-center mb-3">
                 <v-checkbox
                   v-model="selectedPelanggan"
@@ -187,23 +182,35 @@
               <!-- Customer Details -->
               <div class="mobile-details">
                 <div class="detail-row">
+                  <v-icon size="small" class="me-2 text-medium-emphasis">mdi-card-account-details</v-icon>
+                  <span class="detail-label">No. KTP:</span>
+                  <span class="detail-value">{{ item.no_ktp }}</span>
+                </div>
+                <div class="detail-row">
                   <v-icon size="small" class="me-2 text-medium-emphasis">mdi-map-marker</v-icon>
                   <span class="detail-label">Alamat:</span>
                   <span class="detail-value">{{ item.alamat }}</span>
                 </div>
-                
+                <div v-if="item.alamat_2" class="detail-row">
+                  <v-icon size="small" class="me-2 text-medium-emphasis">mdi-map-marker-outline</v-icon>
+                  <span class="detail-label">Alamat 2:</span>
+                  <span class="detail-value">{{ item.alamat_2 }}</span>
+                </div>
+                 <div class="detail-row">
+                  <v-icon size="small" class="me-2 text-medium-emphasis">mdi-home-variant</v-icon>
+                  <span class="detail-label">Blok/Unit:</span>
+                  <span class="detail-value">{{ item.blok }} / {{ item.unit }}</span>
+                </div>
                 <div class="detail-row">
                   <v-icon size="small" class="me-2 text-medium-emphasis">mdi-phone</v-icon>
                   <span class="detail-label">Telepon:</span>
                   <span class="detail-value">{{ item.no_telp }}</span>
                 </div>
-                
                 <div class="detail-row">
                   <v-icon size="small" class="me-2 text-medium-emphasis">mdi-wifi</v-icon>
                   <span class="detail-label">Layanan:</span>
                   <span class="detail-value">{{ item.layanan }}</span>
                 </div>
-                
                 <div class="detail-row">
                   <v-icon size="small" class="me-2 text-medium-emphasis">mdi-domain</v-icon>
                   <span class="detail-label">Brand:</span>
@@ -216,7 +223,6 @@
                     {{ getBrandName(item.id_brand) }}
                   </v-chip>
                 </div>
-                
                 <div class="detail-row">
                   <v-icon size="small" class="me-2 text-medium-emphasis">mdi-calendar</v-icon>
                   <span class="detail-label">Instalasi:</span>
@@ -267,7 +273,7 @@
           show-select
           return-object
         >
-          <template v-slot:loading>
+        <template v-slot:loading>
             <div class="d-flex justify-center align-center py-12">
               <div class="text-center">
                 <v-progress-circular color="primary" indeterminate size="48"></v-progress-circular>
@@ -279,10 +285,9 @@
           <template v-slot:item.nama="{ item }">
             <div class="customer-info">
               <div class="customer-name">{{ item.nama }}</div>
-              <div class="customer-email">{{ item.email }}</div>
             </div>
           </template>
-          
+                    
           <template v-slot:item.id_brand="{ item }">
             <v-chip 
               size="default" 
@@ -942,8 +947,13 @@ const rules = {
 
 // --- TABLE HEADERS ---
 const headers = [
-  { title: 'Pelanggan', key: 'nama', sortable: true },
+  { title: 'Pelanggan', key: 'nama', sortable: true, minWidth: '160px' },
+  { title: 'No. KTP', key: 'no_ktp', sortable: true },
+  { title: 'Email', key: 'email', sortable: true },
   { title: 'Alamat', key: 'alamat', sortable: false },
+  { title: 'Alamat Tambahan', key: 'alamat_2', sortable: false },
+  { title: 'Blok', key: 'blok', sortable: false },
+  { title: 'Unit', key: 'unit', sortable: false },
   { title: 'No. Telepon', key: 'no_telp', sortable: false },
   { title: 'Layanan', key: 'layanan', sortable: false },
   { title: 'Brand', key: 'id_brand', sortable: true },
@@ -1161,41 +1171,40 @@ async function importFromCsv() {
   }
 
   importing.value = true;
-  importErrors.value = [];
+  importErrors.value = []; // Selalu bersihkan error lama
   
   const formData = new FormData();
   formData.append('file', file); 
   
   try {
     const response = await apiClient.post('/pelanggan/import', formData);
-    
     showSnackbar(response.data.message, 'success');
     await fetchPelanggan();
     closeImportDialog();
+
   } catch (error: any) {
+    // ▼▼▼ UBAH BAGIAN CATCH INI ▼▼▼
     console.error("Gagal mengimpor data:", error);
-    if (error.response?.data) {
-      const errors = error.response.data.errors;
-      if (Array.isArray(errors) && errors.length > 0) {
-        importErrors.value = errors;
+    if (error.response?.data?.errors) {
+      // Jika backend mengirimkan daftar error yang spesifik
+      importErrors.value = error.response.data.errors;
+    } else if (error.response?.data?.detail) {
+      // Jika backend mengirimkan satu pesan error umum
+      const detailMsg = error.response.data.detail;
+      if (typeof detailMsg === 'string') {
+        importErrors.value = [detailMsg];
       } else {
-        const detailMsg = error.response.data.detail;
-        if (typeof detailMsg === 'string') {
-          importErrors.value = [detailMsg];
-        } else if (Array.isArray(detailMsg)) {
-          importErrors.value = detailMsg.map(err => err.msg || 'Error tidak diketahui');
-        } else {
-          importErrors.value = ["Terjadi kesalahan yang tidak diketahui."];
-        }
+        importErrors.value = ["Terjadi kesalahan yang tidak diketahui."];
       }
     } else {
+      // Fallback untuk error jaringan atau lainnya
       importErrors.value = ["Tidak dapat terhubung ke server atau terjadi error."];
     }
+    // ▲▲▲ AKHIR PERUBAHAN ▲▲▲
   } finally {
     importing.value = false;
   }
 }
-
 // --- HELPER FUNCTIONS ---
 function downloadFile(blobData: any, filename: string) {
   const url = window.URL.createObjectURL(new Blob([blobData]));

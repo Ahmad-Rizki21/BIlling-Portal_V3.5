@@ -15,103 +15,118 @@
 
     <!-- Filter Controls Card -->
     <v-card class="mb-6 mb-md-8 modern-card" elevation="0" rounded="xl">
-      <v-card-text class="pa-4 pa-md-6">
-        <v-row align="center" justify="space-between" class="g-4">
-          <v-col cols="12" sm="6" md="3">
-            <v-menu v-model="menuStart" :close-on-content-click="false" location="bottom start" offset="8">
-              <template v-slot:activator="{ props }">
-                <v-text-field
-                  :model-value="formatDate(startDate)"
-                  label="Tanggal Awal"
-                  prepend-inner-icon="mdi-calendar"
-                  readonly
-                  v-bind="props"
-                  variant="outlined"
-                  density="comfortable"
-                  hide-details
-                  class="modern-input"
-                  color="deep-purple"
-                ></v-text-field>
-              </template>
-              <v-date-picker 
-                v-model="startDate" 
-                @update:model-value="menuStart = false"
-                color="deep-purple"
-                header-color="deep-purple"
-              ></v-date-picker>
-            </v-menu>
-          </v-col>
-          
-          <v-col cols="12" sm="6" md="3">
-            <v-menu v-model="menuEnd" :close-on-content-click="false" location="bottom start" offset="8">
-              <template v-slot:activator="{ props }">
-                <v-text-field
-                  :model-value="formatDate(endDate)"
-                  label="Tanggal Akhir"
-                  prepend-inner-icon="mdi-calendar"
-                  readonly
-                  v-bind="props"
-                  variant="outlined"
-                  density="comfortable"
-                  hide-details
-                  class="modern-input"
-                  color="deep-purple"
-                ></v-text-field>
-              </template>
-              <v-date-picker 
-                v-model="endDate" 
-                @update:model-value="menuEnd = false"
-                color="deep-purple"
-                header-color="deep-purple"
-              ></v-date-picker>
-            </v-menu>
-          </v-col>
-          
-          <v-col cols="12" sm="6" md="3">
-            <v-select
-              v-model="selectedLocation"
-              :items="locations"
-              label="Filter Berdasarkan Lokasi"
-              prepend-inner-icon="mdi-map-marker"
+  <v-card-text class="pa-4 pa-md-6">
+    <v-row align="center" class="ga-3">
+      
+      <v-col cols="12" sm="6" md="auto" class="flex-grow-1">
+        <v-menu v-model="menuStart" :close-on-content-click="false" location="bottom start" offset="8">
+          <template v-slot:activator="{ props }">
+            <v-text-field
+              :model-value="formatDate(startDate)"
+              label="Tanggal Awal"
+              prepend-inner-icon="mdi-calendar"
+              readonly
+              v-bind="props"
               variant="outlined"
               density="comfortable"
               hide-details
-              clearable
               class="modern-input"
               color="deep-purple"
-            ></v-select>
-          </v-col>
+            ></v-text-field>
+          </template>
+          <v-date-picker 
+            v-model="startDate" 
+            @update:model-value="menuStart = false"
+            color="deep-purple"
+          ></v-date-picker>
+        </v-menu>
+      </v-col>
+      
+      <v-col cols="12" sm="6" md="auto" class="flex-grow-1">
+        <v-menu v-model="menuEnd" :close-on-content-click="false" location="bottom start" offset="8">
+          <template v-slot:activator="{ props }">
+            <v-text-field
+              :model-value="formatDate(endDate)"
+              label="Tanggal Akhir"
+              prepend-inner-icon="mdi-calendar"
+              readonly
+              v-bind="props"
+              variant="outlined"
+              density="comfortable"
+              hide-details
+              class="modern-input"
+              color="deep-purple"
+            ></v-text-field>
+          </template>
+          <v-date-picker 
+            v-model="endDate" 
+            @update:model-value="menuEnd = false"
+            color="deep-purple"
+          ></v-date-picker>
+        </v-menu>
+      </v-col>
+      
+      <v-col cols="12" sm="6" md="auto" class="flex-grow-1">
+        <v-select
+          v-model="selectedLocation"
+          :items="locations"
+          label="Filter Berdasarkan Lokasi"
+          prepend-inner-icon="mdi-map-marker"
+          variant="outlined"
+          density="comfortable"
+          hide-details
+          clearable
+          class="modern-input"
+          color="deep-purple"
+        ></v-select>
+      </v-col>
+      <v-col cols="12" sm="6" md="auto" class="flex-grow-1">
+        <v-select
+          v-model="selectedBrand"
+          :items="brandOptions"
+          item-title="brand"
+          item-value="id_brand"
+          label="Filter Berdasarkan Brand"
+          prepend-inner-icon="mdi-tag"
+          variant="outlined"
+          density="comfortable"
+          hide-details
+          clearable
+          class="modern-input"
+          color="deep-purple"
+        ></v-select>
+    </v-col>
+    <v-col cols="12" sm="12" md="auto">
+      </v-col>
+      <v-col cols="12" sm="6" md="auto">
+        <div class="d-flex ga-3">
+          <v-btn
+            color="deep-purple"
+            @click="fetchReport"
+            :loading="loading"
+            size="large"
+            class="text-none modern-btn"
+            prepend-icon="mdi-magnify"
+            rounded="lg"
+          >
+            Tampilkan
+          </v-btn>
           
-          <v-col cols="12" md="3">
-            <div class="d-flex flex-column flex-sm-row ga-3">
-              <v-btn
-                color="deep-purple"
-                @click="fetchReport"
-                :loading="loading"
-                size="large"
-                class="text-none modern-btn flex-grow-1"
-                prepend-icon="mdi-magnify"
-                rounded="lg"
-                block
-              >
-                Tampilkan
-              </v-btn>
-              
-              <v-btn
-                color="green-darken-1"
-                @click="exportToExcel"
-                :disabled="!reportData || reportData.rincian_invoice.length === 0"
-                size="large"
-                class="text-none modern-btn flex-grow-1"
-                prepend-icon="mdi-microsoft-excel"
-                rounded="lg"
-                variant="tonal"
-                block
-              >
-                Ekspor
-              </v-btn>
-            </div>
-          </v-col>
+          <v-btn
+            color="green-darken-1"
+            @click="exportToExcel"
+            :disabled="!reportData || reportData.rincian_invoice.length === 0"
+            size="large"
+            class="text-none modern-btn"
+            prepend-icon="mdi-microsoft-excel"
+            rounded="lg"
+            variant="tonal"
+          >
+            Ekspor
+          </v-btn>
+        </div>
+      </v-col>
+
         </v-row>
       </v-card-text>
     </v-card>
@@ -374,6 +389,9 @@ const itemsPerPage = 5;
 const selectedLocation = ref<string | null>(null);
 const locations = ref<string[]>([]);
 
+const selectedBrand = ref<string | null>(null);
+const brandOptions = ref<any[]>([]); // Untuk menampung { id_brand, brand }
+
 // --- Computed Properties ---
 const paginatedInvoices = computed(() => {
   if (!reportData.value) return [];
@@ -381,6 +399,18 @@ const paginatedInvoices = computed(() => {
   const end = start + itemsPerPage;
   return reportData.value.rincian_invoice.slice(start, end);
 });
+
+
+// ▼▼▼ TAMBAHKAN FUNGSI BARU INI ▼▼▼
+async function fetchBrandOptions() {
+  try {
+    // Asumsi Anda punya endpoint untuk mengambil daftar brand/harga_layanan
+    const response = await apiClient.get('/harga_layanan'); 
+    brandOptions.value = response.data;
+  } catch (error) {
+    console.error("Gagal mengambil daftar brand:", error);
+  }
+} 
 
 
 async function fetchLocations() {
@@ -453,14 +483,16 @@ function exportToExcel() {
 
   // --- PERBAIKAN DI SINI: Tambahkan pengecekan 'if' ---
   // Hanya jalankan format jika worksheet tidak kosong (memiliki '!ref')
-  if (worksheet['!ref']) {
+   if (worksheet['!ref']) {
     const range = XLSX.utils.decode_range(worksheet['!ref']); // Sekarang ini aman
-    const amountColumnIndex = 6;
+    const amountColumnIndex = 6; // Kolom "Jumlah (Rp)" adalah kolom ke-7 (indeks 6)
+    
+    // Mulai dari baris kedua (indeks 1) untuk melewati header
     for (let rowNum = range.s.r + 1; rowNum <= range.e.r; rowNum++) {
       const cellAddress = XLSX.utils.encode_cell({ r: rowNum, c: amountColumnIndex });
       const cell = worksheet[cellAddress];
-      if (cell && cell.t === 'n') {
-        cell.z = '"Rp" #,##0'; 
+      if (cell && cell.t === 'n') { // Pastikan sel ada dan tipenya adalah angka
+        cell.z = '"Rp" #,##0'; // Format mata uang Rupiah tanpa desimal
       }
     }
   }
@@ -493,7 +525,9 @@ async function fetchReport() {
     if (selectedLocation.value) {
       params.alamat = selectedLocation.value;
     }
-
+    if (selectedBrand.value) {
+          params.id_brand = selectedBrand.value;
+    }
     const response = await apiClient.get('/reports/revenue', { params });
     reportData.value = response.data;
   } catch (error) {
@@ -516,6 +550,7 @@ const formatCurrency = (value: number) => {
 onMounted(() => {
   fetchReport();
   fetchLocations();
+  fetchBrandOptions();
 });
 </script>
 

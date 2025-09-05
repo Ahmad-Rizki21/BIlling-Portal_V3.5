@@ -90,6 +90,45 @@ const router = createRouter({
           name: 'revenue-report',
           component: () => import('../views/RevenueReportView.vue'),
           meta: { permission: 'view_reports_revenue' } 
+        },
+        {
+          path: 'network-management/olt', // Buat URL yang rapi
+          name: 'olt-management',
+          component: () => import('../views/OLTView.vue'),
+          meta: { permission: 'view_olt' } // Beri permission jika perlu
+        },
+        {
+          path: 'odp-management', // URL yang akan diakses
+          name: 'odp-management',
+          component: () => import('../views/ODPView.vue'),
+          meta: { permission: 'view_odp_management' } // Lindungi dengan permission
+        },
+        {
+          path: '/topology/olt/:olt_id',
+          name: 'TopologyView',
+          component: () => import('@/views/TopologyView.vue'), // Halaman baru yang akan kita buat
+          meta: { requiresAuth: true, layout: 'default' }
+        },
+        {
+          path: '/management/settings', // URL untuk halaman pengaturan
+          name: 'SystemSettings',
+          component: () => import('@/views/Management/Settings.vue'),
+          meta: { requiresAuth: true, layout: 'default' } // Pastikan hanya user terotentikasi yang bisa akses
+        },
+        {
+          path: '/inventory',
+          name: 'inventory',
+          component: () => import('../views/InventoryView.vue'),
+          meta: { requiresAuth: true } // Opsional: jika rute ini butuh login
+        },
+        {
+          path: '/dashboard-pelanggan',
+          name: 'DashboardPelanggan',
+          component: () => import('@/views/DashboardPelangganView.vue'),
+          meta: { 
+            requiresAuth: true, 
+            roles: ['Direktur', 'Admin', 'Monitoring']
+          }
         }
       ],
     },

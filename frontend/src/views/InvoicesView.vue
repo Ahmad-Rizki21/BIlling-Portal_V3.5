@@ -227,10 +227,10 @@
           </template>
 
           <template v-slot:item.status_invoice="{ item }">
-            <v-chip 
-              :color="getStatusColor(item.status_invoice)" 
+            <v-chip
+              :color="getStatusColor(item.status_invoice)"
               variant="elevated"
-              size="small" 
+              size="small"
               class="font-weight-bold status-chip"
               :prepend-icon="getStatusIcon(item.status_invoice)"
             >
@@ -241,12 +241,12 @@
           <template v-slot:item.tgl_jatuh_tempo="{ item }">
             <div class="due-date-cell" style="min-width: 150px;">
               <div class="font-weight-medium">{{ formatDate(item.tgl_jatuh_tempo) }}</div>
-              <div 
+              <div
                 v-if="item.status_invoice !== 'Lunas'"
-                class="text-caption" 
-                :class="getDueDateClass(item.tgl_jatuh_tempo)"
+                class="text-caption"
+                :class="item.status_invoice === 'Kadaluarsa' ? 'text-error' : 'text-warning'"
               >
-                {{ getDueDateLabel(item.tgl_jatuh_tempo) }}
+                {{ getDueDateLabel(item) }}
               </div>
             </div>
           </template>
@@ -529,8 +529,7 @@
 </template>
 
 <script setup lang="ts">
-// Script Anda tidak diubah sama sekali
-import { ref, onMounted, computed, watch } from 'vue';
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue';
 import apiClient from '@/services/api';
 import type { Invoice, PelangganSelectItem, LanggananSelectItem } from '@/interfaces/invoice';
 import InvoiceDetailDialog from '@/components/dialogs/InvoiceDetailDialog.vue';
@@ -550,18 +549,13 @@ const selectedInvoice = ref<Invoice | null>(null);
 const snackbar = ref({ show: false, text: '', color: 'success' });
 const dialogDelete = ref(false);
 const deleting = ref(false);
-const itemToDelete = ref<Invoice | null>(
-  null
-);
-
+const itemToDelete = ref<Invoice | null>(null);
 const selectedInvoices = ref<Invoice[]>([]);
 const dialogBulkDelete = ref(false);
-
 const dialogMarkAsPaid = ref(false);
 const markingAsPaid = ref(false);
 const itemToMark = ref<Invoice | null>(null);
 const paymentMethod = ref('Cash');
-
 const selectedStatus = ref<string | null>(null);
 const startDate = ref<string | null>(null);
 const endDate = ref<string | null>(null);
@@ -589,73 +583,95 @@ const langgananForSelect = computed((): LanggananSelectItem[] => {
   });
 });
 
-
-function openDeleteDialog(item: Invoice) {
-  itemToDelete.value = item;
-  dialogDelete.value = true;
-}
-
-function closeDeleteDialog() {
-  dialogDelete.value = false;
-  itemToDelete.value = null;
-}
-
-async function confirmDelete() {
-  if (!itemToDelete.value) return;
-  
-  deleting.value = true;
-  try {
-    await apiClient.delete(`/invoices/${itemToDelete.value.id}`);
-    showSnackbar('Invoice berhasil dihapus', 'success');
-    fetchInvoices(); // Refresh table
-    closeDeleteDialog();
-  } catch (error: any) {
-    const detail = error.response?.data?.detail || 'Gagal menghapus invoice.';
-    showSnackbar(detail, 'error');
-  } finally {
-    deleting.value = false;
-  }
-}
-
-async function confirmBulkDelete() {
-  const itemsToDelete = [...selectedInvoices.value];
-  if (itemsToDelete.length === 0) return;
-
-  deleting.value = true;
-  try {
-    const deletePromises = itemsToDelete.map(invoice =>
-      apiClient.delete(`/invoices/${invoice.id}`)
-    );
-    await Promise.all(deletePromises);
-
-    showSnackbar(`${itemsToDelete.length} invoice berhasil dihapus.`, 'success');
-    
-    fetchInvoices();
-    selectedInvoices.value = [];
-  } catch (error) {
-    console.error("Gagal melakukan hapus massal invoices:", error);
-    showSnackbar('Terjadi kesalahan saat menghapus data.', 'error');
-  } finally {
-    deleting.value = false;
-    dialogBulkDelete.value = false;
-  }
-}
-
 const selectedLanggananDetails = computed(() => {
   if (!selectedLanggananId.value) return null;
   return langgananList.value.find(lang => lang.id === selectedLanggananId.value);
-})
+});
 
-// --- Stats Methods ---
+// --- REVISI UTAMA DIMULAI DI SINI ---
+
+// --- Stats Methods --- (Menjadi lebih sederhana)
 const getPaidCount = () => invoices.value.filter(inv => inv.status_invoice === 'Lunas').length;
 const getPendingCount = () => invoices.value.filter(inv => inv.status_invoice === 'Belum Dibayar').length;
 const getOverdueCount = () => invoices.value.filter(inv => inv.status_invoice === 'Kadaluarsa').length;
 
-// --- Methods ---
+// --- Helper Functions --- (Menjadi lebih sederhana)
+function getPelangganName(pelangganId: number): string {
+  const pelanggan = pelangganList.value.find(p => p.id === pelangganId);
+  return pelanggan?.nama || `ID: ${pelangganId}`;
+}
+
+/**
+ * Fungsi sederhana untuk mendapatkan warna chip berdasarkan status dari API.
+ * TIDAK ADA LAGI PERHITUNGAN TANGGAL.
+ */
+function getStatusColor(status: string): string {
+  switch (status) {
+    case 'Lunas': return 'success';
+    case 'Kadaluarsa': return 'error';
+    case 'Belum Dibayar': return 'warning';
+    default: return 'grey';
+  }
+}
+
+/**
+ * Fungsi sederhana untuk mendapatkan ikon berdasarkan status dari API.
+ * TIDAK ADA LAGI PERHITUNGAN TANGGAL.
+ */
+function getStatusIcon(status: string): string {
+  switch (status) {
+    case 'Lunas': return 'mdi-check-circle';
+    case 'Kadaluarsa': return 'mdi-alert-circle';
+    case 'Belum Dibayar': return 'mdi-clock-outline';
+    default: return 'mdi-help-circle';
+  }
+}
+
+/**
+ * Menampilkan label sisa waktu atau keterlambatan.
+ * Fungsi ini tidak lagi menentukan status 'Kadaluarsa'.
+ */
+function getDueDateLabel(item: Invoice): string {
+  if (item.status_invoice === 'Lunas') return '';
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const dueDate = new Date(item.tgl_jatuh_tempo);
+  dueDate.setHours(0, 0, 0, 0);
+
+  const timeDiff = dueDate.getTime() - today.getTime();
+  const daysRemaining = Math.ceil(timeDiff / (1000 * 60 * 60 * 24));
+  
+  if (daysRemaining < 0) return `${Math.abs(daysRemaining)} hari terlambat`;
+  if (daysRemaining === 0) return 'Jatuh tempo hari ini';
+  if (daysRemaining === 1) return 'Jatuh tempo besok';
+  return `${daysRemaining} hari lagi`;
+}
+
+function formatDate(dateString: string | null | undefined): string {
+  if (!dateString) return 'N/A';
+  return new Date(dateString).toLocaleDateString('id-ID', {
+    day: '2-digit', month: 'long', year: 'numeric'
+  });
+}
+
+function formatCurrency(value: number): string {
+  return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(value);
+}
+
+// --- REVISI UTAMA SELESAI DI SINI ---
+
+
+// --- Methods --- (Tidak ada perubahan di bawah ini, biarkan seperti semula)
 onMounted(() => {
   fetchInvoices();
   fetchPelangganForSelect();
   fetchLanggananForSelect();
+  window.addEventListener('new-notification', handleNewNotification);
+});
+
+onUnmounted(() => {
+  window.removeEventListener('new-notification', handleNewNotification);
 });
 
 async function fetchInvoices() {
@@ -675,25 +691,15 @@ async function fetchInvoices() {
 }
 
 function sendWhatsAppReminder(invoice: Invoice) {
-  // 1. Ambil nomor telepon dan pastikan formatnya benar (+62)
   let phone = invoice.no_telp || '';
   if (phone.startsWith('0')) {
     phone = '62' + phone.substring(1);
   }
-  // Hapus karakter non-numerik lainnya jika ada
   phone = phone.replace(/[^0-9]/g, '');
-
-  // 2. Siapkan template teks pesan
   const paymentLink = invoice.payment_link;
   const templateText = `Link Pembayaran Internet dengan Link berikut: ${paymentLink}`;
-
-  // 3. Encode teks agar aman untuk URL
   const encodedText = encodeURIComponent(templateText);
-
-  // 4. Buat URL "Click to Chat" dari WhatsApp
   const whatsappUrl = `https://wa.me/${phone}?text=${encodedText}`;
-
-  // 5. Buka URL di tab baru
   window.open(whatsappUrl, '_blank');
 }
 
@@ -711,6 +717,14 @@ function resetFilters() {
   startDate.value = null;
   endDate.value = null;
 }
+
+const handleNewNotification = (event: Event) => {
+  const customEvent = event as CustomEvent;
+  const notificationData = customEvent.detail;
+  if (notificationData.type === 'new_payment') {
+    fetchInvoices();
+  }
+};
 
 async function fetchPelangganForSelect() {
   try {
@@ -773,30 +787,6 @@ function showSnackbar(text: string, color: string) {
   snackbar.value.show = true;
 }
 
-// --- Helper Functions ---
-function getPelangganName(pelangganId: number): string {
-  const pelanggan = pelangganList.value.find(p => p.id === pelangganId);
-  return pelanggan?.nama || `ID: ${pelangganId}`;
-}
-
-function getStatusColor(status: string): string {
-  switch (status) {
-    case 'Lunas': return 'success';
-    case 'Belum Dibayar': return 'warning';
-    case 'Kadaluarsa': return 'error';
-    default: return 'grey';
-  }
-}
-
-function getStatusIcon(status: string): string {
-  switch (status) {
-    case 'Lunas': return 'mdi-check-circle';
-    case 'Belum Dibayar': return 'mdi-clock-outline';
-    case 'Kadaluarsa': return 'mdi-alert-circle';
-    default: return 'mdi-help-circle';
-  }
-}
-
 function getSnackbarIcon(color: string): string {
   switch (color) {
     case 'success': return 'mdi-check-circle';
@@ -806,47 +796,55 @@ function getSnackbarIcon(color: string): string {
   }
 }
 
-function getDueDateClass(dueDateString: string | null | undefined): string {
-  if (!dueDateString) return '';
-  const dueDate = new Date(dueDateString);
-  const today = new Date();
-  const diffTime = dueDate.getTime() - today.getTime();
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  
-  if (diffDays < 0) return 'text-error';
-  if (diffDays <= 3) return 'text-warning';
-  return 'text-success';
+function openDeleteDialog(item: Invoice) {
+  itemToDelete.value = item;
+  dialogDelete.value = true;
 }
 
-function getDueDateLabel(dueDateString: string | null | undefined): string {
-  if (!dueDateString) return '';
-  const dueDate = new Date(dueDateString);
-  const today = new Date();
-  const diffTime = dueDate.getTime() - today.getTime();
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  
-  if (diffDays < 0) return `${Math.abs(diffDays)} hari terlambat`;
-  if (diffDays === 0) return 'Jatuh tempo hari ini';
-  if (diffDays === 1) return 'Jatuh tempo besok';
-  if (diffDays <= 7) return `${diffDays} hari lagi`;
-  return '';
+function closeDeleteDialog() {
+  dialogDelete.value = false;
+  itemToDelete.value = null;
 }
 
-function formatDate(dateString: string | null | undefined): string {
-  if (!dateString) return 'N/A';
-  return new Date(dateString).toLocaleDateString('id-ID', {
-    day: '2-digit', month: 'long', year: 'numeric'
-  });
+async function confirmDelete() {
+  if (!itemToDelete.value) return;
+  deleting.value = true;
+  try {
+    await apiClient.delete(`/invoices/${itemToDelete.value.id}`);
+    showSnackbar('Invoice berhasil dihapus', 'success');
+    fetchInvoices();
+    closeDeleteDialog();
+  } catch (error: any) {
+    const detail = error.response?.data?.detail || 'Gagal menghapus invoice.';
+    showSnackbar(detail, 'error');
+  } finally {
+    deleting.value = false;
+  }
 }
 
-function formatCurrency(value: number): string {
-  return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(value);
+async function confirmBulkDelete() {
+  const itemsToDelete = [...selectedInvoices.value];
+  if (itemsToDelete.length === 0) return;
+  deleting.value = true;
+  try {
+    const deletePromises = itemsToDelete.map(invoice =>
+      apiClient.delete(`/invoices/${invoice.id}`)
+    );
+    await Promise.all(deletePromises);
+    showSnackbar(`${itemsToDelete.length} invoice berhasil dihapus.`, 'success');
+    fetchInvoices();
+    selectedInvoices.value = [];
+  } catch (error) {
+    showSnackbar('Terjadi kesalahan saat menghapus data.', 'error');
+  } finally {
+    deleting.value = false;
+    dialogBulkDelete.value = false;
+  }
 }
-
 
 function openMarkAsPaidDialog(item: Invoice) {
   itemToMark.value = item;
-  paymentMethod.value = 'Cash'; // Reset ke default
+  paymentMethod.value = 'Cash';
   dialogMarkAsPaid.value = true;
 }
 
@@ -857,14 +855,13 @@ function closeMarkAsPaidDialog() {
 
 async function confirmMarkAsPaid() {
   if (!itemToMark.value) return;
-  
   markingAsPaid.value = true;
   try {
     await apiClient.post(`/invoices/${itemToMark.value.id}/mark-as-paid`, {
       metode_pembayaran: paymentMethod.value
     });
     showSnackbar('Invoice berhasil ditandai lunas', 'success');
-    fetchInvoices(); // Refresh table
+    fetchInvoices();
     closeMarkAsPaidDialog();
   } catch (error: any) {
     const detail = error.response?.data?.detail || 'Gagal menandai lunas.';

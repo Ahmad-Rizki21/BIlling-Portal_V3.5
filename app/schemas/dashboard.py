@@ -1,18 +1,26 @@
-# app/schemas/dashboard.py
 from pydantic import BaseModel
-from typing import List, Dict, Optional
+from typing import List, Optional
 
+# Skema BARU untuk setiap item pendapatan brand
+class BrandRevenueItem(BaseModel):
+    brand: str
+    revenue: float
 
+# Skema pendapatan yang diperbarui
+class RevenueSummary(BaseModel):
+    total: float
+    periode: str
+    breakdown: List[BrandRevenueItem] # Menggunakan list dinamis
+
+# (Sisa skema lain seperti StatCard, ChartData, dll. tetap sama)
 class StatCard(BaseModel):
     title: str
-    value: int | str
+    value: str | int
     description: str
-
 
 class ChartData(BaseModel):
     labels: List[str]
     data: List[int]
-
 
 class InvoiceSummary(BaseModel):
     labels: List[str]
@@ -21,20 +29,20 @@ class InvoiceSummary(BaseModel):
     menunggu: List[int]
     kadaluarsa: List[int]
 
+class ChartData(BaseModel):
+    labels: List[str]
+    data: List[int]
 
-# ===== TAMBAHKAN SKEMA BARU DI SINI =====
-class RevenueSummary(BaseModel):
-    """Skema untuk data ringkasan pendapatan bulanan."""
-
-    total: float
-    periode: str
-
-
-# ===== PERBARUI DashboardData UNTUK MENYERTAKAN PENDAPATAN =====
+# Skema utama yang menggabungkan semua data
 class DashboardData(BaseModel):
     revenue_summary: Optional[RevenueSummary] = None
-    stat_cards: Optional[List[StatCard]] = None
+    stat_cards: List[StatCard] = []
     lokasi_chart: Optional[ChartData] = None
     paket_chart: Optional[ChartData] = None
-    invoice_summary_chart: Optional[InvoiceSummary] = None
     growth_chart: Optional[ChartData] = None
+    invoice_summary_chart: Optional[InvoiceSummary] = None
+    status_langganan_chart: Optional[ChartData] = None
+    pelanggan_per_alamat_chart: Optional[ChartData] = None
+    
+    class Config:
+        from_attributes = True

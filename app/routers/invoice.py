@@ -12,6 +12,7 @@ import logging
 import pytz
 from ..websocket_manager import manager
 import math
+from sqlalchemy import and_
 
 from typing import Optional
 
@@ -186,15 +187,34 @@ async def _process_successful_payment(
 
     db.add(langganan)
 
-    try:
-        await mikrotik_service.trigger_mikrotik_update(db, langganan)
-        logger.info(
-            f"Successfully triggered Mikrotik reactivation for subscription ID {langganan.id}"
-        )
-    except Exception as e:
-        logger.error(
-            f"Failed to trigger Mikrotik reactivation for subscription ID {langganan.id}: {e}"
-        )
+    data_teknis = pelanggan.data_teknis
+
+    if not data_teknis:
+        logger.error(f"Data Teknis tidak ditemukan untuk pelanggan ID {pelanggan.id}. Mikrotik update dilewati.")
+    else:
+        try:
+            # ▼▼▼ BAGIAN YANG DIPERBAIKI ▼▼▼
+            # Panggil fungsi dengan SEMUA argumen yang dibutuhkan
+            await mikrotik_service.trigger_mikrotik_update(
+                db, 
+                langganan, 
+                data_teknis, 
+                data_teknis.id_pelanggan  # old_id_pelanggan diisi dengan id saat ini
+            )
+            # ▲▲▲ AKHIR PERBAIKAN ▲▲▲
+
+            logger.info(f"Berhasil trigger re-aktivasi Mikrotik untuk langganan ID {langganan.id}")
+            
+            # Jika berhasil, set flag pending sync (jika ada) kembali ke False
+            if data_teknis.mikrotik_sync_pending:
+                data_teknis.mikrotik_sync_pending = False
+                db.add(data_teknis)
+
+        except Exception as e:
+            # Jika GAGAL, catat error DAN set flag retry menjadi True
+            logger.error(f"Gagal trigger re-aktivasi Mikrotik untuk langganan ID {langganan.id}: {e}. Menandai untuk dicoba lagi.")
+            data_teknis.mikrotik_sync_pending = True
+            db.add(data_teknis)
 
     # Notif ke frontend
     try:
@@ -398,6 +418,7 @@ async def generate_manual_invoice(
         "status_invoice": "Belum Dibayar",
     }
 
+
     db_invoice = InvoiceModel(**new_invoice_data)
     db.add(db_invoice)
     await db.flush()
@@ -511,3 +532,69 @@ async def delete_invoice(invoice_id: int, db: AsyncSession = Depends(get_db)):
     await db.commit()
 
     return None
+
+#Logic atau EndPoint untuk melihat Status Invoice itu masih layar atau sudah kadaluarsa ??
+
+@router.post("/internal/update-overdue-status", status_code=status.HTTP_200_OK, include_in_schema=False)
+async def update_overdue_invoices(db: AsyncSession = Depends(get_db)):
+    """
+    Endpoint internal untuk memperbarui status invoice menjadi 'Kadaluarsa' dan men-suspend layanan.
+    Endpoint ini HARUS dipanggil oleh scheduler (cron job) setiap hari dan tidak boleh terekspos ke publik.
+    `include_in_schema=False` digunakan agar tidak muncul di dokumentasi API publik.
+    """
+    today = date.today()
+    # Aturan: Kadaluarsa jika hari ini adalah hari ke-6 setelah jatuh tempo (lewat 5 hari).
+    overdue_threshold_date = today - timedelta(days=5)
+    
+    logger = logging.getLogger("app.routers.invoice")
+    logger.info("Scheduler-triggered job: Mencari invoice kadaluarsa...")
+
+    # 1. Cari semua invoice yang 'Belum Dibayar' dan sudah melewati masa tenggang
+    stmt = (
+        select(InvoiceModel)
+        .options(
+            selectinload(InvoiceModel.pelanggan)
+            .selectinload(PelangganModel.langganan)
+        )
+        .where(
+            and_(
+                InvoiceModel.status_invoice == 'Belum Dibayar',
+                InvoiceModel.tgl_jatuh_tempo < overdue_threshold_date
+            )
+        )
+    )
+    
+    overdue_invoices = (await db.execute(stmt)).scalars().all()
+
+    if not overdue_invoices:
+        logger.info("Tidak ada invoice kadaluarsa yang perlu diperbarui.")
+        return {"message": "Tidak ada invoice kadaluarsa yang perlu diperbarui."}
+
+    updated_count = 0
+    suspended_count = 0
+    # 2. Update status dan suspend layanan untuk setiap invoice yang ditemukan
+    for invoice in overdue_invoices:
+        invoice.status_invoice = 'Kadaluarsa'
+        db.add(invoice)
+        updated_count += 1
+        
+        # Logika untuk men-suspend layanan pelanggan
+        try:
+            pelanggan = invoice.pelanggan
+            if pelanggan and pelanggan.langganan:
+                 langganan_pelanggan = pelanggan.langganan[0]
+                 if langganan_pelanggan.status != 'Suspended':
+                    langganan_pelanggan.status = 'Suspended'
+                    db.add(langganan_pelanggan)
+                    # Panggil service mikrotik untuk update
+                    await mikrotik_service.trigger_mikrotik_update(db, langganan_pelanggan)
+                    suspended_count += 1
+                    logger.info(f"Layanan untuk {pelanggan.nama} (Invoice: {invoice.invoice_number}) telah di-suspend.")
+        except Exception as e:
+            logger.error(f"Gagal men-suspend layanan untuk invoice {invoice.invoice_number}: {e}")
+
+    await db.commit()
+
+    message = f"Proses selesai. {updated_count} invoice diperbarui menjadi 'Kadaluarsa'. {suspended_count} layanan di-suspend."
+    logger.info(message)
+    return {"message": message}

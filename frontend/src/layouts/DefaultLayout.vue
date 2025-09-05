@@ -1,5 +1,14 @@
 <template>
-  <v-app class="modern-app">
+ <v-app class="modern-app">
+    <v-system-bar 
+     v-if="settingsStore.maintenanceMode.isActive"
+      color="warning" 
+      window 
+      class="maintenance-banner" 
+      >
+      <v-icon class="me-2">mdi-alert</v-icon>
+      <span>{{ settingsStore.maintenanceMode.message }}</span>
+    </v-system-bar>
     <v-navigation-drawer
       v-model="drawer"
       :rail="rail && !isMobile"
@@ -16,7 +25,7 @@
 
           <div v-if="!rail || isMobile" class="sidebar-title-wrapper">
             <h1 class="sidebar-title">Artacom Ftth</h1>
-            <span class="sidebar-subtitle">BILLING SYSTEM V2.0</span>
+            <span class="sidebar-subtitle">PORTAL CUSTOMER V2.5</span>
           </div>
 
           <v-spacer v-if="!rail || isMobile"></v-spacer>
@@ -42,62 +51,86 @@
       <v-divider></v-divider>
 
       <div class="navigation-wrapper">
-        <v-list nav class="navigation-menu">
-          <template v-for="group in filteredMenuGroups" :key="group.title">
-            <v-list-subheader v-if="!rail || isMobile" class="menu-subheader">{{ group.title }}</v-list-subheader>
+  <v-list nav class="navigation-menu">
+    <template v-for="group in filteredMenuGroups" :key="group.title">
+      <v-list-subheader v-if="!rail || isMobile" class="menu-subheader">{{ group.title }}</v-list-subheader>
+      
+      <template v-for="item in group.items" :key="item.title">
+        <v-list-group 
+          v-if="'children' in item"
+          :value="item.value"
+        >
+          <template v-slot:activator="{ props }">
             <v-list-item
-                v-for="item in group.items"
-                :key="item.title"
-                :prepend-icon="item.icon"
-                :title="item.title"
-                :value="item.value"
-                :to="item.to"
-                class="nav-item"
-              >
-                <template v-slot:append>
-                  <v-tooltip location="end">
-                    <template v-slot:activator="{ props }">
-                      <v-badge
-                        v-if="item.value === 'langganan' && suspendedCount > 0"
-                        color="error"
-                        :content="suspendedCount"
-                        inline
-                        v-bind="props"
-                      ></v-badge>
-                    </template>
-                    <span>{{ suspendedCount }} langganan berstatus "Suspended"</span>
-                  </v-tooltip>
-
-                  <v-tooltip location="end">
-                    <template v-slot:activator="{ props }">
-                      <v-badge
-                        v-if="item.value === 'langganan' && stoppedCount > 0"
-                        :content="stoppedCount"
-                        inline
-                        v-bind="props"
-                        class="ml-2"
-                      ></v-badge>
-                    </template>
-                    <span>{{ stoppedCount }} langganan telah berhenti</span>
-                  </v-tooltip>
-                  
-                  <v-tooltip location="end">
-                    <template v-slot:activator="{ props }">
-                      <v-badge
-                        v-if="item.value === 'invoices' && unpaidInvoiceCount > 0"
-                        color="warning"
-                        :content="unpaidInvoiceCount"
-                        inline
-                        v-bind="props"
-                      ></v-badge>
-                    </template>
-                    <span>{{ unpaidInvoiceCount }} invoice belum dibayar</span>
-                  </v-tooltip>
-                </template>
-              </v-list-item>
+              v-bind="props"
+              :prepend-icon="item.icon"
+              :title="item.title"
+              class="nav-item"
+            ></v-list-item>
           </template>
-        </v-list>
-      </div>
+
+              <v-list-item
+          v-for="subItem in item.children"
+          :key="subItem.title"
+          :title="subItem.title"
+          :to="subItem.to"
+          :prepend-icon="subItem.icon"
+          class="nav-sub-item"
+      ></v-list-item>
+        </v-list-group>
+        
+        <v-list-item
+          v-else
+          :prepend-icon="item.icon"
+          :title="item.title"
+          :value="item.value"
+          :to="item.to"
+          class="nav-item"
+        >
+          <template v-slot:append>
+            <v-tooltip location="end">
+              <template v-slot:activator="{ props }">
+                <v-badge
+                  v-if="item.value === 'langganan' && suspendedCount > 0"
+                  color="error"
+                  :content="suspendedCount"
+                  inline
+                  v-bind="props"
+                ></v-badge>
+              </template>
+              <span>{{ suspendedCount }} langganan berstatus "Suspended"</span>
+            </v-tooltip>
+            <v-tooltip location="end">
+            <template v-slot:activator="{ props }">
+              <v-badge
+                v-if="item.value === 'langganan' && stoppedCount > 0"
+                color="grey"
+                :content="stoppedCount"
+                inline
+                class="ms-2"
+                v-bind="props"
+              ></v-badge>
+            </template>
+            <span>{{ stoppedCount }} langganan berstatus "Berhenti"</span>
+          </v-tooltip>
+          <v-tooltip location="end">
+            <template v-slot:activator="{ props }">
+              <v-badge
+                v-if="item.value === 'invoices' && unpaidInvoiceCount > 0"
+                color="warning"
+                :content="unpaidInvoiceCount"
+                inline
+                v-bind="props"
+              ></v-badge>
+            </template>
+            <span>{{ unpaidInvoiceCount }} invoice belum dibayar</span>
+          </v-tooltip>
+          </template>
+        </v-list-item>
+      </template>
+    </template>
+  </v-list>
+</div>
 
       <template v-slot:append>
         <div class="logout-section pa-4">
@@ -148,10 +181,11 @@
               Tidak ada notifikasi baru.
           </div>
           <v-list-item
-            v-for="(notif, index) in notifications"
-            :key="index"
-            class="py-2 notification-item"  :to="getNotificationLink(notif)"
-          >
+          v-for="(notif, index) in notifications"
+          :key="index"
+          class="py-2 notification-item"
+          :to="getNotificationLink(notif)"
+            >
             <template v-slot:prepend>
               <v-avatar :color="getNotificationColor(notif.type)" size="32" class="me-3">
                   <v-icon size="18">{{ getNotificationIcon(notif.type) }}</v-icon>
@@ -171,6 +205,13 @@
                 <strong>{{ notif.data.pelanggan_nama }}</strong> perlu dibuatkan Data Teknis.
               </v-list-item-subtitle>
             </div>
+
+          <div v-if="notif.type === 'new_technical_data'">
+            <v-list-item-title class="font-weight-medium text-body-2">Data Teknis Baru</v-list-item-title>
+            <v-list-item-subtitle class="text-caption">
+              Data teknis untuk <strong>{{ notif.data.pelanggan_nama }}</strong> telah ditambahkan.
+            </v-list-item-subtitle>
+          </div>
 
           </v-list-item>
           </v-list>
@@ -207,6 +248,7 @@ import { useTheme } from 'vuetify';
 import { useDisplay } from 'vuetify';
 import apiClient from '@/services/api';
 import { useAuthStore } from '@/stores/auth';
+import { useSettingsStore } from '@/stores/settings';
 
 // --- State ---
 const theme = useTheme();
@@ -223,10 +265,12 @@ const roleCount = ref(0);
 const userPermissions = ref<string[]>([]);
 const authStore = useAuthStore();
 let socket: WebSocket | null = null;
-let reconnectInterval: NodeJS.Timeout | null = null;
+// let reconnectInterval: NodeJS.Timeout | null = null;
 
 // Computed untuk mobile detection
 const isMobile = computed(() => mobile.value);
+const logoSrc = computed(() => theme.global.current.value.dark ? logoDark : logoLight);
+const settingsStore = useSettingsStore();
 
 // Toggle drawer function untuk mobile/desktop
 function toggleDrawer() {
@@ -249,108 +293,243 @@ async function fetchSidebarBadges() {
 }
 
 // --- Fungsi WebSocket yang Diperbaiki ---
-function connectWebSocket() {
-  if (!authStore.token) return;
-  if (socket && socket.readyState === WebSocket.OPEN) return;
+// function connectWebSocket() {
+//   if (!authStore.token) return;
+//   if (socket && socket.readyState === WebSocket.OPEN) return;
 
-  // Untuk development (localhost)
-  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-    const wsUrl = `ws://127.0.0.1:8000/ws/notifications?token=${authStore.token}`;
-    console.log(`Connecting to WebSocket at ${wsUrl}`);
-    socket = new WebSocket(wsUrl);
-  } else {
-    // Untuk production - gunakan wss dengan domain yang sama
-    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${wsProtocol}//${window.location.host}/ws/notifications?token=${authStore.token}`;
-    console.log(`Connecting to WebSocket at ${wsUrl}`);
-    socket = new WebSocket(wsUrl);
-  }
+//   // Untuk development (localhost)
+//   if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+//     const wsUrl = `ws://127.0.0.1:8000/ws/notifications?token=${authStore.token}`;
+//     console.log(`Connecting to WebSocket at ${wsUrl}`);
+//     socket = new WebSocket(wsUrl);
+//   } else {
+//     // Untuk production - gunakan wss dengan domain yang sama
+//     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+//     const wsUrl = `${wsProtocol}//${window.location.host}/ws/notifications?token=${authStore.token}`;
+//     console.log(`Connecting to WebSocket at ${wsUrl}`);
+//     socket = new WebSocket(wsUrl);
+//   }
 
-  socket.onopen = () => {
-    console.log('WebSocket connection established.');
-    // Clear reconnect interval jika berhasil
-    if (reconnectInterval) {
-      clearInterval(reconnectInterval);
-      reconnectInterval = null;
-    }
-  };
+//   socket.onopen = () => {
+//     console.log('WebSocket connection established.');
+//     // Clear reconnect interval jika berhasil
+//     if (reconnectInterval) {
+//       clearInterval(reconnectInterval);
+//       reconnectInterval = null;
+//     }
+//   };
 
-  function playSound(type: string) {
+// //   function playSound(type: string) {
+// //   let audioFile = '';
+
+// //   if (type === 'new_payment') {
+// //     audioFile = '/pembayaran.mp3'; // Suara baru untuk pembayaran
+// //   } else if (type === 'new_customer_for_noc') {
+// //     audioFile = '/payment.mp3'; // Suara lama untuk pelanggan baru
+// //   }
+
+// //   if (audioFile) {
+// //     const audio = new Audio(audioFile);
+// //     audio.play().catch(error => {
+// //       console.error(`Gagal memutar audio (${audioFile}):`, error);
+// //     });
+// //   }
+// // }
+
+// function playSound(type: string) {
+//   let audioFile = '';
+//   if (type === 'new_payment') {
+//     audioFile = '/pembayaran.mp3';
+//   } else if (type === 'new_customer_for_noc') {
+//     audioFile = '/payment.mp3';
+//   } else if (type === 'new_technical_data') {
+//     audioFile = '/langganan.mp3';
+//   }
+
+//   if (audioFile) {
+//     const audio = new Audio(audioFile);
+//     audio.play().catch(error => {
+//       console.warn(`Gagal memutar audio (${audioFile}):`, error);
+//     });
+//   }
+// }
+
+// socket.onmessage = (event) => {
+//   // Log 1: Lihat data mentah yang diterima
+//   console.log('--- RAW MESSAGE RECEIVED ---', event.data); 
+  
+//   try {
+//     const data = JSON.parse(event.data);
+
+//     // Log 2: Lihat data setelah di-parse menjadi objek
+//     console.log('--- PARSED DATA OBJECT ---', data); 
+    
+//     const notificationType = data.type;
+
+//     if (['new_payment', 'new_technical_data', 'new_customer_for_noc'].includes(notificationType)) {
+//       // Log 3: Konfirmasi tipe notifikasi cocok
+//       console.log('--- NOTIFICATION TYPE MATCHED ---', notificationType); 
+      
+//       notifications.value = [data, ...notifications.value];
+//       playSound(notificationType);
+      
+//       // Log 4: Lihat isi array notifikasi setelah di-update
+//       console.log('--- UPDATED NOTIFICATIONS ARRAY ---', notifications.value); 
+      
+//       const customEvent = new CustomEvent('new-notification', { detail: data });
+//       window.dispatchEvent(customEvent);
+
+//     } else {
+//       // Log 5: Jika tipe notifikasi tidak cocok
+//       console.log('--- NOTIFICATION TYPE MISMATCH ---', notificationType); 
+//     }
+//   } catch (error) {
+//     console.error('Error parsing WebSocket message:', error);
+//   }
+// };
+
+//   socket.onerror = (error) => {
+//     console.error('WebSocket error:', error);
+//   };
+
+//   socket.onclose = (event) => {
+//     console.log('WebSocket closed:', event.code, event.reason);
+    
+//     // Hanya reconnect jika user masih authenticated dan bukan intentional close
+//     if (authStore.isAuthenticated && event.code !== 1000) {
+//       console.log('WebSocket closed unexpectedly. Attempting to reconnect...');
+//       if (!reconnectInterval) {
+//         reconnectInterval = setInterval(() => {
+//           if (authStore.isAuthenticated) {
+//             connectWebSocket();
+//           } else {
+//             disconnectWebSocket();
+//           }
+//         }, 5000);
+//       }
+//     }
+//   };
+// }
+
+let pingInterval: NodeJS.Timeout | null = null;
+let reconnectTimeout: NodeJS.Timeout | null = null;
+
+function playSound(type: string) {
   let audioFile = '';
-
   if (type === 'new_payment') {
-    audioFile = '/pembayaran.mp3'; // Suara baru untuk pembayaran
+    audioFile = '/pembayaran.mp3';
   } else if (type === 'new_customer_for_noc') {
-    audioFile = '/payment.mp3'; // Suara lama untuk pelanggan baru
+    audioFile = '/payment.mp3';
+  } else if (type === 'new_technical_data') {
+    audioFile = '/langganan.mp3';
   }
 
   if (audioFile) {
     const audio = new Audio(audioFile);
     audio.play().catch(error => {
-      console.error(`Gagal memutar audio (${audioFile}):`, error);
+      console.warn(`Gagal memutar audio (${audioFile}):`, error);
     });
   }
 }
 
+function connectWebSocket() {
+  // 1. Hentikan jika sudah ada koneksi atau tidak ada token
+  if (!authStore.token || (socket && socket.readyState === WebSocket.OPEN)) {
+    return;
+  }
+  
+  // Hentikan timer reconnect yang mungkin sedang berjalan
+  if (reconnectTimeout) clearTimeout(reconnectTimeout);
+  
+  const token = authStore.token;
+  const hostname = window.location.hostname;
+  let wsUrl = '';
+
+  // 2. Tentukan URL berdasarkan lingkungan (produksi atau development)
+  if (hostname === 'billingftth.my.id') {
+      // Produksi (Sudah Benar)
+      wsUrl = `wss://${hostname}/api/ws/notifications?token=${token}`;
+  } else {
+      // Lokal (Perbaiki di sini, hapus /api)
+      wsUrl = `ws://localhost:8000/ws/notifications?token=${token}`; 
+  }
+
+  // 3. Buat koneksi dengan URL yang sudah pasti benar
+  console.log(`[WebSocket] Mencoba terhubung ke ${wsUrl}`);
+  socket = new WebSocket(wsUrl);
+
+  // --- Sisa event handler (onopen, onmessage, dll.) bisa tetap sama ---
+  socket.onopen = () => {
+    console.log('[WebSocket] Koneksi berhasil dibuat.');
+    if (pingInterval) clearInterval(pingInterval);
+    pingInterval = setInterval(() => {
+      if (socket && socket.readyState === WebSocket.OPEN) {
+        socket.send('ping');
+      }
+    }, 30000);
+  };
+
   socket.onmessage = (event) => {
-    console.log('WebSocket message received:', event.data);
+    if (event.data === 'pong') return;
+    
+    console.log('[WebSocket] Pesan diterima:', event.data);
     try {
       const data = JSON.parse(event.data);
-      
-      if (data.type === 'new_payment' || data.type === 'new_customer_for_noc') {
-        notifications.value.unshift(data);
-        
-        // ===== TAMBAHKAN BARIS INI =====
+      if (['new_payment', 'new_technical_data', 'new_customer_for_noc'].includes(data.type)) {
+        notifications.value = [data, ...notifications.value];
         playSound(data.type);
-        // ===============================
-
-        if (notifications.value.length > 50) {
-          notifications.value = notifications.value.slice(0, 50);
-        }
+        window.dispatchEvent(new CustomEvent('new-notification', { detail: data }));
       }
     } catch (error) {
-      console.error('Error parsing WebSocket message:', error);
+      console.error('[WebSocket] Gagal mem-parse pesan:', error);
     }
   };
 
   socket.onerror = (error) => {
-    console.error('WebSocket error:', error);
+    console.error('[WebSocket] Terjadi error:', error);
+    socket?.close();
   };
 
   socket.onclose = (event) => {
-    console.log('WebSocket closed:', event.code, event.reason);
+    console.warn(`[WebSocket] Koneksi ditutup: Kode ${event.code}`);
+    socket = null; 
+    if (pingInterval) clearInterval(pingInterval);
     
-    // Hanya reconnect jika user masih authenticated dan bukan intentional close
     if (authStore.isAuthenticated && event.code !== 1000) {
-      console.log('WebSocket closed unexpectedly. Attempting to reconnect...');
-      if (!reconnectInterval) {
-        reconnectInterval = setInterval(() => {
-          if (authStore.isAuthenticated) {
-            connectWebSocket();
-          } else {
-            disconnectWebSocket();
-          }
-        }, 5000);
-      }
+      console.log('[WebSocket] Menjadwalkan reconnect dalam 5 detik...');
+      reconnectTimeout = setTimeout(connectWebSocket, 5000);
     }
   };
 }
 
 function disconnectWebSocket() {
-  if (reconnectInterval) clearInterval(reconnectInterval);
-  reconnectInterval = null;
+  console.log('[WebSocket] Memutuskan koneksi secara manual...');
+  if (reconnectTimeout) clearTimeout(reconnectTimeout);
+  if (pingInterval) clearInterval(pingInterval);
+
   if (socket) {
-    socket.onclose = null; 
-    socket.close();
+    socket.onclose = null; // Hapus listener onclose agar tidak memicu reconnect
+    socket.close(1000, "Logout Pengguna");
     socket = null;
-    console.log('WebSocket connection intentionally disconnected.');
   }
 }
 // --- AKHIR BLOK KODE WEBSOCKET ---
 
 
 const menuGroups = ref([
-  { title: 'DASHBOARD', items: [{ title: 'Dashboard', icon: 'mdi-home-variant', value: 'dashboard', to: '/dashboard', permission: 'view_dashboard' }] },
+    { title: 'DASHBOARD', items: [
+      { 
+        title: 'Dashboard', 
+        icon: 'mdi-home-variant', 
+        value: 'dashboard-group', 
+        permission: 'view_dashboard',
+        children: [
+          { title: 'Dashboard Admin', icon: 'mdi-home-variant', to: '/dashboard', permission: 'view_dashboard' },
+          { title: 'Dashboard Jakinet', icon: 'mdi-account-group', to: '/dashboard-pelanggan', permission: 'view_dashboard_pelanggan' }
+        ]
+      },
+    ] },
+  
   { title: 'FTTH', items: [
       { title: 'Data Pelanggan', icon: 'mdi-account-group-outline', value: 'pelanggan', to: '/pelanggan', permission: 'view_pelanggan' },
       { title: 'Langganan', icon: 'mdi-wifi-star', value: 'langganan', to: '/langganan', badge: suspendedCount, badgeColor: 'orange', permission: 'view_langganan' },
@@ -365,12 +544,18 @@ const menuGroups = ref([
     { title: 'Invoices', icon: 'mdi-file-document-outline', value: 'invoices', to: '/invoices', badge: 0, badgeColor: 'grey-darken-1', permission: 'view_invoices' },
     { title: 'Laporan Pendapatan', icon: 'mdi-chart-line', value: 'revenue-report', to: '/reports/revenue', permission: 'view_reports_revenue' }
   ]},
-  { title: 'NETWORK MANAGEMENT', items: [{ title: 'Mikrotik Servers', icon: 'mdi-server', value: 'mikrotik', to: '/mikrotik', permission: 'view_mikrotik_servers' }] },
+  { title: 'NETWORK MANAGEMENT', items: [
+    { title: 'Mikrotik Servers', icon: 'mdi-server', value: 'mikrotik', to: '/mikrotik', permission: 'view_mikrotik_servers' },
+    { title: 'OLT Management', icon: 'mdi-router-network', value: 'olt', to: '/network-management/olt', permission: 'view_olt' },
+    { title: 'ODP Management', icon: 'mdi-sitemap', value: 'odp', to: '/odp-management', permission: 'view_odp_management' },
+    { title: 'Manajemen Inventaris', icon: 'mdi-archive-outline', value: 'inventory', to: '/inventory', permission: 'view_inventory' }
+  ]},
   { title: 'MANAGEMENT', items: [
       { title: 'Users', icon: 'mdi-account-cog-outline', value: 'users', to: '/users', badge: userCount, badgeColor: 'primary', permission: 'view_users' },
       { title: 'Roles', icon: 'mdi-shield-account-outline', value: 'roles', to: '/roles', badge: roleCount, badgeColor: 'primary', permission: 'view_roles' },
       { title: 'Permissions', icon: 'mdi-shield-key-outline', value: 'permissions', to: '/permissions', permission: 'view_permissions' },
-      { title: 'Kelola S&K', icon: 'mdi-file-edit-outline', value: 'sk-management', to: '/management/sk', permission: 'manage_sk' }
+      { title: 'Kelola S&K', icon: 'mdi-file-edit-outline', value: 'sk-management', to: '/management/sk', permission: 'manage_sk' },
+      { title: 'Pengaturan', icon: 'mdi-cog-outline', value: 'settings', to: '/management/settings', permission: 'manage_settings' }
   ]},
 ]);
 
@@ -382,11 +567,14 @@ const filteredMenuGroups = computed(() => {
   })).filter(group => group.items.length > 0);
 });
 
-const logoSrc = computed(() => theme.global.current.value.dark ? logoDark : logoLight);
+
 
 onMounted(async () => {
   const savedTheme = localStorage.getItem('theme');
   if (savedTheme) theme.global.name.value = savedTheme;
+
+
+  await settingsStore.fetchMaintenanceStatus(); 
 
   // Set drawer behavior based on screen size
   if (isMobile.value) {
@@ -419,6 +607,10 @@ onMounted(async () => {
   }
 });
 
+onUnmounted(() => {
+  disconnectWebSocket();
+});
+
 onUnmounted(() => disconnectWebSocket());
 
 function toggleTheme() {
@@ -431,6 +623,7 @@ function getNotificationIcon(type: string) {
   switch (type) {
     case 'new_payment': return 'mdi-cash-check';
     case 'new_customer_for_noc': return 'mdi-account-plus-outline';
+    case 'new_technical_data': return 'mdi-lan-connect';
     default: return 'mdi-bell-outline';
   }
 }
@@ -439,11 +632,16 @@ function getNotificationColor(type: string) {
   switch (type) {
     case 'new_payment': return 'success';
     case 'new_customer_for_noc': return 'info';
+    case 'new_technical_data': return 'cyan';
     default: return 'grey';
   }
 }
 
 function getNotificationLink(notification: any) {
+  // Arahkan ke halaman langganan agar Finance bisa langsung membuat langganan baru
+  if (notification.type === 'new_technical_data') {
+    return '/langganan';
+  }
   if (notification.type === 'new_customer_for_noc') {
     return '/data-teknis';
   }
@@ -489,6 +687,40 @@ function handleLogout() {
 .modern-app {
   background-color: rgb(var(--v-theme-background));
   transition: background-color 0.3s ease;
+}
+
+.nav-sub-item {
+  border-radius: 10px;
+  margin-bottom: 4px;
+  color: rgba(var(--v-theme-on-surface), 0.8);
+  min-height: 44px;
+  transition: all 0.3s ease;
+  /* Mengurangi padding kiri untuk menyelaraskan dengan parent */
+  padding-left: 16px !important;
+  /* Atau gunakan margin-left negatif untuk menarik ke kiri */
+  margin-left: -8px;
+}
+
+.nav-sub-item .v-list-item-title {
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.nav-sub-item:not(.v-list-item--active):hover {
+  background-color: rgba(var(--v-theme-primary), 0.1);
+  color: rgb(var(--v-theme-primary));
+  transform: translateX(2px);
+}
+
+/* Alternatif lain - override Vuetify's default indentation */
+.v-list-group .v-list-item {
+  padding-inline-start: 16px !important;
+}
+
+/* Atau gunakan custom class untuk lebih spesifik */
+.nav-sub-item.v-list-item {
+  padding-inline-start: 16px !important;
+  margin-inline-start: 0 !important;
 }
 
 .modern-drawer {
@@ -689,6 +921,20 @@ function handleLogout() {
 .modern-main {
   background-color: rgb(var(--v-theme-background));
   transition: background-color 0.3s ease;
+}
+
+.maintenance-banner {
+  /* Memperbesar tinggi banner */
+  height: 50px !important; 
+  
+  /* Memperbesar ukuran font */
+  font-size: 2rem !important; 
+  
+  /* Membuat teks sedikit lebih tebal */
+  font-weight: 600;
+
+  /* Memastikan konten berada di tengah secara horizontal */
+  justify-content: center; 
 }
 
 /* Footer responsive */

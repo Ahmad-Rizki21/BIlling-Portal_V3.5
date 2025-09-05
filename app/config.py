@@ -23,6 +23,8 @@ class Settings(BaseSettings):
         "S&K",
         "Simulasi Harga",
         "Kelola S&K",
+        "Manajemen Inventaris", 
+        "Dashboard Jakinet",
     ]
 
     # --- TAMBAHKAN INI ---
@@ -35,6 +37,17 @@ class Settings(BaseSettings):
         "pelanggan_per_paket",
         "tren_pertumbuhan",
         "invoice_bulanan",
+        "status_langganan",
+        "alamat_aktif",
+
+        #Dashboard Pelanggan Widget
+        "pelanggan_statistik_utama",
+        "pelanggan_pendapatan_jakinet",
+        "pelanggan_distribusi_chart",
+        "pelanggan_pertumbuhan_chart",
+        "pelanggan_status_overview_chart",
+        "pelanggan_metrik_cepat",
+        "pelanggan_tren_pendapatan_chart"
     ]
     # ---------------------
 
@@ -47,6 +60,8 @@ class Settings(BaseSettings):
     XENDIT_API_KEY_JAKINET: str
     XENDIT_API_KEY_JELANTIK: str
     XENDIT_API_URL: str = "https://api.xendit.co/v2/invoices"
+
+    ENCRYPTION_KEY: str
 
     @property
     def XENDIT_API_KEYS(self) -> dict:

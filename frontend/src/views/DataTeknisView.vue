@@ -414,7 +414,7 @@
                           <v-list-item-title>ODC: {{ item.odc }}</v-list-item-title>
                         </v-list-item>
                         <v-list-item prepend-icon="mdi-distribution-point">
-                          <v-list-item-title>ODP: {{ item.odp }}</v-list-item-title>
+                          <v-list-item-title>ODP ID: {{ item.odp_id || 'N/A' }}</v-list-item-title>
                         </v-list-item>
                         <v-list-item prepend-icon="mdi-barcode-scan">
                             <v-list-item-title>SN: {{ item.sn || 'N/A' }}</v-list-item-title>
@@ -451,12 +451,10 @@
     </v-card>
 
     <v-dialog 
-      v-model="dialog"
-      persistent 
-      attach
-      max-width="900px"
-      :fullscreen="$vuetify.display.smAndDown"
-    >
+        v-model="dialog"
+        max-width="900px"
+        :fullscreen="$vuetify.display.smAndDown"
+      >
       <v-card class="d-flex flex-column" style="height: 100vh;">
         
         <v-card-title class="pa-0 flex-shrink-0" :style="{ background: 'linear-gradient(135deg, #00ACC1 0%, #006064 100%)', color: 'white' }">
@@ -501,7 +499,15 @@
                       <v-text-field v-model="editedItem.password_pppoe" label="Password PPPoE" type="password" variant="outlined"></v-text-field>
                     </v-col>
                     <v-col cols="12" sm="6">
-                      <v-text-field v-model="editedItem.ip_pelanggan" label="IP Pelanggan" variant="outlined"></v-text-field>
+                      <v-text-field
+                        v-model="editedItem.ip_pelanggan"
+                        label="IP Pelanggan"
+                        variant="outlined"
+                        @update:modelValue="checkIpAvailability"
+                        :loading="ipValidation.loading"
+                        :error-messages="ipValidation.color === 'error' ? ipValidation.message : ''"
+                        :success-messages="ipValidation.color === 'success' ? ipValidation.message : ''"
+                      ></v-text-field>
                     </v-col>
                     <v-col cols="12" sm="6">
                       <v-select
@@ -527,23 +533,73 @@
                   <v-row>
                     <v-col cols="12" sm="6">
                       <v-select
-                        v-model="editedItem.mikrotik_server_id"
-                        :items="mikrotikServers"
-                        item-title="name"
-                        item-value="id"
-                        label="OLT"
-                        @update:modelValue="handleOltSelection"
-                        variant="outlined"
+                          v-model="editedItem.mikrotik_server_id"
+                          :items="mikrotikServers"
+                          item-title="name"
+                          item-value="id"
+                          label="OLT"
+                          @update:modelValue="handleOltSelection"
+                          variant="outlined"
                       ></v-select>
+                    </v-col>
+                    <v-col cols="12" sm="6">
+                       <v-select
+                        v-model="editedItem.odp_id" :items="odpList"
+                        item-title="kode_odp"
+                        item-value="id"
+                        label="Terhubung ke ODP"
+                        variant="outlined"
+                        clearable
+                        :loading="loadingOdps"
+                      >
+                        <template v-slot:item="{ props, item }">
+                          <v-list-item v-bind="props" :subtitle="item.raw.alamat"></v-list-item>
+                        </template>
+                      </v-select>
                     </v-col>
                     <v-col cols="12" sm="6">
                       <v-text-field v-model="editedItem.olt_custom" label="OLT Custom (Opsional)" variant="outlined"></v-text-field>
                     </v-col>
-                    <v-col cols="12" sm="3"><v-text-field v-model.number="editedItem.pon" label="PON" type="number" variant="outlined" :readonly="isNocUser"></v-text-field></v-col>
-                    <v-col cols="12" sm="3"><v-text-field v-model.number="editedItem.otb" label="OTB" type="number" variant="outlined" :readonly="isNocUser"></v-text-field></v-col>
-                    <v-col cols="12" sm="3"><v-text-field v-model.number="editedItem.odc" label="ODC" type="number" variant="outlined" :readonly="isNocUser"></v-text-field></v-col>
-                    <v-col cols="12" sm="3"><v-text-field v-model.number="editedItem.odp" label="ODP" type="number" variant="outlined" :readonly="isNocUser"></v-text-field></v-col>
-                  </v-row>
+                    <v-col cols="12" sm="3">
+                      <v-text-field 
+                        v-model.number="editedItem.pon" 
+                        label="PON" 
+                        type="number" 
+                        variant="outlined" 
+                        :readonly="isNocUser"
+                      ></v-text-field>
+                    </v-col>
+
+                    <v-col cols="12" sm="3">
+                      <v-text-field 
+                        v-model.number="editedItem.otb" 
+                        label="OTB" 
+                        type="number" 
+                        variant="outlined" 
+                        :readonly="isNocUser"
+                      ></v-text-field>
+                    </v-col>
+
+                    <v-col cols="12" sm="3">
+                      <v-text-field 
+                        v-model.number="editedItem.odc" 
+                        label="ODC" 
+                        type="number" 
+                        variant="outlined" 
+                        :readonly="isNocUser"
+                      ></v-text-field>
+                    </v-col>
+
+                    <v-col cols="12" sm="3">
+                      <v-text-field 
+                        v-model.number="editedItem.odp" 
+                        label="Port ODP" 
+                        type="number" 
+                        variant="outlined" 
+                        :readonly="isNocUser"
+                      ></v-text-field>
+                    </v-col>
+                    </v-row>
                 </div>
               </v-stepper-window-item>
 
@@ -685,13 +741,13 @@ interface DataTeknis {
   pon: number;
   otb: number;
   odc: number;
+  odp_id?: number | null; // ID ODP (dari dropdown)
   odp: number;
   speedtest_proof?: string | null;
   onu_power: number;
   mikrotik_server_id: number;
   sn?: string | null;
 }
-
 interface Pelanggan {
   id: number;
   nama: string;
@@ -721,9 +777,12 @@ const editedItem = ref<Partial<DataTeknis>>({});
 const itemToDeleteId = ref<number | null>(null);
 const searchQuery = ref('');
 const mikrotikServers = ref<MikrotikServer[]>([]);
-const availablePppoeProfiles = ref<string[]>([]);
+
 const profilesLoading = ref(false);
 const paketLayananSelectList = ref<PaketLayananSelectItem[]>([]);
+const odpList = ref<any[]>([]);
+const loadingOdps = ref(false);
+const profilesFromApi = ref<{ profile_name: string; usage_count: number }[]>([]);
 
 const selectedDataTeknis = ref<DataTeknis[]>([]);
 const dialogBulkDelete = ref(false);
@@ -745,6 +804,24 @@ const expanded = ref<readonly any[]>([]);
 const isEditMode = computed(() => !!editedItem.value.id);
 const formTitle = computed(() => isEditMode.value ? 'Edit Data Teknis' : 'Tambah Data Teknis');
 
+const availablePppoeProfiles = computed(() => {
+  // 1. Filter profile yang masih tersedia (kurang dari 5)
+  const available = profilesFromApi.value
+    .filter(p => p.usage_count < 5)
+    .map(p => p.profile_name);
+
+  // 2. Ambil profile yang sedang digunakan oleh user yang diedit
+  const currentProfile = editedItem.value.profile_pppoe;
+
+  // 3. Jika profile saat ini ada DAN belum termasuk di daftar, tambahkan.
+  if (currentProfile && !available.includes(currentProfile)) {
+    available.unshift(currentProfile); // Taruh di paling atas
+  }
+
+  return available;
+});
+
+
 const imagePreviewUrl = computed(() => {
   if (fileInputComponent.value?.files && fileInputComponent.value.files.length > 0) {
     return URL.createObjectURL(fileInputComponent.value.files[0]);
@@ -754,6 +831,12 @@ const imagePreviewUrl = computed(() => {
     return `${baseUrl}${editedItem.value.speedtest_proof}`;
   }
   return null;
+});
+
+const ipValidation = ref({
+  loading: false,
+  message: '',
+  color: ''
 });
 
 const pelangganForSelect = computed(() => {
@@ -823,6 +906,7 @@ onMounted(() => {
   fetchPelanggan();
   fetchMikrotikServers();
   fetchPaketLayananForSelect();
+  fetchOdpList();
 });
 
 async function fetchDataTeknis() {
@@ -842,6 +926,21 @@ async function fetchDataTeknis() {
     loading.value = false;
   }
 }
+
+
+async function fetchOdpList() {
+  loadingOdps.value = true;
+  try {
+    const response = await apiClient.get('/odp/');
+    odpList.value = response.data;
+  } catch (error) {
+    console.error("Gagal mengambil daftar ODP:", error);
+  } finally {
+    loadingOdps.value = false;
+  }
+}
+
+
 
 const applyFilters = debounce(() => {
   fetchDataTeknis();
@@ -880,8 +979,33 @@ async function fetchPelanggan() {
   }
 }
 
+// function openDialog(item?: DataTeknis) {
+//   editedItem.value = item ? { ...item } : {};
+//   currentStep.value = 1;
+//   dialog.value = true;
+// }
+
+
 function openDialog(item?: DataTeknis) {
-  editedItem.value = item ? { ...item } : {};
+  ipValidation.value = { loading: false, message: '', color: '' };
+  if (item) {
+    // Mode Edit: Gunakan data yang ada
+    editedItem.value = { ...item };
+
+    if (item.pelanggan_id) {
+      handlePelangganSelection(item.pelanggan_id);
+    }
+  } else {
+    // Mode Tambah Baru: Set nilai default di sini
+    editedItem.value = {
+      pon: 0,
+      otb: 0,
+      odc: 0,
+      odp: 0,
+      onu_power: 0, // Ini juga akan mengisi default 0 pada ONU Power
+    };
+    profilesFromApi.value = []; 
+  }
   currentStep.value = 1;
   dialog.value = true;
 }
@@ -894,6 +1018,34 @@ function closeDialog() {
   editedItem.value = {};
   currentStep.value = 1;
 }
+
+const checkIpAvailability = debounce(async (ip: string) => {
+  // Jangan cek jika IP kosong
+  if (!ip) {
+    ipValidation.value = { loading: false, message: '', color: '' };
+    return;
+  }
+  
+  ipValidation.value.loading = true;
+  try {
+    const response = await apiClient.post('/data_teknis/check-ip', {
+      ip_address: ip,
+      current_id: editedItem.value.id || null // Kirim ID saat mode edit
+    });
+    
+    const { is_taken, message } = response.data;
+    
+    ipValidation.value.message = message;
+    ipValidation.value.color = is_taken ? 'error' : 'success';
+
+  } catch (error) {
+    console.error("Gagal memeriksa IP:", error);
+    ipValidation.value.message = "Gagal memeriksa ketersediaan IP.";
+    ipValidation.value.color = 'error';
+  } finally {
+    ipValidation.value.loading = false;
+  }
+}, 700);
 
 async function saveDataTeknis() {
   saving.value = true;
@@ -914,13 +1066,26 @@ async function saveDataTeknis() {
       }
     }
 
+    let updatedData: DataTeknis; // Deklarasikan variabel di sini
+
     if (isEditMode.value) {
-      await apiClient.patch(`/data_teknis/${editedItem.value.id}`, editedItem.value);
+      // Tangkap respons dari server setelah PATCH
+      const response = await apiClient.patch(`/data_teknis/${editedItem.value.id}`, editedItem.value);
+      updatedData = response.data;
+      
+      // Cari index dari data lama di dalam array
+      const index = dataTeknisList.value.findIndex(item => item.id === updatedData.id);
+      if (index !== -1) {
+        // Ganti data lama dengan data baru yang diterima dari server
+        dataTeknisList.value[index] = updatedData;
+      }
+
     } else {
+      // Untuk "Tambah Data", panggil ulang fetchDataTeknis
       await apiClient.post('/data_teknis/', editedItem.value);
+      fetchDataTeknis(); 
     }
     
-    fetchDataTeknis();
     closeDialog();
   } catch (error) {
     console.error("Gagal saat menyimpan data teknis:", error);
@@ -1097,34 +1262,77 @@ function showSnackbar(text: string, color: string) {
   snackbar.value.show = true;
 }
 
-watch(() => editedItem.value.pelanggan_id, async (newPelangganId) => {
-  // Reset pilihan profile setiap kali pelanggan diganti
-  editedItem.value.profile_pppoe = undefined;
-  availablePppoeProfiles.value = [];
+// watch(() => editedItem.value.pelanggan_id, async (newPelangganId) => {
+//   // Reset pilihan profile setiap kali pelanggan diganti
+//   editedItem.value.profile_pppoe = undefined;
+//   availablePppoeProfiles.value = [];
   
-  if (!newPelangganId) return;
+//   if (!newPelangganId) return;
+
+//   try {
+//     // 1. Ambil detail pelanggan yang dipilih (termasuk 'layanan')
+//     const pelangganResponse = await apiClient.get(`/pelanggan/${newPelangganId}`);
+//     const pelangganDetail = pelangganResponse.data;
+
+//     if (pelangganDetail && pelangganDetail.layanan) {
+//       // 2. Cari ID paket yang namanya cocok dengan 'layanan' pelanggan
+//       const paketTerkait = paketLayananSelectList.value.find(
+//         (p: PaketLayananSelectItem) => p.nama_paket === pelangganDetail.layanan
+//       );
+
+//       if (paketTerkait) {
+//         // 3. Jika paket ditemukan, panggil fungsi untuk mengambil profile yang tersedia
+//         await fetchAvailableProfiles(paketTerkait.id);
+//       }
+//     }
+//   } catch (error) {
+//     console.error("Gagal mengambil data detail pelanggan:", error);
+//   }
+// });
+
+
+// GANTI watch LAMA ANDA DENGAN INI:
+
+watch(() => editedItem.value.pelanggan_id, (newPelangganId) => {
+  // Hanya jalankan jika BUKAN mode edit DAN ada pelanggan baru yang dipilih
+  if (!isEditMode.value && newPelangganId) {
+    handlePelangganSelection(newPelangganId);
+  } else if (!newPelangganId) {
+    profilesFromApi.value = [];
+    if (editedItem.value) {
+      editedItem.value.profile_pppoe = undefined;
+    }
+  }
+}, { immediate: false }); // 'immediate: false' agar tidak berjalan saat komponen pertama kali dibuat
+
+async function handlePelangganSelection(pelangganId: number) {
+  // Reset state yang relevan
+  profilesLoading.value = true;
+  profilesFromApi.value = []; // <-- RESET DATA MENTAH
+  
+  // Update editedItem di sini, tapi di dalam fungsi terpisah
+  if (editedItem.value) {
+    editedItem.value.profile_pppoe = undefined;
+  }
 
   try {
-    // 1. Ambil detail pelanggan yang dipilih (termasuk 'layanan')
-    const pelangganResponse = await apiClient.get(`/pelanggan/${newPelangganId}`);
+    const pelangganResponse = await apiClient.get(`/pelanggan/${pelangganId}`);
     const pelangganDetail = pelangganResponse.data;
 
     if (pelangganDetail && pelangganDetail.layanan) {
-      // 2. Cari ID paket yang namanya cocok dengan 'layanan' pelanggan
       const paketTerkait = paketLayananSelectList.value.find(
         (p: PaketLayananSelectItem) => p.nama_paket === pelangganDetail.layanan
       );
-
       if (paketTerkait) {
-        // 3. Jika paket ditemukan, panggil fungsi untuk mengambil profile yang tersedia
         await fetchAvailableProfiles(paketTerkait.id);
       }
     }
   } catch (error) {
     console.error("Gagal mengambil data detail pelanggan:", error);
+  } finally {
+    profilesLoading.value = false;
   }
-});
-
+}
 
 async function fetchPaketLayananForSelect() {
   try {
@@ -1139,16 +1347,17 @@ async function fetchPaketLayananForSelect() {
 
 async function fetchAvailableProfiles(paketLayananId: number) {
   if (!paketLayananId) {
-    availablePppoeProfiles.value = [];
+    profilesFromApi.value = [];
     return;
   }
   profilesLoading.value = true;
   try {
+    // API sekarang mengembalikan { profile_name, usage_count }
     const response = await apiClient.get(`/data_teknis/available-profiles/${paketLayananId}`);
-    availablePppoeProfiles.value = response.data;
+    profilesFromApi.value = response.data;
   } catch (error) {
     console.error("Gagal mengambil profile PPPoE yang tersedia:", error);
-    availablePppoeProfiles.value = [];
+    profilesFromApi.value = [];
   } finally {
     profilesLoading.value = false;
   }

@@ -12,6 +12,9 @@ import { createVuetify } from 'vuetify'
 import * as components from 'vuetify/components'
 import * as directives from 'vuetify/directives'
 import '@mdi/font/css/materialdesignicons.css'
+import 'leaflet/dist/leaflet.css';
+
+import { useAuthStore } from './stores/auth'
 
 // 2. Buat instance Vuetify dengan tema light dan dark yang kontras
 const vuetify = createVuetify({
@@ -51,6 +54,28 @@ const vuetify = createVuetify({
     },
   },
 })
+
+
+async function startup() {
+  const app = createApp(App)
+  const pinia = createPinia()
+  
+  app.use(pinia)
+
+  // 3. Panggil aksi untuk memulihkan sesi
+  // Ini akan berjalan SEBELUM aplikasi di-mount
+  const authStore = useAuthStore()
+  await authStore.initializeAuth()
+
+  app.use(router)
+  app.use(vuetify)
+
+  // 4. Mount aplikasi setelah semua siap
+  app.mount('#app')
+}
+
+startup()
+
 
 // 3. Buat aplikasi Vue
 const app = createApp(App)

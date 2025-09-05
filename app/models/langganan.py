@@ -15,15 +15,15 @@ if TYPE_CHECKING:
 class Langganan(Base):
     __tablename__ = "langganan"
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    pelanggan_id: Mapped[int] = mapped_column(ForeignKey("pelanggan.id"))
+    pelanggan_id: Mapped[int] = mapped_column(ForeignKey("pelanggan.id"), index=True)
     paket_layanan_id: Mapped[int] = mapped_column(ForeignKey("paket_layanan.id"))
-
-    status: Mapped[str] = mapped_column(String(50), default="Aktif", nullable=False)
-    tgl_jatuh_tempo: Mapped[date | None] = mapped_column(Date, nullable=True)
+    status: Mapped[str] = mapped_column(String(100), index=True)
+    tgl_jatuh_tempo: Mapped[Date | None] = mapped_column(Date, index=True)
     tgl_invoice_terakhir: Mapped[date | None] = mapped_column(Date, nullable=True)
 
     # --- PASTIKAN HANYA BARIS YANG BENAR INI YANG ADA ---
     tgl_mulai_langganan = Column(Date, nullable=True)
+    tgl_berhenti: Mapped[date | None] = mapped_column(Date, nullable=True)
 
     metode_pembayaran: Mapped[str] = mapped_column(String(50), default="Otomatis")
     harga_awal: Mapped[float | None] = mapped_column(Numeric(15, 2))

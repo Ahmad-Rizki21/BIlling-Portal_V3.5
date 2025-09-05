@@ -34,44 +34,61 @@ def get_api_connection(server_info: MikrotikServerModel):
         return None, None
 
 
-def update_pppoe_secret(api, data_teknis: DataTeknisModel, new_status: str):
-    """Mengubah status PPPoE secret di Mikrotik."""
+def update_pppoe_secret(api, old_id_pelanggan: str, data_teknis: DataTeknisModel, new_status: str):
+    """
+    Mengubah status dan detail PPPoE secret di Mikrotik.
+    Mencari berdasarkan NAMA LAMA, dan mengupdate semua data baru.
+    """
     try:
         ppp_secrets = api.get_resource("/ppp/secret")
 
-        # Cari user berdasarkan 'name' yang merujuk ke id_pelanggan Anda
-        target_secret = ppp_secrets.get(name=data_teknis.id_pelanggan)
+        # 1. Cari user berdasarkan 'name' LAMA
+        target_secret = ppp_secrets.get(name=old_id_pelanggan)
 
         if not target_secret:
             logger.warning(
-                f"PPPoE secret untuk '{data_teknis.id_pelanggan}' tidak ditemukan di Mikrotik."
+                f"PPPoE secret untuk nama lama '{old_id_pelanggan}' tidak ditemukan di Mikrotik. Mencoba mencari dengan nama baru '{data_teknis.id_pelanggan}'."
             )
-            return
+            # Coba cari dengan nama baru sebagai fallback (jika nama tidak diubah)
+            target_secret = ppp_secrets.get(name=data_teknis.id_pelanggan)
+            if not target_secret:
+                 logger.error(f"PPPoE secret '{data_teknis.id_pelanggan}' tetap tidak ditemukan. Update dibatalkan.")
+                 return
 
-        # Ambil ID internal dari secret yang ditemukan
-        user_id = target_secret[0]["id"]
+        # 2. Ambil ID internal dari secret yang ditemukan
+        secret_id = target_secret[0]["id"]
+        
+        # 3. Siapkan payload data baru untuk diupdate
+        update_payload = {
+            "id": secret_id,
+            "name": data_teknis.id_pelanggan, # Nama baru
+            "password": data_teknis.password_pppoe, # Password baru
+            "remote-address": data_teknis.ip_pelanggan, # IP baru
+        }
 
+        # 4. Atur profile dan status 'disabled' berdasarkan status langganan
         if new_status == "Aktif":
+            update_payload["profile"] = data_teknis.profile_pppoe
+            update_payload["disabled"] = "no"
             logger.info(
-                f"Mengaktifkan '{data_teknis.id_pelanggan}', profil diubah ke '{data_teknis.profile_pppoe}'"
+                f"Mengaktifkan '{old_id_pelanggan}' -> '{data_teknis.id_pelanggan}', profil: '{data_teknis.profile_pppoe}'"
             )
-            # --- PERBAIKAN DI SINI: Gunakan .set() ---
-            ppp_secrets.set(
-                id=user_id, disabled="no", profile=data_teknis.profile_pppoe
+        elif new_status == "Suspended":
+            update_payload["profile"] = "SUSPENDED"
+            update_payload["disabled"] = "yes"
+            logger.info(
+                f"Menonaktifkan '{old_id_pelanggan}' -> '{data_teknis.id_pelanggan}', profil: 'SUSPENDED'"
             )
 
-        elif new_status == "Suspended":
-            logger.info(
-                f"Menonaktifkan '{data_teknis.id_pelanggan}', profil diubah ke 'SUSPENDED'"
-            )
-            # --- PERBAIKAN DI SINI: Gunakan .set() ---
-            ppp_secrets.set(id=user_id, disabled="yes", profile="SUSPENDED")
+        # 5. Kirim perintah .set() dengan semua data baru
+        ppp_secrets.set(**update_payload)
 
         logger.info(f"Update PPPoE secret untuk '{data_teknis.id_pelanggan}' berhasil.")
 
     except Exception as e:
         logger.error(f"Terjadi error saat update PPPoE secret: {e}")
         raise e
+
 
 
 def remove_active_connection(api, id_pelanggan: str):
@@ -94,29 +111,24 @@ def remove_active_connection(api, id_pelanggan: str):
         # jika hanya gagal menghapus koneksi aktif.
 
 
-async def trigger_mikrotik_update(db: AsyncSession, langganan: LanggananModel):
+async def trigger_mikrotik_update(db: AsyncSession, langganan: LanggananModel, data_teknis: DataTeknisModel, old_id_pelanggan: str):
     """Fungsi utama yang dipanggil dari router atau job untuk trigger update ke Mikrotik."""
-    # Pastikan data yang dibutuhkan sudah di-load
-    if not hasattr(langganan, "pelanggan") or not hasattr(
-        langganan.pelanggan, "data_teknis"
-    ):
+    if not hasattr(langganan, "pelanggan"):
         logger.error(
-            f"Gagal trigger Mikrotik: Relasi 'pelanggan' atau 'data_teknis' tidak di-load untuk langganan ID {langganan.id}"
+            f"Gagal trigger Mikrotik: Relasi 'pelanggan' tidak di-load untuk langganan ID {langganan.id}"
         )
         return
-
-    data_teknis = langganan.pelanggan.data_teknis
-
+    
     if not data_teknis or not data_teknis.id_pelanggan:
         logger.warning(
-            f"Data teknis atau id_pelanggan untuk pelanggan ID {langganan.pelanggan_id} tidak ditemukan."
+            f"Data teknis atau id_pelanggan tidak valid. Skip update."
         )
         return
 
     server_id = data_teknis.mikrotik_server_id
     if not server_id:
         logger.error(
-            f"mikrotik_server_id tidak di-set untuk pelanggan ID {langganan.pelanggan_id}. Skip update."
+            f"mikrotik_server_id tidak di-set untuk data teknis ID {data_teknis.id}. Skip."
         )
         return
 
@@ -133,16 +145,53 @@ async def trigger_mikrotik_update(db: AsyncSession, langganan: LanggananModel):
         return
 
     try:
-        update_pppoe_secret(api, data_teknis, langganan.status)
+        # Panggil fungsi update yang sudah diperbaiki dengan argumen baru
+        update_pppoe_secret(api, old_id_pelanggan, data_teknis, langganan.status)
 
-        # Jika statusnya adalah Suspended, panggil juga fungsi untuk remove active connection
         if langganan.status == "Suspended":
+            # Saat suspend, hapus koneksi aktif dengan NAMA BARU
             remove_active_connection(api, data_teknis.id_pelanggan)
 
     finally:
         if connection:
             logger.info("Menutup koneksi Mikrotik.")
             connection.disconnect()
+
+def check_ip_in_secrets(api, ip_address: str) -> str | None:
+    """
+    Memeriksa apakah sebuah IP sudah digunakan sebagai 'remote-address' di PPP secrets.
+    Mengembalikan nama secret jika ditemukan, jika tidak None.
+    """
+    try:
+        ppp_secrets = api.get_resource("/ppp/secret")
+        # Query Mikrotik untuk mencari secret dengan remote-address yang cocok
+        existing_secret = ppp_secrets.get(remote_address=ip_address)
+        
+        if existing_secret:
+            # Jika ditemukan, kembalikan nama (ID Pelanggan) dari secret tersebut
+            owner_name = existing_secret[0].get('name', 'N/A')
+            logger.info(f"IP {ip_address} ditemukan di Mikrotik, digunakan oleh secret: {owner_name}")
+            return owner_name
+            
+        return None
+    except Exception as e:
+        logger.error(f"Gagal memeriksa IP di Mikrotik: {e}")
+        # Anggap tidak ditemukan jika terjadi error koneksi agar tidak menghalangi input
+        return None
+    
+def get_active_connections(api):
+    """
+    Mengambil daftar semua koneksi PPP yang sedang aktif dari Mikrotik.
+    """
+    try:
+        # Perintah ini akan mengambil semua entri dari /ppp/active
+        logger.info("Mengambil data live 'Active Connections' dari Mikrotik...")
+        active_list = api.get_resource('/ppp/active').get()
+        logger.info(f"Ditemukan {len(active_list)} koneksi aktif.")
+        return active_list
+    except Exception as e:
+        logger.error(f"Gagal mengambil 'Active Connections': {e}")
+        return []
 
 
 # --- FUNGSI BARU UNTUK MEMBUAT SECRET ---

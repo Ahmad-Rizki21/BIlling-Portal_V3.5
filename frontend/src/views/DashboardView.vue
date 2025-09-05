@@ -7,7 +7,7 @@
             <v-icon class="title-icon">mdi-view-dashboard</v-icon>
             Dashboard
           </h1>
-          <p class="dashboard-subtitle">Monitor your billing system performance</p>
+          <p class="dashboard-subtitle">Monitoring Customer Fiber To The Home Artacom Portal System's</p>
         </div>
         <div class="header-actions">
           <v-chip class="status-chip" color="success" size="small">
@@ -23,15 +23,30 @@
         <v-skeleton-loader v-if="loading" type="card-avatar, article" class="fill-height"></v-skeleton-loader>
         <div v-else class="revenue-card">
           <div class="revenue-card-content">
-            <div class="revenue-header">
-              <p class="revenue-title">Pendapatan Bulanan</p>
-              <div class="revenue-icon-wrapper">
-                <v-icon color="white">mdi-cash-multiple</v-icon>
+            <div class="revenue-main">
+              <div class="revenue-header">
+                <p class="revenue-title">Piutang</p>
+                <div class="revenue-icon-wrapper">
+                  <v-icon color="white">mdi-cash-multiple</v-icon>
+                </div>
+              </div>
+              <div class="revenue-body">
+                <h2 class="revenue-value">{{ formatCurrency(revenueData.total) }}</h2>
+                <p class="revenue-period">Periode {{ revenueData.periode }}</p>
               </div>
             </div>
-            <div class="revenue-body">
-              <h2 class="revenue-value">{{ formatCurrency(revenueData.total) }}</h2>
-              <p class="revenue-period">Periode {{ revenueData.periode }}</p>
+            <div class="revenue-divider"></div>
+            <div class="revenue-breakdown">
+              <div v-for="item in revenueData.breakdown" :key="item.brand" class="breakdown-item">
+                <div class="breakdown-header">
+                  <p class="breakdown-title">{{ item.brand }}</p>
+                  <v-icon size="20" class="breakdown-icon">
+                    {{ getIconForBrand(item.brand) }}
+                  </v-icon>
+                </div>
+                <p class="breakdown-value">{{ formatCurrency(item.revenue) }}</p>
+                <p class="breakdown-period">PERIODE {{ revenueData.periode.toUpperCase() }}</p>
+              </div>
             </div>
           </div>
           <div class="revenue-card-background"></div>
@@ -112,135 +127,174 @@
         </div>
       </div>
     </div>
-  </div>
-    <v-dialog v-model="dialogPaketDetail" max-width="700px" persistent>
-    <v-card class="package-detail-card elevation-12">
-      <div class="dialog-header">
-        <div class="header-gradient"></div>
-        <div class="header-content">
-          <div class="header-icon">
-            <v-icon size="32" color="white">mdi-package-variant</v-icon>
-          </div>
-          <div class="header-text">
-            <h2 class="dialog-title">{{ selectedPaketTitle }}</h2>
-            <p class="dialog-subtitle">Detail distribusi pelanggan</p>
-          </div>
-        </div>
-        <v-btn
-          icon="mdi-close"
-          variant="text"
-          color="white"
-          size="small"
-          class="close-btn"
-          @click="dialogPaketDetail = false"
-        ></v-btn>
+
+    <div class="charts-row">
+  <div v-if="statusChartData" class="chart-card">
+    <div class="chart-header">
+      <div class="chart-title-section">
+        <h3 class="chart-title">
+          <v-icon class="chart-icon" color="primary">mdi-account-details</v-icon>
+          Status Langganan
+        </h3>
+        <p class="chart-subtitle">Distribusi status semua langganan</p>
       </div>
+    </div>
+    <div class="chart-container donut-container">
+      <Chart v-if="!loading" type="doughnut" :data="statusChartData" :options="donutChartOptions" />
+      <div class="total-in-center">
+        <h3>{{ totalSubscriptions }}</h3>
+        <span>Total Langganan</span>
+      </div>
+    </div>
+  </div>
 
-      <v-card-text class="dialog-content" v-if="selectedPaketDetail">
-        <div class="summary-section">
-          <div class="summary-card">
-            <div class="summary-icon">
-              <v-icon color="primary">mdi-account-group</v-icon>
+
+      <div v-if="alamatChartData" class="chart-card">
+    <div class="chart-header">
+      <div class="chart-title-section">
+        <h3 class="chart-title">
+          <v-icon class="chart-icon" color="primary">mdi-map-marker-radius</v-icon>
+          Pelanggan Aktif per Alamat
+        </h3>
+        <p class="chart-subtitle">7 Lokasi dengan pelanggan aktif terbanyak</p>
+      </div>
+    </div>
+    <div class="chart-container">
+      <Chart v-if="!loading" type="pie" :data="alamatChartData" :options="pieChartOptions" />
+    </div>
+  </div>
+</div>
+
+    <v-dialog v-model="dialogPaketDetail" max-width="700px" persistent>
+      <v-card class="package-detail-card elevation-12">
+        <div class="dialog-header">
+          <div class="header-gradient"></div>
+          <div class="header-content">
+            <div class="header-icon">
+              <v-icon size="32" color="white">mdi-package-variant</v-icon>
             </div>
-            <div class="summary-content">
-              <div class="summary-label">Total Pelanggan</div>
-              <div class="summary-value">{{ selectedPaketDetail.total_pelanggan }}</div>
+            <div class="header-text">
+              <h2 class="dialog-title">{{ selectedPaketTitle }}</h2>
+              <p class="dialog-subtitle">Detail distribusi pelanggan</p>
             </div>
           </div>
+          <v-btn
+            icon="mdi-close"
+            variant="text"
+            color="white"
+            size="small"
+            class="close-btn"
+            @click="dialogPaketDetail = false"
+          ></v-btn>
         </div>
 
-        <div class="content-sections">
-          <div class="detail-section">
-            <div class="section-header">
-              <div class="section-icon location-icon">
-                <v-icon size="20">mdi-map-marker-radius</v-icon>
+        <v-card-text class="dialog-content" v-if="selectedPaketDetail">
+          <div class="summary-section">
+            <div class="summary-card">
+              <div class="summary-icon">
+                <v-icon color="primary">mdi-account-group</v-icon>
               </div>
-              <h3 class="section-title">Distribusi Lokasi</h3>
-            </div>
-            
-            <div class="items-grid">
-              <div 
-                v-for="item in selectedPaketDetail.breakdown_lokasi" 
-                :key="item.nama"
-                class="detail-item location-item"
-              >
-                <div class="item-content">
-                  <div class="item-icon">
-                    <v-icon size="18" color="info">mdi-map-marker</v-icon>
-                  </div>
-                  <div class="item-info">
-                    <div class="item-name">{{ item.nama }}</div>
-                    <div class="item-subtitle">Lokasi</div>
-                  </div>
-                </div>
-                <div class="item-value">
-                  <v-chip 
-                    color="info" 
-                    variant="flat"
-                    size="small"
-                    class="value-chip"
-                  >
-                    {{ item.jumlah }}
-                  </v-chip>
-                </div>
+              <div class="summary-content">
+                <div class="summary-label">Total Pelanggan</div>
+                <div class="summary-value">{{ selectedPaketDetail.total_pelanggan }}</div>
               </div>
             </div>
           </div>
 
-          <div class="detail-section">
-            <div class="section-header">
-              <div class="section-icon brand-icon">
-                <v-icon size="20">mdi-tag-outline</v-icon>
+          <div class="content-sections">
+            <div class="detail-section">
+              <div class="section-header">
+                <div class="section-icon location-icon">
+                  <v-icon size="20">mdi-map-marker-radius</v-icon>
+                </div>
+                <h3 class="section-title">Distribusi Lokasi</h3>
               </div>
-              <h3 class="section-title">Distribusi Brand</h3>
-            </div>
-            
-            <div class="items-grid">
-              <div 
-                v-for="item in selectedPaketDetail.breakdown_brand" 
-                :key="item.nama"
-                class="detail-item brand-item"
-              >
-                <div class="item-content">
-                  <div class="item-icon">
-                    <v-icon size="18" color="success">mdi-tag</v-icon>
+              
+              <div class="items-grid">
+                <div 
+                  v-for="item in selectedPaketDetail.breakdown_lokasi" 
+                  :key="item.nama"
+                  class="detail-item location-item"
+                >
+                  <div class="item-content">
+                    <div class="item-icon">
+                      <v-icon size="18" color="info">mdi-map-marker</v-icon>
+                    </div>
+                    <div class="item-info">
+                      <div class="item-name">{{ item.nama }}</div>
+                      <div class="item-subtitle">Lokasi</div>
+                    </div>
                   </div>
-                  <div class="item-info">
-                    <div class="item-name">{{ item.nama }}</div>
-                    <div class="item-subtitle">Brand</div>
+                  <div class="item-value">
+                    <v-chip 
+                      color="info" 
+                      variant="flat"
+                      size="small"
+                      class="value-chip"
+                    >
+                      {{ item.jumlah }}
+                    </v-chip>
                   </div>
                 </div>
-                <div class="item-value">
-                  <v-chip 
-                    color="success" 
-                    variant="flat"
-                    size="small"
-                    class="value-chip"
-                  >
-                    {{ item.jumlah }}
-                  </v-chip>
+              </div>
+            </div>
+
+            <div class="detail-section">
+              <div class="section-header">
+                <div class="section-icon brand-icon">
+                  <v-icon size="20">mdi-tag-outline</v-icon>
+                </div>
+                <h3 class="section-title">Distribusi Brand</h3>
+              </div>
+              
+              <div class="items-grid">
+                <div 
+                  v-for="item in selectedPaketDetail.breakdown_brand" 
+                  :key="item.nama"
+                  class="detail-item brand-item"
+                >
+                  <div class="item-content">
+                    <div class="item-icon">
+                      <v-icon size="18" color="success">mdi-tag</v-icon>
+                    </div>
+                    <div class="item-info">
+                      <div class="item-name">{{ item.nama }}</div>
+                      <div class="item-subtitle">Brand</div>
+                    </div>
+                  </div>
+                  <div class="item-value">
+                    <v-chip 
+                      color="success" 
+                      variant="flat"
+                      size="small"
+                      class="value-chip"
+                    >
+                      {{ item.jumlah }}
+                    </v-chip>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-      </v-card-text>
+        </v-card-text>
 
-      <v-card-actions class="dialog-footer">
-        <v-spacer></v-spacer>
-        <v-btn
-          color="primary"
-          variant="elevated"
-          size="large"
-          class="close-action-btn"
-          @click="dialogPaketDetail = false"
-        >
-          <v-icon start>mdi-check</v-icon>
-          Tutup
-        </v-btn>
-      </v-card-actions>
-    </v-card>
-  </v-dialog>
+        <v-card-actions class="dialog-footer">
+          <v-spacer></v-spacer>
+          <v-btn
+            color="primary"
+            variant="elevated"
+            size="large"
+            class="close-action-btn"
+            @click="dialogPaketDetail = false"
+          >
+            <v-icon start>mdi-check</v-icon>
+            Tutup
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+    
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -259,67 +313,77 @@ import {
   CategoryScale, 
   LinearScale, 
   Filler,
-  ChartOptions
+  ChartOptions,
+  DoughnutController,
+  PieController,
+  ArcElement
 } from 'chart.js';
 import { useTheme } from 'vuetify';
 import apiClient from '@/services/api';
 
-// Mendaftarkan semua komponen yang dibutuhkan
 ChartJS.register(
-  Title, Tooltip, Legend, BarElement, BarController, LineElement, LineController, PointElement, CategoryScale, LinearScale, Filler
+  Title, Tooltip, Legend, BarElement, BarController, LineElement, LineController, PointElement, CategoryScale, LinearScale, Filler, DoughnutController, PieController, ArcElement // <-- TAMBAHKAN INI
 );
 
 const theme = useTheme();
 const loading = ref(true);
 
-// --- Inisialisasi state menjadi null atau array kosong ---
+// --- State ---
 const revenueData = ref<any>(null);
 const allStats = ref<any[]>([]);
 const lokasiChartData = ref<any>(null);
 const paketChartData = ref<any>(null);
 const growthChartData = ref<any>(null);
 const invoiceChartData = ref<any>(null);
+const statusChartData = ref<any>(null);
+const alamatChartData = ref<any>(null);
 
-// --- State untuk dialog detail paket (yang sebelumnya hilang) ---
 const paketDetailData = ref<any>({});
 const dialogPaketDetail = ref(false);
 const selectedPaketTitle = ref('');
 const selectedPaketDetail = ref<any>(null);
 
-
-// Pisahkan stat pelanggan dan server menggunakan computed property
+// --- Computed Properties ---
 const customerStats = computed(() => 
   allStats.value.filter(s => s.title.toLowerCase().includes('pelanggan'))
 );
 const serverStats = computed(() => 
   allStats.value.filter(s => s.title.toLowerCase().includes('server'))
 );
+const totalSubscriptions = computed(() => {
+  if (!statusChartData.value?.datasets[0]?.data) {
+    return 0;
+  }
+  return statusChartData.value.datasets[0].data.reduce((sum: number, current: number) => sum + current, 0);
+});
 
+// --- Methods ---
 const formatCurrency = (value: number) => {
   if (typeof value !== 'number') return 'Rp 0';
   return new Intl.NumberFormat('id-ID', {
-    style: 'currency',
-    currency: 'IDR',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
+    style: 'currency', currency: 'IDR', minimumFractionDigits: 0
   }).format(value);
 };
 
-// Fungsi yang dipanggil saat chart diklik (yang sebelumnya hilang)
 function handlePaketChartClick(_event: any, elements: any[]) {
   if (elements.length === 0) return;
-
   const chart = elements[0].element.$context.chart;
   const index = elements[0].index;
   const label = chart.data.labels[index];
-
   const detail = paketDetailData.value[label];
-
   if (detail) {
     selectedPaketTitle.value = `Rincian Paket: ${label}`;
     selectedPaketDetail.value = detail;
     dialogPaketDetail.value = true;
   }
+}
+
+function getIconForBrand(brandName: string) {
+  const name = brandName.toLowerCase();
+  if (name.includes('jakinet')) return 'mdi-account-network';
+  if (name.includes('nagrak')) return 'mdi-home-group';
+  if (name.includes('jelantik')) return 'mdi-account-group';
+  return 'mdi-tag-outline';
 }
 
 async function fetchPaketDetails() {
@@ -350,19 +414,14 @@ onMounted(async () => {
     const response = await apiClient.get('/dashboard/');
     const data = response.data;
 
-    // --- Assign data dari backend dengan format yang benar ---
-    
-    // 1. Data Revenue
     revenueData.value = data.revenue_summary;
     
-    // 2. Data Stat Cards
     allStats.value = (data.stat_cards || []).map((card: any) => ({
       ...card,
       icon: getIconForStat(card.title),
       color: getColorForStat(card.title)
     }));
     
-    // 3. Data Chart Lokasi
     if (data.lokasi_chart) {
       lokasiChartData.value = {
         labels: data.lokasi_chart.labels,
@@ -370,14 +429,11 @@ onMounted(async () => {
           label: 'Jumlah Pelanggan',
           data: data.lokasi_chart.data,
           backgroundColor: 'rgba(99, 102, 241, 0.8)',
-          borderColor: 'rgb(99, 102, 241)',
-          borderWidth: 2,
           borderRadius: 8,
         }]
       };
     }
 
-    // 4. Data Chart Paket
     if (data.paket_chart) {
       paketChartData.value = {
         labels: data.paket_chart.labels,
@@ -385,14 +441,11 @@ onMounted(async () => {
           label: 'Jumlah Pelanggan',
           data: data.paket_chart.data,
           backgroundColor: 'rgba(34, 197, 94, 0.8)',
-          borderColor: 'rgb(34, 197, 94)',
-          borderWidth: 2,
           borderRadius: 8,
         }]
       };
     }
 
-    // 5. Data Chart Pertumbuhan
     if (data.growth_chart) {
       growthChartData.value = {
         labels: data.growth_chart.labels,
@@ -407,30 +460,82 @@ onMounted(async () => {
       };
     }
     
-    // 6. Data Chart Invoice
     if (data.invoice_summary_chart) {
-        invoiceChartData.value = {
-            labels: data.invoice_summary_chart.labels,
-            datasets: [
-                { type: 'line', label: 'Total Invoice', data: data.invoice_summary_chart.total, borderColor: 'rgb(168, 85, 247)', tension: 0.4, fill: true },
-                { type: 'bar', label: 'Lunas', data: data.invoice_summary_chart.lunas, backgroundColor: 'rgba(34, 197, 94, 0.8)', stack: 'Stack 0' },
-                { type: 'bar', label: 'Menunggu', data: data.invoice_summary_chart.menunggu, backgroundColor: 'rgba(251, 191, 36, 0.8)', stack: 'Stack 0' },
-                { type: 'bar', label: 'Kadaluarsa', data: data.invoice_summary_chart.kadaluarsa, backgroundColor: 'rgba(239, 68, 68, 0.8)', stack: 'Stack 0' },
-            ]
-        };
+      invoiceChartData.value = {
+        labels: data.invoice_summary_chart.labels,
+        datasets: [
+            { type: 'line', label: 'Total Invoice', data: data.invoice_summary_chart.total, borderColor: 'rgb(168, 85, 247)', tension: 0.4, fill: true },
+            { type: 'bar', label: 'Lunas', data: data.invoice_summary_chart.lunas, backgroundColor: 'rgba(34, 197, 94, 0.8)', stack: 'Stack 0' },
+            { type: 'bar', label: 'Menunggu', data: data.invoice_summary_chart.menunggu, backgroundColor: 'rgba(251, 191, 36, 0.8)', stack: 'Stack 0' },
+            { type: 'bar', label: 'Kadaluarsa', data: data.invoice_summary_chart.kadaluarsa, backgroundColor: 'rgba(239, 68, 68, 0.8)', stack: 'Stack 0' },
+        ]
+      };
     }
 
-    // Panggil juga fungsi untuk mengambil detail paket untuk fungsionalitas klik
+    if (data.status_langganan_chart) {
+      statusChartData.value = {
+        labels: data.status_langganan_chart.labels,
+        datasets: [{
+            data: data.status_langganan_chart.data,
+            // Anda bisa menyesuaikan warna ini
+            backgroundColor: ['#22c55e', '#ef4444', '#f59e0b'], 
+            borderColor: theme.global.current.value.dark ? '#1E1E1E' : '#FFFFFF',
+            borderWidth: 4,
+        }]
+      };
+    }
+
+    if (data.pelanggan_per_alamat_chart) {
+      alamatChartData.value = {
+        labels: data.pelanggan_per_alamat_chart.labels,
+        datasets: [{
+            data: data.pelanggan_per_alamat_chart.data,
+            // Sediakan beberapa warna, akan digunakan berulang jika data lebih banyak
+            backgroundColor: [
+              '#6366f1', '#22c55e', '#f97316', '#3b82f6', 
+              '#ec4899', '#f59e0b', '#10b981'
+            ], 
+            borderColor: theme.global.current.value.dark ? '#1E1E1E' : '#FFFFFF',
+            borderWidth: 4,
+        }]
+      };
+    }
+
     fetchPaketDetails();
 
   } catch (error) {
     console.error("Failed to fetch dashboard data:", error);
   } finally {
     loading.value = false;
-    // Panggil status mikrotik secara terpisah agar tidak memblokir UI
     fetchMikrotikStats();
   }
 });
+
+
+const pieChartOptions = computed((): ChartOptions<'pie'> => ({
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: { 
+    legend: { 
+      position: 'bottom' as const, 
+      labels: { 
+        color: chartAxisColor.value, 
+        usePointStyle: true, 
+        pointStyle: 'circle' as const, 
+        padding: 20,
+        font: { size: 12, weight: 'bold' as const } 
+      }
+    },
+    tooltip: {
+      backgroundColor: theme.global.current.value.dark ? 'rgba(0, 0, 0, 0.9)' : 'rgba(255, 255, 255, 0.95)',
+      titleColor: chartAxisColor.value,
+      bodyColor: chartAxisColor.value,
+      borderColor: chartGridColor.value,
+      borderWidth: 1,
+      cornerRadius: 8,
+    }
+  },
+}));
 
 function getIconForStat(title: string) {
   if (title.toLowerCase().includes('jakinet')) return 'mdi-account-network';
@@ -452,13 +557,14 @@ function getColorForStat(title: string) {
   return 'primary';
 }
 
+// --- Chart Options (HANYA SATU BLOK) ---
 const chartAxisColor = computed(() => theme.global.current.value.dark ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.7)');
 const chartGridColor = computed(() => theme.global.current.value.dark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)');
 
 const chartOptions = computed((): ChartOptions<'bar'> => ({
   responsive: true,
   maintainAspectRatio: false,
-  onClick: handlePaketChartClick, // <-- Fungsi ini sekarang sudah terdefinisi
+  onClick: handlePaketChartClick,
   plugins: { 
     legend: { display: false },
     tooltip: {
@@ -468,7 +574,6 @@ const chartOptions = computed((): ChartOptions<'bar'> => ({
       borderColor: chartGridColor.value,
       borderWidth: 1,
       cornerRadius: 8,
-      displayColors: true,
     }
   },
   scales: {
@@ -495,31 +600,21 @@ const growthChartOptions = computed((): ChartOptions<'line'> => ({
     },
     tooltip: {
       backgroundColor: theme.global.current.value.dark ? 'rgba(0, 0, 0, 0.9)' : 'rgba(255, 255, 255, 0.95)',
-      titleColor: chartAxisColor.value,
-      bodyColor: chartAxisColor.value,
       borderColor: 'rgb(236, 72, 153)',
       borderWidth: 2,
-      cornerRadius: 8,
-      displayColors: true,
-      mode: 'index' as const,
-      intersect: false,
     }
   },
   scales: {
     y: { 
       beginAtZero: true, 
-      grid: { color: chartGridColor.value, },
-      border: { display: false, },
-      ticks: { color: chartAxisColor.value, font: { size: 12, weight: 'normal' as const },
-        callback: function(value) { return value + ' orang'; }
-      },
-      title: { display: true, text: 'Jumlah Pelanggan Baru', color: chartAxisColor.value, font: { size: 13, weight: 'bold' as const } }
+      grid: { color: chartGridColor.value },
+      ticks: { color: chartAxisColor.value },
+      title: { display: true, text: 'Jumlah Pelanggan Baru', color: chartAxisColor.value }
     },
     x: { 
-      grid: { display: false, },
-      border: { display: false, },
-      ticks: { color: chartAxisColor.value, font: { size: 12, weight: 'normal' as const } },
-      title: { display: true, text: 'Periode', color: chartAxisColor.value, font: { size: 13, weight: 'bold' as const } }
+      grid: { display: false },
+      ticks: { color: chartAxisColor.value },
+      title: { display: true, text: 'Periode', color: chartAxisColor.value }
     },
   },
 }));
@@ -532,30 +627,40 @@ const invoiceChartOptions = computed((): ChartOptions<'bar'> => ({
       position: 'top' as const, 
       labels: { color: chartAxisColor.value, usePointStyle: true, pointStyle: 'circle' as const, font: { size: 12, weight: 'bold' as const } }
     },
-    tooltip: {
-      backgroundColor: theme.global.current.value.dark ? 'rgba(0, 0, 0, 0.9)' : 'rgba(255, 255, 255, 0.95)',
-      titleColor: chartAxisColor.value,
-      bodyColor: chartAxisColor.value,
-      borderColor: chartGridColor.value,
-      borderWidth: 1,
-      cornerRadius: 8,
-      displayColors: true,
-    }
   },
   scales: {
     y: { 
       stacked: true, 
       beginAtZero: true, 
       grid: { color: chartGridColor.value },
-      ticks: { color: chartAxisColor.value, font: { size: 12, weight: 'normal' as const } }
+      ticks: { color: chartAxisColor.value }
     },
     x: { 
       stacked: true, 
       grid: { display: false },
-      ticks: { color: chartAxisColor.value, font: { size: 12, weight: 'normal' as const } }
+      ticks: { color: chartAxisColor.value }
     },
   },
 }));
+
+const donutChartOptions = computed((): ChartOptions<'doughnut'> => ({
+  responsive: true,
+  maintainAspectRatio: false,
+  cutout: '70%', // Ini yang membuat chart menjadi Doughnut, bukan Pie
+  plugins: { 
+    legend: { 
+      position: 'bottom' as const, 
+      labels: { 
+        color: chartAxisColor.value, 
+        usePointStyle: true, 
+        pointStyle: 'circle' as const, 
+        padding: 20,
+        font: { size: 12, weight: 'bold' as const } 
+      }
+    }
+  },
+}));
+
 </script>
 
 <style scoped>
@@ -580,23 +685,128 @@ const invoiceChartOptions = computed((): ChartOptions<'bar'> => ({
   }
 }
 
+/* === MODIFIKASI CSS UNTUK WIDGET PENDAPATAN === */
 .revenue-widget-container { min-height: 220px; }
+
 .revenue-card {
   position: relative;
   border-radius: 16px;
   overflow: hidden;
   color: white;
-  padding: 1.75rem;
   background: linear-gradient(135deg, #3b82f6 0%, #6366f1 100%);
   box-shadow: 0 10px 20px rgba(59, 130, 246, 0.2);
   transition: all 0.3s ease-in-out;
   height: 100%;
+}
+
+.donut-container {
+  position: relative;
+}
+
+.total-in-center {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  pointer-events: none; /* Agar tidak mengganggu tooltip chart */
+}
+
+.total-in-center h3 {
+  font-size: 2rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.total-in-center span {
+  font-size: 0.8rem;
+  font-weight: 500;
+  opacity: 0.7;
+}
+
+/* Gunakan flexbox untuk membagi kartu menjadi dua bagian */
+.revenue-card-content {
+  z-index: 2;
+  position: relative;
+  display: flex;
+  height: 100%;
+  padding: 0; /* Hapus padding lama */
+}
+
+/* Bagian utama (kiri) untuk total pendapatan */
+.revenue-main {
+  flex: 1.2; /* Beri ruang lebih besar untuk total */
+  padding: 1.75rem;
   display: flex;
   flex-direction: column;
   justify-content: center;
 }
+
+/* Garis pemisah di tengah */
+.revenue-divider {
+  width: 1px;
+  background: rgba(255, 255, 255, 0.25);
+  margin: 1.5rem 0;
+}
+
+/* Bagian rincian (kanan) untuk brand */
+.revenue-breakdown {
+  flex: 1; /* Ruang lebih kecil */
+  padding: 1.75rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around; /* Beri jarak antar item */
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.breakdown-item {
+  text-align: left;
+}
+
+.breakdown-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.breakdown-title {
+  font-size: 0.9rem; /* Sedikit lebih kecil */
+  font-weight: 600;
+  opacity: 0.9;
+}
+
+.breakdown-icon {
+  opacity: 0.8;
+}
+
+.breakdown-value {
+  font-size: 1.5rem; /* Lebih kecil dari total utama */
+  font-weight: 700;
+  line-height: 1.2;
+  margin: 0.25rem 0;
+}
+.revenue-breakdown {
+  justify-content: center; /* Mengubah dari space-around agar lebih rapi */
+  gap: 0.5rem; /* Menambahkan sedikit jarak */
+}
+
+.breakdown-value {
+  font-size: 1.35rem; /* Sedikit lebih kecil agar muat */
+}
+
+.breakdown-title {
+  font-size: 0.85rem; /* Sedikit lebih kecil agar muat */
+}
+.breakdown-period {
+  font-size: 0.7rem; /* Sangat kecil */
+  font-weight: 500;
+  opacity: 0.7;
+  letter-spacing: 0.5px;
+}
+
+
 .revenue-card:hover { transform: translateY(-5px); box-shadow: 0 15px 25px rgba(59, 130, 246, 0.3); }
-.revenue-card-content { z-index: 2; position: relative; }
+
 .revenue-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
 .revenue-title { font-size: 1rem; font-weight: 600; opacity: 0.9; }
 .revenue-icon-wrapper { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; background: rgba(255, 255, 255, 0.2); }
@@ -609,8 +819,6 @@ const invoiceChartOptions = computed((): ChartOptions<'bar'> => ({
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 1.5rem;
 }
-
-
 
 /* Header Section - Improved Responsive Layout */
 .dashboard-header {
@@ -697,6 +905,14 @@ const invoiceChartOptions = computed((): ChartOptions<'bar'> => ({
 @media (min-width: 1200px) {
   .stats-grid {
     grid-template-columns: repeat(3, 1fr);
+  }
+  .revenue-card-content {
+    flex-direction: row; /* Kembali ke row di layar besar */
+  }
+  .revenue-divider {
+    width: 1px;
+    height: auto;
+    margin: 1.5rem 0;
   }
 }
 
@@ -820,6 +1036,7 @@ const invoiceChartOptions = computed((): ChartOptions<'bar'> => ({
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
   gap: 1.5rem;
+  margin-bottom: 1.7rem;
 }
 
 .chart-card {
@@ -827,7 +1044,7 @@ const invoiceChartOptions = computed((): ChartOptions<'bar'> => ({
   backdrop-filter: blur(20px);
   border-radius: 16px;
   padding: 1.25rem;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  /* border: 1px solid rgba(255, 255, 255, 0.2); */
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -935,6 +1152,20 @@ const invoiceChartOptions = computed((): ChartOptions<'bar'> => ({
 }
 
 /* Responsive Design */
+@media (max-width: 1200px) {
+    .revenue-card-content {
+    flex-direction: column;
+  }
+  .revenue-divider {
+    width: auto;
+    height: 1px;
+    margin: 0 1.5rem;
+  }
+  .revenue-main, .revenue-breakdown {
+    flex: none; /* Hapus flex-grow */
+  }
+}
+
 @media (max-width: 768px) {
   .dashboard-container {
     padding: 1rem;

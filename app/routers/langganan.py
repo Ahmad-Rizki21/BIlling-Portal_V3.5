@@ -107,7 +107,8 @@ async def create_langganan(
         select(LanggananModel)
         .where(LanggananModel.id == db_langganan.id)
         .options(
-            selectinload(LanggananModel.pelanggan),
+            # Sama seperti di atas, muat relasi secara bersarang
+            selectinload(LanggananModel.pelanggan).selectinload(PelangganModel.harga_layanan),
             selectinload(LanggananModel.paket_layanan),
         )
     )
@@ -132,8 +133,8 @@ async def get_all_langganan(
         select(LanggananModel)
         .join(LanggananModel.pelanggan)
         .options(
-            selectinload(LanggananModel.paket_layanan),
-            selectinload(LanggananModel.pelanggan),
+            selectinload(LanggananModel.pelanggan).selectinload(PelangganModel.harga_layanan),
+            selectinload(LanggananModel.paket_layanan)
         )
     )
 
@@ -178,14 +179,17 @@ async def update_langganan(
         select(LanggananModel)
         .where(LanggananModel.id == db_langganan.id)
         .options(
-            selectinload(LanggananModel.pelanggan),
+            # UBAH BAGIAN INI:
+            # Muat relasi pelanggan, DAN di dalamnya muat juga relasi harga_layanan
+            selectinload(LanggananModel.pelanggan).selectinload(PelangganModel.harga_layanan),
             selectinload(LanggananModel.paket_layanan),
         )
     )
     result = await db.execute(query)
-    created_langganan = result.scalar_one()
+    # Ganti nama variabel agar tidak ambigu
+    updated_langganan = result.scalar_one()
 
-    return created_langganan
+    return updated_langganan
 
 
 @router.delete("/{langganan_id}", status_code=status.HTTP_204_NO_CONTENT)

@@ -26,7 +26,8 @@ router = APIRouter(
 async def get_revenue_report(
     start_date: date,
     end_date: date,
-    alamat: Optional[str] = None,  # 1. Tambah parameter 'alamat' (opsional)
+    alamat: Optional[str] = None,
+    id_brand: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
     current_user: UserModel = Depends(get_current_active_user),
 ):
@@ -44,6 +45,9 @@ async def get_revenue_report(
     )
     if alamat:  # 3. Terapkan filter jika 'alamat' diberikan
         total_revenue_query = total_revenue_query.where(PelangganModel.alamat == alamat)
+
+    if id_brand:
+        total_revenue_query = total_revenue_query.where(PelangganModel.id_brand == id_brand)
 
     total_revenue_result = await db.execute(total_revenue_query)
     total_pendapatan = total_revenue_result.scalar_one_or_none() or 0.0
@@ -65,6 +69,9 @@ async def get_revenue_report(
     )
     if alamat:  # 3. Terapkan filter jika 'alamat' diberikan
         invoices_query = invoices_query.where(PelangganModel.alamat == alamat)
+    
+    if id_brand:
+        invoices_query = invoices_query.where(PelangganModel.id_brand == id_brand)
 
     invoices_result = await db.execute(invoices_query)
     invoices = invoices_result.scalars().unique().all()

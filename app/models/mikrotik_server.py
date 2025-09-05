@@ -15,6 +15,7 @@ from ..database import Base
 # Tambahkan blok ini untuk type hinting relasi
 if TYPE_CHECKING:
     from .data_teknis import DataTeknis
+    from .olt import OLT
 
 
 class MikrotikServer(Base):
@@ -48,3 +49,4 @@ class MikrotikServer(Base):
         back_populates="mikrotik_server"
     )
     # -----------------------------------
+    olts: Mapped[List["OLT"]] = relationship(back_populates="mikrotik_server")

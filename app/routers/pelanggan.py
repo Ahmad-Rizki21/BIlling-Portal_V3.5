@@ -300,7 +300,6 @@ async def import_from_csv(
     """
     Mengimpor data pelanggan dari file CSV dengan validasi mendalam dan laporan error.
     """
-    # 1. Validasi awal file
     if not file.filename or not file.filename.lower().endswith(".csv"):
         raise HTTPException(status_code=400, detail="File harus berformat .csv")
 
@@ -308,124 +307,90 @@ async def import_from_csv(
     if not contents:
         raise HTTPException(status_code=400, detail="File kosong.")
 
-    # 2. Baca dan proses file CSV
     try:
-        # Deteksi encoding secara otomatis untuk kompatibilitas
         encoding = chardet.detect(contents)["encoding"] or "utf-8"
         content_str = contents.decode(encoding)
         stream = io.StringIO(content_str)
-
-        # Gunakan DictReader, cara paling andal untuk membaca CSV dengan header
         reader = csv.DictReader(stream)
-
-        # Validasi sederhana: pastikan header ada
         if not reader.fieldnames:
-            raise HTTPException(
-                status_code=400,
-                detail="Header tidak ditemukan atau file CSV tidak valid.",
-            )
-
-        logger.info(f"CSV Headers found: {reader.fieldnames}")
-
+            raise HTTPException(status_code=400, detail="Header CSV tidak ditemukan.")
     except Exception as e:
-        logger.error(f"Gagal membaca atau mem-parsing file CSV: {e}")
-        raise HTTPException(status_code=400, detail=f"Gagal memproses file CSV: {e}")
+        logger.error(f"Gagal membaca atau mem-parsing file CSV: {repr(e)}")
+        raise HTTPException(status_code=400, detail=f"Gagal memproses file CSV: {repr(e)}")
 
-    # 3. Siapkan untuk validasi data
-    # Mapping nama kolom di CSV ke field di skema Pydantic
     column_mapping = {
-        "Nama": "nama",
-        "No KTP": "no_ktp",
-        "Email": "email",
-        "No Telepon": "no_telp",
-        "Alamat": "alamat",
-        "Alamat 2": "alamat_2",
-        "Blok": "blok",
-        "Unit": "unit",
+        "Nama": "nama", "No KTP": "no_ktp", "Email": "email",
+        "No Telepon": "no_telp", "Alamat": "alamat", "Alamat 2": "alamat_2",
+        "Blok": "blok", "Unit": "unit",
         "Tanggal Instalasi (YYYY-MM-DD)": "tgl_instalasi",
-        "Layanan": "layanan",
-        "ID Brand": "id_brand",
+        "Layanan": "layanan", "ID Brand": "id_brand",
     }
 
     new_customers = []
     errors = []
+    processed_emails_in_file = set()
 
-    # 4. Loop melalui setiap baris data (header sudah otomatis dilewati oleh DictReader)
-    for row_num, row in enumerate(reader, start=2):  # Mulai dari baris 2 untuk logging
-        data = {}
-        # Membersihkan dan memetakan data dari baris CSV
-        for csv_header, model_field in column_mapping.items():
-            # Ambil nilai dari baris, bersihkan spasi di awal/akhir
-            value = row.get(csv_header, "").strip()
-            # Hanya proses jika sel tidak kosong. "N/A" akan dianggap sebagai data valid.
-            if value:
-                data[model_field] = value
+    # Ambil semua email yang ada di database dalam satu query untuk efisiensi
+    existing_emails_q = await db.execute(select(func.lower(PelangganModel.email)))
+    existing_emails_in_db = set(existing_emails_q.scalars().all())
 
-        # Lewati baris yang sepenuhnya kosong
+    for row_num, row in enumerate(reader, start=2):
+        data = {model_field: row.get(csv_header, "").strip() for csv_header, model_field in column_mapping.items() if row.get(csv_header, "").strip()}
         if not data:
-            logger.warning(f"Skipping empty row {row_num}")
             continue
 
         try:
-            # Validasi tanggal jika ada
+            # Validasi dan konversi tanggal
             if "tgl_instalasi" in data:
                 try:
                     data["tgl_instalasi"] = parser.parse(data["tgl_instalasi"]).date()
                 except (parser.ParserError, ValueError):
-                    errors.append(
-                        f"Baris {row_num}: Format tanggal tidak valid untuk '{data['tgl_instalasi']}'. Gunakan YYYY-MM-DD."
-                    )
+                    errors.append(f"Baris {row_num}: Format tanggal tidak valid untuk '{data['tgl_instalasi']}'. Gunakan YYYY-MM-DD.")
                     continue
 
-            # Validasi data menggunakan skema Pydantic
+            # Validasi format Pydantic
             customer_schema = PelangganCreate(**data)
-            # Jika valid, tambahkan ke daftar untuk disimpan
+            email_lower = customer_schema.email.lower()
+
+            # Validasi duplikat di file CSV
+            if email_lower in processed_emails_in_file:
+                errors.append(f"Baris {row_num}: Email '{customer_schema.email}' duplikat di dalam file CSV.")
+                continue
+
+            # Validasi duplikat di database
+            if email_lower in existing_emails_in_db:
+                errors.append(f"Baris {row_num}: Email '{customer_schema.email}' sudah terdaftar di database.")
+                continue
+
             new_customers.append(PelangganModel(**customer_schema.model_dump()))
-            logger.info(
-                f"Valid customer prepared from row {row_num}: {data.get('nama')}"
-            )
+            processed_emails_in_file.add(email_lower)
+            logger.info(f"Valid customer prepared from row {row_num}: {data.get('nama')}")
 
         except ValidationError as e:
-            # Tangkap error validasi dari Pydantic
-            error_details = "; ".join(
-                [f"{err['loc'][0]}: {err['msg']}" for err in e.errors()]
-            )
+            error_details = "; ".join([f"{err['loc'][0]}: {err['msg']}" for err in e.errors()])
             errors.append(f"Baris {row_num}: {error_details}")
         except Exception as e:
-            # Tangkap error tak terduga lainnya
-            errors.append(f"Baris {row_num}: Terjadi error - {str(e)}")
+            # Gunakan repr(e) untuk penanganan error yang aman
+            errors.append(f"Baris {row_num}: Terjadi error tak terduga - {repr(e)}")
 
-    # 5. Laporkan error jika ada
     if errors:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail={
-                "message": f"Ditemukan {len(errors)} kesalahan dalam file.",
-                "errors": errors,
-            },
+            detail={"message": f"Ditemukan {len(errors)} kesalahan dalam file.", "errors": errors},
         )
 
     if not new_customers:
-        raise HTTPException(
-            status_code=400, detail="Tidak ada data pelanggan yang valid untuk diimpor."
-        )
+        raise HTTPException(status_code=400, detail="Tidak ada data pelanggan yang valid untuk diimpor.")
 
-    # 6. Simpan ke database jika tidak ada error
     try:
         db.add_all(new_customers)
         await db.commit()
     except Exception as e:
         await db.rollback()
-        raise HTTPException(
-            status_code=500,
-            detail=f"Terjadi kesalahan saat menyimpan ke database: {str(e)}",
-        )
+        logger.error(f"Database error during import: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Gagal menyimpan ke database: {repr(e)}")
 
-    # 7. Kirim pesan sukses
-    return {
-        "message": f"Sukses! Berhasil mengimpor {len(new_customers)} pelanggan baru."
-    }
-
+    return {"message": f"Sukses! Berhasil mengimpor {len(new_customers)} pelanggan baru."}
 
 # ========================================================== IMPORT DAN EXPORT ==========================================================
 

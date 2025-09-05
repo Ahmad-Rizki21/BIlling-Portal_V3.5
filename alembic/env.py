@@ -30,7 +30,14 @@ from app.models.role import Role, role_has_permissions
 from app.models.permission import Permission
 from app.models.user import User
 from app.models.sk import SK
+from app.models.olt import OLT
+from app.models.odp import ODP
+from app.models.system_setting import SystemSetting
 
+from app.models.inventory_item_type import InventoryItemType
+from app.models.inventory_status import InventoryStatus
+from app.models.inventory_item import InventoryItem
+from app.models.inventory_history import InventoryHistory
 # ====================================================================
 
 

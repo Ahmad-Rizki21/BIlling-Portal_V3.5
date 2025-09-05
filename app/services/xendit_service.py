@@ -83,8 +83,10 @@ async def create_xendit_invoice(
     brand_prefix = brand_prefix_map.get(id_brand_pelanggan, brand_info.brand)
     nama_user = pelanggan.nama.replace(" ", "")
     lokasi_singkat = pelanggan.alamat.split(" ")[0] if pelanggan.alamat else "Lokasi"
-    bulan_tagihan_sebenarnya = invoice.tgl_jatuh_tempo + relativedelta(months=1)
-    bulan_tahun = bulan_tagihan_sebenarnya.strftime("%B-%Y")
+
+    # ▼▼▼ PERBAIKAN DI SINI ▼▼▼
+    # Langsung format tanggal jatuh tempo dari invoice tanpa menambahkan bulan
+    bulan_tahun = invoice.tgl_jatuh_tempo.strftime("%B-%Y")
 
     payload["external_id"] = (
         f"{brand_prefix}/ftth/{nama_user}/{bulan_tahun}/{lokasi_singkat}/{invoice.id}"

@@ -1,14 +1,16 @@
 # app/jobs.py
 
 import logging
+import traceback
+from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import date, timedelta
 from dateutil.relativedelta import relativedelta
 from sqlalchemy.future import select
 from sqlalchemy import update
 from sqlalchemy.orm import selectinload
 import uuid
-import traceback
 import math
+from .database import get_db
 
 # Impor komponen
 from .database import AsyncSessionLocal as SessionLocal
@@ -20,6 +22,8 @@ from .models import (
 from .services import mikrotik_service, xendit_service
 from .logging_config import log_scheduler_event
 from .routers.invoice import _process_successful_payment
+from .models import DataTeknis as DataTeknisModel
+from .routers.invoice import update_overdue_invoices
 
 logger = logging.getLogger("app.jobs")
 
@@ -122,6 +126,48 @@ async def generate_single_invoice(db, langganan: LanggananModel):
         logger.error(
             f"Gagal membuat invoice untuk Langganan ID {langganan.id}: {e}\n{traceback.format_exc()}"
         )
+
+async def job_update_overdue_invoices():
+    """Tugas untuk menandai invoice yang belum dibayar menjadi 'Kadaluarsa'."""
+    log_scheduler_event(logger, "job_update_overdue_invoices", "started")
+    
+    async with SessionLocal() as db:
+        try:
+            # Aturan: Kadaluarsa jika hari ini adalah hari ke-6 setelah jatuh tempo (telah lewat 5 hari).
+            # Misal: Jatuh tempo tgl 1, maka pada tgl 7 akan menjadi kadaluarsa.
+            # Ubah 'days=1' menjadi 'days=5' jika ingin masa tenggang 5 hari.
+            expired_stmt = (
+                update(InvoiceModel)
+                .where(
+                    InvoiceModel.status_invoice == "Belum Dibayar",
+                    InvoiceModel.tgl_jatuh_tempo < date.today() - timedelta(days=5),
+                )
+                .values(status_invoice="Kadaluarsa")
+            )
+            result = await db.execute(expired_stmt)
+            await db.commit()
+
+            if result.rowcount > 0:
+                log_scheduler_event(
+                    logger,
+                    "job_update_overdue_invoices",
+                    "completed",
+                    f"Berhasil menandai {result.rowcount} invoice sebagai 'Kadaluarsa'.",
+                )
+            else:
+                log_scheduler_event(
+                    logger,
+                    "job_update_overdue_invoices",
+                    "completed",
+                    "Tidak ada invoice untuk ditandai 'Kadaluarsa'.",
+                )
+
+        except Exception as e:
+            await db.rollback()
+            logger.error(f"[FAIL] Scheduler 'job_update_overdue_invoices' gagal. Rincian: {traceback.format_exc()}")
+
+
+
 
 
 # ==========================================================
@@ -247,6 +293,17 @@ async def job_suspend_services():
                     )
                     langganan.status = "Suspended"
                     db.add(langganan)
+
+                data_teknis = langganan.pelanggan.data_teknis
+                if data_teknis:
+                    await mikrotik_service.trigger_mikrotik_update(
+                        db, 
+                        langganan, 
+                        data_teknis, 
+                        data_teknis.id_pelanggan # old_id_pelanggan diisi dengan id saat ini
+                    )
+                else:
+                    logger.error(f"Data Teknis tidak ditemukan untuk langganan ID {langganan.id}, skip update Mikrotik.")
                     await mikrotik_service.trigger_mikrotik_update(db, langganan)
 
                 await db.commit()
@@ -335,27 +392,14 @@ async def job_send_payment_reminders():
 
 
 async def job_verify_payments():
-    """Job untuk rekonsiliasi pembayaran dan menandai invoice kedaluwarsa."""
+    """Job HANYA untuk rekonsiliasi pembayaran yang terlewat via Xendit."""
     log_scheduler_event(logger, "job_verify_payments", "started")
 
     async with SessionLocal() as db:
         try:
-            # Bagian 1: Tandai Invoice Kedaluwarsa (Batch Update) - Ini sudah efisien
-            expired_stmt = (
-                update(InvoiceModel)
-                .where(
-                    InvoiceModel.status_invoice == "Belum Dibayar",
-                    InvoiceModel.tgl_jatuh_tempo < date.today() - timedelta(days=1),
-                )
-                .values(status_invoice="Kadaluarsa")
-            )
-            result = await db.execute(expired_stmt)
-            if result.rowcount > 0:
-                logger.info(
-                    f"[VERIFY] Menandai {result.rowcount} invoice sebagai kedaluwarsa."
-                )
+            # Bagian 1: Logika Kadaluarsa SUDAH DIHAPUS DARI SINI
 
-            # Bagian 2: Rekonsiliasi Pembayaran Terlewat - Ini sudah efisien
+            # Bagian 2: Rekonsiliasi Pembayaran Terlewat
             paid_invoice_ids = await xendit_service.get_paid_invoice_ids_since(days=3)
 
             if not paid_invoice_ids:
@@ -365,12 +409,12 @@ async def job_verify_payments():
                     "completed",
                     "Tidak ada pembayaran baru di Xendit.",
                 )
-                await db.commit()
+                await db.commit() # Tetap commit untuk menutup transaksi
                 return
 
             unprocessed_stmt = select(InvoiceModel).where(
                 InvoiceModel.xendit_external_id.in_(paid_invoice_ids),
-                InvoiceModel.status_invoice == "Belum Dibayar",
+                InvoiceModel.status_invoice != "Lunas", # Ubah dari "Belum Dibayar" agar lebih fleksibel
             )
             invoices_to_process = (await db.execute(unprocessed_stmt)).scalars().all()
 
@@ -397,3 +441,45 @@ async def job_verify_payments():
             logger.error(
                 f"[FAIL] Scheduler 'job_verify_payments' failed. Details:\n{error_details}"
             )
+
+async def job_retry_mikrotik_syncs():
+    log_scheduler_event(logger, "job_retry_mikrotik_syncs", "started")
+    total_retried = 0
+    async with SessionLocal() as db:
+        try:
+            # Cari semua data teknis yang sinkronisasinya tertunda
+            stmt = select(DataTeknisModel).where(DataTeknisModel.mikrotik_sync_pending == True).options(
+                selectinload(DataTeknisModel.pelanggan).selectinload(PelangganModel.langganan)
+            )
+            pending_syncs = (await db.execute(stmt)).scalars().all()
+
+            if not pending_syncs:
+                log_scheduler_event(logger, "job_retry_mikrotik_syncs", "completed", "No pending Mikrotik syncs.")
+                return
+
+            logger.info(f"Found {len(pending_syncs)} pending Mikrotik syncs to retry.")
+            for data_teknis in pending_syncs:
+                try:
+                    langganan = data_teknis.pelanggan.langganan[0]
+                    # Coba jalankan lagi fungsi update ke Mikrotik DENGAN ARGUMEN LENGKAP
+                    await mikrotik_service.trigger_mikrotik_update(
+                        db,
+                        langganan,
+                        data_teknis,
+                        data_teknis.id_pelanggan
+                    )
+                    
+                    # Jika berhasil, set flag kembali ke False
+                    data_teknis.mikrotik_sync_pending = False
+                    db.add(data_teknis)
+                    logger.info(f"Successfully synced pending update for Data Teknis ID: {data_teknis.id}")
+                    total_retried += 1
+                except Exception as e:
+                    # Jika masih gagal, biarkan flag tetap True dan catat error
+                    logger.error(f"Still failing to sync Mikrotik for Data Teknis ID {data_teknis.id}: {e}")
+            
+            await db.commit()
+            log_scheduler_event(logger, "job_retry_mikrotik_syncs", "completed", f"Successfully retried {total_retried} syncs.")
+        except Exception as e:
+            await db.rollback()
+            logger.error(f"[FAIL] Scheduler 'job_retry_mikrotik_syncs' encountered an error: {traceback.format_exc()}")
