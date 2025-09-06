@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import func
 from sqlalchemy.orm import selectinload
+import pytz
 from datetime import date, datetime, time
 from typing import List, Optional
 
@@ -78,6 +79,7 @@ async def get_revenue_report(
 
     # --- PERBARUAN LOGIKA UTAMA ADA DI SINI ---
     rincian_invoice_list = []
+    wib_timezone = pytz.timezone("Asia/Jakarta")
     for inv in invoices:
         # Tentukan tipe invoice berdasarkan tanggal jatuh tempo
         invoice_type = "Otomatis"
@@ -90,11 +92,18 @@ async def get_revenue_report(
             # Jika kosong (via Xendit), gabungkan dengan tipe invoice
             metode_pembayaran_final = f"Xendit - {invoice_type}"
 
+        paid_at_wib = None
+        if inv.paid_at:
+            # Pastikan paid_at adalah timezone-aware (UTC)
+            utc_time = inv.paid_at.replace(tzinfo=pytz.utc)
+            # Konversi ke WIB
+            paid_at_wib = utc_time.astimezone(wib_timezone)
+
         # Buat item laporan
         report_item = InvoiceReportItem(
             invoice_number=inv.invoice_number,
             pelanggan_nama=inv.pelanggan.nama if inv.pelanggan else "N/A",
-            paid_at=inv.paid_at,
+            paid_at=paid_at_wib,
             total_harga=inv.total_harga,
             metode_pembayaran=metode_pembayaran_final,  # Gunakan nilai yang sudah diproses
             alamat=inv.pelanggan.alamat if inv.pelanggan else "N/A",

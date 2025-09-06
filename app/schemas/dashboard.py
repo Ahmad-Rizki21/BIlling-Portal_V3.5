@@ -33,6 +33,13 @@ class ChartData(BaseModel):
     labels: List[str]
     data: List[int]
 
+class LoyalitasUserDetail(BaseModel):
+    id: Optional[int] = None
+    nama: Optional[str] = None
+    id_pelanggan: Optional[str] = None
+    alamat: Optional[str] = None
+    no_telp: Optional[str] = None
+
 # Skema utama yang menggabungkan semua data
 class DashboardData(BaseModel):
     revenue_summary: Optional[RevenueSummary] = None
@@ -43,6 +50,7 @@ class DashboardData(BaseModel):
     invoice_summary_chart: Optional[InvoiceSummary] = None
     status_langganan_chart: Optional[ChartData] = None
     pelanggan_per_alamat_chart: Optional[ChartData] = None
+    loyalitas_pembayaran_chart: Optional[ChartData] = None
     
     class Config:
         from_attributes = True

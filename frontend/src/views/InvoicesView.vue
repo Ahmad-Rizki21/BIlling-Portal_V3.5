@@ -133,6 +133,22 @@
           style="min-width: 180px;"
         ></v-text-field>
 
+        <v-switch
+          v-model="showPaidInvoices"
+          color="success"
+          label="Tampilkan Lunas"
+          hide-details
+          density="comfortable"
+          class="flex-grow-0 ms-md-4"
+        ></v-switch>
+        <v-spacer></v-spacer> <v-btn
+            variant="text"
+            @click="resetFilters"
+            class="text-none"
+        >
+          Reset Filter
+        </v-btn>
+
         <v-btn
             variant="text"
             @click="resetFilters"
@@ -174,7 +190,7 @@
         <v-data-table
             v-model="selectedInvoices"
             :headers="headers"
-            :items="invoices"
+            :items="filteredInvoices" 
             :loading="loading"
             item-value="id"
             class="invoice-table"
@@ -560,6 +576,7 @@ const selectedStatus = ref<string | null>(null);
 const startDate = ref<string | null>(null);
 const endDate = ref<string | null>(null);
 const statusOptions = ref(['Lunas', 'Belum Dibayar', 'Kadaluarsa']);
+const showPaidInvoices = ref(false);
 
 // --- Table Headers ---
 const headers = [
@@ -613,6 +630,15 @@ function getStatusColor(status: string): string {
     default: return 'grey';
   }
 }
+
+const filteredInvoices = computed(() => {
+  // Jika switch "Tampilkan Lunas" aktif, tampilkan semua invoice
+  if (showPaidInvoices.value) {
+    return invoices.value;
+  }
+  // Jika tidak aktif, tampilkan HANYA yang statusnya BUKAN 'Lunas'
+  return invoices.value.filter(inv => inv.status_invoice !== 'Lunas');
+});
 
 /**
  * Fungsi sederhana untuk mendapatkan ikon berdasarkan status dari API.

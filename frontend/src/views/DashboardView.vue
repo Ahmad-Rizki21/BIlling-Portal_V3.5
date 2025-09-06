@@ -7,7 +7,7 @@
             <v-icon class="title-icon">mdi-view-dashboard</v-icon>
             Dashboard
           </h1>
-          <p class="dashboard-subtitle">Monitoring Customer Fiber To The Home Artacom Portal System's</p>
+          <p class="dashboard-subtitle">Monitoring Customer Fiber To The Home Artacom Portal Systems</p>
         </div>
         <div class="header-actions">
           <v-chip class="status-chip" color="success" size="small">
@@ -129,24 +129,44 @@
     </div>
 
     <div class="charts-row">
-  <div v-if="statusChartData" class="chart-card">
-    <div class="chart-header">
-      <div class="chart-title-section">
-        <h3 class="chart-title">
-          <v-icon class="chart-icon" color="primary">mdi-account-details</v-icon>
-          Status Langganan
-        </h3>
-        <p class="chart-subtitle">Distribusi status semua langganan</p>
+      <div v-if="statusChartData" class="chart-card">
+        <div class="chart-header">
+          <div class="chart-title-section">
+            <h3 class="chart-title">
+              <v-icon class="chart-icon" color="primary">mdi-account-details</v-icon>
+              Status Langganan
+            </h3>
+            <p class="chart-subtitle">Distribusi status semua langganan</p>
+          </div>
+        </div>
+        <div class="chart-container donut-container">
+          <Chart v-if="!loading" type="doughnut" :data="statusChartData" :options="donutChartOptions" />
+          <div class="total-in-center">
+            <h3>{{ totalSubscriptions }}</h3>
+            <span>Total Langganan</span>
+          </div>
+        </div>
       </div>
-    </div>
-    <div class="chart-container donut-container">
-      <Chart v-if="!loading" type="doughnut" :data="statusChartData" :options="donutChartOptions" />
-      <div class="total-in-center">
-        <h3>{{ totalSubscriptions }}</h3>
-        <span>Total Langganan</span>
+
+      <div v-if="loyalitasChartData" class="chart-card">
+        <div class="chart-header">
+          <div class="chart-title-section">
+            <h3 class="chart-title">
+              <v-icon class="chart-icon" color="success">mdi-account-star</v-icon>
+              Loyalitas Pembayaran
+            </h3>
+            <p class="chart-subtitle">Distribusi pembayaran pelanggan aktif</p>
+          </div>
+        </div>
+        <div class="chart-container donut-container">
+            <Chart v-if="!loading" type="doughnut" :data="loyalitasChartData" :options="loyalitasDonutOptions" />
+          <div class="total-in-center">
+            <h3>{{ totalActiveCustomers }}</h3>
+            <span>Pelanggan Aktif</span>
+          </div>
+        </div>
       </div>
-    </div>
-  </div>
+
 
 
       <div v-if="alamatChartData" class="chart-card">
@@ -278,25 +298,151 @@
           </div>
         </v-card-text>
 
-        <v-card-actions class="dialog-footer">
-          <v-spacer></v-spacer>
-          <v-btn
-            color="primary"
-            variant="elevated"
-            size="large"
-            class="close-action-btn"
-            @click="dialogPaketDetail = false"
-          >
-            <v-icon start>mdi-check</v-icon>
-            Tutup
-          </v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
+            <v-card-actions class="dialog-footer">
+              <v-spacer></v-spacer>
+              <v-btn
+                color="primary"
+                variant="elevated"
+                size="large"
+                class="close-action-btn"
+                @click="dialogLoyalitas = false"
+              >
+                <v-icon start>mdi-check</v-icon>
+                Tutup
+              </v-btn>
+            </v-card-actions>
+          </v-card>
+        </v-dialog>
+
+        <v-dialog v-model="dialogLoyalitas" max-width="800px" persistent>
+          <v-card class="loyalitas-detail-card elevation-12">
+            <div class="dialog-header">
+              <div class="header-gradient"></div>
+              <div class="header-content">
+                <div class="header-icon">
+                  <v-icon size="32" color="white">mdi-account-star</v-icon>
+                </div>
+                <div class="header-text">
+                  <h2 class="dialog-title">{{ selectedLoyalitasSegmen }}</h2>
+                  <p class="dialog-subtitle">Daftar pelanggan dalam kategori ini</p>
+                </div>
+              </div>
+              <v-btn
+                icon="mdi-close"
+                variant="text"
+                color="white"
+                size="small"
+                class="close-btn"
+                @click="dialogLoyalitas = false"
+              ></v-btn>
+            </div>
+
+            <v-card-text class="dialog-content">
+              <!-- Loading State -->
+              <div v-if="loadingLoyalitasDetail" class="loading-section">
+                <v-progress-circular
+                  indeterminate
+                  color="primary"
+                  size="60"
+                  width="4"
+                ></v-progress-circular>
+                <p class="loading-text">Memuat data pelanggan...</p>
+              </div>
+
+              <!-- Content -->
+              <div v-else>
+                <!-- Summary Section -->
+                <div class="summary-section">
+                  <div class="summary-card">
+                    <div class="summary-icon">
+                      <v-icon color="primary">mdi-account-group</v-icon>
+                    </div>
+                    <div class="summary-content">
+                      <div class="summary-label">Total Pelanggan</div>
+                      <div class="summary-value">{{ loyalitasUserList.length }}</div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- User List -->
+                <div class="users-section">
+                  <div class="section-header">
+                    <div class="section-icon">
+                      <v-icon size="20" color="primary">mdi-account-details</v-icon>
+                    </div>
+                    <h3 class="section-title">Detail Pelanggan</h3>
+                  </div>
+                  
+                  <!-- Empty State -->
+                  <div v-if="loyalitasUserList.length === 0" class="empty-state">
+                    <v-icon size="64" color="grey">mdi-account-off</v-icon>
+                    <h3>Tidak ada data</h3>
+                    <p>Tidak ada pelanggan dalam kategori ini</p>
+                  </div>
+                  
+                  <!-- User Cards -->
+                  <div v-else class="users-grid">
+                    <div 
+                      v-for="(user, index) in loyalitasUserList" 
+                      :key="user.id || index"
+                      class="user-card"
+                    >
+                      <div class="user-avatar">
+                        <v-icon size="24" color="primary">mdi-account</v-icon>
+                      </div>
+                      <div class="user-info">
+                        <h4 class="user-name">{{ user.nama || 'Nama tidak tersedia' }}</h4>
+                        <div class="user-details">
+                          <div class="detail-row">
+                            <v-icon size="14" color="grey">mdi-identifier</v-icon>
+                            <span>{{ user.id_pelanggan || 'ID tidak tersedia' }}</span>
+                          </div>
+                          <div class="detail-row" v-if="user.alamat">
+                            <v-icon size="14" color="grey">mdi-map-marker</v-icon>
+                            <span>{{ user.alamat }}</span>
+                          </div>
+                          <div class="detail-row" v-if="user.no_telp">
+                            <v-icon size="14" color="grey">mdi-phone</v-icon>
+                            <span>{{ user.no_telp }}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="user-badge">
+                        <v-chip 
+                          :color="getLoyaltyColor(selectedLoyalitasSegmen)" 
+                          variant="flat"
+                          size="small"
+                          class="status-chip"
+                        >
+                          {{ getShortLabel(selectedLoyalitasSegmen) }}
+                        </v-chip>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </v-card-text>
+
+            <v-card-actions class="dialog-footer">
+              <v-spacer></v-spacer>
+              <v-btn
+                color="primary"
+                variant="elevated"
+                size="large"
+                class="close-action-btn"
+                @click="dialogLoyalitas = false"
+              >
+                <v-icon start>mdi-check</v-icon>
+                Tutup
+              </v-btn>
+            </v-card-actions>
+          </v-card>
+        </v-dialog>
     
   </div>
 </template>
 
+// BAGIAN 2: PERBAIKAN SCRIPT SETUP
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import { Chart } from 'vue-chartjs';
@@ -315,20 +461,30 @@ import {
   Filler,
   ChartOptions,
   DoughnutController,
-  PieController,
-  ArcElement
+  ArcElement,
+  PieController
 } from 'chart.js';
 import { useTheme } from 'vuetify';
 import apiClient from '@/services/api';
 
 ChartJS.register(
-  Title, Tooltip, Legend, BarElement, BarController, LineElement, LineController, PointElement, CategoryScale, LinearScale, Filler, DoughnutController, PieController, ArcElement // <-- TAMBAHKAN INI
+  Title, Tooltip, Legend, BarElement, BarController, LineElement, LineController, 
+  PointElement, CategoryScale, LinearScale, Filler, DoughnutController, ArcElement, PieController
 );
 
 const theme = useTheme();
 const loading = ref(true);
 
-// --- State ---
+// Define interfaces for better TypeScript support
+interface LoyalitasUser {
+  id: number;
+  nama: string;
+  id_pelanggan: string;
+  alamat?: string;
+  no_telp?: string;
+}
+
+// --- State dengan tipe yang tepat ---
 const revenueData = ref<any>(null);
 const allStats = ref<any[]>([]);
 const lokasiChartData = ref<any>(null);
@@ -337,11 +493,18 @@ const growthChartData = ref<any>(null);
 const invoiceChartData = ref<any>(null);
 const statusChartData = ref<any>(null);
 const alamatChartData = ref<any>(null);
+const loyalitasChartData = ref<any>(null);
 
 const paketDetailData = ref<any>({});
 const dialogPaketDetail = ref(false);
 const selectedPaketTitle = ref('');
 const selectedPaketDetail = ref<any>(null);
+
+// PERBAIKAN: Tipe yang benar untuk loyalitas variables
+const dialogLoyalitas = ref(false);
+const loyalitasUserList = ref<LoyalitasUser[]>([]);
+const loadingLoyalitasDetail = ref(false);
+const selectedLoyalitasSegmen = ref('');
 
 // --- Computed Properties ---
 const customerStats = computed(() => 
@@ -355,6 +518,13 @@ const totalSubscriptions = computed(() => {
     return 0;
   }
   return statusChartData.value.datasets[0].data.reduce((sum: number, current: number) => sum + current, 0);
+});
+
+const totalActiveCustomers = computed(() => {
+  if (!loyalitasChartData.value?.datasets[0]?.data) {
+    return 0;
+  }
+  return loyalitasChartData.value.datasets[0].data.reduce((sum: number, current: number) => sum + current, 0);
 });
 
 // --- Methods ---
@@ -408,109 +578,113 @@ async function fetchMikrotikStats() {
   }
 }
 
-onMounted(async () => {
-  loading.value = true;
+// Fungsi loyalitas dengan error handling yang lebih baik
+async function handleLoyalitasChartClick(_event: any, elements: any[]) {
+  if (elements.length === 0) return;
+
+  const chart = elements[0].element.$context.chart;
+  const index = elements[0].index;
+  const label = chart.data.labels[index];
+
   try {
-    const response = await apiClient.get('/dashboard/');
-    const data = response.data;
-
-    revenueData.value = data.revenue_summary;
+    // Reset dan set state
+    selectedLoyalitasSegmen.value = label;
+    loyalitasUserList.value = [];
+    loadingLoyalitasDetail.value = true;
     
-    allStats.value = (data.stat_cards || []).map((card: any) => ({
-      ...card,
-      icon: getIconForStat(card.title),
-      color: getColorForStat(card.title)
+    // Buka dialog dulu
+    dialogLoyalitas.value = true;
+
+    // Small delay untuk memastikan dialog ter-render
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    // API call
+    const response = await apiClient.get(`/dashboard/loyalitas-users-by-segment?segmen=${encodeURIComponent(label)}`);
+    
+    // Pastikan response data sesuai dengan interface
+    loyalitasUserList.value = response.data.map((user: any) => ({
+      id: user.id,
+      nama: user.nama,
+      id_pelanggan: user.id_pelanggan,
+      alamat: user.alamat,
+      no_telp: user.no_telp
     }));
-    
-    if (data.lokasi_chart) {
-      lokasiChartData.value = {
-        labels: data.lokasi_chart.labels,
-        datasets: [{
-          label: 'Jumlah Pelanggan',
-          data: data.lokasi_chart.data,
-          backgroundColor: 'rgba(99, 102, 241, 0.8)',
-          borderRadius: 8,
-        }]
-      };
-    }
-
-    if (data.paket_chart) {
-      paketChartData.value = {
-        labels: data.paket_chart.labels,
-        datasets: [{
-          label: 'Jumlah Pelanggan',
-          data: data.paket_chart.data,
-          backgroundColor: 'rgba(34, 197, 94, 0.8)',
-          borderRadius: 8,
-        }]
-      };
-    }
-
-    if (data.growth_chart) {
-      growthChartData.value = {
-        labels: data.growth_chart.labels,
-        datasets: [{
-          label: 'Pelanggan Baru',
-          data: data.growth_chart.data,
-          borderColor: 'rgb(236, 72, 153)',
-          backgroundColor: 'rgba(236, 72, 153, 0.1)',
-          tension: 0.4,
-          fill: true,
-        }]
-      };
-    }
-    
-    if (data.invoice_summary_chart) {
-      invoiceChartData.value = {
-        labels: data.invoice_summary_chart.labels,
-        datasets: [
-            { type: 'line', label: 'Total Invoice', data: data.invoice_summary_chart.total, borderColor: 'rgb(168, 85, 247)', tension: 0.4, fill: true },
-            { type: 'bar', label: 'Lunas', data: data.invoice_summary_chart.lunas, backgroundColor: 'rgba(34, 197, 94, 0.8)', stack: 'Stack 0' },
-            { type: 'bar', label: 'Menunggu', data: data.invoice_summary_chart.menunggu, backgroundColor: 'rgba(251, 191, 36, 0.8)', stack: 'Stack 0' },
-            { type: 'bar', label: 'Kadaluarsa', data: data.invoice_summary_chart.kadaluarsa, backgroundColor: 'rgba(239, 68, 68, 0.8)', stack: 'Stack 0' },
-        ]
-      };
-    }
-
-    if (data.status_langganan_chart) {
-      statusChartData.value = {
-        labels: data.status_langganan_chart.labels,
-        datasets: [{
-            data: data.status_langganan_chart.data,
-            // Anda bisa menyesuaikan warna ini
-            backgroundColor: ['#22c55e', '#ef4444', '#f59e0b'], 
-            borderColor: theme.global.current.value.dark ? '#1E1E1E' : '#FFFFFF',
-            borderWidth: 4,
-        }]
-      };
-    }
-
-    if (data.pelanggan_per_alamat_chart) {
-      alamatChartData.value = {
-        labels: data.pelanggan_per_alamat_chart.labels,
-        datasets: [{
-            data: data.pelanggan_per_alamat_chart.data,
-            // Sediakan beberapa warna, akan digunakan berulang jika data lebih banyak
-            backgroundColor: [
-              '#6366f1', '#22c55e', '#f97316', '#3b82f6', 
-              '#ec4899', '#f59e0b', '#10b981'
-            ], 
-            borderColor: theme.global.current.value.dark ? '#1E1E1E' : '#FFFFFF',
-            borderWidth: 4,
-        }]
-      };
-    }
-
-    fetchPaketDetails();
 
   } catch (error) {
-    console.error("Failed to fetch dashboard data:", error);
+    console.error("Gagal mengambil detail user loyalitas:", error);
+    loyalitasUserList.value = [];
   } finally {
-    loading.value = false;
-    fetchMikrotikStats();
+    loadingLoyalitasDetail.value = false;
   }
-});
+}
 
+// Fungsi helper
+function getLoyaltyColor(segmen: string): string {
+  if (segmen === "Setia On-Time") return "success";
+  if (segmen === "Lunas (Tapi Telat)") return "warning";
+  if (segmen === "Menunggak") return "error";
+  return "primary";
+}
+
+function getShortLabel(segmen: string): string {
+  if (segmen === "Setia On-Time") return "Setia";
+  if (segmen === "Lunas (Tapi Telat)") return "Telat";
+  if (segmen === "Menunggak") return "Nunggak";
+  return segmen;
+}
+
+// PERBAIKAN: Chart options dengan tipe yang benar
+const chartAxisColor = computed(() => theme.global.current.value.dark ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.7)');
+const chartGridColor = computed(() => theme.global.current.value.dark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)');
+
+// PERBAIKAN: Loyalitas donut options dengan tipe yang tepat
+const loyalitasDonutOptions = computed((): ChartOptions<'doughnut'> => ({
+  responsive: true,
+  maintainAspectRatio: false,
+  cutout: '70%',
+  onClick: handleLoyalitasChartClick,
+  plugins: { 
+    legend: { 
+      position: 'bottom' as const, // PERBAIKAN: Explicit as const
+      labels: { 
+        color: chartAxisColor.value, 
+        usePointStyle: true, 
+        pointStyle: 'circle' as const, // PERBAIKAN: Explicit as const
+        padding: 20,
+        font: { size: 12, weight: 'bold' as const } 
+      }
+    }
+  },
+}));
+
+// Chart options lainnya
+const chartOptions = computed((): ChartOptions<'bar'> => ({
+  responsive: true,
+  maintainAspectRatio: false,
+  onClick: handlePaketChartClick,
+  plugins: { 
+    legend: { display: false },
+    tooltip: {
+      backgroundColor: theme.global.current.value.dark ? 'rgba(0, 0, 0, 0.9)' : 'rgba(255, 255, 255, 0.95)',
+      titleColor: chartAxisColor.value,
+      bodyColor: chartAxisColor.value,
+      borderColor: chartGridColor.value,
+      borderWidth: 1,
+      cornerRadius: 8,
+    }
+  },
+  scales: {
+    y: { 
+      beginAtZero: true, 
+      grid: { color: chartGridColor.value },
+      ticks: { color: chartAxisColor.value, font: { size: 12, weight: 'normal' as const } }
+    },
+    x: { 
+      grid: { display: false },
+      ticks: { color: chartAxisColor.value, font: { size: 12, weight: 'normal' as const } }
+    },
+  },
+}));
 
 const pieChartOptions = computed((): ChartOptions<'pie'> => ({
   responsive: true,
@@ -537,55 +711,21 @@ const pieChartOptions = computed((): ChartOptions<'pie'> => ({
   },
 }));
 
-function getIconForStat(title: string) {
-  if (title.toLowerCase().includes('jakinet')) return 'mdi-account-network';
-  if (title.toLowerCase().includes('jelantik')) return 'mdi-account-group';
-  if (title.toLowerCase().includes('nagrak')) return 'mdi-home-group';
-  if (title.toLowerCase().includes('total servers')) return 'mdi-server';
-  if (title.toLowerCase().includes('online')) return 'mdi-check-circle';
-  if (title.toLowerCase().includes('offline')) return 'mdi-close-circle';
-  return 'mdi-chart-box';
-}
-
-function getColorForStat(title: string) {
-  if (title.toLowerCase().includes('jakinet')) return 'primary';
-  if (title.toLowerCase().includes('jelantik')) return 'success';
-  if (title.toLowerCase().includes('nagrak')) return 'warning';
-  if (title.toLowerCase().includes('total servers')) return 'error';
-  if (title.toLowerCase().includes('online')) return 'success';
-  if (title.toLowerCase().includes('offline')) return 'error';
-  return 'primary';
-}
-
-// --- Chart Options (HANYA SATU BLOK) ---
-const chartAxisColor = computed(() => theme.global.current.value.dark ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.7)');
-const chartGridColor = computed(() => theme.global.current.value.dark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)');
-
-const chartOptions = computed((): ChartOptions<'bar'> => ({
+const donutChartOptions = computed((): ChartOptions<'doughnut'> => ({
   responsive: true,
   maintainAspectRatio: false,
-  onClick: handlePaketChartClick,
+  cutout: '70%',
   plugins: { 
-    legend: { display: false },
-    tooltip: {
-      backgroundColor: theme.global.current.value.dark ? 'rgba(0, 0, 0, 0.9)' : 'rgba(255, 255, 255, 0.95)',
-      titleColor: chartAxisColor.value,
-      bodyColor: chartAxisColor.value,
-      borderColor: chartGridColor.value,
-      borderWidth: 1,
-      cornerRadius: 8,
+    legend: { 
+      position: 'bottom' as const, 
+      labels: { 
+        color: chartAxisColor.value, 
+        usePointStyle: true, 
+        pointStyle: 'circle' as const, 
+        padding: 20,
+        font: { size: 12, weight: 'bold' as const } 
+      }
     }
-  },
-  scales: {
-    y: { 
-      beginAtZero: true, 
-      grid: { color: chartGridColor.value },
-      ticks: { color: chartAxisColor.value, font: { size: 12, weight: 'normal' as const } }
-    },
-    x: { 
-      grid: { display: false },
-      ticks: { color: chartAxisColor.value, font: { size: 12, weight: 'normal' as const } }
-    },
   },
 }));
 
@@ -643,24 +783,141 @@ const invoiceChartOptions = computed((): ChartOptions<'bar'> => ({
   },
 }));
 
-const donutChartOptions = computed((): ChartOptions<'doughnut'> => ({
-  responsive: true,
-  maintainAspectRatio: false,
-  cutout: '70%', // Ini yang membuat chart menjadi Doughnut, bukan Pie
-  plugins: { 
-    legend: { 
-      position: 'bottom' as const, 
-      labels: { 
-        color: chartAxisColor.value, 
-        usePointStyle: true, 
-        pointStyle: 'circle' as const, 
-        padding: 20,
-        font: { size: 12, weight: 'bold' as const } 
-      }
-    }
-  },
-}));
+// Helper functions for stats
+function getIconForStat(title: string) {
+  if (title.toLowerCase().includes('jakinet')) return 'mdi-account-network';
+  if (title.toLowerCase().includes('jelantik')) return 'mdi-account-group';
+  if (title.toLowerCase().includes('nagrak')) return 'mdi-home-group';
+  if (title.toLowerCase().includes('total servers')) return 'mdi-server';
+  if (title.toLowerCase().includes('online')) return 'mdi-check-circle';
+  if (title.toLowerCase().includes('offline')) return 'mdi-close-circle';
+  return 'mdi-chart-box';
+}
 
+function getColorForStat(title: string) {
+  if (title.toLowerCase().includes('jakinet')) return 'primary';
+  if (title.toLowerCase().includes('jelantik')) return 'success';
+  if (title.toLowerCase().includes('nagrak')) return 'warning';
+  if (title.toLowerCase().includes('total servers')) return 'error';
+  if (title.toLowerCase().includes('online')) return 'success';
+  if (title.toLowerCase().includes('offline')) return 'error';
+  return 'primary';
+}
+
+// onMounted tetap sama seperti sebelumnya
+onMounted(async () => {
+  loading.value = true;
+  try {
+    const response = await apiClient.get('/dashboard/');
+    const data = response.data;
+
+    revenueData.value = data.revenue_summary;
+    
+    allStats.value = (data.stat_cards || []).map((card: any) => ({
+      ...card,
+      icon: getIconForStat(card.title),
+      color: getColorForStat(card.title)
+    }));
+    
+    // Setup chart data...
+    if (data.lokasi_chart) {
+      lokasiChartData.value = {
+        labels: data.lokasi_chart.labels,
+        datasets: [{
+          label: 'Jumlah Pelanggan',
+          data: data.lokasi_chart.data,
+          backgroundColor: 'rgba(99, 102, 241, 0.8)',
+          borderRadius: 8,
+        }]
+      };
+    }
+
+    if (data.paket_chart) {
+      paketChartData.value = {
+        labels: data.paket_chart.labels,
+        datasets: [{
+          label: 'Jumlah Pelanggan',
+          data: data.paket_chart.data,
+          backgroundColor: 'rgba(34, 197, 94, 0.8)',
+          borderRadius: 8,
+        }]
+      };
+    }
+
+    if (data.growth_chart) {
+      growthChartData.value = {
+        labels: data.growth_chart.labels,
+        datasets: [{
+          label: 'Pelanggan Baru',
+          data: data.growth_chart.data,
+          borderColor: 'rgb(236, 72, 153)',
+          backgroundColor: 'rgba(236, 72, 153, 0.1)',
+          tension: 0.4,
+          fill: true,
+        }]
+      };
+    }
+    
+    if (data.invoice_summary_chart) {
+      invoiceChartData.value = {
+        labels: data.invoice_summary_chart.labels,
+        datasets: [
+            { type: 'line', label: 'Total Invoice', data: data.invoice_summary_chart.total, borderColor: 'rgb(168, 85, 247)', tension: 0.4, fill: true },
+            { type: 'bar', label: 'Lunas', data: data.invoice_summary_chart.lunas, backgroundColor: 'rgba(34, 197, 94, 0.8)', stack: 'Stack 0' },
+            { type: 'bar', label: 'Menunggu', data: data.invoice_summary_chart.menunggu, backgroundColor: 'rgba(251, 191, 36, 0.8)', stack: 'Stack 0' },
+            { type: 'bar', label: 'Kadaluarsa', data: data.invoice_summary_chart.kadaluarsa, backgroundColor: 'rgba(239, 68, 68, 0.8)', stack: 'Stack 0' },
+        ]
+      };
+    }
+
+    if (data.status_langganan_chart) {
+      statusChartData.value = {
+        labels: data.status_langganan_chart.labels,
+        datasets: [{
+            data: data.status_langganan_chart.data,
+            backgroundColor: ['#22c55e', '#ef4444', '#f59e0b'], 
+            borderColor: theme.global.current.value.dark ? '#1E1E1E' : '#FFFFFF',
+            borderWidth: 4,
+        }]
+      };
+    }
+
+    if (data.loyalitas_pembayaran_chart) {
+      loyalitasChartData.value = {
+        labels: data.loyalitas_pembayaran_chart.labels,
+        datasets: [{
+            data: data.loyalitas_pembayaran_chart.data,
+            backgroundColor: ['#22c55e', '#f97316', '#ef4444'], 
+            borderColor: theme.global.current.value.dark ? '#1E1E1E' : '#FFFFFF',
+            borderWidth: 4,
+        }]
+      };
+    }
+
+    if (data.pelanggan_per_alamat_chart) {
+      alamatChartData.value = {
+        labels: data.pelanggan_per_alamat_chart.labels,
+        datasets: [{
+            data: data.pelanggan_per_alamat_chart.data,
+            backgroundColor: [
+              '#6366f1', '#22c55e', '#f97316', '#3b82f6', 
+              '#ec4899', '#f59e0b', '#10b981'
+            ], 
+            borderColor: theme.global.current.value.dark ? '#1E1E1E' : '#FFFFFF',
+            borderWidth: 4,
+        }]
+      };
+    }
+
+    fetchPaketDetails();
+
+  } catch (error) {
+    console.error("Failed to fetch dashboard data:", error);
+  } finally {
+    loading.value = false;
+    fetchMikrotikStats();
+  }
+});
 </script>
 
 <style scoped>
@@ -1029,14 +1286,14 @@ const donutChartOptions = computed((): ChartOptions<'doughnut'> => ({
 .charts-section {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 3rem;
+  margin-bottom: 2rem; 
 }
 
 .charts-row {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
   gap: 1.5rem;
-  margin-bottom: 1.7rem;
 }
 
 .chart-card {
@@ -1044,7 +1301,7 @@ const donutChartOptions = computed((): ChartOptions<'doughnut'> => ({
   backdrop-filter: blur(20px);
   border-radius: 16px;
   padding: 1.25rem;
-  /* border: 1px solid rgba(255, 255, 255, 0.2); */
+  border: 1px solid rgba(255, 255, 255, 0.2);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -1704,4 +1961,168 @@ const donutChartOptions = computed((): ChartOptions<'doughnut'> => ({
     align-self: flex-end;
   }
 }
+
+/* Loading Section */
+.loading-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem;
+  gap: 1rem;
+}
+
+.loading-text {
+  color: rgba(var(--v-theme-on-surface), 0.7);
+  font-weight: 500;
+}
+
+/* Users Section */
+.users-section {
+  margin-top: 2rem;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.section-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(99, 102, 241, 0.08) 100%);
+}
+
+.section-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: rgb(var(--v-theme-on-surface));
+  margin: 0;
+}
+
+/* Empty State */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem;
+  text-align: center;
+  gap: 1rem;
+  color: rgba(var(--v-theme-on-surface), 0.6);
+}
+
+/* Users Grid */
+.users-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.user-card {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.25rem;
+  background: rgba(248, 250, 252, 0.8);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 12px;
+  transition: all 0.2s ease;
+}
+
+.user-card:hover {
+  background: rgba(248, 250, 252, 1);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  border-color: rgba(99, 102, 241, 0.2);
+}
+
+.user-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(99, 102, 241, 0.05) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border: 1px solid rgba(99, 102, 241, 0.15);
+}
+
+.user-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.user-name {
+  font-size: 1rem;
+  font-weight: 600;
+  color: rgb(var(--v-theme-on-surface));
+  margin: 0 0 0.5rem 0;
+  line-height: 1.2;
+}
+
+.user-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.detail-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: rgba(var(--v-theme-on-surface), 0.7);
+}
+
+.user-badge {
+  flex-shrink: 0;
+}
+
+.status-chip {
+  font-weight: 600;
+  font-size: 0.75rem;
+}
+
+/* Dark Theme */
+.v-theme--dark .user-card {
+  background: rgba(50, 50, 50, 0.6);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.v-theme--dark .user-card:hover {
+  background: rgba(50, 50, 50, 0.8);
+  border-color: rgba(99, 102, 241, 0.3);
+}
+
+.v-theme--dark .user-avatar {
+  background: rgba(99, 102, 241, 0.15);
+  border-color: rgba(99, 102, 241, 0.25);
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+  .user-card {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+    padding: 1rem;
+  }
+
+  .user-badge {
+    align-self: flex-end;
+  }
+  
+  .users-grid {
+    gap: 0.75rem;
+  }
+}
+
 </style>
