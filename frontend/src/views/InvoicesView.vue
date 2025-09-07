@@ -136,7 +136,7 @@
         <v-switch
           v-model="showPaidInvoices"
           color="success"
-          label="Tampilkan Lunas"
+          label="Tampilkan Lunas & Kadaluarsa"
           hide-details
           density="comfortable"
           class="flex-grow-0 ms-md-4"
@@ -149,13 +149,6 @@
           Reset Filter
         </v-btn>
 
-        <v-btn
-            variant="text"
-            @click="resetFilters"
-            class="text-none"
-        >
-          Reset Filter
-        </v-btn>
       </div>
     </v-card>
 
@@ -632,12 +625,14 @@ function getStatusColor(status: string): string {
 }
 
 const filteredInvoices = computed(() => {
-  // Jika switch "Tampilkan Lunas" aktif, tampilkan semua invoice
+  // Jika switch "Tampilkan Lunas" aktif (true), tampilkan semua data yang kita miliki
   if (showPaidInvoices.value) {
-    return invoices.value;
+    return invoices.value; // Ini akan menampilkan Lunas, Belum Dibayar, DAN Kadaluarsa
   }
-  // Jika tidak aktif, tampilkan HANYA yang statusnya BUKAN 'Lunas'
-  return invoices.value.filter(inv => inv.status_invoice !== 'Lunas');
+  
+  // Jika switch tidak aktif (false), tampilkan HANYA yang statusnya "Belum Dibayar"
+  // Ini secara otomatis menyembunyikan "Lunas" DAN "Kadaluarsa" sesuai permintaan Anda.
+  return invoices.value.filter(inv => inv.status_invoice === 'Belum Dibayar');
 });
 
 /**

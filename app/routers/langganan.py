@@ -123,6 +123,7 @@ async def create_langganan(
 @router.get("/", response_model=List[LanggananSchema])
 async def get_all_langganan(
     search: Optional[str] = None,
+    alamat: Optional[str] = None,
     paket_layanan_id: Optional[int] = None,
     status: Optional[str] = None,
     for_invoice_selection: bool = False,
@@ -147,6 +148,8 @@ async def get_all_langganan(
 
     if search:
         query = query.where(PelangganModel.nama.ilike(f"%{search}%"))
+    if alamat: 
+        query = query.where(PelangganModel.alamat.ilike(f"%{alamat}%"))
     if paket_layanan_id:
         query = query.where(LanggananModel.paket_layanan_id == paket_layanan_id)
     if status:
