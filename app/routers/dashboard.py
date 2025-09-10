@@ -47,6 +47,117 @@ except locale.Error:
         pass
 
 
+async def _get_revenue_summary(db: AsyncSession) -> RevenueSummary:
+    """Helper untuk mengambil ringkasan pendapatan bulanan."""
+    now = datetime.now()
+    revenue_stmt = (
+        select(
+            HargaLayanan.brand, func.sum(Invoice.total_harga).label("total_revenue")
+        )
+        .select_from(Invoice)
+        .join(Pelanggan, Invoice.pelanggan_id == Pelanggan.id, isouter=True)
+        .join(
+            HargaLayanan, Pelanggan.id_brand == HargaLayanan.id_brand, isouter=True
+        )
+        .where(
+            Invoice.status_invoice == "Lunas",
+            HargaLayanan.brand.is_not(None),
+            func.extract("year", Invoice.paid_at) == now.year,
+            func.extract("month", Invoice.paid_at) == now.month,
+        )
+        .group_by(HargaLayanan.brand)
+    )
+    revenue_results = (await db.execute(revenue_stmt)).all()
+    brand_breakdown = [
+        BrandRevenueItem(brand=row.brand, revenue=float(row.total_revenue or 0.0))
+        for row in revenue_results
+    ]
+    total_revenue = sum(item.revenue for item in brand_breakdown)
+    next_month_date = now + relativedelta(months=1)
+    periode_str = next_month_date.strftime("%B %Y")
+
+    return RevenueSummary(
+        total=total_revenue, periode=periode_str, breakdown=brand_breakdown
+    )
+
+
+async def _get_pelanggan_stat_cards(db: AsyncSession) -> List[StatCard]:
+    """Helper untuk mengambil data kartu statistik pelanggan."""
+    pelanggan_count_stmt = (
+        select(HargaLayanan.brand, func.count(Pelanggan.id))
+        .join(Pelanggan, HargaLayanan.id_brand == Pelanggan.id_brand, isouter=True)
+        .group_by(HargaLayanan.brand)
+    )
+    pelanggan_counts = (await db.execute(pelanggan_count_stmt)).all()
+    pelanggan_by_brand = {brand.lower(): count for brand, count in pelanggan_counts}
+
+    return [
+        StatCard(
+            title="Jumlah Pelanggan Jakinet",
+            value=pelanggan_by_brand.get("jakinet", 0),
+            description="Total Pelanggan Jakinet",
+        ),
+        StatCard(
+            title="Jumlah Pelanggan Jelantik",
+            value=pelanggan_by_brand.get("jelantik", 0),
+            description="Total Pelanggan Jelantik",
+        ),
+        StatCard(
+            title="Pelanggan Jelantik Nagrak",
+            value=pelanggan_by_brand.get("jelantik nagrak", 0),
+            description="Total Pelanggan Rusun Nagrak",
+        ),
+    ]
+
+
+async def _get_loyalty_chart(db: AsyncSession) -> ChartData:
+    """Helper untuk mengambil data chart loyalitas pembayaran."""
+    outstanding_payers_sq = (
+        select(Invoice.pelanggan_id)
+        .where(Invoice.status_invoice.in_(["Belum Dibayar", "Kadaluarsa"]))
+        .distinct()
+    )
+    ever_late_payers_sq = (
+        select(Invoice.pelanggan_id)
+        .where(Invoice.paid_at > Invoice.tgl_jatuh_tempo)
+        .distinct()
+    )
+    categorization_stmt = select(
+        func.sum(case((Langganan.pelanggan_id.in_(outstanding_payers_sq), 1), else_=0)).label("count_menunggak"),
+        func.sum(case((and_(not_(Langganan.pelanggan_id.in_(outstanding_payers_sq)), Langganan.pelanggan_id.in_(ever_late_payers_sq)), 1), else_=0)).label("count_lunas_telat"),
+        func.sum(case((and_(not_(Langganan.pelanggan_id.in_(outstanding_payers_sq)), not_(Langganan.pelanggan_id.in_(ever_late_payers_sq))), 1), else_=0)).label("count_setia"),
+    ).select_from(Langganan).where(Langganan.status == "Aktif")
+
+    loyalty_counts = (await db.execute(categorization_stmt)).first()
+    if loyalty_counts:
+        return ChartData(
+            labels=["Setia On-Time", "Lunas (Tapi Telat)", "Menunggak"],
+            data=[
+                loyalty_counts.count_setia or 0,
+                loyalty_counts.count_lunas_telat or 0,
+                loyalty_counts.count_menunggak or 0,
+            ],
+        )
+    return ChartData(labels=[], data=[])
+
+
+async def _get_mikrotik_status_counts(db: AsyncSession) -> dict:
+    """Helper untuk memeriksa status online/offline semua server Mikrotik secara paralel."""
+    all_servers = (await db.execute(select(MikrotikServer))).scalars().all()
+    if not all_servers:
+        return {"online": 0, "offline": 0, "total": 0}
+
+    async def check_status(server):
+        loop = asyncio.get_event_loop()
+        api, conn = await loop.run_in_executor(None, mikrotik_service.get_api_connection, server)
+        if conn: conn.disconnect()
+        return bool(api)
+
+    results = await asyncio.gather(*(check_status(server) for server in all_servers))
+    online_count = sum(1 for res in results if res)
+    return {"online": online_count, "offline": len(all_servers) - online_count, "total": len(all_servers)}
+
+
 class MikrotikStatus(BaseModel):
     online: int
     offline: int
@@ -70,162 +181,40 @@ async def get_dashboard_data(
     user_permissions = {p.name for p in user.role.permissions}
     dashboard_response = DashboardData()
 
-    # 1. Widget Pendapatan Bulanan (Tidak ada perubahan)
+    # --- OPTIMISASI: Jalankan semua pengambilan data secara paralel ---
+    tasks = {}
+
     if "view_widget_pendapatan_bulanan" in user_permissions:
-        now = datetime.now()
-        revenue_stmt = (
-            select(
-                HargaLayanan.brand, func.sum(Invoice.total_harga).label("total_revenue")
-            )
-            .select_from(Invoice)
-            .join(Pelanggan, Invoice.pelanggan_id == Pelanggan.id, isouter=True)
-            .join(
-                HargaLayanan, Pelanggan.id_brand == HargaLayanan.id_brand, isouter=True
-            )
-            .where(
-                Invoice.status_invoice == "Lunas",
-                HargaLayanan.brand.is_not(None),
-                func.extract("year", Invoice.paid_at) == now.year,
-                func.extract("month", Invoice.paid_at) == now.month,
-            )
-            .group_by(HargaLayanan.brand)
-        )
+        tasks['revenue_summary'] = asyncio.create_task(_get_revenue_summary(db))
 
-        revenue_results = (await db.execute(revenue_stmt)).all()
-        brand_breakdown = [
-            BrandRevenueItem(brand=row.brand, revenue=float(row.total_revenue or 0.0))
-            for row in revenue_results
-        ]
-        total_revenue = sum(item.revenue for item in brand_breakdown)
-        next_month_date = now + relativedelta(months=1)
-        periode_str = next_month_date.strftime("%B %Y")
-
-        dashboard_response.revenue_summary = RevenueSummary(
-            total=total_revenue, periode=periode_str, breakdown=brand_breakdown
-        )
-
-    # 2. Widget Statistik
-    temp_stat_cards = []
     if "view_widget_statistik_pelanggan" in user_permissions:
-        # Query untuk kartu brand (Tetap sama)
-        pelanggan_count_stmt = (
-            select(HargaLayanan.brand, func.count(Pelanggan.id))
-            .join(Pelanggan, HargaLayanan.id_brand == Pelanggan.id_brand, isouter=True)
-            .group_by(HargaLayanan.brand)
-        )
-        pelanggan_counts = (await db.execute(pelanggan_count_stmt)).all()
-        pelanggan_by_brand = {brand.lower(): count for brand, count in pelanggan_counts}
+        tasks['pelanggan_stats'] = asyncio.create_task(_get_pelanggan_stat_cards(db))
+        tasks['loyalty_chart'] = asyncio.create_task(_get_loyalty_chart(db))
 
-        # --- REVISI: LOGIKA CHART LOYALITAS (PENGGANTI STATCARD) ---
-
-        # 1. Subquery A: Daftar ID pelanggan yang punya tagihan TERTUNGGAK
-        outstanding_payers_sq = (
-            select(Invoice.pelanggan_id)
-            .where(Invoice.status_invoice.in_(["Belum Dibayar", "Kadaluarsa"]))
-            .distinct()
-        )
-
-        # 2. Subquery B: Daftar ID pelanggan yang PERNAH telat bayar
-        ever_late_payers_sq = (
-            select(Invoice.pelanggan_id)
-            .where(Invoice.paid_at > Invoice.tgl_jatuh_tempo)
-            .distinct()
-        )
-
-        # 3. Query utama: Hitung semua pelanggan AKTIF dan bagi jadi 3 grup
-        categorization_stmt = (
-            select(
-                # Grup 1: Menunggak (Punya tagihan tertunggak)
-                func.sum(
-                    case(
-                        (Langganan.pelanggan_id.in_(outstanding_payers_sq), 1), else_=0
-                    )
-                ).label("count_menunggak"),
-                # Grup 2: Lunas Tapi Telat (TIDAK menunggak, TAPI PERNAH telat)
-                func.sum(
-                    case(
-                        (
-                            and_(
-                                not_(Langganan.pelanggan_id.in_(outstanding_payers_sq)),
-                                Langganan.pelanggan_id.in_(ever_late_payers_sq),
-                            ),
-                            1,
-                        ),
-                        else_=0,
-                    )
-                ).label("count_lunas_telat"),
-                # Grup 3: Setia On-Time (TIDAK menunggak DAN TIDAK PERNAH telat)
-                func.sum(
-                    case(
-                        (
-                            and_(
-                                not_(Langganan.pelanggan_id.in_(outstanding_payers_sq)),
-                                not_(Langganan.pelanggan_id.in_(ever_late_payers_sq)),
-                            ),
-                            1,
-                        ),
-                        else_=0,
-                    )
-                ).label("count_setia"),
-            )
-            .select_from(Langganan)
-            .where(Langganan.status == "Aktif")
-        )
-
-        loyalty_counts = (await db.execute(categorization_stmt)).first()
-
-        # 4. Masukkan hasil ke skema ChartData (Asumsi Anda sudah menambahkannya ke schema DashboardData)
-        if loyalty_counts:
-            dashboard_response.loyalitas_pembayaran_chart = ChartData(
-                labels=["Setia On-Time", "Lunas (Tapi Telat)", "Menunggak"],
-                data=[
-                    loyalty_counts.count_setia or 0,
-                    loyalty_counts.count_lunas_telat or 0,
-                    loyalty_counts.count_menunggak or 0,
-                ],
-            )
-        # --- AKHIR REVISI LOGIKA CHART ---
-
-        # REVISI: Hapus StatCard Setia & Telat. Sisakan 3 kartu brand.
-        pelanggan_stats = [
-            StatCard(
-                title="Jumlah Pelanggan Jakinet",
-                value=pelanggan_by_brand.get("jakinet", 0),
-                description="Total Pelanggan Jakinet",
-            ),
-            StatCard(
-                title="Jumlah Pelanggan Jelantik",
-                value=pelanggan_by_brand.get("jelantik", 0),
-                description="Total Pelanggan Jelantik",
-            ),
-            StatCard(
-                title="Pelanggan Jelantik Nagrak",
-                value=pelanggan_by_brand.get("jelantik nagrak", 0),
-                description="Total Pelanggan Rusun Nagrak",
-            ),
-        ]
-        temp_stat_cards.extend(pelanggan_stats)
-
-    # Blok Statistik Server (Tidak ada perubahan, sekarang ditempatkan dengan benar)
     if "view_widget_statistik_server" in user_permissions:
-        total_servers_stmt = select(func.count(MikrotikServer.id))
-        total_servers = (await db.execute(total_servers_stmt)).scalar_one_or_none() or 0
+        tasks['server_stats'] = asyncio.create_task(_get_mikrotik_status_counts(db))
+
+    # Jalankan semua task yang sudah dikumpulkan
+    results = await asyncio.gather(*tasks.values(), return_exceptions=True)
+    results_map = dict(zip(tasks.keys(), results))
+
+    # --- Proses hasil dari task yang sudah selesai ---
+    if 'revenue_summary' in results_map and not isinstance(results_map['revenue_summary'], Exception):
+        dashboard_response.revenue_summary = results_map['revenue_summary']
+
+    temp_stat_cards = []
+    if 'pelanggan_stats' in results_map and not isinstance(results_map['pelanggan_stats'], Exception):
+        temp_stat_cards.extend(results_map['pelanggan_stats'])
+
+    if 'loyalty_chart' in results_map and not isinstance(results_map['loyalty_chart'], Exception):
+        dashboard_response.loyalitas_pembayaran_chart = results_map['loyalty_chart']
+
+    if 'server_stats' in results_map and not isinstance(results_map['server_stats'], Exception):
+        server_counts = results_map['server_stats']
         server_stats = [
-            StatCard(
-                title="Total Servers",
-                value=total_servers,
-                description="Total Mikrotik servers",
-            ),
-            StatCard(
-                title="Online Servers",
-                value="N/A",
-                description="Servers currently online",
-            ),
-            StatCard(
-                title="Offline Servers",
-                value="N/A",
-                description="Servers currently offline",
-            ),
+            StatCard(title="Total Servers", value=server_counts['total'], description="Total Mikrotik servers"),
+            StatCard(title="Online Servers", value=server_counts['online'], description="Servers currently online"),
+            StatCard(title="Offline Servers", value=server_counts['offline'], description="Servers currently offline"),
         ]
         temp_stat_cards.extend(server_stats)
 
@@ -354,40 +343,6 @@ async def get_dashboard_data(
     return dashboard_response
 
 
-# ==========================================================
-# --- ENDPOINT STATUS MIKROTIK YANG DIPERBAIKI ---
-# ==========================================================
-@router.get("/mikrotik-status", response_model=MikrotikStatus)
-async def get_mikrotik_status(db: AsyncSession = Depends(get_db)):
-    """
-    Endpoint terpisah untuk memeriksa status online/offline semua server Mikrotik.
-    """
-    all_servers = (await db.execute(select(MikrotikServer))).scalars().all()
-    total_servers = len(all_servers)
-
-    if total_servers == 0:
-        return MikrotikStatus(online=0, offline=0)
-
-    async def check_status(server):
-        try:
-            loop = asyncio.get_event_loop()
-            api, conn = await loop.run_in_executor(
-                None, mikrotik_service.get_api_connection, server
-            )
-            if api and conn:
-                conn.disconnect()
-                return True
-            return False
-        except Exception:
-            return False
-
-    results = await asyncio.gather(*(check_status(server) for server in all_servers))
-    online_servers = sum(1 for res in results if res)
-    offline_servers = total_servers - online_servers
-
-    return MikrotikStatus(online=online_servers, offline=offline_servers)
-
-
 class SidebarBadgeResponse(BaseModel):
     suspended_count: int
     unpaid_invoice_count: int
@@ -401,107 +356,82 @@ class SidebarBadgeResponse(BaseModel):
     stopped_count: int
 
 
-class LoyalitasUserDetail(BaseModel):
-    id: Optional[int] = None
-    nama: Optional[str] = None
-    id_pelanggan: Optional[int] = None  # Ubah ke int jika diperlukan
-    alamat: Optional[str] = None
-    no_telp: Optional[str] = None
-
-
 # Tambahkan ini ke file dashboard.py di router dashboard
 
 
 @router.get("/loyalitas-users-by-segment")
 async def get_loyalty_users_by_segment(segmen: str, db: AsyncSession = Depends(get_db)):
     """
-    Mengambil daftar user berdasarkan segmen loyalitas pembayaran dari data REAL
+    Mengambil daftar user berdasarkan segmen loyalitas pembayaran secara efisien
+    tanpa N+1 query.
     """
     try:
-        from ..models.pelanggan import Pelanggan
-        from ..models.langganan import Langganan
-        from ..models.invoice import Invoice
+        # 1. Get all active customer IDs
+        active_customers_stmt = (
+            select(Langganan.pelanggan_id).where(Langganan.status == "Aktif").distinct()
+        )
+        active_customer_ids = (await db.execute(active_customers_stmt)).scalars().all()
+        active_customer_ids_set = set(active_customer_ids)
 
-        users_list = []
-
-        # Query pelanggan aktif dengan relasi lengkap
-        pelanggan_query = (
-            select(Pelanggan)
-            .join(Langganan, Pelanggan.id == Langganan.pelanggan_id)
-            .where(Langganan.status == "Aktif")
-            .options(
-                selectinload(Pelanggan.langganan), selectinload(Pelanggan.data_teknis)
-            )
+        # 2. Get IDs of customers with outstanding invoices
+        outstanding_payers_stmt = (
+            select(Invoice.pelanggan_id)
+            .where(Invoice.status_invoice.in_(["Belum Dibayar", "Kadaluarsa"]))
             .distinct()
         )
+        outstanding_payer_ids = (
+            await db.execute(outstanding_payers_stmt)
+        ).scalars().all()
+        outstanding_payer_ids_set = set(outstanding_payer_ids)
 
-        result = await db.execute(pelanggan_query)
-        all_active_customers = result.scalars().all()
+        # 3. Get IDs of customers who have ever paid late
+        ever_late_payers_stmt = (
+            select(Invoice.pelanggan_id)
+            .where(Invoice.paid_at > Invoice.tgl_jatuh_tempo)
+            .distinct()
+        )
+        ever_late_payer_ids = (await db.execute(ever_late_payers_stmt)).scalars().all()
+        ever_late_payer_ids_set = set(ever_late_payer_ids)
 
-        for pelanggan in all_active_customers:
-            # PERBAIKAN: Invoice menggunakan pelanggan_id langsung, bukan langganan_id
-            invoice_query = (
-                select(Invoice)
-                .where(Invoice.pelanggan_id == pelanggan.id)
-                .order_by(Invoice.tgl_jatuh_tempo.desc())
-            )
+        # 4. Categorize based on the requested segment
+        target_ids = set()
+        if segmen == "Menunggak":
+            target_ids = active_customer_ids_set.intersection(outstanding_payer_ids_set)
+        elif segmen == "Lunas (Tapi Telat)":
+            target_ids = active_customer_ids_set.difference(
+                outstanding_payer_ids_set
+            ).intersection(ever_late_payer_ids_set)
+        elif segmen == "Setia On-Time":
+            target_ids = active_customer_ids_set.difference(
+                outstanding_payer_ids_set
+            ).difference(ever_late_payer_ids_set)
+        else:
+            return []
 
-            invoice_result = await db.execute(invoice_query)
-            invoices = invoice_result.scalars().all()
+        if not target_ids:
+            return []
 
-            if not invoices:
-                continue
+        # 5. Fetch the full details for the target customers
+        final_query = (
+            select(Pelanggan)
+            .where(Pelanggan.id.in_(list(target_ids)))
+            .options(selectinload(Pelanggan.data_teknis))
+        )
+        final_customers = (await db.execute(final_query)).scalars().all()
 
-            # Analisis pola pembayaran berdasarkan invoice terbaru dan historis
-            recent_invoices = invoices[:5]  # 5 invoice terbaru
-            total_lunas = 0
-            total_telat = 0
-            has_nunggak = False
-
-            for invoice in recent_invoices:
-                if invoice.status_invoice == "Lunas":
-                    total_lunas += 1
-                    # Periksa apakah bayar telat
-                    if (
-                        invoice.paid_at
-                        and invoice.tgl_jatuh_tempo
-                        and invoice.paid_at.date() > invoice.tgl_jatuh_tempo
-                    ):
-                        total_telat += 1
-                elif invoice.status_invoice in ["Belum Dibayar", "Kadaluarsa"]:
-                    has_nunggak = True
-
-            # Klasifikasi berdasarkan pola pembayaran
-            customer_segment = None
-
-            if has_nunggak:
-                customer_segment = "Menunggak"
-            elif total_telat > 0:
-                customer_segment = "Lunas (Tapi Telat)"
-            elif total_lunas > 0:
-                customer_segment = "Setia On-Time"
-
-            # Tambahkan ke list jika sesuai segmen yang diminta
-            if customer_segment == segmen:
-                # PERBAIKAN: data_teknis adalah objek tunggal, bukan list
-                id_pelanggan = (
-                    pelanggan.data_teknis.id_pelanggan
-                    if pelanggan.data_teknis
-                    else f"PLG-{pelanggan.id:04d}"
-                )
-
-                users_list.append(
-                    {
-                        "id": pelanggan.id,
-                        "nama": pelanggan.nama,
-                        "id_pelanggan": id_pelanggan,
-                        "alamat": pelanggan.alamat or "Alamat tidak tersedia",
-                        "no_telp": pelanggan.no_telp or "Nomor tidak tersedia",
-                    }
-                )
-
-        return users_list
-
+        # 6. Format the response
+        return [
+            {
+                "id": p.id,
+                "nama": p.nama,
+                "id_pelanggan": p.data_teknis.id_pelanggan
+                if p.data_teknis
+                else f"PLG-{p.id:04d}",
+                "alamat": p.alamat or "Alamat tidak tersedia",
+                "no_telp": p.no_telp or "Nomor tidak tersedia",
+            }
+            for p in final_customers
+        ]
     except Exception as e:
         import traceback
 
@@ -510,213 +440,6 @@ async def get_loyalty_users_by_segment(segmen: str, db: AsyncSession = Depends(g
         raise HTTPException(
             status_code=500, detail=f"Gagal mengambil data user loyalitas: {str(e)}"
         )
-
-
-# Jika dummy data berfungsi, maka coba versi dengan database sederhana ini:
-@router.get("/loyalitas-users-by-segment-real")
-async def get_loyalty_users_by_segment_real(
-    segmen: str, db: AsyncSession = Depends(get_db)
-):
-    """
-    Versi dengan data real dari database
-    """
-    try:
-        # Import di dalam fungsi untuk menghindari circular import
-        from ..models.pelanggan import Pelanggan as PelangganModel
-        from ..models.langganan import Langganan as LanggananModel
-
-        # Query sederhana untuk mengambil pelanggan aktif
-        query = (
-            select(PelangganModel)
-            .join(LanggananModel, PelangganModel.id == LanggananModel.pelanggan_id)
-            .where(LanggananModel.status == "Aktif")
-            .limit(10)
-        )  # Batasi untuk testing
-
-        result = await db.execute(query)
-        pelanggan_list = result.scalars().all()
-
-        users_list = []
-        for pelanggan in pelanggan_list:
-            users_list.append(
-                {
-                    "id": pelanggan.id,
-                    "nama": pelanggan.nama,
-                    "id_pelanggan": f"PLG-{pelanggan.id:04d}",
-                    "alamat": getattr(pelanggan, "alamat", "Alamat tidak tersedia"),
-                    "no_telp": getattr(pelanggan, "no_telp", "Nomor tidak tersedia"),
-                }
-            )
-
-        # Return subset berdasarkan segmen (untuk simulasi)
-        if segmen == "Setia On-Time":
-            return users_list[:3]  # Return 3 user pertama
-        elif segmen == "Lunas (Tapi Telat)":
-            return users_list[3:6] if len(users_list) > 3 else []
-        elif segmen == "Menunggak":
-            return users_list[6:] if len(users_list) > 6 else []
-        else:
-            return []
-
-    except Exception as e:
-        import traceback
-
-        print(f"Error in real loyalitas users: {e}")
-        print(f"Traceback: {traceback.format_exc()}")
-        return []
-
-
-# Juga pastikan untuk memperbaiki chart loyalitas jika ada masalah serupa
-@router.get("/loyalitas-pembayaran-chart")
-async def get_loyalitas_pembayaran_chart(db: AsyncSession = Depends(get_db)):
-    """
-    Mengambil data chart loyalitas pembayaran pelanggan
-    """
-    try:
-        # Hitung pelanggan setia (selalu bayar tepat waktu)
-        subquery_setia = (
-            select(Langganan.id.label("langganan_id"))
-            .select_from(Langganan)
-            .join(Invoice, Langganan.id == Invoice.langganan_id)
-            .where(Langganan.status == "Aktif", Invoice.status_pembayaran == "Lunas")
-            .group_by(Langganan.id)
-            .having(
-                func.count(case((Invoice.tgl_bayar > Invoice.tgl_jatuh_tempo, 1))) == 0
-            )
-            .subquery()
-        )
-
-        setia_count = await db.execute(select(func.count()).select_from(subquery_setia))
-        setia_total = setia_count.scalar() or 0
-
-        # Hitung pelanggan yang lunas tapi telat
-        telat_count = await db.execute(
-            select(func.count(Langganan.id.distinct()))
-            .select_from(Langganan)
-            .join(Invoice, Langganan.id == Invoice.langganan_id)
-            .where(
-                Langganan.status == "Aktif",
-                Invoice.status_pembayaran == "Lunas",
-                Invoice.tgl_bayar > Invoice.tgl_jatuh_tempo,
-            )
-        )
-        telat_total = telat_count.scalar() or 0
-
-        # Hitung pelanggan menunggak
-        nunggak_count = await db.execute(
-            select(func.count(Langganan.id.distinct()))
-            .select_from(Langganan)
-            .join(Invoice, Langganan.id == Invoice.langganan_id)
-            .where(
-                Langganan.status == "Aktif",
-                Invoice.status_pembayaran.in_(["Menunggu Pembayaran", "Kadaluarsa"]),
-            )
-        )
-        nunggak_total = nunggak_count.scalar() or 0
-
-        return {
-            "labels": ["Setia On-Time", "Lunas (Tapi Telat)", "Menunggak"],
-            "data": [setia_total, telat_total, nunggak_total],
-        }
-
-    except Exception as e:
-        print(f"Error in loyalitas chart: {e}")
-        return {
-            "labels": ["Setia On-Time", "Lunas (Tapi Telat)", "Menunggak"],
-            "data": [0, 0, 0],
-        }
-
-
-# ALTERNATIF QUERY - Jika field id_pelanggan ada di tabel Langganan
-@router.get("/loyalitas-users-by-segment-alt", response_model=List[LoyalitasUserDetail])
-async def get_loyalty_users_by_segment_alternative(
-    segmen: str, db: AsyncSession = Depends(get_db)
-):
-    """
-    Alternatif query jika field id_pelanggan ada di tabel Langganan
-    """
-
-    outstanding_payers_sq = (
-        select(Invoice.pelanggan_id)
-        .where(Invoice.status_invoice.in_(["Belum Dibayar", "Kadaluarsa"]))
-        .distinct()
-    ).correlate(None)
-
-    ever_late_payers_sq = (
-        select(Invoice.pelanggan_id)
-        .where(
-            and_(
-                Invoice.paid_at.is_not(None),
-                func.date(Invoice.paid_at) > Invoice.tgl_jatuh_tempo,
-            )
-        )
-        .distinct()
-    ).correlate(None)
-
-    # Query dengan join untuk mendapatkan id_pelanggan dari tabel Langganan
-    query = (
-        select(
-            Pelanggan.id,
-            Pelanggan.nama,
-            Langganan.id_pelanggan,  # Ambil dari tabel Langganan
-            Pelanggan.alamat,
-            Pelanggan.no_telp,
-        )
-        .join(Langganan, Pelanggan.id == Langganan.pelanggan_id)
-        .where(Langganan.status == "Aktif")
-    )
-
-    # Filter berdasarkan segmen
-    if segmen == "Setia On-Time":
-        query = query.where(
-            and_(
-                not_(Pelanggan.id.in_(outstanding_payers_sq)),
-                not_(Pelanggan.id.in_(ever_late_payers_sq)),
-            )
-        )
-    elif segmen == "Lunas (Tapi Telat)":
-        query = query.where(
-            and_(
-                not_(Pelanggan.id.in_(outstanding_payers_sq)),
-                Pelanggan.id.in_(ever_late_payers_sq),
-            )
-        )
-    elif segmen == "Menunggak":
-        query = query.where(Pelanggan.id.in_(outstanding_payers_sq))
-    else:
-        return []
-
-    result = await db.execute(query.order_by(Pelanggan.nama))
-    return result.all()
-
-
-# DEBUGGING HELPER - Untuk melihat struktur tabel yang sebenarnya
-@router.get("/debug-table-structure")
-async def debug_table_structure(db: AsyncSession = Depends(get_db)):
-    """
-    Endpoint untuk debugging - melihat field yang tersedia di tabel
-    """
-    try:
-        # Ambil satu record dari setiap tabel untuk melihat field yang tersedia
-        pelanggan_sample = await db.execute(select(Pelanggan).limit(1))
-        pelanggan_record = pelanggan_sample.first()
-
-        langganan_sample = await db.execute(select(Langganan).limit(1))
-        langganan_record = langganan_sample.first()
-
-        result = {
-            "pelanggan_fields": (
-                dir(pelanggan_record[0]) if pelanggan_record else "No records found"
-            ),
-            "langganan_fields": (
-                dir(langganan_record[0]) if langganan_record else "No records found"
-            ),
-        }
-
-        return result
-
-    except Exception as e:
-        return {"error": str(e)}
 
 
 @router.get("/sidebar-badges", response_model=SidebarBadgeResponse)
@@ -745,51 +468,6 @@ async def get_sidebar_badges(db: AsyncSession = Depends(get_db)):
         unpaid_invoice_count=unpaid_count,
         stopped_count=stopped_count,
     )
-
-
-class GrowthChartData(BaseModel):
-    labels: List[str]
-    data: List[int]
-
-
-# ============================================
-
-
-# =========================================== Chart untuk menampilkan penambahan User =======================================
-
-
-class GrowthChartData(BaseModel):
-    labels: List[str]
-    data: List[int]
-
-
-@router.get("/growth-trend", response_model=GrowthChartData)
-async def get_growth_trend_data(db: AsyncSession = Depends(get_db)):
-    """
-    Menyediakan data untuk grafik tren pertumbuhan pelanggan baru per bulan.
-    """
-    stmt = (
-        select(
-            func.date_format(Pelanggan.tgl_instalasi, "%Y-%m").label("bulan"),
-            func.count(Pelanggan.id).label("jumlah"),
-        )
-        .where(Pelanggan.tgl_instalasi.isnot(None))
-        .group_by("bulan")
-        .order_by("bulan")
-    )
-
-    result = await db.execute(stmt)
-    growth_data = result.all()
-
-    labels = [
-        datetime.strptime(item.bulan, "%Y-%m").strftime("%b %Y") for item in growth_data
-    ]
-    data = [item.jumlah for item in growth_data]
-
-    return GrowthChartData(labels=labels, data=data)
-
-
-# =========================================== Chart untuk menampilkan penambahan User =======================================
 
 
 # --- 1. Definisikan Skema Pydantic Baru untuk Respons ---

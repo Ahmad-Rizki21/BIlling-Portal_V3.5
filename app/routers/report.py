@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from sqlalchemy import func
-from sqlalchemy.orm import selectinload
+from sqlalchemy import func, and_
+from sqlalchemy.orm import selectinload, aliased
 import pytz
 from datetime import date, datetime, time
 from typing import List, Optional
@@ -35,51 +35,84 @@ async def get_revenue_report(
     start_datetime = datetime.combine(start_date, time.min)
     end_datetime = datetime.combine(end_date, time.max)
 
-    # Query 1: Menghitung total pendapatan
-    total_revenue_query = (
-        select(func.sum(InvoiceModel.total_harga))
-        .join(InvoiceModel.pelanggan)  # 2. Join tabel Pelanggan untuk filter
-        .where(
-            InvoiceModel.status_invoice == "Lunas",
-            InvoiceModel.paid_at.between(start_datetime, end_datetime),
-        )
-    )
-    if alamat:  # 3. Terapkan filter jika 'alamat' diberikan
-        total_revenue_query = total_revenue_query.where(PelangganModel.alamat == alamat)
-
+    # --- KONDISI FILTER UMUM ---
+    filter_conditions = [
+        InvoiceModel.status_invoice == "Lunas",
+        InvoiceModel.paid_at.between(start_datetime, end_datetime),
+    ]
+    if alamat:
+        filter_conditions.append(PelangganModel.alamat == alamat)
     if id_brand:
-        total_revenue_query = total_revenue_query.where(
-            PelangganModel.id_brand == id_brand
+        filter_conditions.append(PelangganModel.id_brand == id_brand)
+
+    # --- QUERY UNTUK SUMMARY (TOTAL PENDAPATAN & JUMLAH INVOICE) ---
+    summary_query = (
+        select(
+            func.coalesce(func.sum(InvoiceModel.total_harga), 0.0),
+            func.count(InvoiceModel.id)
         )
+        .join(InvoiceModel.pelanggan)
+        .where(and_(*filter_conditions))
+    )
+    total_pendapatan, total_invoices = (await db.execute(summary_query)).one()
 
-    total_revenue_result = await db.execute(total_revenue_query)
-    total_pendapatan = total_revenue_result.scalar_one_or_none() or 0.0
+    # HAPUS SEMUA LOGIKA UNTUK MENGAMBIL RINCIAN DARI ENDPOINT INI
+    # KITA AKAN BUAT ENDPOINT BARU UNTUK ITU
 
-    # Query untuk rincian invoice (tidak ada perubahan)
+    return RevenueReportResponse(
+        total_pendapatan=float(total_pendapatan),
+        total_invoices=total_invoices,
+        rincian_invoice=[],  # Selalu kembalikan list kosong
+    )
+
+
+@router.get("/revenue/details", response_model=List[InvoiceReportItem])
+async def get_revenue_report_details(
+    start_date: date,
+    end_date: date,
+    alamat: Optional[str] = None,
+    id_brand: Optional[str] = None,
+    skip: int = 0,
+    limit: Optional[int] = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user),
+):
+    """
+    Endpoint baru yang HANYA mengambil rincian invoice dengan paginasi.
+    """
+    start_datetime = datetime.combine(start_date, time.min)
+    end_datetime = datetime.combine(end_date, time.max)
+
+    # --- KONDISI FILTER UMUM (SAMA SEPERTI DI ATAS) ---
+    filter_conditions = [
+        InvoiceModel.status_invoice == "Lunas",
+        InvoiceModel.paid_at.between(start_datetime, end_datetime),
+    ]
+    if alamat:
+        filter_conditions.append(PelangganModel.alamat == alamat)
+    if id_brand:
+        filter_conditions.append(PelangganModel.id_brand == id_brand)
+
+    # --- QUERY UNTUK RINCIAN INVOICE (DENGAN PAGINASI) ---
     invoices_query = (
         select(InvoiceModel)
-        .join(InvoiceModel.pelanggan)  # Join sudah ada, bagus!
+        .join(InvoiceModel.pelanggan)
         .options(
             selectinload(InvoiceModel.pelanggan).selectinload(
                 PelangganModel.harga_layanan
             )
         )
-        .where(
-            InvoiceModel.status_invoice == "Lunas",
-            InvoiceModel.paid_at.between(start_datetime, end_datetime),
-        )
+        .where(and_(*filter_conditions))
         .order_by(InvoiceModel.paid_at.desc())
+        .offset(skip)
     )
-    if alamat:  # 3. Terapkan filter jika 'alamat' diberikan
-        invoices_query = invoices_query.where(PelangganModel.alamat == alamat)
 
-    if id_brand:
-        invoices_query = invoices_query.where(PelangganModel.id_brand == id_brand)
+    if limit is not None:
+        invoices_query = invoices_query.limit(limit)
 
     invoices_result = await db.execute(invoices_query)
     invoices = invoices_result.scalars().unique().all()
 
-    # --- PERBARUAN LOGIKA UTAMA ADA DI SINI ---
     rincian_invoice_list = []
     wib_timezone = pytz.timezone("Asia/Jakarta")
     for inv in invoices:
@@ -117,6 +150,5 @@ async def get_revenue_report(
         )
         rincian_invoice_list.append(report_item)
 
-    return RevenueReportResponse(
-        total_pendapatan=total_pendapatan, rincian_invoice=rincian_invoice_list
-    )
+    # Kembalikan hanya list rinciannya
+    return rincian_invoice_list

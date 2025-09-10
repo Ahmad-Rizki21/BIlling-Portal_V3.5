@@ -50,7 +50,10 @@ async def create_pelanggan(
     db_pelanggan = PelangganModel(**pelanggan.model_dump())
     db.add(db_pelanggan)
     await db.commit()
-    await db.refresh(db_pelanggan)
+    # PERBAIKAN: Muat relasi secara eksplisit setelah membuat objek baru.
+    # Ini mencegah error "MissingGreenlet" saat FastAPI mencoba mengakses relasi
+    # yang belum di-load (lazy loading) di luar scope async.
+    await db.refresh(db_pelanggan, attribute_names=["harga_layanan", "data_teknis"])
 
     try:
         # Cari semua user ID dengan role 'NOC' atau 'CS'
@@ -96,7 +99,12 @@ async def read_all_pelanggan(
     """
     Mengambil daftar semua pelanggan dengan paginasi dan filter.
     """
-    query = select(PelangganModel).options(selectinload(PelangganModel.data_teknis))
+    # PERBAIKAN: Selalu muat relasi yang dibutuhkan oleh skema respons
+    # menggunakan selectinload untuk menghindari error "MissingGreenlet"
+    # akibat lazy loading.
+    query = select(PelangganModel).options(
+        selectinload(PelangganModel.data_teknis), 
+        selectinload(PelangganModel.harga_layanan))
 
     # Terapkan filter pencarian umum (nama, email, no_telp)
     if search:
@@ -132,7 +140,17 @@ async def read_pelanggan_by_id(pelanggan_id: int, db: AsyncSession = Depends(get
     """
     Mengambil satu data pelanggan spesifik berdasarkan ID-nya.
     """
-    db_pelanggan = await db.get(PelangganModel, pelanggan_id)
+    # PERBAIKAN: Ganti db.get() dengan select() untuk eager loading.
+    # Ini mencegah error "MissingGreenlet" saat skema mencoba mengakses
+    # relasi seperti 'harga_layanan' atau 'data_teknis'.
+    query = (
+        select(PelangganModel)
+        .where(PelangganModel.id == pelanggan_id)
+        .options(selectinload(PelangganModel.harga_layanan), selectinload(PelangganModel.data_teknis))
+    )
+    result = await db.execute(query)
+    db_pelanggan = result.scalar_one_or_none()
+
     if not db_pelanggan:
         raise HTTPException(status_code=404, detail="Pelanggan tidak ditemukan")
     return db_pelanggan
@@ -147,18 +165,26 @@ async def update_pelanggan(
     """
     Memperbarui data pelanggan secara parsial (hanya field yang diisi).
     """
-    db_pelanggan = await db.get(PelangganModel, pelanggan_id)
+    # PERBAIKAN: Ganti db.get() dengan query select() agar bisa menggunakan
+    # options(selectinload(...)) untuk eager loading relasi.
+    query = (
+        select(PelangganModel)
+        .where(PelangganModel.id == pelanggan_id)
+        .options(selectinload(PelangganModel.harga_layanan), selectinload(PelangganModel.data_teknis))
+    )
+    result = await db.execute(query)
+    db_pelanggan = result.scalar_one_or_none()
+
     if not db_pelanggan:
         raise HTTPException(status_code=404, detail="Pelanggan not found")
 
     update_data = pelanggan_update.model_dump(exclude_unset=True)
-
     for key, value in update_data.items():
         setattr(db_pelanggan, key, value)
 
     db.add(db_pelanggan)
     await db.commit()
-    await db.refresh(db_pelanggan)
+    await db.refresh(db_pelanggan, attribute_names=["harga_layanan", "data_teknis"])
     return db_pelanggan
 
 
@@ -344,23 +370,27 @@ async def import_from_csv(
 
     for row_num, row in enumerate(reader, start=2):
         data = {
+            # PERBAIKAN: Hapus kondisi `if` agar semua kolom diproses.
+            # Ini memungkinkan Pydantic melakukan validasi yang benar untuk field kosong.
             model_field: row.get(csv_header, "").strip()
             for csv_header, model_field in column_mapping.items()
-            if row.get(csv_header, "").strip()
         }
         if not data:
             continue
 
         try:
             # Validasi dan konversi tanggal
-            if "tgl_instalasi" in data:
+            tgl_instalasi_str = data.get("tgl_instalasi")
+            if tgl_instalasi_str:
                 try:
-                    data["tgl_instalasi"] = parser.parse(data["tgl_instalasi"]).date()
+                    data["tgl_instalasi"] = parser.parse(tgl_instalasi_str).date()
                 except (parser.ParserError, ValueError):
                     errors.append(
-                        f"Baris {row_num}: Format tanggal tidak valid untuk '{data['tgl_instalasi']}'. Gunakan YYYY-MM-DD."
+                        f"Baris {row_num}: Format tanggal tidak valid untuk '{tgl_instalasi_str}'. Gunakan YYYY-MM-DD."
                     )
                     continue
+            else:
+                data["tgl_instalasi"] = None
 
             # Validasi format Pydantic
             customer_schema = PelangganCreate(**data)

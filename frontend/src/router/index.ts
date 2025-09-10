@@ -129,9 +129,19 @@ const router = createRouter({
             requiresAuth: true, 
             roles: ['Direktur', 'Admin', 'Monitoring']
           }
-        }
+        },
+        {
+          path: '/activity-logs',
+          name: 'ActivityLogs',
+          component: () => import('@/views/ActivityLogView.vue'),
+          meta: {
+            requiresAuth: true,
+            permissions: ['view_activity_log']
+          },
+        },
       ],
     },
+    
 
     // Rute untuk halaman login (TIDAK ADA LAYOUT)
     {

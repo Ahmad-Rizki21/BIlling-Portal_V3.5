@@ -92,17 +92,33 @@
 
     <div class="charts-section">
       <div class="charts-row">
-        <div v-if="lokasiChartData" class="chart-card location-chart">
+        <div v-if="lokasiChartData" id="lokasi-chart-container" class="chart-card location-chart">
           <div class="chart-header">
+            <div class="chart-title-section">
+              <h3 class="chart-title">
+                <v-icon class="chart-icon" color="primary">mdi-map-marker-radius</v-icon>
+                Pelanggan per Alamat
+              </h3>
+              <p class="chart-subtitle">Distribusi pelanggan aktif di setiap lokasi</p>
             </div>
+            <v-btn icon="mdi-download" size="small" variant="text" @click="downloadAsPNG('lokasi-chart-container', 'distribusi-lokasi.png')"></v-btn>
+          </div>
           <div class="chart-container">
             <Chart v-if="!loading" type="bar" :data="lokasiChartData" :options="chartOptions" />
           </div>
         </div>
 
-        <div v-if="paketChartData" class="chart-card package-chart">
+        <div v-if="paketChartData" id="paket-chart-container" class="chart-card package-chart">
           <div class="chart-header">
-             </div>
+            <div class="chart-title-section">
+              <h3 class="chart-title">
+                <v-icon class="chart-icon" color="success">mdi-wifi</v-icon>
+                Pelanggan per Paket Layanan
+              </h3>
+              <p class="chart-subtitle">Distribusi pelanggan berdasarkan paket</p>
+            </div>
+            <v-btn icon="mdi-download" size="small" variant="text" @click="downloadAsPNG('paket-chart-container', 'distribusi-paket.png')"></v-btn>
+          </div>
           <div class="chart-container">
             <Chart v-if="!loading" type="bar" :data="paketChartData" :options="chartOptions" />
           </div>
@@ -110,17 +126,33 @@
       </div>
       
       <div class="charts-row">
-        <div v-if="growthChartData" class="chart-card growth-chart">
+        <div v-if="growthChartData" id="growth-chart-container" class="chart-card growth-chart">
           <div class="chart-header">
+            <div class="chart-title-section">
+              <h3 class="chart-title">
+                <v-icon class="chart-icon" color="pink">mdi-chart-line</v-icon>
+                Pertumbuhan Pelanggan
+              </h3>
+              <p class="chart-subtitle">Jumlah pelanggan baru per bulan</p>
             </div>
+            <v-btn icon="mdi-download" size="small" variant="text" @click="downloadAsPNG('growth-chart-container', 'pertumbuhan-pelanggan.png')"></v-btn>
+          </div>
           <div class="chart-container">
             <Chart v-if="!loading" type="line" :data="growthChartData" :options="growthChartOptions" />
           </div>
         </div>
 
-        <div v-if="invoiceChartData" class="chart-card invoice-chart">
+        <div v-if="invoiceChartData" id="invoice-chart-container" class="chart-card invoice-chart">
           <div class="chart-header">
-             </div>
+            <div class="chart-title-section">
+              <h3 class="chart-title">
+                <v-icon class="chart-icon" color="indigo">mdi-file-chart</v-icon>
+                Ringkasan Invoice
+              </h3>
+              <p class="chart-subtitle">Distribusi status invoice per bulan</p>
+            </div>
+            <v-btn icon="mdi-download" size="small" variant="text" @click="downloadAsPNG('invoice-chart-container', 'ringkasan-invoice.png')"></v-btn>
+          </div>
           <div class="chart-container">
             <Chart v-if="!loading" type="bar" :data="invoiceChartData" :options="invoiceChartOptions" />
           </div>
@@ -129,7 +161,7 @@
     </div>
 
     <div class="charts-row">
-      <div v-if="statusChartData" class="chart-card">
+      <div v-if="statusChartData" id="status-chart-container" class="chart-card">
         <div class="chart-header">
           <div class="chart-title-section">
             <h3 class="chart-title">
@@ -138,6 +170,7 @@
             </h3>
             <p class="chart-subtitle">Distribusi status semua langganan</p>
           </div>
+          <v-btn icon="mdi-download" size="small" variant="text" @click="downloadAsPNG('status-chart-container', 'status-langganan.png')"></v-btn>
         </div>
         <div class="chart-container donut-container">
           <Chart v-if="!loading" type="doughnut" :data="statusChartData" :options="donutChartOptions" />
@@ -148,7 +181,7 @@
         </div>
       </div>
 
-      <div v-if="loyalitasChartData" class="chart-card">
+      <div v-if="loyalitasChartData" id="loyalitas-chart-container" class="chart-card">
         <div class="chart-header">
           <div class="chart-title-section">
             <h3 class="chart-title">
@@ -157,9 +190,10 @@
             </h3>
             <p class="chart-subtitle">Distribusi pembayaran pelanggan aktif</p>
           </div>
+          <v-btn icon="mdi-download" size="small" variant="text" @click="downloadAsPNG('loyalitas-chart-container', 'loyalitas-pembayaran.png')"></v-btn>
         </div>
         <div class="chart-container donut-container">
-            <Chart v-if="!loading" type="doughnut" :data="loyalitasChartData" :options="loyalitasDonutOptions" />
+          <Chart v-if="!loading" type="doughnut" :data="loyalitasChartData" :options="loyalitasDonutOptions" />
           <div class="total-in-center">
             <h3>{{ totalActiveCustomers }}</h3>
             <span>Pelanggan Aktif</span>
@@ -169,21 +203,22 @@
 
 
 
-      <div v-if="alamatChartData" class="chart-card">
-    <div class="chart-header">
-      <div class="chart-title-section">
-        <h3 class="chart-title">
-          <v-icon class="chart-icon" color="primary">mdi-map-marker-radius</v-icon>
-          Pelanggan Aktif per Alamat
-        </h3>
-        <p class="chart-subtitle">7 Lokasi dengan pelanggan aktif terbanyak</p>
+      <div v-if="alamatChartData" id="alamat-chart-container" class="chart-card">
+        <div class="chart-header">
+          <div class="chart-title-section">
+            <h3 class="chart-title">
+              <v-icon class="chart-icon" color="info">mdi-map-marker-radius</v-icon>
+              Pelanggan Aktif per Alamat
+            </h3>
+            <p class="chart-subtitle">7 Lokasi dengan pelanggan aktif terbanyak</p>
+          </div>
+          <v-btn icon="mdi-download" size="small" variant="text" @click="downloadAsPNG('alamat-chart-container', 'pelanggan-per-alamat.png')"></v-btn>
+        </div>
+        <div class="chart-container">
+          <Chart v-if="!loading" type="pie" :data="alamatChartData" :options="pieChartOptions" />
+        </div>
       </div>
     </div>
-    <div class="chart-container">
-      <Chart v-if="!loading" type="pie" :data="alamatChartData" :options="pieChartOptions" />
-    </div>
-  </div>
-</div>
 
     <v-dialog v-model="dialogPaketDetail" max-width="700px" persistent>
       <v-card class="package-detail-card elevation-12">
@@ -305,7 +340,7 @@
                 variant="elevated"
                 size="large"
                 class="close-action-btn"
-                @click="dialogLoyalitas = false"
+                @click="dialogPaketDetail = false"
               >
                 <v-icon start>mdi-check</v-icon>
                 Tutup
@@ -446,6 +481,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import { Chart } from 'vue-chartjs';
+import html2canvas from 'html2canvas';
 import {
   Chart as ChartJS, 
   Title, 
@@ -562,19 +598,6 @@ async function fetchPaketDetails() {
     paketDetailData.value = response.data;
   } catch (error) {
     console.error("Gagal mengambil data detail paket:", error);
-  }
-}
-
-async function fetchMikrotikStats() {
-  try {
-    const response = await apiClient.get('/dashboard/mikrotik-status');
-    const { online, offline } = response.data;
-    const onlineStat = allStats.value.find(s => s.title === "Online Servers");
-    if (onlineStat) onlineStat.value = online;
-    const offlineStat = allStats.value.find(s => s.title === "Offline Servers");
-    if (offlineStat) offlineStat.value = offline;
-  } catch (error) {
-    console.error("Failed to fetch Mikrotik server status:", error);
   }
 }
 
@@ -804,6 +827,26 @@ function getColorForStat(title: string) {
   return 'primary';
 }
 
+//Download gambar untuk Chart
+function downloadAsPNG(elementId: string, filename: string) {
+    const element = document.getElementById(elementId);
+    if (!element) {
+        console.error(`Elemen dengan ID '${elementId}' tidak ditemukan.`);
+        return;
+    }
+
+    html2canvas(element, {
+        useCORS: true, // Penting jika ada gambar atau elemen eksternal
+    }).then(canvas => {
+        const link = document.createElement('a');
+        link.download = filename;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+    }).catch(error => {
+        console.error("Gagal men-download gambar:", error);
+    });
+}
+
 // onMounted tetap sama seperti sebelumnya
 onMounted(async () => {
   loading.value = true;
@@ -915,7 +958,6 @@ onMounted(async () => {
     console.error("Failed to fetch dashboard data:", error);
   } finally {
     loading.value = false;
-    fetchMikrotikStats();
   }
 });
 </script>

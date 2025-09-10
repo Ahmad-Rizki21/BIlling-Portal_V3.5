@@ -16,6 +16,7 @@ from ..database import Base
 if TYPE_CHECKING:
     from .data_teknis import DataTeknis
     from .olt import OLT
+    from .pelanggan import Pelanggan
 
 
 class MikrotikServer(Base):
@@ -50,3 +51,5 @@ class MikrotikServer(Base):
     )
     # -----------------------------------
     olts: Mapped[List["OLT"]] = relationship(back_populates="mikrotik_server")
+
+    pelanggan: Mapped[list["Pelanggan"]] = relationship(back_populates="mikrotik_server")

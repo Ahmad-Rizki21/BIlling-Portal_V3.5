@@ -554,6 +554,7 @@ const menuGroups = ref([
       { title: 'Users', icon: 'mdi-account-cog-outline', value: 'users', to: '/users', badge: userCount, badgeColor: 'primary', permission: 'view_users' },
       { title: 'Roles', icon: 'mdi-shield-account-outline', value: 'roles', to: '/roles', badge: roleCount, badgeColor: 'primary', permission: 'view_roles' },
       { title: 'Permissions', icon: 'mdi-shield-key-outline', value: 'permissions', to: '/permissions', permission: 'view_permissions' },
+      { title: 'Activity Log', icon: 'mdi-history', value: 'activity-logs', to: '/activity-logs', permission: 'view_activity_log' },
       { title: 'Kelola S&K', icon: 'mdi-file-edit-outline', value: 'sk-management', to: '/management/sk', permission: 'manage_sk' },
       { title: 'Pengaturan', icon: 'mdi-cog-outline', value: 'settings', to: '/management/settings', permission: 'manage_settings' }
   ]},

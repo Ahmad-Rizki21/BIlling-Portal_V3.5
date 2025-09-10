@@ -137,7 +137,7 @@
         <v-select
           v-model="selectedOlt"
           :items="oltOptions"
-          label="Filter OLT"
+          label="Filter Mikrotik Server"
           variant="outlined"
           density="comfortable"
           hide-details
@@ -480,7 +480,7 @@
             <v-stepper-window>
               <v-stepper-window-item :value="1">
                 <div class="pa-4 pa-sm-6">
-                  <h3 class="text-h6 font-weight-bold mb-4">Informasi Pelanggan</h3>
+              <h3 class="text-h6 font-weight-bold mb-4">Informasi Jaringan</h3>
                   <v-select
                     v-model="editedItem.pelanggan_id"
                     :items="pelangganForSelect"
@@ -492,6 +492,17 @@
                     class="mb-4"
                   ></v-select>
                   <v-row>
+                <v-col cols="12" sm="6">
+                  <v-select
+                      v-model="editedItem.mikrotik_server_id"
+                      :items="mikrotikServers"
+                      item-title="name"
+                      item-value="id"
+                      label="Mikrotik Server"
+                      @update:modelValue="handleOltSelection"
+                      variant="outlined"
+                  ></v-select>
+                </v-col>
                     <v-col cols="12" sm="6">
                       <v-text-field v-model="editedItem.id_pelanggan" label="ID Pelanggan (PPPoE)" variant="outlined"></v-text-field>
                     </v-col>
@@ -529,19 +540,8 @@
 
               <v-stepper-window-item :value="2">
                 <div class="pa-4 pa-sm-6">
-                  <h3 class="text-h6 font-weight-bold mb-4">Infrastruktur</h3>
+              <h3 class="text-h6 font-weight-bold mb-4">Detail Infrastruktur</h3>
                   <v-row>
-                    <v-col cols="12" sm="6">
-                      <v-select
-                          v-model="editedItem.mikrotik_server_id"
-                          :items="mikrotikServers"
-                          item-title="name"
-                          item-value="id"
-                          label="OLT"
-                          @update:modelValue="handleOltSelection"
-                          variant="outlined"
-                      ></v-select>
-                    </v-col>
                     <v-col cols="12" sm="6">
                        <v-select
                         v-model="editedItem.odp_id" :items="odpList"
@@ -991,10 +991,6 @@ function openDialog(item?: DataTeknis) {
   if (item) {
     // Mode Edit: Gunakan data yang ada
     editedItem.value = { ...item };
-
-    if (item.pelanggan_id) {
-      handlePelangganSelection(item.pelanggan_id);
-    }
   } else {
     // Mode Tambah Baru: Set nilai default di sini
     editedItem.value = {
@@ -1262,69 +1258,45 @@ function showSnackbar(text: string, color: string) {
   snackbar.value.show = true;
 }
 
-// watch(() => editedItem.value.pelanggan_id, async (newPelangganId) => {
-//   // Reset pilihan profile setiap kali pelanggan diganti
-//   editedItem.value.profile_pppoe = undefined;
-//   availablePppoeProfiles.value = [];
-  
-//   if (!newPelangganId) return;
-
-//   try {
-//     // 1. Ambil detail pelanggan yang dipilih (termasuk 'layanan')
-//     const pelangganResponse = await apiClient.get(`/pelanggan/${newPelangganId}`);
-//     const pelangganDetail = pelangganResponse.data;
-
-//     if (pelangganDetail && pelangganDetail.layanan) {
-//       // 2. Cari ID paket yang namanya cocok dengan 'layanan' pelanggan
-//       const paketTerkait = paketLayananSelectList.value.find(
-//         (p: PaketLayananSelectItem) => p.nama_paket === pelangganDetail.layanan
-//       );
-
-//       if (paketTerkait) {
-//         // 3. Jika paket ditemukan, panggil fungsi untuk mengambil profile yang tersedia
-//         await fetchAvailableProfiles(paketTerkait.id);
-//       }
-//     }
-//   } catch (error) {
-//     console.error("Gagal mengambil data detail pelanggan:", error);
-//   }
-// });
-
-
-// GANTI watch LAMA ANDA DENGAN INI:
-
-watch(() => editedItem.value.pelanggan_id, (newPelangganId) => {
-  // Hanya jalankan jika BUKAN mode edit DAN ada pelanggan baru yang dipilih
-  if (!isEditMode.value && newPelangganId) {
-    handlePelangganSelection(newPelangganId);
-  } else if (!newPelangganId) {
-    profilesFromApi.value = [];
-    if (editedItem.value) {
-      editedItem.value.profile_pppoe = undefined;
+/**
+ * Watcher cerdas yang memantau perubahan pada pelanggan DAN OLT/Server yang dipilih.
+ * Ini akan memicu pengambilan profil PPPoE hanya jika kedua informasi tersebut sudah ada.
+ */
+watch(
+  () => [editedItem.value.pelanggan_id, editedItem.value.mikrotik_server_id],
+  async ([newPelangganId, newServerId]) => {
+    // Jika salah satu kosong, reset dan hentikan proses
+    if (!newPelangganId || !newServerId) {
+      profilesFromApi.value = [];
+      if (editedItem.value) editedItem.value.profile_pppoe = undefined;
+      return;
     }
-  }
-}, { immediate: false }); // 'immediate: false' agar tidak berjalan saat komponen pertama kali dibuat
 
-async function handlePelangganSelection(pelangganId: number) {
+    await handleProfileFetch(newPelangganId, newServerId);
+  },
+  { deep: true }
+);
+
+async function handleProfileFetch(pelangganId: number, serverId: number) {
   // Reset state yang relevan
   profilesLoading.value = true;
-  profilesFromApi.value = []; // <-- RESET DATA MENTAH
-  
-  // Update editedItem di sini, tapi di dalam fungsi terpisah
-  if (editedItem.value) {
-    editedItem.value.profile_pppoe = undefined;
-  }
+  profilesFromApi.value = [];
+  if (editedItem.value) editedItem.value.profile_pppoe = undefined;
 
   try {
+    // 1. Ambil detail pelanggan untuk mengetahui paket layanan apa yang dia gunakan
     const pelangganResponse = await apiClient.get(`/pelanggan/${pelangganId}`);
     const pelangganDetail = pelangganResponse.data;
 
     if (pelangganDetail && pelangganDetail.layanan) {
+      // 2. Cari ID paket yang namanya cocok dengan 'layanan' pelanggan
       const paketTerkait = paketLayananSelectList.value.find(
         (p: PaketLayananSelectItem) => p.nama_paket === pelangganDetail.layanan
       );
+
       if (paketTerkait) {
-        await fetchAvailableProfiles(paketTerkait.id);
+        // 3. Jika paket ditemukan, panggil API dengan SEMUA info yang dibutuhkan
+        await fetchAvailableProfiles(paketTerkait.id, pelangganId, serverId);
       }
     }
   } catch (error) {
@@ -1345,15 +1317,18 @@ async function fetchPaketLayananForSelect() {
 }
 
 
-async function fetchAvailableProfiles(paketLayananId: number) {
-  if (!paketLayananId) {
+async function fetchAvailableProfiles(paketLayananId: number, pelangganId: number, serverId: number) {
+  if (!paketLayananId || !pelangganId || !serverId) {
     profilesFromApi.value = [];
     return;
   }
   profilesLoading.value = true;
   try {
-    // API sekarang mengembalikan { profile_name, usage_count }
-    const response = await apiClient.get(`/data_teknis/available-profiles/${paketLayananId}`);
+    // --- PERBAIKAN UTAMA DI SINI ---
+    // Kirim mikrotik_server_id sebagai query parameter
+    const response = await apiClient.get(
+      `/data_teknis/available-profiles/${paketLayananId}/${pelangganId}?mikrotik_server_id=${serverId}`
+    );
     profilesFromApi.value = response.data;
   } catch (error) {
     console.error("Gagal mengambil profile PPPoE yang tersedia:", error);

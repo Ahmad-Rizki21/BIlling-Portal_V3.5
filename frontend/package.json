@@ -29,6 +29,9 @@
     }
   },
   "dependencies": {
+    "@capacitor/android": "^7.4.3",
+    "@capacitor/cli": "^7.4.3",
+    "@capacitor/core": "^7.4.3",
     "@mdi/font": "^7.4.47",
     "@tauri-apps/plugin-store": "^2.3.0",
     "@types/d3-force": "^3.0.10",
@@ -39,6 +42,7 @@
     "d3-force": "^3.0.0",
     "echarts": "^5.6.0",
     "electron-is-dev": "^3.0.1",
+    "html2canvas": "^1.4.1",
     "leaflet": "^1.9.4",
     "lodash-es": "^4.17.21",
     "pinia": "^3.0.3",
@@ -51,6 +55,7 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
     "@eslint/js": "^9.31.0",
     "@tauri-apps/cli": "^2.7.1",
     "@tsconfig/node22": "^22.0.2",

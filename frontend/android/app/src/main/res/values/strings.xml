@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Portal FTTH</string>
+    <string name="title_activity_main">Portal FTTH</string>
+    <string name="package_name">com.billingftth.my.id</string>
+    <string name="custom_url_scheme">com.billingftth.my.id</string>
+</resources>

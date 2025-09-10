@@ -214,13 +214,13 @@
                 <div class="detail-row">
                   <v-icon size="small" class="me-2 text-medium-emphasis">mdi-domain</v-icon>
                   <span class="detail-label">Brand:</span>
-                  <v-chip 
-                    size="small" 
-                    :color="getBrandChipColor(getBrandName(item.id_brand))" 
+                  <v-chip v-if="item.harga_layanan"
+                    size="small"
+                    :color="getBrandChipColor(item.harga_layanan?.brand || '')"
                     variant="tonal"
                     class="ml-2"
                   >
-                    {{ getBrandName(item.id_brand) }}
+                    {{ item.harga_layanan?.brand || 'N/A' }}
                   </v-chip>
                 </div>
                 <div class="detail-row">
@@ -289,14 +289,14 @@
           </template>
                     
           <template v-slot:item.id_brand="{ item }">
-            <v-chip 
-              size="default" 
-              :color="getBrandChipColor(getBrandName(item.id_brand))" 
+            <v-chip v-if="item.harga_layanan"
+              size="small"
+              :color="getBrandChipColor(item.harga_layanan?.brand || '')"
               variant="tonal"
               class="brand-chip"
             >
               <v-icon start size="small">mdi-wifi</v-icon>
-              {{ getBrandName(item.id_brand) }}
+              {{ item.harga_layanan?.brand || 'N/A' }}
             </v-chip>
           </template>
           
@@ -865,13 +865,14 @@ import type { Pelanggan as BasePelanggan } from '@/interfaces/pelanggan';
 import { debounce } from 'lodash-es';
 
 // --- INTERFACES ---
-interface Pelanggan extends BasePelanggan {
-  alamat_2?: string | null;
-  id_brand?: string | null;
-}
 interface HargaLayanan {
   id_brand: string;
   brand: string;
+}
+interface Pelanggan extends BasePelanggan {
+  alamat_2?: string | null;
+  id_brand?: string | null;
+  harga_layanan?: HargaLayanan | null;
 }
 
 // --- STATE MANAGEMENT ---
@@ -1215,12 +1216,6 @@ function downloadFile(blobData: any, filename: string) {
   link.click();
   document.body.removeChild(link);
   window.URL.revokeObjectURL(url);
-}
-
-function getBrandName(id_brand: string | null | undefined): string {
-  if (!id_brand) return 'N/A';
-  const brand = hargaLayananList.value.find(h => h.id_brand === id_brand);
-  return brand ? brand.brand : 'Unknown';
 }
 
 function getBrandChipColor(brandName: string): string {

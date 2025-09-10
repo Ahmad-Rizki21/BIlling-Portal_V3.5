@@ -103,7 +103,7 @@
           <v-btn
             color="deep-purple"
             @click="fetchReport"
-            :loading="loading"
+            :loading="isReportLoading"
             size="large"
             class="text-none modern-btn"
             prepend-icon="mdi-magnify"
@@ -115,14 +115,15 @@
           <v-btn
             color="green-darken-1"
             @click="exportToExcel"
-            :disabled="!reportData || reportData.rincian_invoice.length === 0"
+            :disabled="!reportSummary || reportSummary.total_invoices === 0 || exporting"
             size="large"
             class="text-none modern-btn"
             prepend-icon="mdi-microsoft-excel"
             rounded="lg"
-            variant="tonal"
+            variant="outlined"
           >
             Ekspor
+            <v-progress-circular v-if="exporting" indeterminate size="20" class="ms-2"></v-progress-circular>
           </v-btn>
         </div>
       </v-col>
@@ -132,7 +133,7 @@
     </v-card>
 
     <!-- Loading State -->
-    <div v-if="loading" class="text-center pa-10 pa-md-16">
+    <div v-if="isReportLoading" class="text-center pa-10 pa-md-16">
       <div class="loading-container">
         <v-progress-circular 
           indeterminate 
@@ -147,7 +148,7 @@
     </div>
     
     <!-- Report Data -->
-    <div v-else-if="reportData" class="report-content">
+    <div v-else-if="reportSummary" class="report-content">
       <!-- Revenue Summary Card -->
       <v-card class="mb-6 mb-md-8 revenue-card" elevation="0" rounded="xl">
         <div class="revenue-gradient pa-6 pa-md-8">
@@ -163,7 +164,7 @@
                 {{ formatDate(startDate) }} - {{ formatDate(endDate) }}
               </div>
               <div class="revenue-amount text-white">
-                {{ formatCurrency(reportData.total_pendapatan) }}
+                {{ formatCurrency(reportSummary.total_pendapatan) }}
               </div>
             </div>
           </div>
@@ -182,8 +183,8 @@
         <v-divider class="mx-4 mx-md-6"></v-divider>
         
         <!-- Mobile Card View -->
-        <div class="d-md-none">
-          <div v-if="reportData.rincian_invoice.length === 0" class="text-center pa-8">
+        <div v-if="!$vuetify.display.mdAndUp">
+          <div v-if="invoiceDetails.length === 0" class="text-center pa-8">
             <v-icon size="48" color="grey-lighten-1" class="mb-4">mdi-receipt-text-off</v-icon>
             <p class="text-body-1 text-medium-emphasis">Tidak ada data invoice untuk periode ini</p>
           </div>
@@ -244,36 +245,24 @@
           </div>
           
           <!-- Mobile Pagination -->
-          <div v-if="reportData.rincian_invoice.length > 0" class="d-flex justify-center align-center pa-4">
-            <v-btn
-              icon="mdi-chevron-left"
-              variant="text"
-              :disabled="currentPage === 1"
-              @click="currentPage--"
-              size="small"
-            ></v-btn>
-            
-            <span class="mx-4 text-body-2">
-              {{ currentPage }} dari {{ totalPages }}
-            </span>
-            
-            <v-btn
-              icon="mdi-chevron-right"
-              variant="text"
-              :disabled="currentPage === totalPages"
-              @click="currentPage++"
-              size="small"
-            ></v-btn>
+          <div v-if="totalPages > 1" class="d-flex justify-center align-center pa-4">
+            <v-pagination
+              v-model="currentPage"
+              :length="totalPages"
+              :total-visible="5" 
+              @update:model-value="handleMobilePageUpdate" 
+            ></v-pagination>
           </div>
         </div>
 
         <!-- Desktop Table View -->
-        <div class="d-none d-md-block">
-          <v-data-table
+        <div v-if="$vuetify.display.mdAndUp">
+          <v-data-table-server
             :headers="headers"
-            :items="reportData.rincian_invoice"
-            item-value="invoice_number"
-            :items-per-page="10"
+            :items="invoiceDetails"
+            :items-length="reportSummary?.total_invoices || 0"
+            :loading="isDetailsLoading"
+            @update:options="fetchInvoiceDetails"
             class="modern-table"
             :no-data-text="'Tidak ada data invoice untuk periode ini'"
           >
@@ -327,7 +316,7 @@
                 {{ (item as InvoiceReportItem).metode_pembayaran || 'Tidak tercatat' }}
               </v-chip>
             </template>
-          </v-data-table>
+          </v-data-table-server>
         </div>
       </v-card>
     </div>
@@ -376,42 +365,34 @@ const startDate = ref(new Date(new Date().getFullYear(), new Date().getMonth(), 
 const endDate = ref(new Date());
 const menuStart = ref(false);
 const menuEnd = ref(false);
-const loading = ref(false);
-const reportData = ref<{
+const isReportLoading = ref(false);
+const isDetailsLoading = ref(false);
+// --- PERBAIKAN STATE: Pisahkan summary dan details ---
+const reportSummary = ref<{
   total_pendapatan: number;
-  rincian_invoice: InvoiceReportItem[];
+  total_invoices: number;
 } | null>(null);
+const invoiceDetails = ref<InvoiceReportItem[]>([]);
+// ----------------------------------------------------
 
 // Mobile pagination
-const currentPage = ref(1);
-const itemsPerPage = 5;
+const currentPage = ref(1); // Halaman saat ini
+const itemsPerPage = ref(10); // Item per halaman, cocokkan dengan v-data-table
 
 const selectedLocation = ref<string | null>(null);
 const locations = ref<string[]>([]);
 
 const selectedBrand = ref<string | null>(null);
 const brandOptions = ref<any[]>([]); // Untuk menampung { id_brand, brand }
+const exporting = ref(false);
 
 // --- Computed Properties ---
-const paginatedInvoices = computed(() => {
-  if (!reportData.value) return [];
-  const start = (currentPage.value - 1) * itemsPerPage;
-  const end = start + itemsPerPage;
-  return reportData.value.rincian_invoice.slice(start, end);
+const paginatedInvoices = computed(() => invoiceDetails.value || []);
+
+const totalPages = computed(() => {
+  if (!reportSummary.value?.total_invoices) return 0;
+  return Math.ceil(reportSummary.value.total_invoices / itemsPerPage.value);
 });
-
-
-// ▼▼▼ TAMBAHKAN FUNGSI BARU INI ▼▼▼
-async function fetchBrandOptions() {
-  try {
-    // Asumsi Anda punya endpoint untuk mengambil daftar brand/harga_layanan
-    const response = await apiClient.get('/harga_layanan'); 
-    brandOptions.value = response.data;
-  } catch (error) {
-    console.error("Gagal mengambil daftar brand:", error);
-  }
-} 
-
 
 async function fetchLocations() {
   try {
@@ -422,12 +403,18 @@ async function fetchLocations() {
   }
 }
 
-
-const totalPages = computed(() => {
-  if (!reportData.value) return 0;
-  return Math.ceil(reportData.value.rincian_invoice.length / itemsPerPage);
-});
-
+async function fetchBrandOptions() {
+  try {
+    // Asumsi Anda punya endpoint untuk mengambil daftar brand/harga_layanan
+    const response = await apiClient.get('/harga_layanan'); 
+    brandOptions.value = response.data;
+  } catch (error) {
+    console.error("Gagal mengambil daftar brand:", error);
+  }
+} 
+function handleMobilePageUpdate(newPage: number) {
+  fetchInvoiceDetails({ page: newPage, itemsPerPage: itemsPerPage.value, sortBy: [] });
+}
 // --- Table Headers ---
 const headers = [
   { title: 'No. Invoice', key: 'invoice_number', width: '200px', sortable: true },
@@ -455,55 +442,79 @@ function getPaymentMethodColor(method?: string): string {
   return 'primary';
 }
 
-function exportToExcel() {
-  if (!reportData.value || reportData.value.rincian_invoice.length === 0) {
+async function exportToExcel() {
+  if (!reportSummary.value || reportSummary.value.total_invoices === 0) {
     alert("Tidak ada data untuk diekspor!");
     return;
   }
 
-  const dataToExport = reportData.value.rincian_invoice.map(item => ({
-    "Nomor Invoice": item.invoice_number,
-    "Nama Pelanggan": item.pelanggan_nama,
-    "Alamat": item.alamat || "",
-    "Nama Brand": item.id_brand || "",
-    "Tanggal Bayar": new Date(item.paid_at),
-    "Metode Pembayaran": item.metode_pembayaran || "",
-    "Jumlah (Rp)": item.total_harga
-  }));
+  exporting.value = true;
+  try {
+    // Siapkan parameter filter tanpa paginasi
+    const params = {
+      start_date: toISODateString(startDate.value),
+      end_date: toISODateString(endDate.value),
+      alamat: selectedLocation.value || undefined,
+      id_brand: selectedBrand.value || undefined,
+      // PENTING: jangan sertakan 'skip' dan 'limit' agar API mengembalikan semua data
+    };
 
-  const worksheet = XLSX.utils.json_to_sheet(dataToExport);
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, "Laporan Pendapatan");
-  
-  // Atur lebar kolom
-  worksheet["!cols"] = [
-      { wch: 25 }, { wch: 30 }, { wch: 40 }, { wch: 15 }, 
-      { wch: 20 }, { wch: 15 }, { wch: 15 }
-  ];
+    // Panggil API untuk mendapatkan SEMUA data yang difilter
+    const response = await apiClient.get<InvoiceReportItem[]>('/reports/revenue/details', { params });
+    const allFilteredData = response.data;
 
-  // --- PERBAIKAN DI SINI: Tambahkan pengecekan 'if' ---
-  // Hanya jalankan format jika worksheet tidak kosong (memiliki '!ref')
-   if (worksheet['!ref']) {
-    const range = XLSX.utils.decode_range(worksheet['!ref']); // Sekarang ini aman
-    const amountColumnIndex = 6; // Kolom "Jumlah (Rp)" adalah kolom ke-7 (indeks 6)
+    if (!allFilteredData || allFilteredData.length === 0) {
+      alert("Tidak ada data yang cocok dengan filter untuk diekspor.");
+      return;
+    }
+
+    const dataToExport = allFilteredData.map((item: InvoiceReportItem) => ({
+      "Nomor Invoice": item.invoice_number,
+      "Nama Pelanggan": item.pelanggan_nama,
+      "Alamat": item.alamat || "",
+      "Nama Brand": item.id_brand || "",
+      "Tanggal Bayar": new Date(item.paid_at),
+      "Metode Pembayaran": item.metode_pembayaran || "",
+      "Jumlah (Rp)": item.total_harga
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Laporan Pendapatan");
     
-    // Mulai dari baris kedua (indeks 1) untuk melewati header
-    for (let rowNum = range.s.r + 1; rowNum <= range.e.r; rowNum++) {
-      const cellAddress = XLSX.utils.encode_cell({ r: rowNum, c: amountColumnIndex });
-      const cell = worksheet[cellAddress];
-      if (cell && cell.t === 'n') { // Pastikan sel ada dan tipenya adalah angka
-        cell.z = '"Rp" #,##0'; // Format mata uang Rupiah tanpa desimal
+    // Atur lebar kolom agar lebih rapi
+    worksheet["!cols"] = [
+        { wch: 25 }, { wch: 30 }, { wch: 40 }, { wch: 15 }, 
+        { wch: 20 }, { wch: 15 }, { wch: 15 }
+    ];
+
+    // Format kolom mata uang
+    if (worksheet['!ref']) {
+      const range = XLSX.utils.decode_range(worksheet['!ref']);
+      const amountColumnIndex = 6; // Kolom "Jumlah (Rp)" adalah kolom ke-7 (indeks 6)
+      
+      for (let rowNum = range.s.r + 1; rowNum <= range.e.r; rowNum++) {
+        const cellAddress = XLSX.utils.encode_cell({ r: rowNum, c: amountColumnIndex });
+        const cell = worksheet[cellAddress];
+        if (cell && cell.t === 'n') { // Pastikan sel ada dan tipenya adalah angka
+          cell.z = '"Rp" #,##0'; // Format mata uang Rupiah tanpa desimal
+        }
       }
     }
+
+    const start = toISODateString(startDate.value);
+    const end = toISODateString(endDate.value);
+    const fileName = `Laporan_Pendapatan_${start}_sampai_${end}.xlsx`;
+
+    XLSX.writeFile(workbook, fileName);
+  } catch (error) {
+    console.error("Gagal mengekspor data:", error);
+    alert("Terjadi kesalahan saat mencoba mengekspor data.");
+  } finally {
+    exporting.value = false;
   }
-  // --------------------------------------------------------
-
-  const start = toISODateString(startDate.value);
-  const end = toISODateString(endDate.value);
-  const fileName = `Laporan_Pendapatan_${start}_sampai_${end}.xlsx`;
-
-  XLSX.writeFile(workbook, fileName);
 }
+
 
 function toISODateString(date: Date): string {
     const year = date.getFullYear();
@@ -513,27 +524,52 @@ function toISODateString(date: Date): string {
 }
 
 async function fetchReport() {
-  loading.value = true;
-  reportData.value = null;
+  isReportLoading.value = true;
+  reportSummary.value = null;
+  invoiceDetails.value = []; // Kosongkan detail saat filter baru
   try {
-    const params: any = { // Siapkan object params
+    const params = {
       start_date: toISODateString(startDate.value),
       end_date: toISODateString(endDate.value),
+      ...(selectedLocation.value && { alamat: selectedLocation.value }),
+      ...(selectedBrand.value && { id_brand: selectedBrand.value }),
     };
 
-    // Tambahkan parameter alamat jika dipilih
-    if (selectedLocation.value) {
-      params.alamat = selectedLocation.value;
-    }
-    if (selectedBrand.value) {
-          params.id_brand = selectedBrand.value;
-    }
     const response = await apiClient.get('/reports/revenue', { params });
-    reportData.value = response.data;
+    reportSummary.value = response.data;
+
   } catch (error) {
     console.error("Gagal mengambil data laporan:", error);
   } finally {
-    loading.value = false;
+    isReportLoading.value = false;
+  }
+}
+
+async function fetchInvoiceDetails(options: { page: number, itemsPerPage: number, sortBy: any[] }) {
+  // Jangan fetch jika summary belum ada, KECUALI saat fetchReport baru saja selesai.
+  // Saat fetchReport selesai, reportSummary sudah ada nilainya, jadi fetchInvoiceDetails akan jalan.
+  // Saat user ganti halaman/sort, reportSummary sudah ada, jadi akan jalan juga.
+  // Ini mencegah @update:options terpanggil sebelum reportSummary siap.
+  if (!reportSummary.value?.total_invoices && reportSummary.value?.total_invoices !== 0) return;
+
+  isDetailsLoading.value = true;
+  try {
+    const params = {
+      start_date: toISODateString(startDate.value),
+      end_date: toISODateString(endDate.value),
+      alamat: selectedLocation.value || undefined,
+      id_brand: selectedBrand.value || undefined,
+      skip: (options.page - 1) * options.itemsPerPage,
+      limit: options.itemsPerPage,
+    };
+    const response = await apiClient.get('/reports/revenue/details', { params });
+    currentPage.value = options.page;
+    itemsPerPage.value = options.itemsPerPage;
+    invoiceDetails.value = response.data;
+  } catch (error) {
+    console.error("Gagal mengambil rincian invoice:", error);
+  } finally {
+    isDetailsLoading.value = false;
   }
 }
 
@@ -548,9 +584,10 @@ const formatCurrency = (value: number) => {
 
 // --- Lifecycle ---
 onMounted(() => {
-  fetchReport();
   fetchLocations();
   fetchBrandOptions();
+  // Panggil fetchReport saat komponen pertama kali dimuat
+  fetchReport();
 });
 </script>
 

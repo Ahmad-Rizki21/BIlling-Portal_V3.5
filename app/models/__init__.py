@@ -12,3 +12,4 @@ from .paket_layanan import PaketLayanan
 from .olt import OLT
 from .odp import ODP
 from .system_setting import SystemSetting
+from .activity_log import ActivityLog

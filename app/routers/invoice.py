@@ -56,7 +56,11 @@ async def get_all_invoices(
     query = (
         select(InvoiceModel)
         .join(InvoiceModel.pelanggan)
-        .options(selectinload(InvoiceModel.pelanggan))
+        # PERBAIKAN: Eager load relasi turunan untuk mencegah N+1 query
+        # saat skema respons membutuhkan data dari relasi ini (misal: nama brand).
+        .options(
+            selectinload(InvoiceModel.pelanggan).selectinload(PelangganModel.harga_layanan)
+        )
     )
 
     if search:
@@ -103,17 +107,23 @@ async def _process_successful_payment(
 ):
     """Fungsi terpusat untuk menangani logika setelah invoice lunas."""
 
-    pelanggan = await db.get(
-        PelangganModel,
-        invoice.pelanggan_id,
-        options=[
-            selectinload(PelangganModel.harga_layanan),
-            selectinload(PelangganModel.langganan).selectinload(
-                LanggananModel.paket_layanan
-            ),
-            selectinload(PelangganModel.data_teknis),
-        ],
-    )
+    # PERBAIKAN: Cek apakah relasi pelanggan sudah di-load untuk menghindari N+1 query
+    if hasattr(invoice, "pelanggan") and invoice.pelanggan:
+        pelanggan = invoice.pelanggan
+    else:
+        # Fallback: jika belum di-load, lakukan query (menjaga kompatibilitas)
+        pelanggan = await db.get(
+            PelangganModel,
+            invoice.pelanggan_id,
+            options=[
+                selectinload(PelangganModel.harga_layanan),
+                selectinload(PelangganModel.langganan).selectinload(
+                    LanggananModel.paket_layanan
+                ),
+                selectinload(PelangganModel.data_teknis),
+            ],
+        )
+
     if not pelanggan or not pelanggan.langganan:
         logger.error(
             f"Pelanggan atau langganan tidak ditemukan untuk invoice {invoice.invoice_number}"
@@ -469,8 +479,9 @@ async def generate_manual_invoice(
             )
 
         no_telp_xendit = (
-            f"+62{pelanggan.no_telp.replace('0', '', 1)}"
-            if pelanggan.no_telp.startswith("0")
+            # PERBAIKAN: Gunakan lstrip untuk menghapus '0' di awal dengan aman.
+            f"+62{pelanggan.no_telp.lstrip('0')}"
+            if pelanggan.no_telp and pelanggan.no_telp.startswith("0")
             else pelanggan.no_telp
         )
 
@@ -563,8 +574,12 @@ async def update_overdue_invoices(db: AsyncSession = Depends(get_db)):
     # 1. Cari semua invoice yang 'Belum Dibayar' dan sudah melewati masa tenggang
     stmt = (
         select(InvoiceModel)
+        # PERBAIKAN: Eager load data_teknis untuk mencegah N+1 query di dalam loop.
         .options(
-            selectinload(InvoiceModel.pelanggan).selectinload(PelangganModel.langganan)
+            selectinload(InvoiceModel.pelanggan).options(
+                selectinload(PelangganModel.langganan),
+                selectinload(PelangganModel.data_teknis),
+            )
         )
         .where(
             and_(
@@ -596,14 +611,22 @@ async def update_overdue_invoices(db: AsyncSession = Depends(get_db)):
                 if langganan_pelanggan.status != "Suspended":
                     langganan_pelanggan.status = "Suspended"
                     db.add(langganan_pelanggan)
-                    # Panggil service mikrotik untuk update
-                    await mikrotik_service.trigger_mikrotik_update(
-                        db, langganan_pelanggan
-                    )
-                    suspended_count += 1
-                    logger.info(
-                        f"Layanan untuk {pelanggan.nama} (Invoice: {invoice.invoice_number}) telah di-suspend."
-                    )
+                    
+                    # PERBAIKAN: Panggil trigger_mikrotik_update dengan argumen yang benar.
+                    data_teknis = pelanggan.data_teknis
+                    if data_teknis:
+                        await mikrotik_service.trigger_mikrotik_update(
+                            db,
+                            langganan_pelanggan,
+                            data_teknis,
+                            data_teknis.id_pelanggan,
+                        )
+                        suspended_count += 1
+                        logger.info(
+                            f"Layanan untuk {pelanggan.nama} (Invoice: {invoice.invoice_number}) telah di-suspend."
+                        )
+                    else:
+                        logger.error(f"Data Teknis tidak ditemukan untuk pelanggan {pelanggan.nama}, suspend di Mikrotik dilewati.")
         except Exception as e:
             logger.error(
                 f"Gagal men-suspend layanan untuk invoice {invoice.invoice_number}: {e}"

@@ -20,4 +20,5 @@ class InvoiceReportItem(BaseModel):
 # Skema utama untuk respons dari API laporan pendapatan
 class RevenueReportResponse(BaseModel):
     total_pendapatan: float
+    total_invoices: int
     rincian_invoice: List[InvoiceReportItem]

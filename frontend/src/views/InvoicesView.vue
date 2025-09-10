@@ -19,7 +19,7 @@
           variant="elevated"
           size="large"
           elevation="4"
-          @click="dialogGenerate = true"
+          @click="openGenerateDialog"
           prepend-icon="mdi-plus-circle-outline"
           class="text-none font-weight-bold w-100 w-md-auto"
           style="color: #4338ca !important;"
@@ -410,7 +410,7 @@
           <v-autocomplete
             v-model="selectedLanggananId"
             :items="langgananForSelect"
-            item-title="display_name"
+            item-title="title"
             item-value="id"
             label="Pilih Langganan Pelanggan"
             placeholder="Ketik nama pelanggan atau ID langganan..."
@@ -419,17 +419,9 @@
             clearable
             :prepend-inner-icon="'mdi-account-search'"
             class="mb-4"
-          >
-            <template v-slot:item="{ props }">
-              <v-list-item v-bind="props">
-                <template v-slot:prepend>
-                  <v-avatar size="32" color="primary">
-                    <v-icon color="white" size="16">mdi-account</v-icon>
-                  </v-avatar>
-                </template>
-              </v-list-item>
-            </template>
-          </v-autocomplete>
+        >
+           
+            </v-autocomplete>
           <v-expand-transition>
             <div v-if="selectedLanggananDetails">
               <v-row>
@@ -540,15 +532,17 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue';
 import apiClient from '@/services/api';
-import type { Invoice, PelangganSelectItem, LanggananSelectItem } from '@/interfaces/invoice';
+import type { Invoice, PelangganSelectItem } from '@/interfaces/invoice';
 import InvoiceDetailDialog from '@/components/dialogs/InvoiceDetailDialog.vue';
 import { debounce } from 'lodash-es';
+
 
 // --- State ---
 const invoices = ref<Invoice[]>([]);
 const pelangganList = ref<PelangganSelectItem[]>([]);
 const langgananList = ref<any[]>([]);
 const loading = ref(true);
+// const customerList = ref([]);
 const generating = ref(false);
 const searchQuery = ref('');
 const dialogGenerate = ref(false);
@@ -571,6 +565,10 @@ const endDate = ref<string | null>(null);
 const statusOptions = ref(['Lunas', 'Belum Dibayar', 'Kadaluarsa']);
 const showPaidInvoices = ref(false);
 
+// const newInvoice = ref({
+//   pelanggan_id: null,
+// });
+
 // --- Table Headers ---
 const headers = [
   { title: 'Nomor Invoice', key: 'invoice_number', width: '200px' },
@@ -581,14 +579,37 @@ const headers = [
   { title: 'Actions', key: 'actions', sortable: false, align: 'center' as const, width: '120px' },
 ];
 
+function isUserExisting(pelangganId: number): boolean {
+  // Cek apakah ada invoice yang sudah dibuat untuk pelanggan ini
+  return invoices.value.some(invoice => invoice.pelanggan_id === pelangganId);
+}
+
 // --- Computed Properties ---
-const langgananForSelect = computed((): LanggananSelectItem[] => {
+const langgananForSelect = computed(() => {
   return langgananList.value.map(langganan => {
+    // Cari pelanggan yang sesuai dengan langganan ini
     const pelanggan = pelangganList.value.find(p => p.id === langganan.pelanggan_id);
+    
+    // Check apakah user sudah existing
+    const isNewUser = pelanggan ? !isUserExisting(pelanggan.id) : false;
+    
+    // Buat title dengan format yang diinginkan
+    const title = `${pelanggan?.nama || 'N/A'}${isNewUser ? ' - NEW USER' : ''}`;
+
     return {
+      // properti 'id' diperlukan untuk item-value
       id: langganan.id,
-      pelanggan_id: langganan.pelanggan_id,
-      display_name: `${pelanggan?.nama || 'N/A'} (Langganan ID: ${langganan.id})`
+      
+      // Properti 'title' dengan format: Nama - NEW USER - Paket xxx
+      title: title,
+
+      // Objek item mentah (raw item) untuk diakses di template slot
+      raw: {
+        ...langganan,
+        pelanggan: pelanggan,
+        // Ambil flag is_new_user dari response backend
+        is_new_user: langganan.is_new_user || false
+      }
     };
   });
 });
@@ -683,6 +704,7 @@ function formatCurrency(value: number): string {
 // --- REVISI UTAMA SELESAI DI SINI ---
 
 
+
 // --- Methods --- (Tidak ada perubahan di bawah ini, biarkan seperti semula)
 onMounted(() => {
   fetchInvoices();
@@ -726,7 +748,7 @@ function sendWhatsAppReminder(invoice: Invoice) {
 
 const applyFilters = debounce(() => {
   fetchInvoices();
-}, 500);
+});
 
 watch([searchQuery, selectedStatus, startDate, endDate], () => {
   applyFilters();
@@ -756,14 +778,23 @@ async function fetchPelangganForSelect() {
 
 async function fetchLanggananForSelect() {
   try {
-    const response = await apiClient.get<any[]>('/langganan/?for_invoice_selection=true');
+    const response = await apiClient.get<any[]>(
+      '/langganan/?for_invoice_selection=true'
+    );
     langgananList.value = response.data;
-  } catch (error) { console.error(error); }
+  } catch (error) { 
+    console.error('Error fetching langganan:', error); 
+  }
 }
 
 function openDetailDialog(item: Invoice) {
   selectedInvoice.value = item;
   dialogDetail.value = true;
+}
+
+function openGenerateDialog() {
+  selectedLanggananId.value = null;
+  dialogGenerate.value = true;
 }
 
 async function generateManualInvoice() {

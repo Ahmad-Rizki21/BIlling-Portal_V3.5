@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import select, func, or_
@@ -472,14 +472,46 @@ async def import_from_csv_teknis(
     try:
         encoding = chardet.detect(contents)["encoding"] or "utf-8"
         content_str = contents.decode(encoding)
-        reader = csv.DictReader(io.StringIO(content_str))
-        if not reader.fieldnames:
+        
+        # --- PERBAIKAN DI SINI ---
+        # 1. Buat objek DictReader terlebih dahulu
+        reader_object = csv.DictReader(io.StringIO(content_str))
+        
+        # 2. Cek 'fieldnames' pada objek DictReader, BUKAN pada list
+        if not reader_object.fieldnames:
             raise HTTPException(status_code=400, detail="Header CSV tidak ditemukan.")
+        # 3. SEKARANG baru ubah menjadi list untuk di-loop
+        reader = list(reader_object)
     except Exception as e:
         logger.error(f"Gagal membaca atau mem-parsing file CSV: {repr(e)}")
         raise HTTPException(
             status_code=400, detail=f"Gagal memproses file CSV: {repr(e)}"
         )
+
+    # --- OPTIMISASI: PRE-FETCH DATA SEBELUM LOOP (MENGHINDARI N+1 QUERY) ---
+    # 1. Kumpulkan semua data unik yang perlu dicari dari CSV
+    emails_to_find = {row.get("email_pelanggan", "").lower().strip() for row in reader if row.get("email_pelanggan")}
+    server_names_to_find = {row.get("olt", "").strip() for row in reader if row.get("olt")}
+    odp_codes_to_find = {row.get("kode_odp", "").strip() for row in reader if row.get("kode_odp")}
+
+    # 2. Lakukan query besar-besaran di luar loop untuk efisiensi
+    # Ambil semua pelanggan yang relevan dalam satu query
+    pelanggan_q = await db.execute(select(PelangganModel).where(func.lower(PelangganModel.email).in_(emails_to_find)))
+    pelanggan_map = {p.email.lower(): p for p in pelanggan_q.scalars().all()}
+
+    # Ambil semua server yang relevan dalam satu query
+    server_q = await db.execute(select(MikrotikServerModel).where(MikrotikServerModel.name.in_(server_names_to_find)))
+    server_map = {s.name: s for s in server_q.scalars().all()}
+
+    # Ambil semua ODP yang relevan dalam satu query
+    odp_q = await db.execute(select(ODPModel).where(ODPModel.kode_odp.in_(odp_codes_to_find)))
+    odp_map = {o.kode_odp: o for o in odp_q.scalars().all()}
+
+    # Ambil semua data teknis yang sudah ada untuk pelanggan yang ditemukan
+    pelanggan_ids_found = [p.id for p in pelanggan_map.values()]
+    existing_teknis_q = await db.execute(select(DataTeknisModel.pelanggan_id).where(DataTeknisModel.pelanggan_id.in_(pelanggan_ids_found)))
+    existing_teknis_pelanggan_ids = set(existing_teknis_q.scalars().all())
+    # --- AKHIR OPTIMISASI ---
 
     errors = []
     data_to_create = []
@@ -491,11 +523,8 @@ async def import_from_csv_teknis(
             data_import = DataTeknisImport.model_validate(row)
             email = data_import.email_pelanggan.lower().strip()
 
-            # 2. Validasi Relasi ke Pelanggan
-            pelanggan_result = await db.execute(
-                select(PelangganModel).where(func.lower(PelangganModel.email) == email)
-            )
-            pelanggan = pelanggan_result.scalar_one_or_none()
+            # 2. Validasi dari data yang sudah di-prefetch (tanpa query baru)
+            pelanggan = pelanggan_map.get(email)
             if not pelanggan:
                 errors.append(
                     f"Baris {row_num}: Pelanggan dengan email '{email}' tidak ditemukan."
@@ -508,38 +537,24 @@ async def import_from_csv_teknis(
                     f"Baris {row_num}: Email '{email}' duplikat di dalam file."
                 )
                 continue
-            existing_teknis_result = await db.execute(
-                select(DataTeknisModel).where(
-                    DataTeknisModel.pelanggan_id == pelanggan.id
-                )
-            )
-            if existing_teknis_result.scalar_one_or_none():
+            if pelanggan.id in existing_teknis_pelanggan_ids:
                 errors.append(
                     f"Baris {row_num}: Pelanggan '{pelanggan.nama}' sudah memiliki data teknis."
                 )
                 continue
 
             # 3. Validasi Relasi ke Mikrotik Server (OLT)
-            mikrotik_server_name = data_import.nama_mikrotik_server
-            server_result = await db.execute(
-                select(MikrotikServerModel).where(
-                    MikrotikServerModel.name == mikrotik_server_name
-                )
-            )
-            mikrotik_server = server_result.scalar_one_or_none()
+            mikrotik_server = server_map.get(data_import.nama_mikrotik_server)
             if not mikrotik_server:
                 errors.append(
-                    f"Baris {row_num}: OLT/Mikrotik Server dengan nama '{mikrotik_server_name}' tidak ditemukan."
+                    f"Baris {row_num}: OLT/Mikrotik Server dengan nama '{data_import.nama_mikrotik_server}' tidak ditemukan."
                 )
                 continue
 
             # 4. Validasi Relasi ke ODP (jika diisi)
             odp_id = None
             if data_import.kode_odp:
-                odp_result = await db.execute(
-                    select(ODPModel).where(ODPModel.kode_odp == data_import.kode_odp)
-                )
-                odp = odp_result.scalar_one_or_none()
+                odp = odp_map.get(data_import.kode_odp)
                 if not odp:
                     errors.append(
                         f"Baris {row_num}: ODP dengan kode '{data_import.kode_odp}' tidak ditemukan."
@@ -599,66 +614,81 @@ async def import_from_csv_teknis(
 # ==========================================================
 
 
-@router.get("/available-profiles/{paket_layanan_id}", response_model=List[ProfileUsage])
+@router.get("/available-profiles/{paket_layanan_id}/{pelanggan_id}", response_model=List[ProfileUsage])
 async def get_available_profiles(
-    paket_layanan_id: int, db: AsyncSession = Depends(get_db)
+    paket_layanan_id: int,
+    pelanggan_id: int,
+    mikrotik_server_id: Optional[int] = Query(None),
+    db: AsyncSession = Depends(get_db),
 ):
     """
-    Menyediakan daftar PPPoE profile yang relevan beserta jumlah
-    pengguna AKTIF berdasarkan data LIVE dari Mikrotik.
+    Menyediakan daftar PPPoE profile yang relevan.
+    Logika ini cerdas:
+    1. Saat EDIT, ia akan menggunakan server yang sudah tersimpan di data teknis.
+    2. Saat CREATE, ia akan menggunakan server yang dipilih di form (dikirim via query param).
     """
+    # 1. Ambil paket layanan (tidak berubah)
     paket = await db.get(PaketLayananModel, paket_layanan_id)
     if not paket:
         raise HTTPException(status_code=404, detail="Paket Layanan tidak ditemukan")
 
-    kecepatan_str = f"{paket.kecepatan}Mbps"
-
-    # Ambil server Mikrotik yang terkait dengan paket layanan ini
-    # Asumsi ada relasi atau cara lain untuk menghubungkan paket ke server tertentu.
-    # Untuk sementara, kita tetap ambil server aktif pertama sebagai contoh.
-    server_result = await db.execute(
-        select(MikrotikServerModel).where(MikrotikServerModel.is_active == True)
+    # 2. Coba cari Data Teknis yang sudah ada untuk pelanggan ini (untuk mode EDIT)
+    data_teknis_stmt = select(DataTeknisModel).where(
+        DataTeknisModel.pelanggan_id == pelanggan_id
     )
-    servers = server_result.scalars().all()
-    if not servers:
-        logger.warning("Tidak ada server Mikrotik aktif yang ditemukan di database.")
+    data_teknis = (await db.execute(data_teknis_stmt)).scalar_one_or_none()
+
+    # 3. Tentukan ID server yang akan digunakan
+    server_id_to_use = None
+    if data_teknis and data_teknis.mikrotik_server_id:
+        # Prioritas 1: Gunakan ID dari data teknis yang sudah ada (mode EDIT)
+        server_id_to_use = data_teknis.mikrotik_server_id
+        logger.info(
+            f"Mode Edit: Menggunakan server ID {server_id_to_use} dari database."
+        )
+    elif mikrotik_server_id:
+        # Prioritas 2: Gunakan ID dari query param (mode CREATE)
+        server_id_to_use = mikrotik_server_id
+        logger.info(f"Mode Create: Menggunakan server ID {server_id_to_use} dari form.")
+    else:
+        # Jika tidak ada data teknis DAN tidak ada ID dari form, kita tidak bisa lanjut.
+        logger.warning(
+            f"Tidak dapat menentukan server Mikrotik untuk pelanggan ID {pelanggan_id}. Data teknis tidak ada dan mikrotik_server_id tidak diberikan."
+        )
         return []
 
-    # Sebaiknya ada logika untuk memilih server yang benar,
-    # tapi untuk perbaikan ini kita fokus pada server pertama.
-    server_to_check = servers[0]
+    # 4. Ambil info server Mikrotik berdasarkan ID yang sudah ditentukan
+    mikrotik_server_info = await db.get(MikrotikServerModel, server_id_to_use)
+    if not mikrotik_server_info:
+        logger.error(
+            f"Server Mikrotik dengan ID {server_id_to_use} tidak ditemukan di database."
+        )
+        raise HTTPException(
+            status_code=404, detail=f"Server Mikrotik untuk pelanggan ini tidak ditemukan."
+        )
 
-    api, connection = mikrotik_service.get_api_connection(server_to_check)
+    # --- Logika selanjutnya sama, tapi sekarang menggunakan server yang PASTI BENAR ---
+    kecepatan_str = f"{paket.kecepatan}Mbps"
+    
+    api, connection = mikrotik_service.get_api_connection(mikrotik_server_info)
     if not api:
         raise HTTPException(
             status_code=503,
-            detail=f"Tidak dapat terhubung ke server Mikrotik {server_to_check.name}",
+            detail=f"Tidak dapat terhubung ke server Mikrotik {mikrotik_server_info.name}",
         )
-
+    
     try:
-        # 1. Ambil SEMUA profile yang ada di Mikrotik
         all_profiles_on_router = mikrotik_service.get_all_ppp_profiles(api)
-        # Filter hanya profile yang relevan dengan kecepatan paket
         relevant_profiles = [p for p in all_profiles_on_router if kecepatan_str in p]
 
         if not relevant_profiles:
-            logger.info(
-                f"Tidak ada profile dengan '{kecepatan_str}' ditemukan di Mikrotik."
-            )
+            logger.info(f"Tidak ada profile dengan '{kecepatan_str}' ditemukan di Mikrotik.")
             return []
 
-        # 2. Ambil data LIVE "Active Connections" dari Mikrotik
         active_connections = mikrotik_service.get_active_connections(api)
-
-        # Ekstrak hanya nama profile dari semua koneksi yang aktif
-        active_profile_names = [
-            conn.get("profile") for conn in active_connections if "profile" in conn
-        ]
-
-        # 3. Hitung penggunaan setiap profile dari data LIVE
+        active_profile_names = [conn.get("profile") for conn in active_connections if "profile" in conn]
         profile_usage_map = Counter(active_profile_names)
 
-        # 4. Buat daftar respons
         response_data = []
         for profile_name in relevant_profiles:
             response_data.append(
@@ -668,7 +698,6 @@ async def get_available_profiles(
                 )
             )
 
-        # Urutkan berdasarkan nama untuk konsistensi
         response_data.sort(key=lambda x: x.profile_name)
         return response_data
 
@@ -677,6 +706,57 @@ async def get_available_profiles(
         raise HTTPException(
             status_code=500, detail="Gagal memproses data dari Mikrotik."
         )
+    finally:
+        if connection:
+            logger.info("Menutup koneksi Mikrotik.")
+            connection.disconnect()
+
+
+
+# Perbarui endpoint lama untuk menjaga kompatibilitas, tapi berikan peringatan
+@router.get("/available-profiles/{paket_layanan_id}", response_model=List[ProfileUsage], include_in_schema=False)
+async def get_available_profiles_legacy(
+    paket_layanan_id: int, db: AsyncSession = Depends(get_db)
+):
+    """Fungsi lama, gunakan yang baru dengan pelanggan_id."""
+    logger.warning("Memanggil endpoint lama /available-profiles/{paket_layanan_id}. Gunakan yang baru.")
+    # Fallback ke server aktif pertama
+    server_result = await db.execute(
+        select(MikrotikServerModel).where(MikrotikServerModel.is_active == True)
+    )
+    server_to_check = server_result.scalars().first()
+    
+    if not server_to_check:
+        return []
+    
+    # Lanjutkan logika yang sama seperti di fungsi utama, tetapi tanpa pelanggan_id
+    paket = await db.get(PaketLayananModel, paket_layanan_id)
+    if not paket:
+        return []
+
+    kecepatan_str = f"{paket.kecepatan}Mbps"
+    api, connection = mikrotik_service.get_api_connection(server_to_check)
+    if not api:
+        raise HTTPException(status_code=503, detail="Tidak dapat terhubung ke Mikrotik.")
+    
+    try:
+        all_profiles_on_router = mikrotik_service.get_all_ppp_profiles(api)
+        relevant_profiles = [p for p in all_profiles_on_router if kecepatan_str in p]
+        
+        active_connections = mikrotik_service.get_active_connections(api)
+        active_profile_names = [conn.get("profile") for conn in active_connections if "profile" in conn]
+        
+        profile_usage_map = Counter(active_profile_names)
+        
+        response_data = []
+        for profile_name in relevant_profiles:
+            response_data.append(ProfileUsage(
+                profile_name=profile_name,
+                usage_count=profile_usage_map.get(profile_name, 0)
+            ))
+            
+        response_data.sort(key=lambda x: x.profile_name)
+        return response_data
     finally:
         if connection:
             connection.disconnect()

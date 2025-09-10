@@ -196,7 +196,9 @@ def get_active_connections(api):
     try:
         # Perintah ini akan mengambil semua entri dari /ppp/active
         logger.info("Mengambil data live 'Active Connections' dari Mikrotik...")
-        active_list = api.get_resource("/ppp/active").get()
+        # OPTIMISASI: Hanya ambil properti yang dibutuhkan (.id dan profile) untuk mengurangi beban.
+        # Ini akan mempercepat proses secara signifikan.
+        active_list = api.get_resource("/ppp/active").get(proplist=".id,profile")
         logger.info(f"Ditemukan {len(active_list)} koneksi aktif.")
         return active_list
     except Exception as e:

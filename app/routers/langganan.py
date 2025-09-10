@@ -16,6 +16,7 @@ from sqlalchemy.orm import selectinload
 
 from ..database import get_db
 from ..models.harga_layanan import HargaLayanan as HargaLayananModel
+from ..models.invoice import Invoice as InvoiceModel
 from ..models.langganan import Langganan as LanggananModel
 from ..models.paket_layanan import PaketLayanan as PaketLayananModel
 from ..models.pelanggan import Pelanggan as PelangganModel
@@ -25,6 +26,7 @@ from ..schemas.langganan import (
     LanggananImport,
     LanggananUpdate,
 )
+from ..schemas.pelanggan import Pelanggan as PelangganSchema
 
 router = APIRouter(prefix="/langganan", tags=["Langganan"])
 
@@ -136,9 +138,12 @@ async def get_all_langganan(
         select(LanggananModel)
         .join(LanggananModel.pelanggan)
         .options(
-            selectinload(LanggananModel.pelanggan).selectinload(
-                PelangganModel.harga_layanan
+            # PERBAIKAN: Muat relasi pelanggan, DAN di dalamnya muat DUA relasi milik pelanggan:
+            selectinload(LanggananModel.pelanggan).options(
+                selectinload(PelangganModel.langganan),      # <-- Ini untuk logika "NEW USER"
+                selectinload(PelangganModel.harga_layanan)   # <-- Mencegah N+1 saat serialisasi
             ),
+            # Lanjutkan dengan memuat relasi lainnya di level Langganan
             selectinload(LanggananModel.paket_layanan),
         )
     )
@@ -160,7 +165,38 @@ async def get_all_langganan(
         final_query = final_query.limit(limit)
 
     result = await db.execute(final_query)
-    return result.scalars().all()
+    langganan_list = result.scalars().all()
+    
+    # === OPTIMISASI LOGIKA NEW USER (MENGHINDARI N+1 QUERY) ===
+    if for_invoice_selection and langganan_list:
+        # 1. Kumpulkan semua ID pelanggan dari hasil query
+        pelanggan_ids = {l.pelanggan_id for l in langganan_list}
+
+        # 2. Jalankan SATU query untuk menghitung invoice untuk semua pelanggan tersebut
+        invoice_counts_stmt = (
+            select(InvoiceModel.pelanggan_id, func.count(InvoiceModel.id).label("count"))
+            .where(InvoiceModel.pelanggan_id.in_(pelanggan_ids))
+            .group_by(InvoiceModel.pelanggan_id)
+        )
+        invoice_counts_result = await db.execute(invoice_counts_stmt)
+        # Buat map: {pelanggan_id: invoice_count}
+        invoice_counts_map = {pid: count for pid, count in invoice_counts_result}
+
+        # 3. Iterasi di Python untuk menetapkan flag (sangat cepat)
+        for langganan in langganan_list:
+            pelanggan = langganan.pelanggan
+            is_new_user = False
+            
+            if pelanggan and len(pelanggan.langganan) == 1:
+                # Ambil hasil dari map, bukan query baru. Default ke 0 jika tidak ada.
+                if invoice_counts_map.get(pelanggan.id, 0) == 0:
+                    is_new_user = True
+            
+            # Set flag pada objek langganan
+            langganan.is_new_user = is_new_user
+
+    return langganan_list
+
 
 
 @router.patch("/{langganan_id}", response_model=LanggananSchema)
@@ -394,47 +430,57 @@ async def import_from_csv_langganan(
     except Exception:
         raise HTTPException(status_code=400, detail="Encoding file tidak dapat dibaca.")
 
-    reader = csv.DictReader(io.StringIO(content_str))
+    reader = list(csv.DictReader(io.StringIO(content_str)))
     errors = []
     langganan_to_create = []
+
+    # --- OPTIMISASI: PRE-FETCH DATA SEBELUM LOOP (MENGHINDARI N+1 QUERY) ---
+    emails_to_find = {row.get("email_pelanggan", "").lower().strip() for row in reader if row.get("email_pelanggan")}
+    paket_names_to_find = {row.get("nama_paket_layanan", "").lower().strip() for row in reader if row.get("nama_paket_layanan")}
+    brand_ids_to_find = {row.get("id_brand", "").strip() for row in reader if row.get("id_brand")}
+
+    # 1. Ambil semua Pelanggan yang relevan dalam satu query
+    pelanggan_q = await db.execute(select(PelangganModel).where(func.lower(PelangganModel.email).in_(emails_to_find)))
+    pelanggan_map = {p.email.lower(): p for p in pelanggan_q.scalars().all()}
+
+    # 2. Ambil semua Paket Layanan yang relevan dalam satu query
+    paket_q = await db.execute(
+        select(PaketLayananModel).where(
+            func.lower(PaketLayananModel.nama_paket).in_(paket_names_to_find),
+            PaketLayananModel.id_brand.in_(brand_ids_to_find)
+        )
+    )
+    paket_map = {(p.nama_paket.lower(), p.id_brand): p for p in paket_q.scalars().all()}
+
+    # 3. Ambil semua Langganan yang sudah ada untuk pelanggan yang ditemukan
+    pelanggan_ids_found = [p.id for p in pelanggan_map.values()]
+    existing_langganan_q = await db.execute(select(LanggananModel.pelanggan_id).where(LanggananModel.pelanggan_id.in_(pelanggan_ids_found)))
+    subscribed_pelanggan_ids = set(existing_langganan_q.scalars().all())
+    # --- AKHIR OPTIMISASI ---
 
     for row_num, row in enumerate(reader, start=2):
         try:
             data_import = LanggananImport(**row)
 
-            pelanggan_q = await db.execute(
-                select(PelangganModel).where(
-                    func.lower(PelangganModel.email)
-                    == data_import.email_pelanggan.lower()
-                )
-            )
-            pelanggan = pelanggan_q.scalar_one_or_none()
+            # Lookup dari data yang sudah di-prefetch (tanpa query baru)
+            pelanggan = pelanggan_map.get(data_import.email_pelanggan.lower())
             if not pelanggan:
                 errors.append(
                     f"Baris {row_num}: Pelanggan dengan email '{data_import.email_pelanggan}' tidak ditemukan."
                 )
                 continue
 
-            paket_q = await db.execute(
-                select(PaketLayananModel).where(
-                    func.lower(PaketLayananModel.nama_paket)
-                    == data_import.nama_paket_layanan.lower(),
-                    PaketLayananModel.id_brand == data_import.id_brand,
-                )
-            )
-            paket = paket_q.scalar_one_or_none()
+            # Lookup paket menggunakan kunci gabungan (nama paket + brand)
+            paket_key = (data_import.nama_paket_layanan.lower(), data_import.id_brand)
+            paket = paket_map.get(paket_key)
             if not paket:
                 errors.append(
                     f"Baris {row_num}: Paket Layanan '{data_import.nama_paket_layanan}' untuk brand '{data_import.id_brand}' tidak ditemukan."
                 )
                 continue
 
-            existing_langganan_q = await db.execute(
-                select(LanggananModel).where(
-                    LanggananModel.pelanggan_id == pelanggan.id
-                )
-            )
-            if existing_langganan_q.scalar_one_or_none():
+            # Cek langganan yang sudah ada dari data prefetch
+            if pelanggan.id in subscribed_pelanggan_ids:
                 errors.append(
                     f"Baris {row_num}: Pelanggan '{pelanggan.nama}' sudah memiliki langganan."
                 )
@@ -542,3 +588,23 @@ async def calculate_langganan_price_plus_full(
         harga_total_awal=round(harga_total_final, 0),
         tgl_jatuh_tempo=tgl_jatuh_tempo_final,
     )
+
+
+@router.get("/pelanggan/list", response_model=List[PelangganSchema])
+async def get_all_pelanggan_with_status(db: AsyncSession = Depends(get_db)):
+    """
+    Mengambil daftar semua pelanggan, dengan status langganan mereka.
+    """
+    # Gunakan LEFT JOIN untuk mendapatkan semua pelanggan, bahkan yang tidak punya langganan.
+    result = await db.execute(
+        select(PelangganModel)
+        .options(selectinload(PelangganModel.langganan))
+        .order_by(PelangganModel.nama)
+    )
+    pelanggan = result.scalars().unique().all()
+    
+    # Tambahkan atribut 'has_subscription' ke setiap objek pelanggan
+    for p in pelanggan:
+        p.has_subscription = len(p.langganan) > 0
+
+    return pelanggan

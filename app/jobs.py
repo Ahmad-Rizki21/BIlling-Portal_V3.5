@@ -128,48 +128,6 @@ async def generate_single_invoice(db, langganan: LanggananModel):
         )
 
 
-async def job_update_overdue_invoices():
-    """Tugas untuk menandai invoice yang belum dibayar menjadi 'Kadaluarsa'."""
-    log_scheduler_event(logger, "job_update_overdue_invoices", "started")
-
-    async with SessionLocal() as db:
-        try:
-            # Aturan: Kadaluarsa jika hari ini adalah hari ke-6 setelah jatuh tempo (telah lewat 5 hari).
-            # Misal: Jatuh tempo tgl 1, maka pada tgl 7 akan menjadi kadaluarsa.
-            # Ubah 'days=1' menjadi 'days=5' jika ingin masa tenggang 5 hari.
-            expired_stmt = (
-                update(InvoiceModel)
-                .where(
-                    InvoiceModel.status_invoice == "Belum Dibayar",
-                    InvoiceModel.tgl_jatuh_tempo < date.today() - timedelta(days=5),
-                )
-                .values(status_invoice="Kadaluarsa")
-            )
-            result = await db.execute(expired_stmt)
-            await db.commit()
-
-            if result.rowcount > 0:
-                log_scheduler_event(
-                    logger,
-                    "job_update_overdue_invoices",
-                    "completed",
-                    f"Berhasil menandai {result.rowcount} invoice sebagai 'Kadaluarsa'.",
-                )
-            else:
-                log_scheduler_event(
-                    logger,
-                    "job_update_overdue_invoices",
-                    "completed",
-                    "Tidak ada invoice untuk ditandai 'Kadaluarsa'.",
-                )
-
-        except Exception as e:
-            await db.rollback()
-            logger.error(
-                f"[FAIL] Scheduler 'job_update_overdue_invoices' gagal. Rincian: {traceback.format_exc()}"
-            )
-
-
 # ==========================================================
 # --- JOB SCHEDULER YANG SUDAH DIOPTIMALKAN ---
 # ==========================================================
@@ -210,18 +168,19 @@ async def job_generate_invoices():
                 if not subscriptions_batch:
                     break
 
+                # OPTIMISASI: Ambil semua invoice yang sudah ada untuk batch ini dalam satu query
+                pelanggan_ids_in_batch = [s.pelanggan_id for s in subscriptions_batch]
+                existing_invoices_stmt = select(InvoiceModel.pelanggan_id).where(
+                    InvoiceModel.pelanggan_id.in_(pelanggan_ids_in_batch),
+                    InvoiceModel.tgl_jatuh_tempo == target_due_date,
+                )
+                existing_invoices_pelanggan_ids = {
+                    row[0] for row in await db.execute(existing_invoices_stmt)
+                }
+
                 for langganan in subscriptions_batch:
-                    existing_invoice_stmt = (
-                        select(InvoiceModel.id)
-                        .where(
-                            InvoiceModel.pelanggan_id == langganan.pelanggan_id,
-                            InvoiceModel.tgl_jatuh_tempo == langganan.tgl_jatuh_tempo,
-                        )
-                        .limit(1)
-                    )
-                    if not (
-                        await db.execute(existing_invoice_stmt)
-                    ).scalar_one_or_none():
+                    # Cek dari data yang sudah di-prefetch, bukan query baru
+                    if langganan.pelanggan_id not in existing_invoices_pelanggan_ids:
                         await generate_single_invoice(db, langganan)
                         total_invoices_created += 1
 
@@ -253,11 +212,20 @@ async def job_generate_invoices():
 
 
 async def job_suspend_services():
+    """
+    Tugas untuk men-suspend layanan dan mengubah status invoice menjadi 'Kadaluarsa'.
+    Berjalan setiap hari untuk menonaktifkan pelanggan yang telat bayar.
+    """
     log_scheduler_event(logger, "job_suspend_services", "started")
     total_services_suspended = 0
+    total_invoices_overdue = 0
     current_date = date.today()
     BATCH_SIZE = 50
     offset = 0
+
+    # Aturan: Layanan di-suspend pada hari ke-5 jika jatuh tempo tgl 1.
+    # Artinya, jika hari ini tgl 5, kita cari yg jatuh tempo tgl 1 (selisih 4 hari).
+    overdue_date_threshold = current_date - timedelta(days=4)
 
     async with SessionLocal() as db:
         while True:
@@ -265,15 +233,14 @@ async def job_suspend_services():
                 base_stmt = (
                     select(LanggananModel)
                     .join(
-                        InvoiceModel,
-                        LanggananModel.pelanggan_id == InvoiceModel.pelanggan_id,
+                        InvoiceModel, LanggananModel.pelanggan_id == InvoiceModel.pelanggan_id
                     )
                     .where(
-                        LanggananModel.tgl_jatuh_tempo
-                        <= current_date - timedelta(days=4),
+                        InvoiceModel.tgl_jatuh_tempo <= overdue_date_threshold,
                         LanggananModel.status == "Aktif",
                         InvoiceModel.status_invoice == "Belum Dibayar",
                     )
+                    .distinct(LanggananModel.id) # <-- TAMBAHAN: Pastikan setiap langganan hanya diproses sekali
                     .options(
                         selectinload(LanggananModel.pelanggan).selectinload(
                             PelangganModel.data_teknis
@@ -291,25 +258,34 @@ async def job_suspend_services():
                     logger.warning(
                         f"Melakukan suspend layanan untuk Langganan ID: {langganan.id}..."
                     )
+
+                    # 1. Ubah status invoice terkait menjadi 'Kadaluarsa'
+                    # Ini lebih efisien daripada menjalankan job terpisah.
+                    update_invoice_stmt = (
+                        update(InvoiceModel)
+                        .where(InvoiceModel.pelanggan_id == langganan.pelanggan_id)
+                        .where(InvoiceModel.status_invoice == "Belum Dibayar")
+                        .values(status_invoice="Kadaluarsa")
+                    )
+                    invoice_update_result = await db.execute(update_invoice_stmt)
+                    total_invoices_overdue += invoice_update_result.rowcount
+
+                    # 2. Ubah status langganan menjadi 'Suspended'
                     langganan.status = "Suspended"
                     db.add(langganan)
 
-                data_teknis = langganan.pelanggan.data_teknis
-                if data_teknis:
-                    await mikrotik_service.trigger_mikrotik_update(
-                        db,
-                        langganan,
-                        data_teknis,
-                        data_teknis.id_pelanggan,  # old_id_pelanggan diisi dengan id saat ini
-                    )
-                else:
-                    logger.error(
-                        f"Data Teknis tidak ditemukan untuk langganan ID {langganan.id}, skip update Mikrotik."
-                    )
-                    await mikrotik_service.trigger_mikrotik_update(db, langganan)
+                    data_teknis = langganan.pelanggan.data_teknis
+                    if data_teknis:
+                        await mikrotik_service.trigger_mikrotik_update(
+                            db, langganan, data_teknis, data_teknis.id_pelanggan
+                        )
+                        total_services_suspended += 1
+                    else:
+                        logger.error(
+                            f"Data Teknis tidak ditemukan untuk langganan ID {langganan.id}, skip update Mikrotik."
+                        )
 
                 await db.commit()
-                total_services_suspended += len(overdue_batch)
                 offset += BATCH_SIZE
 
             except Exception as e:
@@ -324,7 +300,7 @@ async def job_suspend_services():
             logger,
             "job_suspend_services",
             "completed",
-            f"Berhasil suspend {total_services_suspended} layanan.",
+            f"Berhasil suspend {total_services_suspended} layanan dan mengubah {total_invoices_overdue} invoice menjadi Kadaluarsa.",
         )
     else:
         log_scheduler_event(
@@ -414,12 +390,24 @@ async def job_verify_payments():
                 await db.commit()  # Tetap commit untuk menutup transaksi
                 return
 
-            unprocessed_stmt = select(InvoiceModel).where(
-                InvoiceModel.xendit_external_id.in_(paid_invoice_ids),
-                InvoiceModel.status_invoice
-                != "Lunas",  # Ubah dari "Belum Dibayar" agar lebih fleksibel
+            # PERBAIKAN: Eager load semua relasi yang dibutuhkan oleh _process_successful_payment
+            unprocessed_stmt = (
+                select(InvoiceModel)
+                .where(
+                    InvoiceModel.xendit_external_id.in_(paid_invoice_ids),
+                    InvoiceModel.status_invoice != "Lunas",
+                )
+                .options(
+                    selectinload(InvoiceModel.pelanggan).options(
+                        selectinload(PelangganModel.harga_layanan),
+                        selectinload(PelangganModel.langganan).selectinload(
+                            LanggananModel.paket_layanan
+                        ),
+                        selectinload(PelangganModel.data_teknis),
+                    )
+                )
             )
-            invoices_to_process = (await db.execute(unprocessed_stmt)).scalars().all()
+            invoices_to_process = (await db.execute(unprocessed_stmt)).scalars().unique().all()
 
             processed_count = 0
             if invoices_to_process:

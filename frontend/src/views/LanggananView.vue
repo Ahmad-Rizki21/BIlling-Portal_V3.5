@@ -280,45 +280,44 @@
             <v-icon size="18" class="me-2">mdi-account</v-icon>
             Informasi Pelanggan
           </h4>
-          <v-autocomplete
-            v-model="editedItem.pelanggan_id"
-            :items="dropdownPelangganSource"
-            item-title="nama"
-            item-value="id"
-            label="Pilih Pelanggan"
-            placeholder="Ketik nama pelanggan untuk mencari..."
-            variant="outlined"
-            prepend-inner-icon="mdi-account-search"
-            :rules="[rules.required]"
-            :disabled="editedIndex !== -1"
-            density="comfortable"
-            clearable
-            hide-details="auto"
-            class="mb-4"
-          >
-            <template v-slot:item="{ props, item }">
-              <v-list-item v-bind="props" class="px-4">
-                <template v-slot:prepend>
-                  <v-avatar color="primary" size="32">
-                    <v-icon color="white" size="16">mdi-account</v-icon>
-                  </v-avatar>
-                </template>
-                <v-list-item-title class="font-weight-medium">
-                  {{ item.raw.nama }}
-                  <v-chip
-                    v-if="item.raw.id === newPelangganIdMarker"
-                    size="x-small"
-                    color="success"
-                    variant="elevated"
-                    class="ms-2"
-                  >
-                    NEW
-                  </v-chip>
-                </v-list-item-title>
-                <v-list-item-subtitle>ID: {{ item.raw.id }}</v-list-item-subtitle>
-              </v-list-item>
-            </template>
-          </v-autocomplete>
+            <v-autocomplete
+              v-model="editedItem.pelanggan_id"
+              :items="dropdownPelangganSource"
+              item-title="nama"
+              item-value="id"
+              label="Pilih Pelanggan"
+              placeholder="Ketik nama pelanggan untuk mencari..."
+              variant="outlined"
+              prepend-inner-icon="mdi-account-search"
+              :rules="[rules.required]"
+              :disabled="editedIndex !== -1"
+              density="comfortable"
+              clearable
+              hide-details="auto"
+              class="mb-4"
+            >
+              <template v-slot:item="{ props, item }">
+                <v-list-item v-bind="props" class="px-4">
+                  <template v-slot:prepend>
+                    <v-avatar color="primary" size="32">
+                      <v-icon color="white" size="16">mdi-account</v-icon>
+                    </v-avatar>
+                  </template>
+                  <v-list-item-title class="font-weight-medium">
+                    {{ item.raw.nama }}
+                    <v-chip
+                      v-if="!isPelangganExisting(item.raw.id)"
+                      size="x-small"
+                      color="success"
+                      variant="elevated"
+                      class="ms-2"
+                    >
+                      NEW USER
+                    </v-chip>
+                  </v-list-item-title>
+                </v-list-item>
+              </template>
+            </v-autocomplete>
         </div>
 
         <!-- Package and Payment -->
@@ -979,12 +978,11 @@ const eligiblePelangganForSelect = computed(() => {
     return pelangganSelectList.value;
   }
   
-  // Saat mode Tambah, filter pelanggan
-  // 1. Buat daftar ID semua pelanggan yang SUDAH punya langganan
+  // Saat mode Tambah, filter pelanggan yang belum memiliki langganan
   const subscribedPelangganIds = new Set(langgananList.value.map(l => l.pelanggan_id));
+  const uniquePelanggan = pelangganSelectList.value.filter(p => !subscribedPelangganIds.has(p.id));
   
-  // 2. Kembalikan HANYA pelanggan yang ID-nya TIDAK ADA di daftar langganan
-  return pelangganSelectList.value.filter(p => !subscribedPelangganIds.has(p.id));
+  return uniquePelanggan;
 });
 
 async function fetchPelangganForSelect() {
@@ -1090,6 +1088,10 @@ async function confirmDelete() {
   } finally {
     deleting.value = false;
   }
+}
+
+function isPelangganExisting(pelangganId: number): boolean {
+  return langgananList.value.some(l => l.pelanggan_id === pelangganId);
 }
 
 // --- Helper Methods ---

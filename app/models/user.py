@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, List # <-- Tambahkan List
 from datetime import datetime
 
 from sqlalchemy import String, BigInteger, func, DateTime, TIMESTAMP, ForeignKey
@@ -9,6 +9,7 @@ from ..database import Base
 
 if TYPE_CHECKING:
     from .role import Role
+    from .activity_log import ActivityLog # <-- Tambahkan import ActivityLog
 
 
 class User(Base):
@@ -32,3 +33,7 @@ class User(Base):
     # AKTIFKAN KEMBALI RELASI INI - Ini adalah kunci perbaikannya
     role_id: Mapped[int | None] = mapped_column(ForeignKey("roles.id"))
     role: Mapped[Role | None] = relationship(back_populates="users")
+
+    # --- TAMBAHKAN RELASI BALIK INI ---
+    # Ini memberitahu SQLAlchemy bahwa satu User bisa memiliki banyak ActivityLog
+    activity_logs: Mapped[List["ActivityLog"]] = relationship(back_populates="user")

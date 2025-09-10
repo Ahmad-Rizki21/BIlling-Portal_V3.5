@@ -3,6 +3,8 @@ from datetime import date
 from typing import Optional
 import re
 
+from .harga_layanan import HargaLayanan as HargaLayananSchema
+
 
 # Skema untuk membuat Pelanggan baru
 class PelangganCreate(BaseModel):
@@ -193,7 +195,7 @@ class PelangganCreate(BaseModel):
 # Skema untuk menampilkan data Pelanggan
 class Pelanggan(PelangganCreate):
     id: int
-
+    harga_layanan: Optional[HargaLayananSchema] = None
 
 class PelangganInLangganan(BaseModel):
     id: int

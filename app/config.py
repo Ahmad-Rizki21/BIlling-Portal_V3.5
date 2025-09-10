@@ -10,12 +10,13 @@ load_dotenv()
 class Settings(BaseSettings):
     # Variabel MENUS yang sudah ada
     MENUS: List[str] = [
+        "Dashboard",
         "Pelanggan",
         "Langganan",
         "Data Teknis",
         "Brand & Paket",
         "Invoices",
-        "Laporan Pendapatan",
+        "Reports Revenue",
         "Mikrotik Servers",
         "Users",
         "Roles",
@@ -24,7 +25,8 @@ class Settings(BaseSettings):
         "Simulasi Harga",
         "Kelola S&K",
         "Manajemen Inventaris",
-        "Dashboard Jakinet",
+        "Dashboard Pelanggan",
+        "Activity Log",
     ]
 
     # --- TAMBAHKAN INI ---
