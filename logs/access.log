@@ -16463,3 +16463,8 @@
 2025-09-09 19:48:28 │ INFO     │ 127.0.0.1:58675 - "GET /activity-logs?skip=0&limit=10 HTTP/1.1" 307
 2025-09-09 19:48:28 │ INFO     │ 127.0.0.1:58675 - "OPTIONS /activity-logs/?skip=0&limit=10 HTTP/1.1" 200
 2025-09-09 19:48:28 │ INFO     │ 127.0.0.1:58676 - "GET /activity-logs/?skip=0&limit=10 HTTP/1.1" 200
+2025-09-10 09:30:43 │ INFO     │ 127.0.0.1:54670 - "GET /docs HTTP/1.1" 200
+2025-09-10 09:30:44 │ INFO     │ 127.0.0.1:54670 - "GET /openapi.json HTTP/1.1" 200
+2025-09-10 09:30:59 │ INFO     │ 127.0.0.1:54671 - "GET /openapi.json HTTP/1.1" 200
+2025-09-10 09:31:00 │ INFO     │ 127.0.0.1:54671 - "GET /favicon.ico HTTP/1.1" 404
+2025-09-10 09:31:42 │ INFO     │ 127.0.0.1:54859 - "GET /openapi.json HTTP/1.1" 200
