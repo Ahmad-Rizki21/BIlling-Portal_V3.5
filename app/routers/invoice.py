@@ -107,23 +107,7 @@ async def _process_successful_payment(
 ):
     """Fungsi terpusat untuk menangani logika setelah invoice lunas."""
 
-    # PERBAIKAN: Cek apakah relasi pelanggan sudah di-load untuk menghindari N+1 query
-    if hasattr(invoice, "pelanggan") and invoice.pelanggan:
-        pelanggan = invoice.pelanggan
-    else:
-        # Fallback: jika belum di-load, lakukan query (menjaga kompatibilitas)
-        pelanggan = await db.get(
-            PelangganModel,
-            invoice.pelanggan_id,
-            options=[
-                selectinload(PelangganModel.harga_layanan),
-                selectinload(PelangganModel.langganan).selectinload(
-                    LanggananModel.paket_layanan
-                ),
-                selectinload(PelangganModel.data_teknis),
-            ],
-        )
-
+    pelanggan = invoice.pelanggan
     if not pelanggan or not pelanggan.langganan:
         logger.error(
             f"Pelanggan atau langganan tidak ditemukan untuk invoice {invoice.invoice_number}"
@@ -132,7 +116,10 @@ async def _process_successful_payment(
 
     langganan = pelanggan.langganan[0]
 
-    # Update status invoice (tidak berubah)
+    # Cek apakah langganan sebelumnya berstatus 'Suspended'
+    is_suspended_or_inactive = langganan.status == "Suspended" or not langganan.status
+    
+    # Update status invoice (tetap)
     invoice.status_invoice = "Lunas"
     if payload:
         invoice.paid_amount = float(payload.get("paid_amount", invoice.total_harga))
@@ -145,7 +132,6 @@ async def _process_successful_payment(
 
     next_due_date = None
 
-    # ▼▼▼ BLOK LOGIKA YANG DIPERBAIKI ▼▼▼
     if langganan.metode_pembayaran == "Prorate":
         paket = langganan.paket_layanan
         brand = pelanggan.harga_layanan
@@ -194,43 +180,42 @@ async def _process_successful_payment(
     langganan.status = "Aktif"
     langganan.tgl_jatuh_tempo = next_due_date
     langganan.tgl_invoice_terakhir = date.today()
-
     db.add(langganan)
 
-    data_teknis = pelanggan.data_teknis
-
-    if not data_teknis:
-        logger.error(
-            f"Data Teknis tidak ditemukan untuk pelanggan ID {pelanggan.id}. Mikrotik update dilewati."
-        )
-    else:
-        try:
-            # ▼▼▼ BAGIAN YANG DIPERBAIKI ▼▼▼
-            # Panggil fungsi dengan SEMUA argumen yang dibutuhkan
-            await mikrotik_service.trigger_mikrotik_update(
-                db,
-                langganan,
-                data_teknis,
-                data_teknis.id_pelanggan,  # old_id_pelanggan diisi dengan id saat ini
-            )
-            # ▲▲▲ AKHIR PERBAIKAN ▲▲▲
-
-            logger.info(
-                f"Berhasil trigger re-aktivasi Mikrotik untuk langganan ID {langganan.id}"
-            )
-
-            # Jika berhasil, set flag pending sync (jika ada) kembali ke False
-            if data_teknis.mikrotik_sync_pending:
-                data_teknis.mikrotik_sync_pending = False
-                db.add(data_teknis)
-
-        except Exception as e:
-            # Jika GAGAL, catat error DAN set flag retry menjadi True
+    # HANYA trigger update Mikrotik jika status sebelumnya adalah 'Suspended'
+    if is_suspended_or_inactive:
+        data_teknis = pelanggan.data_teknis
+        if not data_teknis:
             logger.error(
-                f"Gagal trigger re-aktivasi Mikrotik untuk langganan ID {langganan.id}: {e}. Menandai untuk dicoba lagi."
+                f"Data Teknis tidak ditemukan untuk pelanggan ID {pelanggan.id}. Mikrotik update dilewati."
             )
-            data_teknis.mikrotik_sync_pending = True
-            db.add(data_teknis)
+        else:
+            try:
+                # Panggil fungsi dengan SEMUA argumen yang dibutuhkan
+                await mikrotik_service.trigger_mikrotik_update(
+                    db,
+                    langganan,
+                    data_teknis,
+                    data_teknis.id_pelanggan,  # old_id_pelanggan diisi dengan id saat ini
+                )
+                logger.info(
+                    f"Berhasil trigger re-aktivasi Mikrotik untuk langganan ID {langganan.id}"
+                )
+
+                # Jika berhasil, set flag pending sync (jika ada) kembali ke False
+                if data_teknis.mikrotik_sync_pending:
+                    data_teknis.mikrotik_sync_pending = False
+                    db.add(data_teknis)
+
+            except Exception as e:
+                # Jika GAGAL, catat error DAN set flag retry menjadi True
+                logger.error(
+                    f"Gagal trigger re-aktivasi Mikrotik untuk langganan ID {langganan.id}: {e}. Menandai untuk dicoba lagi."
+                )
+                data_teknis.mikrotik_sync_pending = True
+                db.add(data_teknis)
+    else:
+        logger.info(f"Langganan ID {langganan.id} sudah Aktif. Mikrotik update dilewati.")
 
     # Notif ke frontend
     try:
@@ -275,6 +260,40 @@ async def _process_successful_payment(
     logger.info(f"Payment processed successfully for invoice {invoice.invoice_number}")
 
 
+# @router.post("/xendit-callback", status_code=status.HTTP_200_OK)
+# async def handle_xendit_callback(
+#     request: Request,
+#     x_callback_token: Optional[str] = Header(None),
+#     db: AsyncSession = Depends(get_db),
+# ):
+#     payload = await request.json()
+#     logger.info(f"Xendit callback received. Payload: {json.dumps(payload, indent=2)}")
+
+#     external_id = payload.get("external_id")
+#     if not external_id:
+#         raise HTTPException(
+#             status_code=400, detail="External ID tidak ditemukan di payload"
+#         )
+
+#     try:
+#         brand_prefix = external_id.split("/")[0]
+#     except IndexError:
+#         raise HTTPException(status_code=400, detail="Format external_id tidak valid")
+
+#     correct_token = None
+#     if brand_prefix.lower() in ["jakinet", "nagrak"]:
+#         correct_token = settings.XENDIT_CALLBACK_TOKENS.get("ARTACOM")
+#         logger.info("Validating with ARTACOM callback token.")
+#     elif brand_prefix.lower() == "jelantik":
+#         correct_token = settings.XENDIT_CALLBACK_TOKENS.get("JELANTIK")
+#         logger.info("Validating with JELANTIK callback token.")
+
+#     if not correct_token or x_callback_token != correct_token:
+#         logger.warning(f"Invalid callback token received for brand '{brand_prefix}'.")
+#         raise HTTPException(
+#             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid callback token"
+#         )
+
 @router.post("/xendit-callback", status_code=status.HTTP_200_OK)
 async def handle_xendit_callback(
     request: Request,
@@ -290,28 +309,58 @@ async def handle_xendit_callback(
             status_code=400, detail="External ID tidak ditemukan di payload"
         )
 
+    brand_prefix = None
     try:
-        brand_prefix = external_id.split("/")[0]
+        if "/" in external_id:
+            brand_prefix = external_id.split("/")[0]
+        # Untuk webhook test, tidak ada prefix brand. Kita validasi token saja
     except IndexError:
         raise HTTPException(status_code=400, detail="Format external_id tidak valid")
 
-    correct_token = None
-    if brand_prefix.lower() in ["jakinet", "nagrak"]:
-        correct_token = settings.XENDIT_CALLBACK_TOKENS.get("ARTACOMINDO")
+    # VALIDASI TOKEN SECARA LANGSUNG
+    # 1. Coba validasi dengan token ARTACOMINDO (Jakinet, Nagrak)
+    artacom_token = settings.XENDIT_CALLBACK_TOKENS.get("ARTACOMINDO")
+    if artacom_token and x_callback_token == artacom_token:
         logger.info("Validating with ARTACOMINDO callback token.")
-    elif brand_prefix.lower() == "jelantik":
-        correct_token = settings.XENDIT_CALLBACK_TOKENS.get("JELANTIK")
+        # Cek apakah brand_prefix (jika ada) sesuai dengan token ini
+        if brand_prefix and brand_prefix.lower() not in ["jakinet", "nagrak", "artacom"]:
+             raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid brand for this token"
+            )
+        correct_token = artacom_token
+    
+    # 2. Coba validasi dengan token JELANTIK
+    jelantik_token = settings.XENDIT_CALLBACK_TOKENS.get("JELANTIK")
+    if jelantik_token and x_callback_token == jelantik_token:
         logger.info("Validating with JELANTIK callback token.")
+        # Cek apakah brand_prefix (jika ada) sesuai dengan token ini
+        if brand_prefix and brand_prefix.lower() != "jelantik":
+             raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid brand for this token"
+            )
+        correct_token = jelantik_token
 
-    if not correct_token or x_callback_token != correct_token:
-        logger.warning(f"Invalid callback token received for brand '{brand_prefix}'.")
+    # Jika tidak ada token yang cocok, kembalikan 401
+    if not correct_token:
+        logger.warning("Invalid callback token received.")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid callback token"
         )
-
     xendit_status = payload.get("status")
 
-    stmt = select(InvoiceModel).where(InvoiceModel.xendit_external_id == external_id)
+    # PERBAIKAN: Eager load semua relasi yang dibutuhkan oleh _process_successful_payment
+    # untuk menghindari N+1 query dan membuat proses lebih efisien.
+    stmt = (
+        select(InvoiceModel)
+        .where(InvoiceModel.xendit_external_id == external_id)
+        .options(
+            selectinload(InvoiceModel.pelanggan).options(
+                selectinload(PelangganModel.harga_layanan),
+                selectinload(PelangganModel.langganan).selectinload(LanggananModel.paket_layanan),
+                selectinload(PelangganModel.data_teknis),
+            )
+        )
+    )
     invoice = (await db.execute(stmt)).scalar_one_or_none()
 
     if not invoice:
@@ -512,7 +561,19 @@ async def mark_invoice_as_paid(
     invoice_id: int, payload: MarkAsPaidRequest, db: AsyncSession = Depends(get_db)
 ):
     """Menandai sebuah invoice sebagai lunas secara manual."""
-    stmt = select(InvoiceModel).where(InvoiceModel.id == invoice_id)
+    # PERBAIKAN: Eager load semua relasi yang dibutuhkan oleh _process_successful_payment
+    # untuk menghindari N+1 query dan membuat proses lebih efisien.
+    stmt = (
+        select(InvoiceModel)
+        .where(InvoiceModel.id == invoice_id)
+        .options(
+            selectinload(InvoiceModel.pelanggan).options(
+                selectinload(PelangganModel.harga_layanan),
+                selectinload(PelangganModel.langganan).selectinload(LanggananModel.paket_layanan),
+                selectinload(PelangganModel.data_teknis),
+            )
+        )
+    )
     invoice = (await db.execute(stmt)).scalar_one_or_none()
 
     if not invoice:

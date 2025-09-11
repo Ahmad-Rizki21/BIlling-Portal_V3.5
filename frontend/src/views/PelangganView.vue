@@ -398,6 +398,7 @@
                         <label class="input-label">
                           <v-icon size="small" class="mr-2">mdi-account</v-icon>
                           Nama Lengkap
+                          <span class="required-flag text-error">*</span>
                         </label>
                         <v-text-field 
                           v-model="editedItem.nama" 
@@ -413,6 +414,7 @@
                         <label class="input-label">
                           <v-icon size="small" class="mr-2">mdi-card-account-details</v-icon>
                           Nomor KTP
+                          <span class="required-flag text-error">*</span>
                         </label>
                         <v-text-field 
                           v-model="editedItem.no_ktp" 
@@ -429,6 +431,7 @@
                         <label class="input-label">
                           <v-icon size="small" class="mr-2">mdi-email</v-icon>
                           Email
+                          <span class="required-flag text-error">*</span>
                         </label>
                         <v-text-field 
                           v-model="editedItem.email" 
@@ -444,6 +447,7 @@
                         <label class="input-label">
                           <v-icon size="small" class="mr-2">mdi-phone</v-icon>
                           Nomor Telepon
+                          <span class="required-flag text-error">*</span>
                         </label>
                         <v-text-field 
                           v-model="editedItem.no_telp" 
@@ -469,6 +473,7 @@
                         <label class="input-label">
                           <v-icon size="small" class="mr-2">mdi-map-marker</v-icon>
                           Alamat Utama
+                          <span class="required-flag text-error">*</span>
                         </label>
                         <v-combobox
                           v-model="editedItem.alamat"
@@ -500,6 +505,7 @@
                         <label class="input-label">
                           <v-icon size="small" class="mr-2">mdi-home-variant</v-icon>
                           Blok
+                          <span class="required-flag text-error">*</span>
                         </label>
                         <v-text-field 
                           v-model="editedItem.blok" 
@@ -515,6 +521,7 @@
                         <label class="input-label">
                           <v-icon size="small" class="mr-2">mdi-door</v-icon>
                           Unit
+                          <span class="required-flag text-error">*</span>
                         </label>
                         <v-text-field 
                           v-model="editedItem.unit" 
@@ -545,6 +552,7 @@
                         <label class="input-label">
                           <v-icon size="small" class="mr-2">mdi-wifi</v-icon>
                           Layanan
+                          <span class="required-flag text-error">*</span>
                         </label>
                         <v-select
                           v-model="editedItem.layanan"
@@ -560,6 +568,7 @@
                         <label class="input-label">
                           <v-icon size="small" class="mr-2">mdi-domain</v-icon>
                           Brand Provider
+                          <span class="required-flag text-error">*</span>
                         </label>
                         <v-select 
                           v-model="editedItem.id_brand" 
@@ -2162,5 +2171,12 @@ function showSnackbar(text: string, color: 'success' | 'error' | 'warning') {
   .mobile-customer-name {
     font-weight: 800;
   }
+}
+
+.required-flag {
+  margin-left: 4px;
+  font-size: 1.1em;
+  font-weight: bold;
+  vertical-align: middle;
 }
 </style>

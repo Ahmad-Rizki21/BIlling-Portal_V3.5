@@ -280,12 +280,15 @@
             <v-icon size="18" class="me-2">mdi-account</v-icon>
             Informasi Pelanggan
           </h4>
+            <label class="input-label">
+              Pilih Pelanggan
+              <span class="required-flag text-error">*</span>
+            </label>
             <v-autocomplete
               v-model="editedItem.pelanggan_id"
               :items="dropdownPelangganSource"
               item-title="nama"
               item-value="id"
-              label="Pilih Pelanggan"
               placeholder="Ketik nama pelanggan untuk mencari..."
               variant="outlined"
               prepend-inner-icon="mdi-account-search"
@@ -329,13 +332,16 @@
           
           <v-row>
             <v-col cols="12" md="6">
+              <label class="input-label">
+                Pilih Paket Layanan
+                <span class="required-flag text-error">*</span>
+              </label>
               <v-select
                 v-model="editedItem.paket_layanan_id"
                 :items="filteredPaketLayanan"
                 :loading="paketLoading"
                 item-title="nama_paket"
                 item-value="id"
-                label="Pilih Paket Layanan"
                 :disabled="!editedItem.pelanggan_id || isPaketLocked"
                 placeholder="Pilih pelanggan terlebih dahulu"
                 variant="outlined"
@@ -359,13 +365,16 @@
             </v-col>
             
             <v-col cols="12" md="6">
+              <label class="input-label">
+                Metode Pembayaran
+                <span class="required-flag text-error">*</span>
+              </label>
               <v-select
                 v-model="editedItem.metode_pembayaran"
                 :items="[
                   { title: 'Otomatis (Bulanan)', value: 'Otomatis' }, 
                   { title: 'Prorate (Proporsional)', value: 'Prorate' }
                 ]"
-                label="Metode Pembayaran"
                 variant="outlined"
                 prepend-inner-icon="mdi-cash-multiple"
                 density="comfortable"
@@ -457,6 +466,10 @@
           
           <v-row>
             <v-col cols="12" md="6">
+              <label class="input-label">
+                Status Langganan
+                <span class="required-flag text-error">*</span>
+              </label>
               <v-select
                 v-model="editedItem.status"
                 :items="[
@@ -464,7 +477,6 @@
                   { title: 'Suspended', value: 'Suspended' },
                   { title: 'Berhenti', value: 'Berhenti' }
                 ]"
-                label="Status Langganan"
                 variant="outlined"
                 prepend-inner-icon="mdi-check-circle-outline"
                 :rules="[rules.required]"
@@ -474,12 +486,16 @@
             </v-col>
             
             <v-col cols="12" md="6">
+              <label class="input-label">
+                Tanggal Jatuh Tempo
+                <span class="required-flag text-error">*</span>
+              </label>
               <v-text-field
                 v-model="editedItem.tgl_jatuh_tempo"
-                label="Tanggal Jatuh Tempo"
                 type="date"
                 variant="outlined"
                 prepend-inner-icon="mdi-calendar-alert"
+                :rules="[rules.required]"
                 density="comfortable"
                 hide-details="auto"
               ></v-text-field>
@@ -2650,6 +2666,19 @@ async function importFromCsv() {
   }
 }
 
+.input-label {
+  display: flex;
+  align-items: center;
+  font-weight: 600;
+  color: rgb(var(--v-theme-on-surface));
+  margin-bottom: 8px;
+  font-size: 0.9rem;
+}
+
+.required-flag {
+  margin-left: 4px;
+  font-weight: bold;
+}
 /* ============================================
    ENHANCED IMPORT/EXPORT BUTTONS STYLING
    ============================================ */

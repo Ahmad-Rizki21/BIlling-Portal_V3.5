@@ -481,12 +481,14 @@
               <v-stepper-window-item :value="1">
                 <div class="pa-4 pa-sm-6">
               <h3 class="text-h6 font-weight-bold mb-4">Informasi Jaringan</h3>
+                  <label class="input-label">
+                    Pilih Pelanggan <span class="required-flag text-error">*</span>
+                  </label>
                   <v-select
                     v-model="editedItem.pelanggan_id"
                     :items="pelangganForSelect"
                     item-title="nama"
                     item-value="id"
-                    label="Pilih Pelanggan"
                     :disabled="isEditMode"
                     variant="outlined"
                     class="mb-4"
@@ -494,17 +496,25 @@
                   <v-row>
                 <v-col cols="12" sm="6">
                   <v-select
-                      v-model="editedItem.mikrotik_server_id"
-                      :items="mikrotikServers"
-                      item-title="name"
-                      item-value="id"
-                      label="Mikrotik Server"
-                      @update:modelValue="handleOltSelection"
-                      variant="outlined"
-                  ></v-select>
+                        v-model="editedItem.mikrotik_server_id"
+                        :items="mikrotikServers"
+                        item-title="name"
+                        item-value="id"
+                        label="Mikrotik Server"
+                        @update:modelValue="handleOltSelection"
+                        variant="outlined"
+                  >
+                    <template v-slot:label>
+                      Mikrotik Server <span class="text-error">*</span>
+                    </template>
+                  </v-select>
                 </v-col>
                     <v-col cols="12" sm="6">
-                      <v-text-field v-model="editedItem.id_pelanggan" label="ID Pelanggan (PPPoE)" variant="outlined"></v-text-field>
+                      <v-text-field v-model="editedItem.id_pelanggan" label="ID Pelanggan (PPPoE)" variant="outlined">
+                        <template v-slot:label>
+                          ID Pelanggan (PPPoE) <span class="text-error">*</span>
+                        </template>
+                      </v-text-field>
                     </v-col>
                     <v-col cols="12" sm="6">
                       <v-text-field v-model="editedItem.password_pppoe" label="Password PPPoE" type="password" variant="outlined"></v-text-field>
@@ -518,7 +528,11 @@
                         :loading="ipValidation.loading"
                         :error-messages="ipValidation.color === 'error' ? ipValidation.message : ''"
                         :success-messages="ipValidation.color === 'success' ? ipValidation.message : ''"
-                      ></v-text-field>
+                      >
+                        <template v-slot:label>
+                          IP Pelanggan <span class="text-error">*</span>
+                        </template>
+                      </v-text-field>
                     </v-col>
                     <v-col cols="12" sm="6">
                       <v-select
@@ -529,10 +543,18 @@
                         variant="outlined"
                         placeholder="Pilih profile yang tersedia..."
                         no-data-text="Tidak ada profile tersedia untuk paket ini"
-                      ></v-select>
+                      >
+                        <template v-slot:label>
+                          Profile PPPoE <span class="text-error">*</span>
+                        </template>
+                      </v-select>
                     </v-col>
                     <v-col cols="12" sm="6">
-                      <v-text-field v-model="editedItem.id_vlan" label="ID VLAN" variant="outlined"></v-text-field>
+                      <v-text-field v-model="editedItem.id_vlan" label="ID VLAN" variant="outlined">
+                        <template v-slot:label>
+                          ID VLAN <span class="text-error">*</span>
+                        </template>
+                      </v-text-field>
                     </v-col>
                   </v-row>
                 </div>
