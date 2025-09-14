@@ -173,7 +173,7 @@
           <v-list-item class="font-weight-bold bg-grey-lighten-4">
               Notifikasi
               <template v-slot:append v-if="notifications.length > 0">
-                  <v-btn variant="text" size="small" @click="notifications = []">Bersihkan</v-btn>
+                  <v-btn variant="text" size="small" @click="markAllAsRead">Bersihkan</v-btn>
               </template>
           </v-list-item>
           <v-divider></v-divider>
@@ -184,7 +184,7 @@
           v-for="(notif, index) in notifications"
           :key="index"
           class="py-2 notification-item"
-          :to="getNotificationLink(notif)"
+          @click="handleNotificationClick(notif)"
             >
             <template v-slot:prepend>
               <v-avatar :color="getNotificationColor(notif.type)" size="32" class="me-3">
@@ -192,26 +192,26 @@
               </v-avatar>
             </template>
 
-            <div v-if="notif.type === 'new_payment'">
+            <div v-if="notif.type === 'new_payment'" class="notification-content">
               <v-list-item-title class="font-weight-medium text-body-2">Pembayaran Diterima</v-list-item-title>
               <v-list-item-subtitle class="text-caption">
                 <strong>{{ notif.data.invoice_number }}</strong> dari <strong>{{ notif.data.pelanggan_nama }}</strong> telah lunas.
               </v-list-item-subtitle>
             </div>
 
-            <div v-if="notif.type === 'new_customer_for_noc'">
+            <div v-if="notif.type === 'new_customer_for_noc'" class="notification-content">
               <v-list-item-title class="font-weight-medium text-body-2">Pelanggan Baru</v-list-item-title>
               <v-list-item-subtitle class="text-caption">
                 <strong>{{ notif.data.pelanggan_nama }}</strong> perlu dibuatkan Data Teknis.
               </v-list-item-subtitle>
             </div>
 
-          <div v-if="notif.type === 'new_technical_data'">
+          <div v-if="notif.type === 'new_technical_data'" class="notification-content">
             <v-list-item-title class="font-weight-medium text-body-2">Data Teknis Baru</v-list-item-title>
             <v-list-item-subtitle class="text-caption">
               Data teknis untuk <strong>{{ notif.data.pelanggan_nama }}</strong> telah ditambahkan.
             </v-list-item-subtitle>
-          </div>
+            </div>
 
           </v-list-item>
           </v-list>
@@ -474,7 +474,7 @@ function connectWebSocket() {
     
     console.log('[WebSocket] Pesan diterima:', event.data);
     try {
-      const data = JSON.parse(event.data);
+      const data = JSON.parse(event.data); // 'data' di sini adalah objek notifikasi tunggal
       if (['new_payment', 'new_technical_data', 'new_customer_for_noc'].includes(data.type)) {
         notifications.value = [data, ...notifications.value];
         playSound(data.type);
@@ -602,6 +602,7 @@ onMounted(async () => {
     fetchUserCount();
     // fetchSuspendedCount();
     fetchSidebarBadges();
+    fetchUnreadNotifications(); // <-- PANGGIL FUNGSI UNTUK MENGAMBIL NOTIFIKASI
     connectWebSocket(); // Memulai WebSocket setelah user terverifikasi
   }
 });
@@ -616,6 +617,17 @@ function toggleTheme() {
   const newTheme = theme.global.current.value.dark ? 'light' : 'dark';
   theme.global.name.value = newTheme;
   localStorage.setItem('theme', newTheme);
+}
+
+// --- FUNGSI BARU UNTUK MENGAMBIL NOTIFIKASI DARI DATABASE ---
+async function fetchUnreadNotifications() {
+  try {
+    // Ganti dengan endpoint API Anda yang sebenarnya
+    const response = await apiClient.get('/notifications/unread'); 
+    notifications.value = response.data;
+  } catch (error) {
+    console.error("Gagal mengambil notifikasi yang belum dibaca:", error);
+  }
 }
 
 function getNotificationIcon(type: string) {
@@ -636,16 +648,41 @@ function getNotificationColor(type: string) {
   }
 }
 
-function getNotificationLink(notification: any) {
-  // Arahkan ke halaman langganan agar Finance bisa langsung membuat langganan baru
-  if (notification.type === 'new_technical_data') {
-    return '/langganan';
+async function handleNotificationClick(notification: any) {
+  // 1. Tandai notifikasi sebagai sudah dibaca di backend
+  try {
+    // Ganti dengan endpoint API Anda
+    await apiClient.post(`/notifications/${notification.id}/mark-as-read`); 
+    
+    // 2. Hapus notifikasi dari daftar di frontend secara visual
+    notifications.value = notifications.value.filter(n => n.id !== notification.id);
+
+    // 3. Arahkan pengguna ke halaman yang relevan
+    if (notification.type === 'new_technical_data') {
+      router.push('/langganan');
+    } else if (notification.type === 'new_customer_for_noc') {
+      router.push('/data-teknis');
+    } else if (notification.type === 'new_payment') {
+      // Mungkin arahkan ke detail invoice jika ada ID-nya
+      router.push('/invoices');
+    }
+
+  } catch (error) {
+    console.error("Gagal menandai notifikasi sebagai sudah dibaca:", error);
   }
-  if (notification.type === 'new_customer_for_noc') {
-    return '/data-teknis';
-  }
-  return undefined;
 }
+
+async function markAllAsRead() {
+  try {
+    // Ganti dengan endpoint API Anda
+    await apiClient.post('/notifications/mark-all-as-read'); 
+    notifications.value = []; // Kosongkan daftar di frontend
+  } catch (error) {
+    console.error("Gagal membersihkan notifikasi:", error);
+  }
+}
+
+
 
 // async function fetchSuspendedCount() {
 //   try {
@@ -686,6 +723,10 @@ function handleLogout() {
 .modern-app {
   background-color: rgb(var(--v-theme-background));
   transition: background-color 0.3s ease;
+}
+
+.notification-content {
+  cursor: pointer;
 }
 
 .nav-sub-item {

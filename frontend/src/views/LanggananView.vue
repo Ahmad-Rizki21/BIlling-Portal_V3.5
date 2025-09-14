@@ -89,65 +89,71 @@
       </v-card>
     </v-dialog>
 
-        <v-card class="filter-card mb-4" elevation="1" rounded="lg">
-      <v-card-text class="pa-3">
-        <v-row dense>
-          <v-col cols="12" md="4">
-            <v-text-field
-              :density="fieldDensity"
-              v-model="searchQuery"
-              label="Cari Nama Pelanggan"
-              prepend-inner-icon="mdi-magnify"
-              variant="outlined"
-              hide-details
-              clearable
-              class="compact-field"
-            ></v-text-field>
-          </v-col>
+        <v-card class="filter-card mb-6" elevation="0">
+  <div class="d-flex flex-wrap align-center gap-4 pa-4">
+    <v-text-field
+      v-model="searchQuery"
+      label="Cari Nama Pelanggan"
+      prepend-inner-icon="mdi-magnify"
+      variant="outlined"
+      :density="fieldDensity"
+      hide-details
+      clearable
+      class="flex-grow-1"
+      style="min-width: 250px;"
+    ></v-text-field>
 
-          <v-col cols="12" md="3">
-            <v-select
-              v-model="selectedPaket"
-              :items="paketLayananSelectList"
-              item-title="nama_paket"
-              item-value="id"
-              label="Filter Paket Layanan"
-              variant="outlined"
-              density="compact"
-              hide-details
-              clearable
-              class="compact-field"
-            ></v-select>
-          </v-col>
+    <v-select
+      v-model="selectedAlamat"
+      :items="alamatOptions"
+      label="Filter Alamat"
+      prepend-inner-icon="mdi-map-marker"
+      variant="outlined"
+      density="comfortable"
+      hide-details
+      clearable
+      class="flex-grow-1"
+      style="min-width: 200px;"
+    ></v-select>
 
-          <v-col cols="12" md="3">
-            <v-select
-              v-model="selectedStatus"
-              :items="statusOptions"
-              label="Filter Status"
-              variant="outlined"
-              density="compact"
-              hide-details
-              clearable
-              class="compact-field"
-            ></v-select>
-          </v-col>
-          
-          <v-col cols="12" md="2" class="d-flex align-center">
-            <v-btn
-              variant="text"
-              color="primary"
-              @click="resetFilters"
-              class="reset-filter-btn"
-              size="small"
-            >
-              <v-icon start size="16">mdi-refresh</v-icon>
-              Reset
-            </v-btn>
-          </v-col>
-        </v-row>
-      </v-card-text>
-    </v-card>
+    <v-select
+      v-model="selectedPaket"
+      :items="paketLayananSelectList"
+      item-title="nama_paket"
+      item-value="id"
+      label="Filter Paket Layanan"
+      prepend-inner-icon="mdi-wifi-star"
+      variant="outlined"
+      density="comfortable"
+      hide-details
+      clearable
+      class="flex-grow-1"
+      style="min-width: 200px;"
+    ></v-select>
+
+    <v-select
+      v-model="selectedStatus"
+      :items="statusOptions"
+      label="Filter Status"
+      prepend-inner-icon="mdi-list-status"
+      variant="outlined"
+      density="comfortable"
+      hide-details
+      clearable
+      class="flex-grow-1"
+      style="min-width: 180px;"
+    ></v-select>
+    
+    <v-btn
+        variant="text"
+        @click="resetFilters"
+        class="text-none"
+    >
+      <v-icon start>mdi-refresh</v-icon>
+      Reset
+    </v-btn>
+  </div>
+</v-card>
 
     <v-card elevation="3" class="rounded-lg">
       <v-card-title class="d-flex align-center pa-4 pa-sm-6 bg-grey-lighten-5">
@@ -174,7 +180,110 @@
         </div>
       </v-expand-transition>
       
-      <div class="table-responsive-wrapper">
+      <!-- Mobile Card View -->
+      <div class="d-block d-md-none">
+  <div v-if="loading" class="text-center py-12">
+    <v-progress-circular color="primary" indeterminate size="48"></v-progress-circular>
+    <p class="mt-4 text-medium-emphasis">Memuat data langganan...</p>
+  </div>
+  
+  <div v-else-if="langgananList.length === 0" class="pa-8 text-center">
+    <v-icon size="64" color="grey-lighten-1">mdi-wifi-off</v-icon>
+    <p class="mt-4 text-h6 text-medium-emphasis">Belum ada data langganan</p>
+    <v-btn 
+      color="primary" 
+      variant="elevated" 
+      @click="openDialog()" 
+      class="mt-6 text-none"
+      prepend-icon="mdi-plus-circle"
+    >
+      Tambah Langganan
+    </v-btn>
+  </div>
+
+  <div v-else class="pa-2">
+    <v-card
+      v-for="item in langgananList"
+      :key="item.id"
+      class="mb-3"
+      elevation="2"
+      rounded="lg"
+    >
+      <v-card-text class="pa-4">
+        <div class="d-flex align-center mb-3">
+          <v-checkbox
+            v-model="selectedLangganan"
+            :value="item"
+            hide-details
+            class="me-2 pa-0"
+            density="compact"
+          ></v-checkbox>
+          <div class="flex-grow-1">
+            <h3 class="text-body-1 font-weight-bold">{{ getPelangganName(item.pelanggan_id) }}</h3>
+            <p class="text-caption text-medium-emphasis">{{ getPaketName(item.paket_layanan_id) }}</p>
+          </div>
+          <v-chip
+            size="small"
+            :color="getStatusColor(item.status)"
+            class="font-weight-bold"
+            label
+          >
+            {{ item.status }}
+          </v-chip>
+        </div>
+
+        <v-divider class="mb-3"></v-divider>
+
+        <v-list density="compact" class="bg-transparent">
+          <v-list-item class="px-0">
+            <template v-slot:prepend>
+              <v-icon size="18" class="me-3 text-medium-emphasis">mdi-cash</v-icon>
+            </template>
+            <v-list-item-title class="text-body-2">Harga</v-list-item-title>
+            <template v-slot:append>
+              <span class="text-body-2 font-weight-bold text-success">{{ formatCurrency(item.harga_final) }}</span>
+            </template>
+          </v-list-item>
+          <v-list-item class="px-0">
+            <template v-slot:prepend>
+              <v-icon size="18" class="me-3 text-medium-emphasis">mdi-calendar-alert</v-icon>
+            </template>
+            <v-list-item-title class="text-body-2">Jatuh Tempo</v-list-item-title>
+            <template v-slot:append>
+              <span class="text-body-2">{{ formatDate(item.tgl_jatuh_tempo) }}</span>
+            </template>
+          </v-list-item>
+        </v-list>
+
+        <v-divider class="mt-2"></v-divider>
+
+        <div class="d-flex gap-2 mt-3">
+          <v-btn size="small" variant="tonal" color="primary" @click="openDialog(item)" class="flex-grow-1">
+            <v-icon start size="16">mdi-pencil</v-icon> Edit
+          </v-btn>
+          <v-btn size="small" variant="tonal" color="error" @click="openDeleteDialog(item)" class="flex-grow-1">
+            <v-icon start size="16">mdi-delete</v-icon> Hapus
+          </v-btn>
+        </div>
+      </v-card-text>
+    </v-card>
+
+    <div v-if="hasMoreData && langgananList.length > 0" class="text-center pa-4">
+      <v-btn
+        variant="tonal"
+        color="primary"
+        @click="loadMore"
+        :loading="loadingMore"
+        class="text-none"
+      >
+        Muat Lebih Banyak
+      </v-btn>
+    </div>
+  </div>
+</div>
+
+      <!-- Desktop Table View -->
+      <div class="table-responsive-wrapper d-none d-md-block">
         <v-data-table
           v-model="selectedLangganan"
           :headers="headers"
@@ -254,6 +363,11 @@
       </div>
     </v-card>
 
+<!--
+  Perubahan di atas mengadopsi pola responsif dari halaman lain.
+  - `d-block d-md-none`: Menampilkan daftar kartu hanya di layar kecil (mobile).
+  - `d-none d-md-block`: Menyembunyikan tabel di layar kecil dan menampilkannya di layar medium ke atas (desktop).
+-->
 <v-dialog v-model="dialog" max-width="800px" persistent scrollable>
   <v-card class="subscription-modal">
     <!-- Simplified Header -->
@@ -626,6 +740,12 @@ const { mobile } = useDisplay();
 const fieldDensity = computed(() => mobile.value ? 'compact' : 'comfortable');
 const notificationPelangganList = ref<PelangganSelectItem[] | null>(null);
 
+const mobilePage = ref(1);
+const itemsPerPage = 15; // Jumlah item yang di-load setiap kali di mobile
+const hasMoreData = ref(true);
+const loadingMore = ref(false);
+
+
 // --- Interfaces ---
 interface Langganan {
   id: number;
@@ -686,6 +806,7 @@ const fileToImport = ref<File[]>([]);
 const importErrors = ref<string[]>([]);
 
 const searchQuery = ref('');
+const selectedAlamat = ref('');
 const selectedPaket = ref<number | null>(null);
 const selectedStatus = ref<string | null>(null);
 const statusOptions = ref(['Aktif', 'Suspended', 'Berhenti']);
@@ -921,26 +1042,55 @@ watch(
 
 
 // --- API Methods ---
-async function fetchLangganan() {
-  loading.value = true;
+async function fetchLangganan(isLoadMore = false) {
+  if (isLoadMore) {
+    loadingMore.value = true;
+  } else {
+    loading.value = true;
+    mobilePage.value = 1; // Reset halaman saat filter baru
+    hasMoreData.value = true; // Reset status "has more"
+  }
+
   try {
     const params = new URLSearchParams();
-    if (searchQuery.value) {
-      params.append('search', searchQuery.value);
-    }
-    if (selectedPaket.value) {
-      params.append('paket_layanan_id', String(selectedPaket.value));
-    }
-    if (selectedStatus.value) {
-      params.append('status', selectedStatus.value);
+    if (searchQuery.value) params.append('search', searchQuery.value);
+    if (selectedAlamat.value) params.append('alamat', selectedAlamat.value);
+    if (selectedPaket.value) params.append('paket_layanan_id', String(selectedPaket.value));
+    if (selectedStatus.value) params.append('status', selectedStatus.value);
+
+    // --- LOGIKA KUNCI: Tambahkan paginasi HANYA untuk mobile ---
+    if (mobile.value) {
+      const skip = (mobilePage.value - 1) * itemsPerPage;
+      params.append('skip', String(skip));
+      params.append('limit', String(itemsPerPage));
     }
     
     const response = await apiClient.get<Langganan[]>(`/langganan/?${params.toString()}`);
-    langgananList.value = response.data;
+    const newData = response.data;
+
+    if (isLoadMore) {
+      langgananList.value.push(...newData); // Tambahkan data baru ke list yang ada
+    } else {
+      langgananList.value = newData; // Ganti list dengan data baru
+    }
+
+    // Cek apakah masih ada data untuk dimuat di halaman berikutnya
+    if (newData.length < itemsPerPage) {
+      hasMoreData.value = false;
+    }
+
   } catch (error) {
     console.error("Gagal mengambil data langganan:", error);
   } finally {
     loading.value = false;
+    loadingMore.value = false;
+  }
+}
+
+function loadMore() {
+  if (!loadingMore.value) {
+    mobilePage.value++;
+    fetchLangganan(true); // Panggil fetch dengan flag isLoadMore
   }
 }
 
@@ -950,7 +1100,7 @@ const applyFilters = debounce(() => {
 }, 500); // Tunda 500ms
 
 // Perhatikan perubahan pada filter dan panggil fungsi applyFilters
-watch([searchQuery, selectedPaket, selectedStatus], () => {
+watch([searchQuery, selectedAlamat, selectedPaket, selectedStatus], () => {
   applyFilters();
 });
 
@@ -980,9 +1130,18 @@ async function confirmBulkDelete() {
   }
 }
 
+const alamatOptions = computed(() => {
+  if (!langgananList.value || langgananList.value.length === 0) {
+    return [];
+  }
+  const allAlamat = langgananList.value.map(item => item.pelanggan.alamat);
+  return [...new Set(allAlamat)].sort();
+});
+
 // Fungsi untuk mereset semua filter
 function resetFilters() {
   searchQuery.value = '';
+  selectedAlamat.value = '';
   selectedPaket.value = null;
   selectedStatus.value = null;
 }
@@ -3038,6 +3197,99 @@ async function importFromCsv() {
   background: rgba(0, 0, 0, 0.08) !important;
   color: #333 !important;
 }
+
+.gap-4 {
+  gap: 16px;
+}
+
+/* ============================================
+   STYLING BARU UNTUK FILTER CARD
+   ============================================ */
+
+.filter-card {
+  border-radius: 20px;
+  border: 1px solid rgba(var(--v-theme-primary), 0.12);
+  background: linear-gradient(145deg, 
+    rgba(var(--v-theme-surface), 0.95) 0%, 
+    rgba(var(--v-theme-background), 0.98) 100%);
+  backdrop-filter: blur(10px);
+  box-shadow: 
+    0 4px 20px rgba(var(--v-theme-shadow), 0.08),
+    0 1px 3px rgba(var(--v-theme-shadow), 0.12);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.filter-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 
+    0 8px 30px rgba(var(--v-theme-shadow), 0.12),
+    0 2px 6px rgba(var(--v-theme-shadow), 0.16);
+  border-color: rgba(var(--v-theme-primary), 0.2);
+}
+
+.filter-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, 
+    transparent 0%, 
+    rgba(var(--v-theme-primary), 0.6) 50%, 
+    transparent 100%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.filter-card:hover::before {
+  opacity: 1;
+}
+
+/* Styling untuk input field di dalam filter card */
+.filter-card :deep(.v-field) {
+  background: rgba(var(--v-theme-surface), 0.8) !important;
+  border: 2px solid rgba(var(--v-theme-outline-variant), 0.3) !important;
+  border-radius: 16px !important;
+  box-shadow: inset 0 2px 4px rgba(var(--v-theme-shadow), 0.06);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.filter-card :deep(.v-field:hover) {
+  border-color: rgba(var(--v-theme-primary), 0.4) !important;
+  background: rgba(var(--v-theme-surface), 1) !important;
+  transform: translateY(-1px);
+  box-shadow: 
+    inset 0 2px 4px rgba(var(--v-theme-shadow), 0.06),
+    0 4px 12px rgba(var(--v-theme-primary), 0.1);
+}
+
+.filter-card :deep(.v-field--focused) {
+  border-color: rgb(var(--v-theme-primary)) !important;
+  background: rgba(var(--v-theme-surface), 1) !important;
+  box-shadow: 
+    inset 0 2px 4px rgba(var(--v-theme-shadow), 0.06),
+    0 0 0 3px rgba(var(--v-theme-primary), 0.12);
+}
+
+.filter-card .v-btn[variant="text"] {
+  border-radius: 14px !important;
+  font-weight: 600 !important;
+  color: rgba(var(--v-theme-primary), 0.8) !important;
+  background: rgba(var(--v-theme-primary), 0.08) !important;
+  border: 1px solid rgba(var(--v-theme-primary), 0.2) !important;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.filter-card .v-btn[variant="text"]:hover {
+  background: rgba(var(--v-theme-primary), 0.12) !important;
+  color: rgb(var(--v-theme-primary)) !important;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(var(--v-theme-primary), 0.2);
+}
+
 
 /* ============================================
    ENHANCED FORM DIALOG STYLING

@@ -1,6 +1,7 @@
 # app/main.py
 import os
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query, Request
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query, Request, status
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import logging
@@ -12,11 +13,13 @@ from jose import jwt, JWTError
 from . import config
 from .models.activity_log import ActivityLog
 from .models.user import User as UserModel
+from .models.system_setting import SystemSetting as SettingModel
 from .config import settings
 # --- AKHIR TAMBAHAN IMPORT ---
 
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
 from .database import Base, engine, get_db, AsyncSessionLocal
 from .routers import (
@@ -94,6 +97,48 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ==========================================================
+# --- Middleware untuk Mode Maintenance ---
+# ==========================================================
+@app.middleware("http")
+async def maintenance_mode_middleware(request: Request, call_next):
+    # Daftar path yang diizinkan selama maintenance
+    allowed_paths = [
+        "/api/users/token", # Izinkan login
+        "/api/settings/maintenance", # Izinkan admin mengubah status maintenance
+        "/docs", # Izinkan akses dokumentasi API
+        "/openapi.json"
+    ]
+
+    # Jika path request ada di daftar yang diizinkan, lewati pengecekan
+    if any(request.url.path.startswith(path) for path in allowed_paths):
+        return await call_next(request)
+
+    async with AsyncSessionLocal() as db:
+        # Ambil status maintenance dari database dengan query berdasarkan key
+        stmt_active = select(SettingModel).where(SettingModel.setting_key == "maintenance_active")
+        maintenance_active_setting = (await db.execute(stmt_active)).scalar_one_or_none()
+        is_active = maintenance_active_setting and maintenance_active_setting.setting_value.lower() == 'true'
+
+        if is_active:
+            # Jika maintenance aktif, ambil pesannya
+            stmt_message = select(SettingModel).where(SettingModel.setting_key == "maintenance_message")
+            maintenance_message_setting = (await db.execute(stmt_message)).scalar_one_or_none()
+            message = maintenance_message_setting.setting_value if maintenance_message_setting else "Sistem sedang dalam perbaikan. Silakan coba lagi nanti."
+            
+            # Kembalikan response 503 Service Unavailable
+            return JSONResponse(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                content={"detail": message}
+            )
+
+    # Jika tidak maintenance, lanjutkan ke request berikutnya
+    response = await call_next(request)
+    return response
+
+# Pastikan middleware ini ada SEBELUM middleware logging agar request yang diblok tidak tercatat sebagai aktivitas
+# ==========================================================
 
 
 # --- FUNGSI BANTU UNTUK MENDAPATKAN USER DARI TOKEN (VERSI AMAN UNTUK LOGGING) ---
