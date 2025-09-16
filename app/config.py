@@ -23,10 +23,12 @@ class Settings(BaseSettings):
         "Permissions",
         "S&K",
         "Simulasi Harga",
-        "Kelola S&K",
-        "Manajemen Inventaris",
+        "Kelola S&K", # Tetap
+        "inventory", # Ubah "Manajemen Inventaris" menjadi "inventory"
         "Dashboard Pelanggan",
         "Activity Log",
+        "olt",
+        "odp_management",
     ]
 
     # --- TAMBAHKAN INI ---

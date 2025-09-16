@@ -1,6 +1,8 @@
 <template>
   <v-container fluid class="inventory-container">
     <!-- Header Section -->
+    <!-- ... (bagian ini tidak berubah) ... -->
+
     <div class="page-header mb-6">
       <div class="header-content">
         <v-avatar class="header-avatar" color="primary" size="56">
@@ -45,26 +47,70 @@
         
         <!-- Items Tab -->
         <v-window-item value="items" class="tab-content">
-          <div class="content-header">
+           <div class="content-header">
             <div class="content-title-wrapper">
               <h2 class="content-title">Daftar Perangkat</h2>
               <p class="content-subtitle">Kelola semua perangkat inventaris</p>
             </div>
-            <v-btn 
-              color="primary" 
-              class="add-btn"
-              elevation="2"
-              @click="openItemDialog()"
-            >
-              <v-icon start>mdi-plus</v-icon>
-              <span class="btn-text">Tambah Item</span>
-            </v-btn>
+            <div class="d-flex flex-wrap align-center gap-4">
+              <v-btn 
+                variant="tonal" 
+                color="teal" 
+                @click="exportToExcel"
+                prepend-icon="mdi-file-excel"
+                class="add-btn secondary-action-btn"
+                elevation="0"
+              >
+                <span class="btn-text">Export to Excel</span>
+              </v-btn>
+              <v-btn 
+                color="primary" 
+                class="add-btn"
+                elevation="2"
+                @click="openItemDialog()"
+              >
+                <v-icon start>mdi-plus</v-icon>
+                <span class="btn-text">Tambah Item</span>
+              </v-btn>
+            </div>
           </div>
+
+          <!-- Filter Card -->
+          <v-card class="filter-card mb-6" elevation="0">
+            <div class="d-flex flex-wrap align-center gap-4 pa-4">
+              <v-text-field
+                v-model="searchQuery"
+                label="Cari (SN, MAC, Lokasi)"
+                prepend-inner-icon="mdi-magnify"
+                variant="outlined"
+                density="comfortable"
+                hide-details
+                class="flex-grow-1"
+                style="min-width: 250px;"
+              ></v-text-field>
+              <v-select
+                v-model="selectedType"
+                :items="itemTypes"
+                item-title="name"
+                item-value="id"
+                label="Filter Tipe Item"
+                variant="outlined"
+                density="comfortable"
+                hide-details
+                clearable
+                class="flex-grow-1"
+                style="min-width: 200px;"
+              ></v-select>
+              <v-btn variant="text" @click="resetFilters" class="text-none">
+                Reset Filter
+              </v-btn>
+            </div>
+          </v-card>
 
           <div class="table-container">
             <v-data-table 
               :headers="itemHeaders" 
-              :items="inventoryItems" 
+              :items="filteredInventoryItems" 
               :loading="loading"
               class="modern-table"
               :items-per-page="15"
@@ -594,6 +640,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue';
 import { useDisplay } from 'vuetify';
+import * as XLSX from 'xlsx';
 import apiClient from '@/services/api';
 
 // --- INTERFACES ---
@@ -619,6 +666,10 @@ const isMobile = computed(() => mobile.value);
 const tab = ref('items');
 const loading = ref(true);
 const saving = ref(false);
+
+// --- Filter & Search State ---
+const searchQuery = ref('');
+const selectedType = ref<number | null>(null);
 
 const historyDialog = ref(false);
 const historyLoading = ref(false);
@@ -669,6 +720,26 @@ const statusHeaders = [
 const formItemTitle = computed(() => editedItem.value.id ? 'Edit Item' : 'Tambah Item Baru');
 const formTypeTitle = computed(() => editedType.value.id ? 'Edit Tipe Item' : 'Tambah Tipe Baru');
 const formStatusTitle = computed(() => editedStatus.value.id ? 'Edit Status' : 'Tambah Status Baru');
+
+const filteredInventoryItems = computed(() => {
+  let items = inventoryItems.value;
+
+  if (searchQuery.value) {
+    const lowerQuery = searchQuery.value.toLowerCase();
+    items = items.filter(item => 
+      item.serial_number.toLowerCase().includes(lowerQuery) ||
+      (item.mac_address && item.mac_address.toLowerCase().includes(lowerQuery)) ||
+      (item.location && item.location.toLowerCase().includes(lowerQuery))
+    );
+  }
+
+  if (selectedType.value) {
+    items = items.filter(item => item.item_type_id === selectedType.value);
+  }
+
+  return items;
+});
+
 
 // --- METHODS ---
 async function fetchData() {
@@ -783,6 +854,32 @@ function getStatusColor(statusName: string = '') {
   if (name === 'hilang') return 'error';
   if (name === 'dismantle') return 'grey-darken-1';
   return 'primary';
+}
+
+async function exportToExcel() {
+  const dataToExport = filteredInventoryItems.value.map(item => ({
+    'Serial Number': item.serial_number,
+    'MAC Address': item.mac_address || '-',
+    'Tipe': item.item_type.name,
+    'Status': item.status.name,
+    'Lokasi': item.location || '-',
+    'Catatan': item.notes || '-',
+  }));
+
+  const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Daftar Inventaris');
+  
+  // Auto-size columns
+  const cols = Object.keys(dataToExport[0] || {}).map(key => ({ wch: Math.max(key.length, ...dataToExport.map(row => String(row[key as keyof typeof row] || '').length)) + 2 }));
+  worksheet['!cols'] = cols;
+
+  XLSX.writeFile(workbook, `inventaris_perangkat_${new Date().toISOString().split('T')[0]}.xlsx`);
+}
+
+function resetFilters() {
+  searchQuery.value = '';
+  selectedType.value = null;
 }
 
 onMounted(fetchData);
@@ -921,6 +1018,99 @@ onMounted(fetchData);
 
 .btn-text {
   font-size: 1rem;
+}
+
+.secondary-action-btn {
+  box-shadow: none !important;
+  background: rgba(var(--v-theme-teal), 0.1);
+  color: rgb(var(--v-theme-teal));
+}
+
+.secondary-action-btn:hover {
+  background: rgba(var(--v-theme-teal), 0.15) !important;
+  transform: translateY(-2px);
+}
+
+/* === FILTER CARD === */
+.filter-card {
+  border-radius: 16px;
+  border: 1px solid rgba(var(--v-border-color), 0.1);
+  background: rgba(var(--v-theme-surface), 0.5);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+}
+
+.filter-card .v-text-field :deep(.v-field),
+.filter-card .v-select :deep(.v-field) {
+  border-radius: 12px;
+}
+
+/* === TABLE STYLING === */
+.table-container {
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+}
+
+.modern-table {
+  background: rgb(var(--v-theme-surface));
+}
+
+.modern-table :deep(.v-data-table__wrapper) {
+  border-radius: 12px;
+}
+
+.modern-table :deep(.v-data-table-header) {
+  background: rgba(var(--v-theme-primary), 0.05);
+}
+
+.modern-table :deep(.v-data-table-header th) {
+  font-weight: 600;
+  color: rgb(var(--v-theme-primary));
+  font-size: 0.95rem;
+  letter-spacing: 0.5px;
+  border-bottom: 2px solid rgba(var(--v-theme-primary), 0.1);
+  padding: 20px 16px;
+  height: 60px;
+}
+
+.modern-table :deep(.v-data-table__tr:hover) {
+  background: rgba(var(--v-theme-primary), 0.04);
+}
+
+.modern-table :deep(.v-data-table__td) {
+  padding: 20px 16px;
+  border-bottom: 1px solid rgba(var(--v-border-color), 0.5);
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+/* === TABLE CELL CONTENT === */
+.status-chip {
+  font-weight: 500;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  font-size: 0.85rem;
+  padding: 8px 12px;
+}
+
+.type-wrapper,
+.serial-wrapper,
+.mac-wrapper,
+.location-wrapper {
+  display: flex;
+  align-items: center;
+}
+
+.serial-code,
+.mac-code {
+  background: rgba(var(--v-theme-primary), 0.1);
+  color: rgb(var(--v-theme-primary));
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  font-family: 'Courier New', monospace;
 }
 
 /* === TABLE STYLING === */
@@ -1122,6 +1312,11 @@ onMounted(fetchData);
 
 .v-theme--dark .modern-table :deep(.v-data-table-header) {
   background: rgba(var(--v-theme-primary), 0.15);
+}
+
+.v-theme--dark .filter-card {
+  background: rgba(30, 41, 59, 0.5);
+  border-color: #334155;
 }
 
 .v-theme--dark .modern-table :deep(.v-data-table__tr:hover) {

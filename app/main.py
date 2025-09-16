@@ -81,8 +81,8 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 # --- Middleware Backend to FrontEnd ---
 # ==========================================================
 origins = [
-    # "https://billingftth.my.id",
-    # "wss://billingftth.my.id",
+    "https://billingftth.my.id", # <-- AKTIFKAN INI untuk akses via browser
+    "wss://billingftth.my.id",   # <-- AKTIFKAN INI untuk WebSocket di produksi
     # "http://192.168.222.20",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
