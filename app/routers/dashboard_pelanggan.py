@@ -52,213 +52,193 @@ logger = logging.getLogger(__name__)
 # --- Helper Functions (Logika dari endpoint lama yang di-refactor) ---
 
 
-async def _get_main_statistics() -> MainStats:
+async def _get_main_statistics(db: AsyncSession) -> MainStats:
     """
     Menyediakan data utama untuk kartu statistik di dashboard pelanggan.
-    Setiap pemanggilan fungsi ini akan menggunakan sesi database-nya sendiri.
     """
-    async for db in get_db():
-        try:
-            today = date.today()
-            first_day_of_month = today.replace(day=1)
+    today = date.today()
+    first_day_of_month = today.replace(day=1)
 
-            # Query untuk statistik pelanggan Jakinet
-            jakinet_stats_stmt = (
-                select(
-                    func.count(LanggananModel.id).label("total_langganan"),
-                    func.sum(case((LanggananModel.status == "Aktif", 1), else_=0)).label(
-                        "pelanggan_aktif"
-                    ),
-                    func.sum(
-                        case(
-                            (LanggananModel.tgl_mulai_langganan >= first_day_of_month, 1),
-                            else_=0,
-                        )
-                    ).label("pelanggan_baru_bulan_ini"),
-                    func.sum(
-                        case(
-                            (
-                                (LanggananModel.status == "Berhenti")
-                                & (LanggananModel.tgl_berhenti >= first_day_of_month),
-                                1,
-                            ),
-                            else_=0,
-                        )
-                    ).label("pelanggan_berhenti_bulan_ini"),
+    # --- OPTIMISASI: Gabungkan beberapa query menjadi satu ---
+    # Query untuk statistik pelanggan Jakinet
+    jakinet_stats_stmt = (
+        select(
+            func.count(LanggananModel.id).label("total_langganan"),
+            func.sum(case((LanggananModel.status == "Aktif", 1), else_=0)).label(
+                "pelanggan_aktif"
+            ),
+            func.sum(
+                case(
+                    (LanggananModel.tgl_mulai_langganan >= first_day_of_month, 1),
+                    else_=0,
                 )
-                .join(LanggananModel.pelanggan)
-                .where(PelangganModel.id_brand == "ajn-01")
-            )
-            jakinet_stats_result = (await db.execute(jakinet_stats_stmt)).first()
-
-            # Query untuk pendapatan Jakinet
-            q_pendapatan = (
-                select(func.sum(InvoiceModel.paid_amount))
-                .join(InvoiceModel.pelanggan)
-                .where(
-                    InvoiceModel.status_invoice == "Lunas",
-                    PelangganModel.id_brand == "ajn-01",
-                    InvoiceModel.paid_at >= first_day_of_month,
+            ).label("pelanggan_baru_bulan_ini"),
+            func.sum(  # PERBAIKAN: Memperbaiki struktur tuple untuk case statement
+                case(
+                    (
+                        (LanggananModel.status == "Berhenti")
+                        & (LanggananModel.tgl_berhenti >= first_day_of_month),
+                        1,
+                    ),  # Pastikan ini adalah satu tuple (kondisi, hasil)
+                    else_=0,
                 )
-            )
-            pendapatan_jakinet_bulan_ini = (
-                await db.execute(q_pendapatan)
-            ).scalar_one_or_none() or 0.0
+            ).label("pelanggan_berhenti_bulan_ini"),
+        )
+        .join(LanggananModel.pelanggan)
+        .where(PelangganModel.id_brand == "ajn-01")
+    )
+    jakinet_stats_result = (await db.execute(jakinet_stats_stmt)).first()
 
-            if not jakinet_stats_result:
-                return MainStats(
-                    pelanggan_aktif=0,
-                    pelanggan_baru_bulan_ini=0,
-                    pelanggan_berhenti_bulan_ini=0,
-                    pelanggan_jakinet_aktif=0,
-                    pendapatan_jakinet_bulan_ini=0.0,
-                )
+    # Query untuk pendapatan Jakinet (tetap terpisah karena dari tabel Invoice)
+    q_pendapatan = (
+        select(func.sum(InvoiceModel.paid_amount))
+        .join(InvoiceModel.pelanggan)
+        .where(
+            InvoiceModel.status_invoice == "Lunas",
+            PelangganModel.id_brand == "ajn-01",
+            InvoiceModel.paid_at >= first_day_of_month,
+        )
+    )
+    pendapatan_jakinet_bulan_ini = (
+        await db.execute(q_pendapatan)
+    ).scalar_one_or_none() or 0.0
 
-            return MainStats(
-                pelanggan_aktif=jakinet_stats_result.pelanggan_aktif or 0,
-                pelanggan_baru_bulan_ini=jakinet_stats_result.pelanggan_baru_bulan_ini or 0,
-                pelanggan_berhenti_bulan_ini=jakinet_stats_result.pelanggan_berhenti_bulan_ini or 0,
-                pelanggan_jakinet_aktif=jakinet_stats_result.pelanggan_aktif or 0,
-                pendapatan_jakinet_bulan_ini=float(pendapatan_jakinet_bulan_ini),
-            )
-        except Exception as e:
-            logger.error(f"Error in _get_main_statistics: {str(e)}")
-            return MainStats(
-                pelanggan_aktif=0,
-                pelanggan_baru_bulan_ini=0,
-                pelanggan_berhenti_bulan_ini=0,
-                pelanggan_jakinet_aktif=0,
-                pendapatan_jakinet_bulan_ini=0.0,
-            )
+    # PERBAIKAN: Handle kasus jika tidak ada pelanggan Jakinet sama sekali
+    if not jakinet_stats_result:
+        return MainStats(
+            pelanggan_aktif=0,
+            pelanggan_baru_bulan_ini=0,
+            pelanggan_berhenti_bulan_ini=0,
+            pelanggan_jakinet_aktif=0,
+            pendapatan_jakinet_bulan_ini=0.0,
+        )
 
-    # Return default value if no database session was obtained
     return MainStats(
-        pelanggan_aktif=0,
-        pelanggan_baru_bulan_ini=0,
-        pelanggan_berhenti_bulan_ini=0,
-        pelanggan_jakinet_aktif=0,
-        pendapatan_jakinet_bulan_ini=0.0,
+        pelanggan_aktif=jakinet_stats_result.pelanggan_aktif or 0,
+        pelanggan_baru_bulan_ini=jakinet_stats_result.pelanggan_baru_bulan_ini or 0,
+        pelanggan_berhenti_bulan_ini=jakinet_stats_result.pelanggan_berhenti_bulan_ini
+        or 0,
+        pelanggan_jakinet_aktif=jakinet_stats_result.pelanggan_aktif or 0,
+        pendapatan_jakinet_bulan_ini=float(pendapatan_jakinet_bulan_ini),
     )
 
 
-async def _get_growth_trend() -> ChartData:
+async def _get_growth_trend(db: AsyncSession) -> ChartData:
     """
     Menyediakan data tren pertumbuhan pelanggan Jakinet selama 6 bulan terakhir.
-    Setiap pemanggilan fungsi ini akan menggunakan sesi database-nya sendiri.
+    Dioptimalkan untuk menghindari N+1 query.
     """
-    async for db in get_db():
-        try:
-            today = date.today()
-            six_months_ago = today - relativedelta(months=5)
-            first_day_of_period = six_months_ago.replace(day=1)
+    today = date.today()
+    six_months_ago = today - relativedelta(months=5)
+    first_day_of_period = six_months_ago.replace(day=1)
 
-            stmt = (
-                select(
-                    func.date_format(LanggananModel.tgl_mulai_langganan, "%Y-%m").label("bulan"),
-                    func.count(LanggananModel.id).label("jumlah_baru"),
-                )
-                .join(LanggananModel.pelanggan)
-                .where(
-                    PelangganModel.id_brand == "ajn-01",
-                    LanggananModel.tgl_mulai_langganan >= first_day_of_period,
-                )
-                .group_by("bulan")
-                .order_by("bulan")
-            )
-            result = (await db.execute(stmt)).all()
-            monthly_new_subs = {row.bulan: row.jumlah_baru for row in result}
+    # 1. Ambil semua data langganan baru Jakinet dalam periode 6 bulan dalam satu query
+    stmt = (
+        select(
+            func.date_format(LanggananModel.tgl_mulai_langganan, "%Y-%m").label(
+                "bulan"
+            ),
+            func.count(LanggananModel.id).label("jumlah_baru"),
+        )
+        .join(LanggananModel.pelanggan)
+        .where(
+            PelangganModel.id_brand == "ajn-01",
+            LanggananModel.tgl_mulai_langganan >= first_day_of_period,
+        )
+        .group_by("bulan")
+        .order_by("bulan")
+    )
+    result = (await db.execute(stmt)).all()
+    monthly_new_subs = {row.bulan: row.jumlah_baru for row in result}
 
-            base_count_stmt = (
-                select(func.count(LanggananModel.id))
-                .join(LanggananModel.pelanggan)
-                .where(
-                    PelangganModel.id_brand == "ajn-01",
-                    LanggananModel.tgl_mulai_langganan < first_day_of_period,
-                )
-            )
-            cumulative_total = (await db.execute(base_count_stmt)).scalar_one_or_none() or 0
+    # 2. Hitung total pelanggan Jakinet sebelum periode 6 bulan ini sebagai basis
+    base_count_stmt = (
+        select(func.count(LanggananModel.id))
+        .join(LanggananModel.pelanggan)
+        .where(
+            PelangganModel.id_brand == "ajn-01",
+            LanggananModel.tgl_mulai_langganan < first_day_of_period,
+        )
+    )
+    cumulative_total = (await db.execute(base_count_stmt)).scalar_one_or_none() or 0
 
-            labels = []
-            jakinet_growth_data = []
-            for i in range(5, -1, -1):
-                target_date = today - relativedelta(months=i)
-                month_key = target_date.strftime("%Y-%m")
-                month_label = target_date.strftime("%b")
-                labels.append(month_label)
-                cumulative_total += monthly_new_subs.get(month_key, 0)
-                jakinet_growth_data.append(cumulative_total)
+    # 3. Proses data di Python untuk membuat tren kumulatif
+    labels = []
+    jakinet_growth_data = []
+    for i in range(5, -1, -1):
+        target_date = today - relativedelta(months=i)
+        month_key = target_date.strftime("%Y-%m")
+        month_label = target_date.strftime("%b")
+        labels.append(month_label)
 
-            return ChartData(labels=labels, data=jakinet_growth_data)
-        except Exception as e:
-            logger.error(f"Error in _get_growth_trend: {str(e)}")
-            return ChartData(labels=["Error"], data=[0])
+        # Tambahkan pelanggan baru dari bulan ini ke total kumulatif
+        cumulative_total += monthly_new_subs.get(month_key, 0)
+        jakinet_growth_data.append(cumulative_total)
 
-    # Return default value if no database session was obtained
-    return ChartData(labels=["Error"], data=[0])
+    return ChartData(labels=labels, data=jakinet_growth_data)
 
 
-async def _get_jakinet_revenue_trend(timespan: str = "6m") -> ChartData:
+async def _get_jakinet_revenue_trend(
+    timespan: str = "6m", db: AsyncSession = Depends(get_db)
+):
     """
     Menyediakan data tren pendapatan JakiNet berdasarkan rentang waktu.
-    Setiap pemanggilan fungsi ini akan menggunakan sesi database-nya sendiri.
+    Dioptimalkan untuk menghindari N+1 query.
     """
-    async for db in get_db():
-        try:
-            months_map = {"3m": 3, "6m": 6, "1y": 12}
-            num_months = months_map.get(timespan, 6)
+    months_map = {"3m": 3, "6m": 6, "1y": 12}
+    num_months = months_map.get(timespan, 6)
 
-            today = datetime.now()
-            start_period = today - relativedelta(months=num_months - 1)
-            first_day_of_period = start_period.replace(day=1, hour=0, minute=0, second=0)
+    today = datetime.now()
+    start_period = today - relativedelta(months=num_months - 1)
+    first_day_of_period = start_period.replace(day=1, hour=0, minute=0, second=0)
 
-            stmt = (
-                select(
-                    func.date_format(InvoiceModel.paid_at, "%Y-%m").label("bulan"),
-                    func.sum(InvoiceModel.paid_amount).label("total_revenue"),
-                )
-                .join(InvoiceModel.pelanggan)
-                .where(
-                    InvoiceModel.status_invoice == "Lunas",
-                    PelangganModel.id_brand == "ajn-01",
-                    InvoiceModel.paid_at >= first_day_of_period,
-                )
-                .group_by("bulan")
-                .order_by("bulan")
-            )
-            result = (await db.execute(stmt)).all()
-            monthly_revenue_map = {row.bulan: float(row.total_revenue or 0) for row in result}
+    # 1. Ambil semua data pendapatan Jakinet dalam periode yang diminta dalam satu query
+    stmt = (
+        select(
+            func.date_format(InvoiceModel.paid_at, "%Y-%m").label("bulan"),
+            func.sum(InvoiceModel.paid_amount).label("total_revenue"),
+        )
+        .join(InvoiceModel.pelanggan)
+        .where(
+            InvoiceModel.status_invoice == "Lunas",
+            PelangganModel.id_brand == "ajn-01",
+            InvoiceModel.paid_at >= first_day_of_period,
+        )
+        .group_by("bulan")
+        .order_by("bulan")
+    )
+    result = (await db.execute(stmt)).all()
+    monthly_revenue_map = {row.bulan: float(row.total_revenue or 0) for row in result}
 
-            labels = []
-            revenue_data = []
-            for i in range(num_months - 1, -1, -1):
-                target_date = today - relativedelta(months=i)
-                month_key = target_date.strftime("%Y-%m")
-                month_label = target_date.strftime("%b %y")
-                labels.append(month_label)
-                revenue_data.append(monthly_revenue_map.get(month_key, 0.0))
+    # 2. Proses data di Python untuk memastikan semua bulan ada (termasuk yang 0)
+    labels = []
+    revenue_data = []
+    for i in range(num_months - 1, -1, -1):
+        target_date = today - relativedelta(months=i)
+        month_key = target_date.strftime("%Y-%m")
+        month_label = target_date.strftime("%b %y")
 
-            return ChartData(labels=labels, data=revenue_data)
-        except Exception as e:
-            logger.error(f"Error in _get_jakinet_revenue_trend: {str(e)}")
-            return ChartData(labels=["Error"], data=[0.0])
+        labels.append(month_label)
+        revenue_data.append(monthly_revenue_map.get(month_key, 0.0))
 
-    # Return default value if no database session was obtained
-    return ChartData(labels=["Error"], data=[0.0])
+    return ChartData(labels=labels, data=revenue_data)
 
 
 # --- ENDPOINT UTAMA YANG SUDAH DIOPTIMALKAN ---
 
 
 @router.get("/", response_model=DashboardPelangganData)
-async def get_dashboard_pelanggan_data(timespan: str = "6m"):
+async def get_dashboard_pelanggan_data(
+    timespan: str = "6m", db: AsyncSession = Depends(get_db)
+):
     """
     Mengambil semua data untuk Dashboard Pelanggan dalam satu panggilan API.
-    Setiap tugas query ke database dijalankan secara paralel dengan sesi DB-nya sendiri.
+    Semua query ke database dijalankan secara paralel untuk performa maksimal.
     """
-    # Kumpulkan semua tugas async. Setiap tugas mengelola sesi DB-nya sendiri.
-    stats_task = asyncio.create_task(_get_main_statistics())
-    growth_task = asyncio.create_task(_get_growth_trend())
-    revenue_task = asyncio.create_task(_get_jakinet_revenue_trend(timespan=timespan))
+    # Kumpulkan semua tugas async
+    stats_task = asyncio.create_task(_get_main_statistics(db))
+    growth_task = asyncio.create_task(_get_growth_trend(db))
+    revenue_task = asyncio.create_task(_get_jakinet_revenue_trend(timespan, db))
 
     # Jalankan semua tugas secara bersamaan
     results = await asyncio.gather(
@@ -266,22 +246,22 @@ async def get_dashboard_pelanggan_data(timespan: str = "6m"):
     )
 
     # Cek jika ada error saat menjalankan tugas
-    main_stats = results[0] if not isinstance(results[0], Exception) else MainStats(pelanggan_aktif=0, pelanggan_baru_bulan_ini=0, pelanggan_berhenti_bulan_ini=0, pelanggan_jakinet_aktif=0, pendapatan_jakinet_bulan_ini=0.0)
-    growth_chart = results[1] if not isinstance(results[1], Exception) else ChartData(labels=["Error"], data=[0])
-    revenue_chart = results[2] if not isinstance(results[2], Exception) else ChartData(labels=["Error"], data=[0.0])
-
-    # Log errors jika ada
     for i, result in enumerate(results):
         if isinstance(result, Exception):
+            # Log traceback lengkap untuk debugging di sisi server
             tb_str = traceback.format_exception(
                 type(result), result, result.__traceback__
             )
             logger.error(f"Error in dashboard_pelanggan task {i+1}: {''.join(tb_str)}")
 
+            # Kirim respons error yang jelas ke client
+            raise HTTPException(
+                status_code=500,
+                detail=f"Gagal mengambil data untuk bagian ke-{i+1} dari dashboard: {str(result)}",
+            )
+
     # Susun respons
     response = DashboardPelangganData(
-        main_stats=main_stats,  # type: ignore
-        growth_chart=growth_chart,  # type: ignore
-        revenue_chart=revenue_chart  # type: ignore
+        main_stats=results[0], growth_chart=results[1], revenue_chart=results[2]
     )
     return response

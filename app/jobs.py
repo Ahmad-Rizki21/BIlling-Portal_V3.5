@@ -2,125 +2,39 @@
 
 import logging
 import traceback
-from datetime import date, timedelta, datetime, timezone
+from sqlalchemy.ext.asyncio import AsyncSession
+from datetime import date, timedelta
 from dateutil.relativedelta import relativedelta
 from sqlalchemy.future import select
 from sqlalchemy import update
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import selectinload
 import uuid
 import math
-import asyncio
+from .database import get_db
 
 # Impor komponen
-from .database import AsyncSessionLocal
+from .database import AsyncSessionLocal as SessionLocal
 from .models import (
     Langganan as LanggananModel,
     Invoice as InvoiceModel,
     Pelanggan as PelangganModel,
-    MikrotikServer as MikrotikServerModel,
 )
 from .services import mikrotik_service, xendit_service
 from .logging_config import log_scheduler_event
 from .routers.invoice import _process_successful_payment
 from .models import DataTeknis as DataTeknisModel
+from .routers.invoice import update_overdue_invoices
 
 logger = logging.getLogger("app.jobs")
 
 
-async def job_check_server_connectivity():
-    """Tugas untuk memeriksa konektivitas semua server Mikrotik yang aktif."""
-    log_scheduler_event(logger, "job_check_server_connectivity", "started")
-    total_servers = 0
-    successful_checks = 0
-    async with AsyncSessionLocal() as db:  # type: ignore
-        try:
-            stmt = select(MikrotikServerModel).where(MikrotikServerModel.is_active == True)
-            result = await db.execute(stmt)
-            servers = result.scalars().all()
-            total_servers = len(servers)
-
-            for server in servers:
-                try:
-                    device_details = {
-                        "host": server.host_ip,
-                        "username": server.username,
-                        "password": server.password,
-                        "port": server.port,
-                    }
-                    
-                    loop = asyncio.get_event_loop()
-                    test_result = await loop.run_in_executor(None, mikrotik_service.perform_routeros_connection, device_details)
-
-                    server.last_connection_status = test_result.get("status", "failure")
-                    server.last_connection_message = test_result.get("message", "Unknown error")
-                    server.last_connection_time = datetime.now(timezone.utc)
-
-                    if test_result.get("status") == "success":
-                        data_result = test_result.get("data", {})
-                        if isinstance(data_result, dict):
-                            server.ros_version = data_result.get("ros_version")
-                        successful_checks += 1
-
-                except Exception as e:
-                    server.last_connection_status = "failure"
-                    server.last_connection_message = f"Job error: {e}"
-                    server.last_connection_time = datetime.now(timezone.utc)
-                    logger.error(f"Failed to check server {server.name}: {e}")
-
-            await db.commit()
-            log_scheduler_event(
-                logger,
-                "job_check_server_connectivity",
-                "completed",
-                f"Checked {total_servers} servers. Successful: {successful_checks}, Failed: {total_servers - successful_checks}."
-            )
-
-        except Exception:
-            await db.rollback()
-            logger.error(f"[FAIL] Scheduler 'job_check_server_connectivity' failed: {traceback.format_exc()}")
-
-
-# Fungsi generate_single_invoice - OPTIMIZED to avoid N+1 queries
+# Fungsi generate_single_invoice tetap sama, tidak perlu diubah
 async def generate_single_invoice(db, langganan: LanggananModel):
     try:
-        # OPTIMIZATION: Check if relationships are already loaded to avoid N+1 problems
-        # If called from job_generate_invoices, relationships should be pre-loaded
-
-        # Check if pelanggan relationship is loaded
-        if hasattr(langganan, '_pelanggan') and langganan._pelanggan is not None:
-            # Relationships are already loaded (from job_generate_invoices)
-            pelanggan = langganan.pelanggan
-            paket = langganan.paket_layanan
-            brand = pelanggan.harga_layanan
-            data_teknis = pelanggan.data_teknis
-        else:
-            # Relationships not loaded, need to load them efficiently
-            from sqlalchemy.future import select
-
-            # Load all required relationships in one query
-            stmt = (
-                select(LanggananModel)
-                .options(
-                    joinedload(LanggananModel.pelanggan).options(
-                        joinedload(PelangganModel.harga_layanan),
-                        joinedload(PelangganModel.data_teknis)
-                    ),
-                    joinedload(LanggananModel.paket_layanan)
-                )
-                .where(LanggananModel.id == langganan.id)
-            )
-
-            result = await db.execute(stmt)
-            langganan_loaded = result.scalars().first()
-
-            if not langganan_loaded:
-                logger.error(f"Langganan tidak ditemukan untuk ID {langganan.id}. Skip.")
-                return
-
-            pelanggan = langganan_loaded.pelanggan
-            paket = langganan_loaded.paket_layanan
-            brand = pelanggan.harga_layanan
-            data_teknis = pelanggan.data_teknis
+        pelanggan = langganan.pelanggan
+        paket = langganan.paket_layanan
+        brand = pelanggan.harga_layanan
+        data_teknis = pelanggan.data_teknis
 
         if not all([pelanggan, paket, brand, data_teknis]):
             logger.error(f"Data tidak lengkap untuk langganan ID {langganan.id}. Skip.")
@@ -150,7 +64,7 @@ async def generate_single_invoice(db, langganan: LanggananModel):
         await db.flush()
 
         deskripsi_xendit = ""
-        jatuh_tempo_str_lengkap = datetime.combine(db_invoice.tgl_jatuh_tempo, datetime.min.time()).strftime("%d/%m/%Y")  # type: ignore
+        jatuh_tempo_str_lengkap = db_invoice.tgl_jatuh_tempo.strftime("%d/%m/%Y")
 
         if langganan.metode_pembayaran == "Prorate":
             # ▼▼▼ LOGIKA BARU DIMULAI DI SINI ▼▼▼
@@ -161,11 +75,11 @@ async def generate_single_invoice(db, langganan: LanggananModel):
             # Cek apakah ini invoice gabungan
             if db_invoice.total_harga > (harga_normal_full + 1):
                 # INI TAGIHAN GABUNGAN
-                start_day = db_invoice.tgl_invoice.day  # type: ignore
-                end_day = db_invoice.tgl_jatuh_tempo.day  # type: ignore
-                periode_prorate_str = datetime.combine(db_invoice.tgl_jatuh_tempo, datetime.min.time()).strftime("%B %Y")  # type: ignore
+                start_day = db_invoice.tgl_invoice.day
+                end_day = db_invoice.tgl_jatuh_tempo.day
+                periode_prorate_str = db_invoice.tgl_jatuh_tempo.strftime("%B %Y")
                 periode_berikutnya_str = (
-                    datetime.combine(db_invoice.tgl_jatuh_tempo, datetime.min.time()) + relativedelta(months=1)  # type: ignore
+                    db_invoice.tgl_jatuh_tempo + relativedelta(months=1)
                 ).strftime("%B %Y")
 
                 deskripsi_xendit = (
@@ -175,9 +89,9 @@ async def generate_single_invoice(db, langganan: LanggananModel):
                 )
             else:
                 # INI TAGIHAN PRORATE BIASA
-                start_day = db_invoice.tgl_invoice.day  # type: ignore
-                end_day = db_invoice.tgl_jatuh_tempo.day  # type: ignore
-                periode_str = datetime.combine(db_invoice.tgl_jatuh_tempo, datetime.min.time()).strftime("%B %Y")  # type: ignore
+                start_day = db_invoice.tgl_invoice.day
+                end_day = db_invoice.tgl_jatuh_tempo.day
+                periode_str = db_invoice.tgl_jatuh_tempo.strftime("%B %Y")
                 deskripsi_xendit = (
                     f"Biaya berlangganan internet up to {paket.kecepatan} Mbps, "
                     f"Periode Tgl {start_day}-{end_day} {periode_str}"
@@ -189,25 +103,12 @@ async def generate_single_invoice(db, langganan: LanggananModel):
                 f"jatuh tempo pembayaran tanggal {jatuh_tempo_str_lengkap}"
             )
 
-        # Format nomor telepon untuk Xendit (tanpa '+')
-        no_telp_bersih = ""
-        if pelanggan.no_telp:
-            # Hapus spasi dan karakter non-numerik kecuali '+' di awal
-            no_telp_bersih = ''.join(filter(str.isdigit, pelanggan.no_telp))
-            # Handle '0' di depan -> '62'
-            if no_telp_bersih.startswith('0'):
-                no_telp_bersih = '62' + no_telp_bersih[1:]
-            # Jika sudah '62' di depan, biarkan
-            elif no_telp_bersih.startswith('62'):
-                pass
-            # Untuk format lain, coba tambahkan '62' (asumsi nomor lokal tanpa 0)
-            else:
-                no_telp_bersih = '62' + no_telp_bersih
-
-        no_telp_xendit = no_telp_bersih if no_telp_bersih else None
+        no_telp_xendit = (
+            f"+62{pelanggan.no_telp.lstrip('0')}" if pelanggan.no_telp else None
+        )
 
         xendit_response = await xendit_service.create_xendit_invoice(
-            db_invoice, pelanggan, paket, deskripsi_xendit, pajak, no_telp_xendit or ""
+            db_invoice, pelanggan, paket, deskripsi_xendit, pajak, no_telp_xendit
         )
 
         db_invoice.payment_link = xendit_response.get(
@@ -239,7 +140,7 @@ async def job_generate_invoices():
     BATCH_SIZE = 100
     offset = 0
 
-    async with AsyncSessionLocal() as db:  # type: ignore
+    async with SessionLocal() as db:
         while True:
             try:
                 base_stmt = (
@@ -249,11 +150,13 @@ async def job_generate_invoices():
                         LanggananModel.status == "Aktif",
                     )
                     .options(
-                        joinedload(LanggananModel.pelanggan).options(
-                            joinedload(PelangganModel.harga_layanan),
-                            joinedload(PelangganModel.data_teknis)
+                        selectinload(LanggananModel.pelanggan).selectinload(
+                            PelangganModel.harga_layanan
                         ),
-                        joinedload(LanggananModel.paket_layanan),
+                        selectinload(LanggananModel.pelanggan).selectinload(
+                            PelangganModel.data_teknis
+                        ),
+                        selectinload(LanggananModel.paket_layanan),
                     )
                 )
 
@@ -310,9 +213,8 @@ async def job_generate_invoices():
 
 async def job_suspend_services():
     """
-    Tugas untuk men-suspend layanan pelanggan yang belum bayar sampai tanggal 4.
-    Berjalan tepat tanggal 5 jam 00:00 setiap bulan untuk menangguhkan layanan
-    pelanggan yang telat bayar dari jatuh tempo tanggal 1.
+    Tugas untuk men-suspend layanan dan mengubah status invoice menjadi 'Kadaluarsa'.
+    Berjalan setiap hari untuk menonaktifkan pelanggan yang telat bayar.
     """
     log_scheduler_event(logger, "job_suspend_services", "started")
     total_services_suspended = 0
@@ -321,22 +223,11 @@ async def job_suspend_services():
     BATCH_SIZE = 50
     offset = 0
 
-    # Logika bisnis: Jatuh tempo tanggal 1, suspend tanggal 5 jam 00:00
-    # Cari invoice yang jatuh tempo tanggal 1 bulan ini dan masih belum dibayar
-    current_month = current_date.month
-    current_year = current_date.year
+    # Aturan: Layanan di-suspend pada hari ke-5 jika jatuh tempo tgl 1.
+    # Artinya, jika hari ini tgl 5, kita cari yg jatuh tempo tgl 1 (selisih 4 hari).
+    overdue_date_threshold = current_date - timedelta(days=4)
 
-    # Buat tanggal jatuh tempo (tanggal 1 bulan ini)
-    due_date_this_month = date(current_year, current_month, 1)
-
-    log_scheduler_event(
-        logger,
-        "job_suspend_services",
-        "info",
-        f"Mencari invoice dengan jatuh tempo {due_date_this_month} untuk di-suspend"
-    )
-
-    async with AsyncSessionLocal() as db:  # type: ignore
+    async with SessionLocal() as db:
         while True:
             try:
                 base_stmt = (
@@ -346,15 +237,15 @@ async def job_suspend_services():
                         LanggananModel.pelanggan_id == InvoiceModel.pelanggan_id,
                     )
                     .where(
-                        InvoiceModel.tgl_jatuh_tempo == due_date_this_month,
+                        InvoiceModel.tgl_jatuh_tempo <= overdue_date_threshold,
                         LanggananModel.status == "Aktif",
                         InvoiceModel.status_invoice == "Belum Dibayar",
                     )
                     .distinct(
                         LanggananModel.id
-                    )  # Pastikan setiap langganan hanya diproses sekali
+                    )  # <-- TAMBAHAN: Pastikan setiap langganan hanya diproses sekali
                     .options(
-                        joinedload(LanggananModel.pelanggan).joinedload(
+                        selectinload(LanggananModel.pelanggan).selectinload(
                             PelangganModel.data_teknis
                         )
                     )
@@ -368,15 +259,15 @@ async def job_suspend_services():
 
                 for langganan in overdue_batch:
                     logger.warning(
-                        f"Melakukan suspend layanan untuk Langganan ID: {langganan.id} - Pelanggan: {langganan.pelanggan.nama if langganan.pelanggan else 'Unknown'}..."
+                        f"Melakukan suspend layanan untuk Langganan ID: {langganan.id}..."
                     )
 
                     # 1. Ubah status invoice terkait menjadi 'Kadaluarsa'
+                    # Ini lebih efisien daripada menjalankan job terpisah.
                     update_invoice_stmt = (
                         update(InvoiceModel)
                         .where(InvoiceModel.pelanggan_id == langganan.pelanggan_id)
                         .where(InvoiceModel.status_invoice == "Belum Dibayar")
-                        .where(InvoiceModel.tgl_jatuh_tempo == due_date_this_month)
                         .values(status_invoice="Kadaluarsa")
                     )
                     invoice_update_result = await db.execute(update_invoice_stmt)
@@ -388,18 +279,10 @@ async def job_suspend_services():
 
                     data_teknis = langganan.pelanggan.data_teknis
                     if data_teknis:
-                        try:
-                            await mikrotik_service.trigger_mikrotik_update(
-                                db, langganan, data_teknis, data_teknis.id_pelanggan
-                            )
-                            total_services_suspended += 1
-                            logger.info(
-                                f"✓ Berhasil suspend Mikrotik untuk Langganan ID: {langganan.id}"
-                            )
-                        except Exception as e:
-                            logger.error(
-                                f"✗ Gagal suspend Mikrotik untuk Langganan ID {langganan.id}: {e}"
-                            )
+                        await mikrotik_service.trigger_mikrotik_update(
+                            db, langganan, data_teknis, data_teknis.id_pelanggan
+                        )
+                        total_services_suspended += 1
                     else:
                         logger.error(
                             f"Data Teknis tidak ditemukan untuk langganan ID {langganan.id}, skip update Mikrotik."
@@ -427,7 +310,7 @@ async def job_suspend_services():
             logger,
             "job_suspend_services",
             "completed",
-            f"Tidak ada layanan baru untuk di-suspend. Total invoice kadaluarsa: {total_invoices_overdue}",
+            "Tidak ada layanan baru untuk di-suspend.",
         )
 
 
@@ -438,7 +321,7 @@ async def job_send_payment_reminders():
     BATCH_SIZE = 100
     offset = 0
 
-    async with AsyncSessionLocal() as db:  # type: ignore
+    async with SessionLocal() as db:
         while True:
             try:
                 base_stmt = (
@@ -447,7 +330,7 @@ async def job_send_payment_reminders():
                         LanggananModel.tgl_jatuh_tempo == target_due_date,
                         LanggananModel.status == "Aktif",
                     )
-                    .options(joinedload(LanggananModel.pelanggan))
+                    .options(selectinload(LanggananModel.pelanggan))
                 )
 
                 batch_stmt = base_stmt.offset(offset).limit(BATCH_SIZE)
@@ -493,7 +376,7 @@ async def job_verify_payments():
     """Job HANYA untuk rekonsiliasi pembayaran yang terlewat via Xendit."""
     log_scheduler_event(logger, "job_verify_payments", "started")
 
-    async with AsyncSessionLocal() as db:  # type: ignore
+    async with SessionLocal() as db:
         try:
             # Bagian 1: Logika Kadaluarsa SUDAH DIHAPUS DARI SINI
 
@@ -518,12 +401,12 @@ async def job_verify_payments():
                     InvoiceModel.status_invoice != "Lunas",
                 )
                 .options(
-                    joinedload(InvoiceModel.pelanggan).options(
-                        joinedload(PelangganModel.harga_layanan),
-                        joinedload(PelangganModel.langganan).joinedload(
+                    selectinload(InvoiceModel.pelanggan).options(
+                        selectinload(PelangganModel.harga_layanan),
+                        selectinload(PelangganModel.langganan).selectinload(
                             LanggananModel.paket_layanan
                         ),
-                        joinedload(PelangganModel.data_teknis),
+                        selectinload(PelangganModel.data_teknis),
                     )
                 )
             )
@@ -559,14 +442,14 @@ async def job_verify_payments():
 async def job_retry_mikrotik_syncs():
     log_scheduler_event(logger, "job_retry_mikrotik_syncs", "started")
     total_retried = 0
-    async with AsyncSessionLocal() as db:  # type: ignore
+    async with SessionLocal() as db:
         try:
             # Cari semua data teknis yang sinkronisasinya tertunda
             stmt = (
                 select(DataTeknisModel)
                 .where(DataTeknisModel.mikrotik_sync_pending == True)
                 .options(
-                    joinedload(DataTeknisModel.pelanggan).joinedload(
+                    selectinload(DataTeknisModel.pelanggan).selectinload(
                         PelangganModel.langganan
                     )
                 )
@@ -592,7 +475,7 @@ async def job_retry_mikrotik_syncs():
                     )
 
                     # Jika berhasil, set flag kembali ke False
-                    data_teknis.mikrotik_sync_pending = False  # type: ignore
+                    data_teknis.mikrotik_sync_pending = False
                     db.add(data_teknis)
                     logger.info(
                         f"Successfully synced pending update for Data Teknis ID: {data_teknis.id}"
@@ -611,7 +494,7 @@ async def job_retry_mikrotik_syncs():
                 "completed",
                 f"Successfully retried {total_retried} syncs.",
             )
-        except Exception:
+        except Exception as e:
             await db.rollback()
             logger.error(
                 f"[FAIL] Scheduler 'job_retry_mikrotik_syncs' encountered an error: {traceback.format_exc()}"

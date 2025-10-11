@@ -12,7 +12,7 @@ from pydantic import BaseModel, ValidationError, Field
 from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import selectinload
 
 from ..database import get_db
 from ..models.harga_layanan import HargaLayanan as HargaLayananModel
@@ -45,7 +45,7 @@ async def create_langganan(
     pelanggan = await db.get(
         PelangganModel,
         langganan_data.pelanggan_id,
-        options=[joinedload(PelangganModel.harga_layanan)],
+        options=[selectinload(PelangganModel.harga_layanan)],
     )
     if not pelanggan or not pelanggan.harga_layanan:
         raise HTTPException(
@@ -104,10 +104,10 @@ async def create_langganan(
         select(LanggananModel)
         .where(LanggananModel.id == db_langganan.id)
         .options(
-            joinedload(LanggananModel.pelanggan).joinedload(
+            selectinload(LanggananModel.pelanggan).selectinload(
                 PelangganModel.harga_layanan
             ),
-            joinedload(LanggananModel.paket_layanan),
+            selectinload(LanggananModel.paket_layanan),
         )
     )
     result = await db.execute(query)
@@ -120,7 +120,7 @@ async def create_langganan(
 async def get_all_langganan(
     search: Optional[str] = None,
     alamat: Optional[str] = None,
-    paket_layanan_name: Optional[str] = None,
+    paket_layanan_id: Optional[int] = None,
     status: Optional[str] = None,
     for_invoice_selection: bool = False,
     skip: int = 0,
@@ -133,11 +133,11 @@ async def get_all_langganan(
         select(LanggananModel)
         .join(LanggananModel.pelanggan)
         .options(
-            joinedload(LanggananModel.pelanggan).options(
-                joinedload(PelangganModel.langganan),
-                joinedload(PelangganModel.harga_layanan),
+            selectinload(LanggananModel.pelanggan).options(
+                selectinload(PelangganModel.langganan),
+                selectinload(PelangganModel.harga_layanan),
             ),
-            joinedload(LanggananModel.paket_layanan),
+            selectinload(LanggananModel.paket_layanan),
         )
     )
 
@@ -149,8 +149,8 @@ async def get_all_langganan(
     if alamat:
         # Mencari di kolom alamat pada tabel PelangganModel
         query = query.where(PelangganModel.alamat.ilike(f"%{alamat}%"))
-    if paket_layanan_name:
-        query = query.join(PaketLayananModel).where(PaketLayananModel.nama_paket == paket_layanan_name)
+    if paket_layanan_id:
+        query = query.where(LanggananModel.paket_layanan_id == paket_layanan_id)
     if status:
         query = query.where(LanggananModel.status == status)
     # Logika ini memastikan bahwa jika parameter limit diberikan (dari mobile),
@@ -160,7 +160,7 @@ async def get_all_langganan(
         final_query = final_query.limit(limit)
 
     result = await db.execute(final_query)
-    langganan_list = result.unique().scalars().all()
+    langganan_list = result.scalars().all()
 
     # ... sisa kode tidak perlu diubah ...
     if for_invoice_selection and langganan_list:
@@ -210,10 +210,10 @@ async def update_langganan(
         select(LanggananModel)
         .where(LanggananModel.id == db_langganan.id)
         .options(
-            joinedload(LanggananModel.pelanggan).joinedload(
+            selectinload(LanggananModel.pelanggan).selectinload(
                 PelangganModel.harga_layanan
             ),
-            joinedload(LanggananModel.paket_layanan),
+            selectinload(LanggananModel.paket_layanan),
         )
     )
     result = await db.execute(query)
@@ -257,7 +257,7 @@ async def calculate_langganan_price(
     pelanggan = await db.get(
         PelangganModel,
         request_data.pelanggan_id,
-        options=[joinedload(PelangganModel.harga_layanan)],
+        options=[selectinload(PelangganModel.harga_layanan)],
     )
     if not pelanggan or not pelanggan.harga_layanan:
         raise HTTPException(
@@ -294,7 +294,7 @@ async def calculate_langganan_price(
         )
 
     return LanggananCalculateResponse(
-        harga_awal=round(harga_awal_final, 0), tgl_jatuh_tempo=tgl_jatuh_tempo_final  # type: ignore
+        harga_awal=round(harga_awal_final, 0), tgl_jatuh_tempo=tgl_jatuh_tempo_final
     )
 
 
@@ -341,36 +341,18 @@ async def download_csv_template_langganan():
 
 
 @router.get("/export/csv", response_class=StreamingResponse)
-async def export_to_csv_langganan(
-    search: Optional[str] = None,
-    alamat: Optional[str] = None,
-    paket_layanan_name: Optional[str] = None,
-    status: Optional[str] = None,
-    db: AsyncSession = Depends(get_db)
-):
-    """Mengekspor semua data langganan ke dalam file CSV dengan filter."""
+async def export_to_csv_langganan(db: AsyncSession = Depends(get_db)):
+    """Mengekspor semua data langganan ke dalam file CSV."""
     query = select(LanggananModel).options(
-        joinedload(LanggananModel.pelanggan),
-        joinedload(LanggananModel.paket_layanan),
-    ).join(LanggananModel.pelanggan)
-
-    if search:
-        query = query.where(PelangganModel.nama.ilike(f"%{search}%"))
-    if alamat:
-        query = query.where(PelangganModel.alamat.ilike(f"%{alamat}%"))
-    if paket_layanan_name:
-        query = query.join(PaketLayananModel).where(PaketLayananModel.nama_paket == paket_layanan_name)
-    if status:
-        query = query.where(LanggananModel.status == status)
-        
-    query = query.order_by(LanggananModel.id.desc())
-
+        selectinload(LanggananModel.pelanggan),
+        selectinload(LanggananModel.paket_layanan),
+    )
     result = await db.execute(query)
     langganan_list = result.scalars().unique().all()
 
     if not langganan_list:
         raise HTTPException(
-            status_code=404, detail="Tidak ada data langganan untuk diekspor dengan filter yang diberikan."
+            status_code=404, detail="Tidak ada data langganan untuk diekspor."
         )
 
     output = io.StringIO()
@@ -396,11 +378,6 @@ async def export_to_csv_langganan(
                 "Tgl Jatuh Tempo": langganan.tgl_jatuh_tempo,
                 "Tgl Invoice Terakhir": langganan.tgl_invoice_terakhir,
             }
-        )
-
-    if not rows_to_write:
-        raise HTTPException(
-            status_code=404, detail="Tidak ada data valid untuk diekspor."
         )
 
     writer = csv.DictWriter(output, fieldnames=rows_to_write[0].keys())
@@ -434,7 +411,6 @@ async def import_from_csv_langganan(
     reader = list(csv.DictReader(io.StringIO(content_str)))
     errors = []
     langganan_to_create = []
-    processed_emails_in_file = set()
 
     emails_to_find = {
         row.get("email_pelanggan", "").lower().strip()
@@ -475,16 +451,7 @@ async def import_from_csv_langganan(
 
     for row_num, row in enumerate(reader, start=2):
         try:
-            data_import = LanggananImport(**row) # type: ignore
-
-            # Validasi duplikat email dalam file CSV yang sama
-            email_lower = data_import.email_pelanggan.lower()
-            if email_lower in processed_emails_in_file:
-                errors.append(
-                    f"Baris {row_num}: Email '{data_import.email_pelanggan}' duplikat di dalam file CSV."
-                )
-                continue
-            processed_emails_in_file.add(email_lower)
+            data_import = LanggananImport(**row)
 
             pelanggan = pelanggan_map.get(data_import.email_pelanggan.lower())
             if not pelanggan:
@@ -507,26 +474,13 @@ async def import_from_csv_langganan(
                 )
                 continue
 
-            # Konversi string tanggal ke objek date jika tidak None
-            tgl_jatuh_tempo_value = None
-            if data_import.tgl_jatuh_tempo:
-                if isinstance(data_import.tgl_jatuh_tempo, str):
-                    try:
-                        tgl_jatuh_tempo_value = datetime.strptime(data_import.tgl_jatuh_tempo, "%Y-%m-%d").date()
-                    except ValueError:
-                        # Jika format tanggal tidak valid, lewati baris ini
-                        errors.append(f"Baris {row_num}: Format tanggal tidak valid untuk tgl_jatuh_tempo: '{data_import.tgl_jatuh_tempo}'")
-                        continue
-                else:
-                    tgl_jatuh_tempo_value = data_import.tgl_jatuh_tempo
-
             new_langganan_data = {
                 "pelanggan_id": pelanggan.id,
                 "paket_layanan_id": paket.id,
                 "status": data_import.status,
                 "metode_pembayaran": data_import.metode_pembayaran,
                 "harga_awal": paket.harga,
-                "tgl_jatuh_tempo": tgl_jatuh_tempo_value,
+                "tgl_jatuh_tempo": data_import.tgl_jatuh_tempo,
             }
             langganan_to_create.append(LanggananModel(**new_langganan_data))
 
@@ -582,7 +536,7 @@ async def calculate_langganan_price_plus_full(
     pelanggan = await db.get(
         PelangganModel,
         request_data.pelanggan_id,
-        options=[joinedload(PelangganModel.harga_layanan)],
+        options=[selectinload(PelangganModel.harga_layanan)],
     )
     if not pelanggan or not pelanggan.harga_layanan:
         raise HTTPException(
@@ -620,17 +574,6 @@ async def calculate_langganan_price_plus_full(
     )
 
 
-@router.get("/count", response_model=int)
-async def get_langganan_count(db: AsyncSession = Depends(get_db)):
-    """
-    Menghitung total jumlah langganan.
-    """
-    count_query = select(func.count(LanggananModel.id))
-    result = await db.execute(count_query)
-    total_count = result.scalar_one()
-    return total_count
-
-
 @router.get("/pelanggan/list", response_model=List[PelangganSchema])
 async def get_all_pelanggan_with_status(db: AsyncSession = Depends(get_db)):
     """
@@ -638,7 +581,7 @@ async def get_all_pelanggan_with_status(db: AsyncSession = Depends(get_db)):
     """
     result = await db.execute(
         select(PelangganModel)
-        .options(joinedload(PelangganModel.langganan))
+        .options(selectinload(PelangganModel.langganan))
         .order_by(PelangganModel.nama)
     )
     pelanggan = result.scalars().unique().all()

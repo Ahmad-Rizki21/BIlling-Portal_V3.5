@@ -81,7 +81,9 @@ jobs:
   auto-format:
     name: Auto-Format Code
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    permissions:
+      contents: write
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main-bersih'
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
