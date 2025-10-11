@@ -1,4 +1,4 @@
-name: Enterprise CI/CD Pipeline (Simplified)
+name: Enterprise CI/CD Pipeline
 
 on:
   push:
@@ -6,74 +6,74 @@ on:
   pull_request:
     branches: [ main ]
 
-# Global environment variables
 env:
-  PYTHON_VERSION: '3.11'
-  NODE_VERSION: '20'
+  PYTHON_VERSION: "3.11"
+  NODE_VERSION: "20"
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  security-scan:
+  # Code Quality & Security Checks
+  code-quality:
+    name: Code Quality & Security
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      security-events: write
-    continue-on-error: true  # Don't fail the pipeline for security issues
 
     steps:
-    - uses: actions/checkout@v4
-
-    - name: Run Trivy vulnerability scanner
-      uses: aquasecurity/trivy-action@0.24.0
+    - name: Checkout code
+      uses: actions/checkout@v4
       with:
-        scan-type: 'fs'
-        scan-ref: '.'
-        format: 'sarif'
-        output: 'trivy-results.sarif'
+        fetch-depth: 0
 
-    - name: Upload Trivy scan results
-      uses: github/codeql-action/upload-sarif@v3
-      if: always()
-      with:
-        sarif_file: 'trivy-results.sarif'
-
-  backend-tests:
-    runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:15
-        env:
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_USER: postgres
-          POSTGRES_DB: test_billing
-        ports:
-          - 5432:5432
-        options: --health-cmd="pg_isready" --health-interval=10s --health-timeout=5s --health-retries=3
-
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Set up Python
+    - name: Setup Python
       uses: actions/setup-python@v4
       with:
         python-version: ${{ env.PYTHON_VERSION }}
         cache: 'pip'
 
-    - name: Install dependencies
+    - name: Install Python dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
-        pip install pytest pytest-cov pytest-asyncio httpx bandit safety
+        pip install pytest pytest-cov pytest-asyncio flake8 black isort mypy safety bandit
 
-    - name: Run security tests
-      run: |
-        bandit -r app/ -f json -o bandit-report.json || true
-        safety check --json --output safety-report.json || true
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        cache-dependency-path: frontend/package-lock.json
 
-    - name: Run unit tests
-      env:
-        DATABASE_URL: "postgresql+asyncpg://postgres:postgres@localhost:5432/test_billing"
+    - name: Install Frontend dependencies
+      working-directory: ./frontend
+      run: npm ci
+
+    - name: Run Python linting (flake8)
       run: |
-        pytest tests/ -v --cov=app --cov-report=json --cov-report=xml --cov-report=term-missing || true
+        flake8 app/ --count --select=E9,F63,F7,F82 --show-source --statistics
+        flake8 app/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+
+    - name: Run Python formatting check (black)
+      run: black --check app/
+
+    - name: Run Python import sorting check (isort)
+      run: isort --check-only app/
+
+    - name: Run Python type checking (mypy)
+      run: mypy app/ --ignore-missing-imports
+
+    - name: Run Python security scan (bandit)
+      run: bandit -r app/ -f json -o bandit-report.json
+
+    - name: Run Python dependency security scan (safety)
+      run: safety check --json --output safety-report.json
+
+    - name: Run Frontend linting
+      working-directory: ./frontend
+      run: npm run lint
+
+    - name: Run Frontend type checking
+      working-directory: ./frontend
+      run: npm run type-check
 
     - name: Upload security reports
       uses: actions/upload-artifact@v4
@@ -83,131 +83,293 @@ jobs:
         path: |
           bandit-report.json
           safety-report.json
-          coverage.json
+        retention-days: 30
 
-  frontend-tests:
+  # Unit & Integration Tests
+  test:
+    name: Test Suite
     runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
+    needs: code-quality
 
-    - name: Set up Node.js
-      uses: actions/setup-node@v4
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_DB: test_billing
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Python
+      uses: actions/setup-python@v4
       with:
-        node-version: ${{ env.NODE_VERSION }}
-        cache: 'npm'
-        cache-dependency-path: frontend/package-lock.json
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
 
-    - name: Install dependencies
+    - name: Install Python dependencies
       run: |
-        cd frontend
-        npm ci
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest pytest-cov pytest-asyncio httpx
 
-    - name: Run security audit
+    - name: Setup test environment
       run: |
-        cd frontend
-        npm audit --audit-level=high
+        cp .env.example .env.test
+        echo "DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/test_billing" >> .env.test
+        echo "SECRET_KEY=test-secret-key-for-ci-only" >> .env.test
+        echo "ALGORITHM=HS256" >> .env.test
+        echo "ACCESS_TOKEN_EXPIRE_MINUTES=30" >> .env.test
 
-    - name: Run type check
+    - name: Run database migrations
       run: |
-        cd frontend
-        npm run type-check
+        export DATABASE_URL="postgresql+asyncpg://postgres:postgres@localhost:5432/test_billing"
+        alembic upgrade head
 
-    - name: Build application
+    - name: Run Python tests with coverage
+      env:
+        DATABASE_URL: "postgresql+asyncpg://postgres:postgres@localhost:5432/test_billing"
       run: |
-        cd frontend
-        npm run build
+        pytest tests/ -v \
+          --cov=app \
+          --cov-report=xml \
+          --cov-report=html \
+          --cov-report=term-missing \
+          --junit-xml=test-results.xml
 
-  code-quality:
+    - name: Upload test results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: test-results
+        path: |
+          test-results.xml
+          htmlcov/
+          coverage.xml
+        retention-days: 30
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v4
+      if: always()
+      with:
+        file: ./coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+
+  # Build & Push Docker Images
+  build:
+    name: Build & Push Images
     runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
+    needs: test
+    if: github.event_name == 'push'
 
-    - name: Set up Python
+    outputs:
+      backend-image: ${{ steps.meta-backend.outputs.tags }}
+      frontend-image: ${{ steps.meta-frontend.outputs.tags }}
+      image-digest: ${{ steps.build.outputs.digest }}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Extract backend metadata
+      id: meta-backend
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-backend
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha,prefix={{branch}}-
+          type=raw,value=latest,enable={{is_default_branch}}
+
+    - name: Extract frontend metadata
+      id: meta-frontend
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-frontend
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha,prefix={{branch}}-
+          type=raw,value=latest,enable={{is_default_branch}}
+
+    - name: Build and push backend image
+      id: build
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./Dockerfile.backend
+        push: true
+        tags: ${{ steps.meta-backend.outputs.tags }}
+        labels: ${{ steps.meta-backend.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        platforms: linux/amd64,linux/arm64
+
+    - name: Build and push frontend image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./frontend
+        file: ./frontend/Dockerfile
+        push: true
+        tags: ${{ steps.meta-frontend.outputs.tags }}
+        labels: ${{ steps.meta-frontend.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        platforms: linux/amd64,linux/arm64
+
+  # Deploy to Staging
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main-bersih' && github.event_name == 'push'
+    environment: staging
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Deploy to staging
+      run: |
+        echo "🚀 Deploying to staging environment..."
+        echo "Backend Image: ${{ needs.build.outputs.backend-image }}"
+        echo "Frontend Image: ${{ needs.build.outputs.frontend-image }}"
+        # Add your staging deployment logic here
+        # Example: kubectl apply, docker-compose, etc.
+
+    - name: Health check staging
+      run: |
+        echo "⏳ Waiting for staging deployment to be ready..."
+        # Add health check logic here
+        sleep 30
+
+    - name: Notify staging deployment
+      uses: 8398a7/action-slack@v3
+      if: always()
+      with:
+        status: ${{ job.status }}
+        channel: '#deployments'
+        webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+        fields: repo,message,commit,author,action,eventName,ref,workflow
+
+  # Deploy to Production
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [build, deploy-staging]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment: production
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Deploy to production
+      run: |
+        echo "🚀 Deploying to production environment..."
+        echo "Backend Image: ${{ needs.build.outputs.backend-image }}"
+        echo "Frontend Image: ${{ needs.build.outputs.frontend-image }}"
+        # Add your production deployment logic here
+        # Example: kubectl apply, docker-compose, etc.
+
+    - name: Health check production
+      run: |
+        echo "⏳ Waiting for production deployment to be ready..."
+        # Add health check logic here
+        sleep 60
+
+    - name: Run smoke tests
+      run: |
+        echo "🧪 Running smoke tests..."
+        # Add smoke test logic here
+
+    - name: Notify production deployment
+      uses: 8398a7/action-slack@v3
+      if: always()
+      with:
+        status: ${{ job.status }}
+        channel: '#deployments'
+        webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+        text: |
+          🎉 *Production Deployment*
+          Branch: `${{ github.ref_name }}`
+          Commit: `${{ github.sha }}`
+          Status: `${{ job.status }}`
+
+  # Performance & Load Testing
+  performance-test:
+    name: Performance Testing
+    runs-on: ubuntu-latest
+    needs: deploy-staging
+    if: github.ref == 'refs/heads/main-bersih' && github.event_name == 'push'
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Run performance tests
+      run: |
+        echo "🚀 Running performance tests..."
+        # Add performance testing logic here
+        # Example: k6, artillery, jmeter, etc.
+
+    - name: Upload performance reports
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: performance-reports
+        path: performance-results/
+        retention-days: 30
+
+  # Documentation Generation
+  docs:
+    name: Generate Documentation
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'push'
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Python
       uses: actions/setup-python@v4
       with:
         python-version: ${{ env.PYTHON_VERSION }}
 
-    - name: Install Python dependencies
+    - name: Install dependencies
       run: |
-        pip install black isort flake8 mypy
+        pip install -r requirements.txt
 
-    - name: Run Python code quality checks
+    - name: Generate API documentation
       run: |
-        black --check app/ || echo "Black formatting check completed"
-        isort --check-only app/ || echo "Import sorting check completed"
-        flake8 app/ --count --select=E9,F63,F7,F82 --show-source --statistics || echo "Flake8 check completed"
-        mypy app/ --ignore-missing-imports || echo "Type checking completed"
+        echo "📚 Generating API documentation..."
+        # Add documentation generation logic here
 
-    - name: Set up Node.js
-      uses: actions/setup-node@v4
+    - name: Deploy to GitHub Pages
+      if: github.ref == 'refs/heads/main'
+      uses: peaceiris/actions-gh-pages@v3
       with:
-        node-version: ${{ env.NODE_VERSION }}
-        cache: 'npm'
-        cache-dependency-path: frontend/package-lock.json
-
-    - name: Install frontend dependencies
-      run: |
-        cd frontend
-        npm ci
-
-    - name: Run ESLint
-      run: |
-        cd frontend
-        if [ -f ".eslintrc.js" ] || [ -f ".eslintrc.json" ]; then
-          npm run lint || echo "ESLint completed with warnings"
-        else
-          echo "ESLint config not found, skipping ESLint check"
-        fi
-      continue-on-error: true
-
-    - name: Check code formatting
-      run: |
-        cd frontend
-        if [ -f ".prettierrc" ] || [ -f ".prettierrc.json" ]; then
-          npm run format:check || echo "Prettier check completed with warnings"
-        else
-          echo "Prettier config not found, skipping formatting check"
-        fi
-      continue-on-error: true
-
-  deploy-staging:
-    needs: [security-scan, backend-tests, frontend-tests, code-quality]
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main-bersih'
-    continue-on-error: true
-
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Deploy to staging
-      run: |
-        echo "🚀 Deploy to staging environment"
-        echo "Branch: ${{ github.ref }}"
-        echo "Commit: ${{ github.sha }}"
-        # Add your staging deployment commands here
-        # Example:
-        # docker-compose -f docker-compose.staging.yml up -d
-        # kubectl apply -f k8s/staging/
-
-  deploy-production:
-    needs: [security-scan, backend-tests, frontend-tests, code-quality]
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-    continue-on-error: true
-
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Deploy to production
-      run: |
-        echo "🎉 Deploy to production environment"
-        echo "Branch: ${{ github.ref }}"
-        echo "Commit: ${{ github.sha }}"
-        # Add your production deployment commands here
-        # Example:
-        # docker-compose -f docker-compose.prod.yml up -d
-        # kubectl apply -f k8s/production/
-
-  notify:
-    runs-on: ubuntu-latest
-    needs: [deploy-staging, deploy-production]
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: ./docs/_build/html
