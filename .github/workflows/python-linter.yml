@@ -2,7 +2,7 @@ name: Python CI/CD Pipeline
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main, main-bersih ]
   pull_request:
     branches: [ main ]
 
