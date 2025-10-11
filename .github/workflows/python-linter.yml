@@ -1,4 +1,4 @@
-name: Python Auto-formatter & Linter
+name: Python CI/CD Pipeline
 
 on:
   push:
@@ -7,46 +7,106 @@ on:
     branches: [ main ]
 
 jobs:
-  build:
+  lint:
+    name: Lint & Security Scan
     runs-on: ubuntu-latest
-    # Tambahkan izin 'write' di sini
-    permissions:
-      contents: write
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
-      with:
-        # Sediakan token untuk push
-        token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.13.6'
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
 
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install flake8 bandit black mypy
+      - name: Cache pip dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
 
-    # Langkah 4: Jalankan Black untuk MEMFORMAT kode
-    - name: Format code with Black
-      run: black .
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install flake8 bandit black mypy
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-    # Langkah 5: Commit dan push perubahan format
-    - name: Commit and push changes
-      run: |
-        git config --global user.name 'github-actions[bot]'
-        git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-        git add .
-        # Hanya commit jika ada perubahan dari Black
-        git diff-index --quiet HEAD || git commit -m "style: auto-format code with black" -m "[skip ci]"
-        git push
+      - name: Run Linters and Scanners
+        run: |
+          echo "Checking code format with Black..."
+          black . --check
+          echo "Linting with Flake8..."
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+          echo "Running Bandit security scanner..."
+          bandit -r .
+          echo "Running MyPy type checker..."
+          mypy . --ignore-missing-imports || true
 
-    # Langkah 6: Jalankan Flake8 untuk mengecek style (setelah format)
-    - name: Lint with Flake8
-      run: flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+  test:
+    name: Run Unit Tests
+    runs-on: ubuntu-latest
+    needs: lint
+    strategy:
+      matrix:
+        python-version: ['3.9', '3.10', '3.11']
 
-    # Langkah 7: Jalankan Bandit untuk mengecek keamanan
-    - name: Security scan with Bandit
-      run: bandit -r .
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}-${{ matrix.python-version }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Run tests with Pytest
+        run: pytest
+
+  auto-format:
+    name: Auto-Format Code
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install Black
+        run: pip install black
+
+      - name: Run Black Formatter
+        run: black .
+
+      - name: Commit and push changes
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          git add .
+          if git diff-index --quiet HEAD; then
+            echo "No changes to commit."
+          else
+            git commit -m "style: auto-format code with black" -m "[skip ci]"
+            git push
+          fi
