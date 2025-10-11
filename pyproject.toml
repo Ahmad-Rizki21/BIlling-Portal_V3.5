@@ -1,0 +1,145 @@
+[build-system]
+requires = ["setuptools>=45", "wheel", "setuptools_scm[toml]>=6.2"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "artacom-ftth-billing"
+dynamic = ["version"]
+description = "FTTH Billing System API"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+authors = [
+    {name = "Ahmad Rizki", email = "ahmad@artacom.com"},
+]
+keywords = ["billing", "ftth", "api", "fastapi"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Framework :: FastAPI",
+]
+
+[tool.setuptools_scm]
+write_to = "app/_version.py"
+
+[tool.black]
+line-length = 127
+target-version = ['py311']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  migrations
+  | alembic
+  | __pycache__
+  | venv
+  | .venv
+)/
+'''
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+line_length = 127
+known_first_party = ["app"]
+known_third_party = ["fastapi", "sqlalchemy", "pydantic", "httpx"]
+skip_glob = ["migrations/*", "alembic/*"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+
+[[tool.mypy.overrides]]
+module = [
+    "routeros_api.*",
+    "xendit.*",
+    "mikrotik.*",
+    "apscheduler.*",
+]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-v",
+    "--tb=short",
+    "--strict-markers",
+    "--strict-config",
+    "--cov=app",
+    "--cov-report=term-missing",
+    "--cov-report=html:htmlcov",
+    "--cov-report=xml",
+    "--cov-fail-under=80",
+    "--maxfail=5",
+    "-ra",
+]
+markers = [
+    "unit: Unit tests",
+    "integration: Integration tests",
+    "api: API tests",
+    "slow: Slow tests",
+    "database: Database tests",
+    "auth: Authentication tests",
+    "mikrotik: Mikrotik integration tests",
+    "invoice: Invoice related tests",
+    "pelanggan: Customer related tests",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning",
+]
+
+[tool.coverage.run]
+source = ["app"]
+omit = [
+    "*/tests/*",
+    "*/migrations/*",
+    "*/alembic/*",
+    "*/__pycache__/*",
+    "*/venv/*",
+    "*/env/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "if settings.DEBUG",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if 0:",
+    "if __name__ == .__main__.:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
+]
+show_missing = true
+precision = 2
+
+[tool.coverage.html]
+directory = "htmlcov"
+
+[tool.bandit]
+exclude_dirs = ["tests", "migrations", "alembic"]
+skips = ["B101", "B601"]
+
+[tool.bandit.assert_used]
+skips = ["*_test.py", "test_*.py"]

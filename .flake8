@@ -1,0 +1,28 @@
+[flake8]
+max-line-length = 127
+max-complexity = 10
+exclude =
+    .git,
+    __pycache__,
+    .venv,
+    venv,
+    env,
+    .eggs,
+    *.egg,
+    build,
+    dist,
+    migrations,
+    alembic,
+    node_modules
+ignore =
+    E203,  # whitespace before ':'
+    E501,  # line too long (handled by black)
+    W503,  # line break before binary operator
+    W504,  # line break after binary operator
+    E402,  # module level import not at top of file
+per-file-ignores =
+    __init__.py:F401
+    conftest.py:F401,F811
+    test_*.py:F401,F811
+max-doc-length = 120
+docstring-convention = google

@@ -1,0 +1,189 @@
+version: '3.8'
+
+services:
+  # Database
+  postgres-staging:
+    image: postgres:15-alpine
+    container_name: billing-postgres-staging
+    environment:
+      POSTGRES_DB: ${STAGING_DB_NAME:-billing_staging}
+      POSTGRES_USER: ${STAGING_DB_USER:-staging_user}
+      POSTGRES_PASSWORD: ${STAGING_DB_PASSWORD}
+    volumes:
+      - postgres_staging_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    ports:
+      - "5433:5432"
+    networks:
+      - billing-staging-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${STAGING_DB_USER:-staging_user} -d ${STAGING_DB_NAME:-billing_staging}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Redis for caching
+  redis-staging:
+    image: redis:7-alpine
+    container_name: billing-redis-staging
+    command: redis-server --appendonly yes --requirepass ${STAGING_REDIS_PASSWORD}
+    volumes:
+      - redis_staging_data:/data
+    ports:
+      - "6380:6379"
+    networks:
+      - billing-staging-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Backend API
+  backend-staging:
+    image: ${REGISTRY:-ghcr.io/your-org}/${IMAGE_NAME:-billing-app}-backend:staging
+    container_name: billing-backend-staging
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://${STAGING_DB_USER:-staging_user}:${STAGING_DB_PASSWORD}@postgres-staging:5432/${STAGING_DB_NAME:-billing_staging}
+      - REDIS_URL=redis://:${STAGING_REDIS_PASSWORD}@redis-staging:6379/0
+      - SECRET_KEY=${STAGING_SECRET_KEY}
+      - ALGORITHM=HS256
+      - ACCESS_TOKEN_EXPIRE_MINUTES=30
+      - XENDIT_CALLBACK_TOKEN_ARTACOMINDO=${STAGING_XENDIT_CALLBACK_TOKEN_ARTACOMINDO}
+      - XENDIT_CALLBACK_TOKEN_JELANTIK=${STAGING_XENDIT_CALLBACK_TOKEN_JELANTIK}
+      - XENDIT_API_KEY_JAKINET=${STAGING_XENDIT_API_KEY_JAKINET}
+      - XENDIT_API_KEY_JELANTIK=${STAGING_XENDIT_API_KEY_JELANTIK}
+      - ENCRYPTION_KEY=${STAGING_ENCRYPTION_KEY}
+      - ENVIRONMENT=staging
+      - LOG_LEVEL=INFO
+      - CORS_ORIGINS=${STAGING_CORS_ORIGINS:-https://staging.billing.yourdomain.com}
+    depends_on:
+      postgres-staging:
+        condition: service_healthy
+      redis-staging:
+        condition: service_healthy
+    ports:
+      - "8001:8000"
+    networks:
+      - billing-staging-network
+    restart: unless-stopped
+    volumes:
+      - ./logs/staging:/app/logs
+      - ./static:/app/static
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Frontend
+  frontend-staging:
+    image: ${REGISTRY:-ghcr.io/your-org}/${IMAGE_NAME:-billing-app}-frontend:staging
+    container_name: billing-frontend-staging
+    ports:
+      - "3001:80"
+    networks:
+      - billing-staging-network
+    restart: unless-stopped
+    depends_on:
+      - backend-staging
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Nginx reverse proxy
+  nginx-staging:
+    image: nginx:alpine
+    container_name: billing-nginx-staging
+    ports:
+      - "444:443"
+      - "81:80"
+    volumes:
+      - ./nginx/staging.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl/staging:/etc/nginx/ssl:ro
+      - ./logs/nginx-staging:/var/log/nginx
+    depends_on:
+      - backend-staging
+      - frontend-staging
+    networks:
+      - billing-staging-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Database migration service
+  migrate-staging:
+    image: ${REGISTRY:-ghcr.io/your-org}/${IMAGE_NAME:-billing-app}-backend:staging
+    container_name: billing-migrate-staging
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://${STAGING_DB_USER:-staging_user}:${STAGING_DB_PASSWORD}@postgres-staging:5432/${STAGING_DB_NAME:-billing_staging}
+    command: >
+      sh -c "alembic upgrade head"
+    depends_on:
+      postgres-staging:
+        condition: service_healthy
+    networks:
+      - billing-staging-network
+    restart: "no"
+
+  # Monitoring with Prometheus
+  prometheus-staging:
+    image: prom/prometheus:latest
+    container_name: billing-prometheus-staging
+    ports:
+      - "9091:9090"
+    volumes:
+      - ./monitoring/staging/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_staging_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    networks:
+      - billing-staging-network
+    restart: unless-stopped
+
+  # Grafana for monitoring dashboards
+  grafana-staging:
+    image: grafana/grafana:latest
+    container_name: billing-grafana-staging
+    ports:
+      - "3002:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${STAGING_GRAFANA_PASSWORD}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_staging_data:/var/lib/grafana
+      - ./monitoring/staging/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./monitoring/staging/grafana/datasources:/etc/grafana/provisioning/datasources
+    networks:
+      - billing-staging-network
+    restart: unless-stopped
+
+volumes:
+  postgres_staging_data:
+    driver: local
+  redis_staging_data:
+    driver: local
+  prometheus_staging_data:
+    driver: local
+  grafana_staging_data:
+    driver: local
+
+networks:
+  billing-staging-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

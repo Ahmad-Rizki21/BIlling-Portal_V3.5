@@ -12,7 +12,15 @@
     "electron:build": "vite build && electron-builder",
     "tauri": "tauri",
     "build-only": "vite build",
-    "type-check": "vue-tsc --build"
+    "type-check": "vue-tsc --build",
+    "lint": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --fix --ignore-path .gitignore",
+    "lint:check": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --ignore-path .gitignore",
+    "format": "prettier --write src/",
+    "format:check": "prettier --check src/",
+    "test:unit": "vitest",
+    "test:coverage": "vitest --coverage",
+    "test:e2e": "cypress run",
+    "test:e2e:dev": "cypress open"
   },
   "build": {
     "appId": "com.artacombilling.app",
