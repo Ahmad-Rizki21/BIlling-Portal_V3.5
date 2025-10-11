@@ -15,6 +15,7 @@
     "lint:check": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --ignore-path .gitignore",
     "format": "prettier --write src/",
     "format:check": "prettier --check src/",
+    "test": "vitest",
     "test:unit": "vitest",
     "test:coverage": "vitest --coverage",
     "test:e2e": "cypress run",
