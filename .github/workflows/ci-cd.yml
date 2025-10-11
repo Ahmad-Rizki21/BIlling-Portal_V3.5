@@ -209,19 +209,5 @@ jobs:
         # kubectl apply -f k8s/production/
 
   notify:
-    needs: [deploy-staging, deploy-production]
     runs-on: ubuntu-latest
-    if: always() && (needs.deploy-staging.result == 'success' || needs.deploy-production.result == 'success')
-
-    steps:
-    - name: Deployment Notification
-      run: |
-        echo "📢 Deployment completed successfully!"
-        echo "Repository: ${{ github.repository }}"
-        echo "Branch: ${{ github.ref }}"
-        echo "Commit: ${{ github.sha }}"
-
-        # You can add Slack/Discord notifications here:
-        # curl -X POST -H 'Content-type: application/json' \
-        #   --data '{"text":"✅ Deployment to '"${{ github.ref == 'refs/heads/main' && 'Production' || 'Staging' }}'" completed successfully!"}' \
-        #   ${{ secrets.SLACK_WEBHOOK_URL }}
+    needs: [deploy-staging, deploy-production]
