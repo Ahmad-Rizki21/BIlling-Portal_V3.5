@@ -90,3 +90,11 @@ NOTES.md
 # Documentation drafts
 *.md.tmp
 *~
+
+# CI/CD generated files
+bandit-report.json
+safety-report.json
+*-temp.json
+coverage.xml
+htmlcov/
+test-results.xml
