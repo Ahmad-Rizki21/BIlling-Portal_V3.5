@@ -21,16 +21,10 @@ class SensitiveDataFilter(logging.Filter):
             r".*(ktp|nik|no_ktp|no_ktp|nomor_ktp|ktp_number|identity|identitas).*",
             re.IGNORECASE,
         ),
-        "financial": re.compile(
-            r".*(credit|debit|card|kartu|rekening|account|acc).*", re.IGNORECASE
-        ),
-        "credentials": re.compile(
-            r".*(credential|creds|login|username|user).*", re.IGNORECASE
-        ),
+        "financial": re.compile(r".*(credit|debit|card|kartu|rekening|account|acc).*", re.IGNORECASE),
+        "credentials": re.compile(r".*(credential|creds|login|username|user).*", re.IGNORECASE),
         "address": re.compile(r".*(alamat|address|location|lokasi).*", re.IGNORECASE),
-        "phone": re.compile(
-            r".*(phone|telepon|telp|no_telp|phone_number|mobile).*", re.IGNORECASE
-        ),
+        "phone": re.compile(r".*(phone|telepon|telp|no_telp|phone_number|mobile).*", re.IGNORECASE),
         "email": re.compile(r".*(email|mail).*", re.IGNORECASE),
     }
 
@@ -180,9 +174,7 @@ class SensitiveDataFilter(logging.Filter):
             return False
 
         data = data.strip()
-        return (data.startswith("{") and data.endswith("}")) or (
-            data.startswith("[") and data.endswith("]")
-        )
+        return (data.startswith("{") and data.endswith("}")) or (data.startswith("[") and data.endswith("]"))
 
     def _contains_sensitive_patterns(self, data: str) -> bool:
         """
@@ -225,9 +217,7 @@ def sanitize_log_data(data: Union[Dict, str, Any]) -> Union[Dict, str, Any]:
     return filter_instance._filter_sensitive_data(data)
 
 
-def log_request_safe(
-    logger: logging.Logger, level: int, message: str, request_data: Dict | None = None
-):
+def log_request_safe(logger: logging.Logger, level: int, message: str, request_data: Dict | None = None):
     """
     Log request data safely by filtering sensitive information
 

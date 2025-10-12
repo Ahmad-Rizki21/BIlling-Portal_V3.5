@@ -37,7 +37,7 @@ class UnreadNotification(BaseModel):
     timestamp: str
     action: str
     type: str
-    details: Optional[dict] = None # Kembali ke dict
+    details: Optional[dict] = None  # Kembali ke dict
 
 
 class UnreadNotificationsResponse(BaseModel):
@@ -87,7 +87,7 @@ async def get_unread_notifications(
                 except json.JSONDecodeError:
                     # Fallback jika details bukan JSON valid
                     parsed_details = {"raw_details": notif.details}
-            
+
             # Pastikan parsed_details adalah dict jika tidak None
             if parsed_details is not None and not isinstance(parsed_details, dict):
                 parsed_details = {"raw_details": str(parsed_details)}
@@ -114,6 +114,7 @@ async def get_unread_notifications(
             detail="Failed to retrieve notifications",
         )
 
+
 @router.post("/mark-all-as-read", status_code=status.HTTP_200_OK)
 async def mark_all_as_read(current_user: UserModel = Depends(get_current_active_user)):
     """Marks all notifications for the current user as read."""
@@ -129,9 +130,7 @@ async def mark_as_read(notification_id: int, current_user: UserModel = Depends(g
 
 
 @router.websocket("/ws/notifications")
-async def websocket_endpoint(
-    websocket: WebSocket, token: str = Query(...), db: AsyncSession = Depends(get_db)
-):
+async def websocket_endpoint(websocket: WebSocket, token: str = Query(...), db: AsyncSession = Depends(get_db)):
     logger.info(f"WebSocket connection attempt with token: {token[:20]}...")
 
     try:
@@ -165,9 +164,7 @@ async def websocket_endpoint(
                 logger.info(f"WebSocket disconnected for user {user_id}")
                 break
             except Exception as e:
-                logger.error(
-                    f"Error in WebSocket message loop for user {user_id}: {str(e)}"
-                )
+                logger.error(f"Error in WebSocket message loop for user {user_id}: {str(e)}")
                 break
 
     except Exception as e:

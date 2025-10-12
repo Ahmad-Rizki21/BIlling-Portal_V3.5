@@ -4,12 +4,8 @@ import re
 
 
 class PaketLayananBase(BaseModel):
-    id_brand: str = Field(
-        ..., min_length=1, max_length=50, description="ID brand paket layanan"
-    )
-    nama_paket: str = Field(
-        ..., min_length=3, max_length=100, description="Nama paket layanan"
-    )
+    id_brand: str = Field(..., min_length=1, max_length=50, description="ID brand paket layanan")
+    nama_paket: str = Field(..., min_length=3, max_length=100, description="Nama paket layanan")
     kecepatan: int = Field(..., gt=0, le=10000, description="Kecepatan internet (Mbps)")
     harga: float = Field(..., gt=0, description="Harga paket per bulan")
 
@@ -44,9 +40,7 @@ class PaketLayananBase(BaseModel):
 
         # Check for valid characters
         if not re.match(r"^[a-zA-Z0-9\s\-\_\.\+\(\)]+$", v_str):
-            raise ValueError(
-                "Nama paket hanya boleh mengandung huruf, angka, spasi, dan karakter khusus (-_+.())"
-            )
+            raise ValueError("Nama paket hanya boleh mengandung huruf, angka, spasi, dan karakter khusus (-_+.())")
 
         return v_str
 
@@ -90,12 +84,8 @@ class PaketLayananCreate(PaketLayananBase):
 
 
 class PaketLayananUpdate(BaseModel):
-    nama_paket: Optional[str] = Field(
-        None, min_length=3, max_length=100, description="Nama paket layanan"
-    )
-    kecepatan: Optional[int] = Field(
-        None, gt=0, le=10000, description="Kecepatan internet (Mbps)"
-    )
+    nama_paket: Optional[str] = Field(None, min_length=3, max_length=100, description="Nama paket layanan")
+    kecepatan: Optional[int] = Field(None, gt=0, le=10000, description="Kecepatan internet (Mbps)")
     harga: Optional[float] = Field(None, gt=0, description="Harga paket per bulan")
 
     @validator("nama_paket", pre=True)
@@ -115,9 +105,7 @@ class PaketLayananUpdate(BaseModel):
 
         # Check for valid characters
         if not re.match(r"^[a-zA-Z0-9\s\-\_\.\+\(\)]+$", v_str):
-            raise ValueError(
-                "Nama paket hanya boleh mengandung huruf, angka, spasi, dan karakter khusus (-_+.())"
-            )
+            raise ValueError("Nama paket hanya boleh mengandung huruf, angka, spasi, dan karakter khusus (-_+.())")
 
         return v_str
 

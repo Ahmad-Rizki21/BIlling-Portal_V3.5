@@ -71,11 +71,7 @@ async def test_delete_pelanggan(client: AsyncClient, auth_headers: dict, sample_
 @pytest.mark.pelanggan
 async def test_create_pelanggan_invalid_data(client: AsyncClient, auth_headers: dict):
     """Test creating pelanggan with invalid data."""
-    invalid_data = {
-        "nama": "",  # Empty name
-        "email": "invalid-email",  # Invalid email
-        "no_telepon": ""  # Empty phone
-    }
+    invalid_data = {"nama": "", "email": "invalid-email", "no_telepon": ""}  # Empty name  # Invalid email  # Empty phone
     response = await client.post("/pelanggan/", json=invalid_data, headers=auth_headers)
     assert response.status_code == 422
 

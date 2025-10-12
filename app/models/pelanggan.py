@@ -28,25 +28,17 @@ class Pelanggan(Base):
     unit: Mapped[str] = mapped_column(String(191))
     no_telp: Mapped[str] = mapped_column(String(191), index=True)
     email: Mapped[str] = mapped_column(String(191), unique=True, index=True)
-    id_brand: Mapped[str | None] = mapped_column(
-        ForeignKey("harga_layanan.id_brand"), index=True
-    )
+    id_brand: Mapped[str | None] = mapped_column(ForeignKey("harga_layanan.id_brand"), index=True)
     layanan: Mapped[str | None] = mapped_column(String(191))
     brand_default: Mapped[str | None] = mapped_column(String(191))
 
     # --- TAMBAHAN PENTING ---
-    mikrotik_server_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("mikrotik_servers.id")
-    )
-    mikrotik_server: Mapped[Optional["MikrotikServer"]] = relationship(
-        back_populates="pelanggan"
-    )
+    mikrotik_server_id: Mapped[Optional[int]] = mapped_column(ForeignKey("mikrotik_servers.id"))
+    mikrotik_server: Mapped[Optional["MikrotikServer"]] = relationship(back_populates="pelanggan")
     # --- AKHIR TAMBAHAN ---
 
     # Relationships
-    data_teknis: Mapped["DataTeknis"] = relationship(
-        back_populates="pelanggan", uselist=False, cascade="all, delete-orphan"
-    )
+    data_teknis: Mapped["DataTeknis"] = relationship(back_populates="pelanggan", uselist=False, cascade="all, delete-orphan")
     langganan: Mapped[list["Langganan"]] = relationship(back_populates="pelanggan")
     invoices: Mapped[list["Invoice"]] = relationship(back_populates="pelanggan")
     harga_layanan: Mapped["HargaLayanan"] = relationship(foreign_keys=[id_brand])

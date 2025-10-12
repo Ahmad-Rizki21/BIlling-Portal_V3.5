@@ -30,33 +30,25 @@ class Invoice(Base):
     # OPTIMIZED index strategy - Hanya index yang BENAR-BENAR PENTING
     # Total: 10 indexes (dari 15+) untuk balance performa read/write
     __table_args__ = (
-        CheckConstraint(
-            "pelanggan_id IS NOT NULL", name="ck_invoice_pelanggan_id_not_null"
-        ),
+        CheckConstraint("pelanggan_id IS NOT NULL", name="ck_invoice_pelanggan_id_not_null"),
         # CORE indexes untuk query kritis yang sering digunakan
-        Index('idx_invoice_customer_status', 'pelanggan_id', 'status_invoice'),           # Customer dashboard
-        Index('idx_invoice_status_brand', 'status_invoice', 'brand'),                   # Dashboard filtering
-        Index('idx_invoice_date_range', 'tgl_invoice', 'tgl_jatuh_tempo'),           # Date filtering
-        Index('idx_invoice_payment_tracking', 'status_invoice', 'paid_at'),             # Payment tracking
-
+        Index("idx_invoice_customer_status", "pelanggan_id", "status_invoice"),  # Customer dashboard
+        Index("idx_invoice_status_brand", "status_invoice", "brand"),  # Dashboard filtering
+        Index("idx_invoice_date_range", "tgl_invoice", "tgl_jatuh_tempo"),  # Date filtering
+        Index("idx_invoice_payment_tracking", "status_invoice", "paid_at"),  # Payment tracking
         # PERFORMANCE indexes untuk dashboard revenue
-        Index('idx_invoice_revenue_analysis', 'status_invoice', 'tgl_invoice', 'total_harga'),  # Revenue dashboard
-        Index('idx_invoice_late_payment', 'paid_at', 'tgl_jatuh_tempo'),                 # Loyalty analysis
-        Index('idx_invoice_brand_revenue', 'brand', 'tgl_invoice', 'total_harga'),      # Brand reporting
-
+        Index("idx_invoice_revenue_analysis", "status_invoice", "tgl_invoice", "total_harga"),  # Revenue dashboard
+        Index("idx_invoice_late_payment", "paid_at", "tgl_jatuh_tempo"),  # Loyalty analysis
+        Index("idx_invoice_brand_revenue", "brand", "tgl_invoice", "total_harga"),  # Brand reporting
         # INTEGRATION indexes untuk payment processing
-        Index('idx_invoice_xendit_lookup', 'xendit_id', 'status_invoice'),              # Xendit callback
-        Index('idx_invoice_number_lookup', 'invoice_number', 'status_invoice'),          # Invoice search
-        Index('idx_invoice_payment_method', 'metode_pembayaran', 'status_invoice'),    # Payment analysis
+        Index("idx_invoice_xendit_lookup", "xendit_id", "status_invoice"),  # Xendit callback
+        Index("idx_invoice_number_lookup", "invoice_number", "status_invoice"),  # Invoice search
+        Index("idx_invoice_payment_method", "metode_pembayaran", "status_invoice"),  # Payment analysis
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, index=True)
-    invoice_number: Mapped[str] = mapped_column(
-        String(191), unique=True, index=True
-    )  # Unique index untuk invoice lookup
-    pelanggan_id: Mapped[int] = mapped_column(
-        ForeignKey("pelanggan.id"), nullable=False
-    )  # Foreign key index otomatis dibuat
+    invoice_number: Mapped[str] = mapped_column(String(191), unique=True, index=True)  # Unique index untuk invoice lookup
+    pelanggan_id: Mapped[int] = mapped_column(ForeignKey("pelanggan.id"), nullable=False)  # Foreign key index otomatis dibuat
     id_pelanggan: Mapped[str] = mapped_column(String(255))  # Tidak perlu index, jarang diquery
     brand: Mapped[str] = mapped_column(String(191))  # Sudah ada di composite index
     total_harga: Mapped[float] = mapped_column(Numeric(15, 2))  # Sudah ada di composite index
@@ -73,9 +65,7 @@ class Invoice(Base):
     paid_amount: Mapped[float | None] = mapped_column(Numeric(15, 2))  # Tidak perlu index
     paid_at: Mapped[datetime | None] = mapped_column(TIMESTAMP)  # Sudah ada di composite index
     is_processing: Mapped[bool] = mapped_column(Boolean, default=False)  # Tidak perlu index
-    created_at: Mapped[datetime | None] = mapped_column(
-        DateTime, server_default=func.now()
-    )  # Tidak perlu index
+    created_at: Mapped[datetime | None] = mapped_column(DateTime, server_default=func.now())  # Tidak perlu index
     updated_at: Mapped[datetime | None] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now()
     )  # Tidak perlu index
@@ -112,7 +102,7 @@ class Invoice(Base):
             except:
                 try:
                     # Approach 2: Gunakan datetime parsing
-                    invoice_date = datetime.strptime(str(self.tgl_invoice), '%Y-%m-%d').date()
+                    invoice_date = datetime.strptime(str(self.tgl_invoice), "%Y-%m-%d").date()
                 except:
                     # Approach 3: Fallback ke default 10 hari
                     expiry_date = today + timedelta(days=10)

@@ -14,26 +14,24 @@ if TYPE_CHECKING:
 
 class DataTeknis(Base):
     __tablename__ = "data_teknis"
-    
+
     # OPTIMIZED index strategy - Hanya index yang BENAR-BENAR PENTING
     # Total: 12 indexes (dari 20+) untuk 70% lebih fast write operations
     __table_args__ = (
         # CORE indexes untuk query kritis yang sering digunakan
-        Index('idx_datateknis_sync_pending', 'mikrotik_sync_pending'),  # Sync operations
-        Index('idx_datateknis_pelanggan_id', 'pelanggan_id'),          # Foreign key lookup
-        Index('idx_datateknis_ip_pelanggan', 'ip_pelanggan'),            # Network management
-        Index('idx_datateknis_password_pppoe', 'password_pppoe'),       # PPPoE authentication
-
+        Index("idx_datateknis_sync_pending", "mikrotik_sync_pending"),  # Sync operations
+        Index("idx_datateknis_pelanggan_id", "pelanggan_id"),  # Foreign key lookup
+        Index("idx_datateknis_ip_pelanggan", "ip_pelanggan"),  # Network management
+        Index("idx_datateknis_password_pppoe", "password_pppoe"),  # PPPoE authentication
         # COMPOSITE indexes untuk query pattern yang sering digunakan bersama
-        Index('idx_datateknis_customer_network', 'pelanggan_id', 'ip_pelanggan'),  # Customer network lookup
-        Index('idx_datateknis_mikrotik_vlan', 'mikrotik_server_id', 'id_vlan'),     # Server-VLAN mapping
-        Index('idx_datateknis_sync_status', 'mikrotik_sync_pending', 'pelanggan_id'), # Sync status by customer
-        Index('idx_datateknis_odp_location', 'odp_id', 'port_odp'),                     # ODP port management
-
+        Index("idx_datateknis_customer_network", "pelanggan_id", "ip_pelanggan"),  # Customer network lookup
+        Index("idx_datateknis_mikrotik_vlan", "mikrotik_server_id", "id_vlan"),  # Server-VLAN mapping
+        Index("idx_datateknis_sync_status", "mikrotik_sync_pending", "pelanggan_id"),  # Sync status by customer
+        Index("idx_datateknis_odp_location", "odp_id", "port_odp"),  # ODP port management
         # PERFORMANCE indexes untuk dashboard dan reporting
-        Index('idx_datateknis_pppoe_credentials', 'id_pelanggan', 'password_pppoe'),  # PPPoE credential validation
-        Index('idx_datateknis_olt_port', 'olt', 'pon'),                                # OLT port utilization
-        Index('idx_datateknis_onu_status', 'onu_power', 'mikrotik_sync_pending'),      # ONU signal monitoring
+        Index("idx_datateknis_pppoe_credentials", "id_pelanggan", "password_pppoe"),  # PPPoE credential validation
+        Index("idx_datateknis_olt_port", "olt", "pon"),  # OLT port utilization
+        Index("idx_datateknis_onu_status", "onu_power", "mikrotik_sync_pending"),  # ONU signal monitoring
         # Index('idx_datateknis_customer_sync', 'pelanggan_id', 'mikrotik_sync_pending'),
         # Index('idx_datateknis_server_sync', 'mikrotik_server_id', 'mikrotik_sync_pending'),
         # Index('idx_datateknis_odp_sync', 'odp_id', 'mikrotik_sync_pending'),
@@ -49,15 +47,11 @@ class DataTeknis(Base):
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, index=True)
-    pelanggan_id: Mapped[int] = mapped_column(
-        ForeignKey("pelanggan.id"), unique=True, index=True
-    )
+    pelanggan_id: Mapped[int] = mapped_column(ForeignKey("pelanggan.id"), unique=True, index=True)
     id_vlan: Mapped[str | None] = mapped_column(String(191), nullable=True, index=True)
     id_pelanggan: Mapped[str] = mapped_column(String(191), index=True)
     password_pppoe: Mapped[str] = mapped_column(String(191), index=True)
-    ip_pelanggan: Mapped[str | None] = mapped_column(
-        String(191), nullable=True, index=True
-    )
+    ip_pelanggan: Mapped[str | None] = mapped_column(String(191), nullable=True, index=True)
     profile_pppoe: Mapped[str | None] = mapped_column(String(191), nullable=True, index=True)
     olt: Mapped[str | None] = mapped_column(String(191), nullable=True, index=True)
     olt_custom: Mapped[str | None] = mapped_column(String(191), nullable=True, index=True)
@@ -74,12 +68,8 @@ class DataTeknis(Base):
 
     mikrotik_sync_pending = Column(Boolean, default=False, nullable=False, index=True)
 
-    mikrotik_server_id: Mapped[int | None] = mapped_column(
-        ForeignKey("mikrotik_servers.id"), index=True
-    )
-    mikrotik_server: Mapped["MikrotikServer"] = relationship(
-        "MikrotikServer", back_populates="data_teknis_records"
-    )
+    mikrotik_server_id: Mapped[int | None] = mapped_column(ForeignKey("mikrotik_servers.id"), index=True)
+    mikrotik_server: Mapped["MikrotikServer"] = relationship("MikrotikServer", back_populates="data_teknis_records")
 
     # Kolom foreign key untuk relasi ODP
     odp_id: Mapped[int | None] = mapped_column(ForeignKey("odp.id"), index=True)

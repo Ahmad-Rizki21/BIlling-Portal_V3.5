@@ -3,6 +3,7 @@ Memory optimization utilities untuk handling large datasets efficiently.
 """
 
 import asyncio
+
 try:
     import psutil
 except ImportError:
@@ -23,6 +24,7 @@ MEMORY_WARNING_THRESHOLD = 80  # Warning at 80% memory usage
 MEMORY_CRITICAL_THRESHOLD = 90  # Critical at 90% memory usage
 DEFAULT_BATCH_SIZE = 1000
 MAX_EXPORT_BATCH_SIZE = 5000
+
 
 class MemoryMonitor:
     """Monitor memory usage dan log warnings jika needed."""
@@ -90,23 +92,19 @@ class MemoryMonitor:
             return None
 
         current_snapshot = tracemalloc.take_snapshot()
-        top_stats = current_snapshot.compare_to(self.snapshot, 'lineno')
+        top_stats = current_snapshot.compare_to(self.snapshot, "lineno")
 
         total_diff = sum(stat.size_diff for stat in top_stats)
         self.snapshot = current_snapshot
 
-        return {
-            "total_diff_mb": total_diff / 1024 / 1024,
-            "top_stats": top_stats[:10]  # Top 10 memory allocations
-        }
+        return {"total_diff_mb": total_diff / 1024 / 1024, "top_stats": top_stats[:10]}  # Top 10 memory allocations
+
 
 memory_monitor = MemoryMonitor()
 
+
 async def execute_with_memory_monitor(
-    session: AsyncSession,
-    query: Any,
-    operation_name: str = "query",
-    batch_size: int = DEFAULT_BATCH_SIZE
+    session: AsyncSession, query: Any, operation_name: str = "query", batch_size: int = DEFAULT_BATCH_SIZE
 ) -> AsyncGenerator[Sequence[Any], Any]:
     """
     Execute query dengan memory monitoring dan streaming results.
@@ -138,12 +136,9 @@ async def execute_with_memory_monitor(
 
             # Log memory usage for this batch
             current_memory = memory_monitor.get_memory_usage()
-            memory_diff = current_memory['rss_mb'] - initial_memory['rss_mb']
+            memory_diff = current_memory["rss_mb"] - initial_memory["rss_mb"]
 
-            logger.info(
-                f"📦 Processing batch {offset//batch_size + 1} "
-                f"({len(batch)} records, +{memory_diff:.1f}MB)"
-            )
+            logger.info(f"📦 Processing batch {offset//batch_size + 1} " f"({len(batch)} records, +{memory_diff:.1f}MB)")
 
             # Check memory status
             status = memory_monitor.check_memory_status()
@@ -166,7 +161,7 @@ async def execute_with_memory_monitor(
         raise
     finally:
         final_memory = memory_monitor.get_memory_usage()
-        memory_diff = final_memory['rss_mb'] - initial_memory['rss_mb']
+        memory_diff = final_memory["rss_mb"] - initial_memory["rss_mb"]
 
         logger.info(
             f"✅ Completed {operation_name}: "
@@ -180,10 +175,9 @@ async def execute_with_memory_monitor(
             if diff_details:
                 logger.info(f"🔍 Memory allocation details: {diff_details['total_diff_mb']:.1f}MB change")
 
+
 def optimize_large_list_comprehension(
-    data: List[Any],
-    transform_func: Callable[[Any], Any],
-    batch_size: int = DEFAULT_BATCH_SIZE
+    data: List[Any], transform_func: Callable[[Any], Any], batch_size: int = DEFAULT_BATCH_SIZE
 ) -> List[Any]:
     """
     Optimize large list comprehensions dengan processing berbasis batch.
@@ -205,7 +199,7 @@ def optimize_large_list_comprehension(
     logger.info(f"🔄 Processing {total_items} items in batches of {batch_size}")
 
     for i in range(0, total_items, batch_size):
-        batch = data[i:i + batch_size]
+        batch = data[i : i + batch_size]
         batch_result = [transform_func(item) for item in batch]
         result.extend(batch_result)
 
@@ -224,10 +218,9 @@ def optimize_large_list_comprehension(
 
     return result
 
+
 async def create_streaming_csv_response(
-    data_generator: AsyncGenerator[List[dict], None],
-    filename: str,
-    headers: List[str]
+    data_generator: AsyncGenerator[List[dict], None], filename: str, headers: List[str]
 ) -> AsyncGenerator[str, None]:
     """
     Create streaming CSV response untuk mengurangi memory usage.
@@ -264,6 +257,7 @@ async def create_streaming_csv_response(
         # Small delay to allow memory cleanup
         await asyncio.sleep(0.001)
 
+
 def get_safe_export_limit(requested_limit: int) -> int:
     """
     Get safe export limit berdasarkan available memory.
@@ -292,6 +286,7 @@ def get_safe_export_limit(requested_limit: int) -> int:
 
     return safe_limit
 
+
 async def force_garbage_collection_if_needed() -> bool:
     """
     Force garbage collection jika memory usage tinggi.
@@ -309,7 +304,7 @@ async def force_garbage_collection_if_needed() -> bool:
         await asyncio.sleep(0.1)  # Allow time for GC to complete
 
         after_gc = memory_monitor.get_memory_usage()
-        freed_memory = before_gc['rss_mb'] - after_gc['rss_mb']
+        freed_memory = before_gc["rss_mb"] - after_gc["rss_mb"]
 
         logger.info(f"✅ Garbage collection freed {freed_memory:.1f}MB")
         return True

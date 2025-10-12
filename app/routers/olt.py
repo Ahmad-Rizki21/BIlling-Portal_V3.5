@@ -40,9 +40,7 @@ async def get_all_olts(db: AsyncSession = Depends(get_db)):
 
 
 @router.patch("/{olt_id}", response_model=OLTSchema)
-async def update_olt(
-    olt_id: int, olt_data: OLTUpdate, db: AsyncSession = Depends(get_db)
-):
+async def update_olt(olt_id: int, olt_data: OLTUpdate, db: AsyncSession = Depends(get_db)):
     db_olt = await db.get(OLTModel, olt_id)
     if not db_olt:
         raise HTTPException(status_code=404, detail="OLT not found")
@@ -76,14 +74,12 @@ def _perform_netmiko_connection(olt_details: dict):
         olt_details["session_log"] = "netmiko_session.log"
         olt_details["global_delay_factor"] = 2  # Memberi jeda lebih lama antar perintah
         olt_details["banner_timeout"] = 20  # Waktu tunggu lebih lama untuk banner login
-        olt_details["blocking_timeout"] = (
-            20  # Waktu tunggu lebih lama untuk eksekusi perintah
-        )
-        
+        olt_details["blocking_timeout"] = 20  # Waktu tunggu lebih lama untuk eksekusi perintah
+
         # Hapus key yang tidak diperlukan oleh Netmiko
         clean_details = olt_details.copy()
         # Hapus key internal yang tidak diperlukan Netmiko
-        for key in ['session_log']:
+        for key in ["session_log"]:
             clean_details.pop(key, None)
 
         with ConnectHandler(**olt_details) as net_connect:

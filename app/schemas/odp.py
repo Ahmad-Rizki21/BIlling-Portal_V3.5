@@ -36,9 +36,7 @@ class ODPBase(BaseModel):
     # --- ▼▼▼ PERUBAHAN DI SINI ▼▼▼ ---
     latitude: Optional[float] = Field(None, description="Garis Lintang lokasi ODP")
     longitude: Optional[float] = Field(None, description="Garis Bujur lokasi ODP")
-    parent_odp_id: Optional[int] = Field(
-        None, description="ID dari ODP induk/sebelumnya"
-    )
+    parent_odp_id: Optional[int] = Field(None, description="ID dari ODP induk/sebelumnya")
     # --- ▲▲▲ AKHIR PERUBAHAN ▲▲▲ ---
 
 

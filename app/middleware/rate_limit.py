@@ -64,14 +64,10 @@ class RateLimiter:
         # Clean old failed attempts (15 minutes window)
         window_seconds = 900  # 15 minutes
         self.failed_logins[key_ip] = [
-            attempt
-            for attempt in self.failed_logins[key_ip]
-            if current_time - attempt < window_seconds
+            attempt for attempt in self.failed_logins[key_ip] if current_time - attempt < window_seconds
         ]
         self.failed_logins[key_user] = [
-            attempt
-            for attempt in self.failed_logins[key_user]
-            if current_time - attempt < window_seconds
+            attempt for attempt in self.failed_logins[key_user] if current_time - attempt < window_seconds
         ]
 
         # Add current failed attempt
@@ -85,16 +81,12 @@ class RateLimiter:
         if len(self.failed_logins[key_ip]) >= max_ip_attempts:
             # Block IP for 1 hour
             self.blocked_ips[client_ip] = current_time + 3600
-            logger.warning(
-                f"Blocking IP {client_ip} due to {max_ip_attempts} failed login attempts"
-            )
+            logger.warning(f"Blocking IP {client_ip} due to {max_ip_attempts} failed login attempts")
 
         if len(self.failed_logins[key_user]) >= max_user_attempts:
             # Block user for 30 minutes
             self.blocked_users[username.lower()] = current_time + 1800
-            logger.warning(
-                f"Blocking user {username} due to {max_user_attempts} failed login attempts"
-            )
+            logger.warning(f"Blocking user {username} due to {max_user_attempts} failed login attempts")
 
     def reset_failed_attempts(self, client_ip: str, username: str):
         """Reset failed login attempts on successful login"""
@@ -137,11 +129,7 @@ class RateLimiter:
         current_time = time.time()
 
         # Clean old requests outside the window
-        self.requests[key] = [
-            req_time
-            for req_time in self.requests[key]
-            if current_time - req_time < window_seconds
-        ]
+        self.requests[key] = [req_time for req_time in self.requests[key] if current_time - req_time < window_seconds]
 
         # Check rate limit
         request_count = len(self.requests[key])
@@ -185,22 +173,14 @@ class RateLimiter:
         current_time = time.time()
 
         # Clean old attempts
-        self.requests[key] = [
-            req_time
-            for req_time in self.requests[key]
-            if current_time - req_time < window_seconds
-        ]
+        self.requests[key] = [req_time for req_time in self.requests[key] if current_time - req_time < window_seconds]
 
         # Check if exceeds max attempts
         if len(self.requests[key]) >= max_attempts:
             # Block further login attempts for this user
             client_ip = self._get_client_ip(request)
-            self.blocked_users[username_lower] = (
-                current_time + 1800
-            )  # Block user for 30 minutes
-            logger.warning(
-                f"Brute force attempt detected for user {username} from IP {client_ip}"
-            )
+            self.blocked_users[username_lower] = current_time + 1800  # Block user for 30 minutes
+            logger.warning(f"Brute force attempt detected for user {username} from IP {client_ip}")
             return True
 
         # Add current attempt
@@ -213,9 +193,7 @@ rate_limiter = RateLimiter()
 
 
 # Rate limiting decorators
-def rate_limit(
-    max_requests: int = 100, window_seconds: int = 3600, endpoint_specific: bool = False
-):
+def rate_limit(max_requests: int = 100, window_seconds: int = 3600, endpoint_specific: bool = False):
     """Decorator for rate limiting endpoints"""
 
     def decorator(func):
@@ -230,9 +208,7 @@ def rate_limit(
                 request = kwargs["request"]
 
             if request:
-                is_limited, info = rate_limiter.is_rate_limited(
-                    request, max_requests, window_seconds, endpoint_specific
-                )
+                is_limited, info = rate_limiter.is_rate_limited(request, max_requests, window_seconds, endpoint_specific)
                 if is_limited:
                     raise HTTPException(
                         status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -286,9 +262,7 @@ def login_rate_limit(max_attempts: int = 5, window_seconds: int = 900):
                         pass
 
                 if username:
-                    if rate_limiter.is_brute_force_login(
-                        request, username, max_attempts, window_seconds
-                    ):
+                    if rate_limiter.is_brute_force_login(request, username, max_attempts, window_seconds):
                         raise HTTPException(
                             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                             detail={

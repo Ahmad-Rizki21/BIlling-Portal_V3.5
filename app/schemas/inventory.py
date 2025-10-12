@@ -5,20 +5,14 @@ import re
 
 
 class InventoryItemBase(BaseModel):
-    serial_number: str = Field(
-        ..., min_length=1, max_length=100, description="Nomor serial perangkat"
-    )
+    serial_number: str = Field(..., min_length=1, max_length=100, description="Nomor serial perangkat")
     mac_address: Optional[str] = Field(
         None,
         max_length=17,
         description="Alamat MAC perangkat (format: XX:XX:XX:XX:XX:XX)",
     )
-    location: Optional[str] = Field(
-        None, max_length=200, description="Lokasi perangkat"
-    )
-    purchase_date: Optional[date] = Field(
-        None, description="Tanggal pembelian perangkat"
-    )
+    location: Optional[str] = Field(None, max_length=200, description="Lokasi perangkat")
+    purchase_date: Optional[date] = Field(None, description="Tanggal pembelian perangkat")
     notes: Optional[str] = Field(None, max_length=500, description="Catatan tambahan")
     item_type_id: int = Field(..., gt=0, description="ID tipe perangkat")
     status_id: int = Field(..., gt=0, description="ID status perangkat")
@@ -149,20 +143,14 @@ class InventoryItemCreate(InventoryItemBase):
 
 
 class InventoryItemUpdate(BaseModel):
-    serial_number: Optional[str] = Field(
-        None, min_length=1, max_length=100, description="Nomor serial perangkat"
-    )
+    serial_number: Optional[str] = Field(None, min_length=1, max_length=100, description="Nomor serial perangkat")
     mac_address: Optional[str] = Field(
         None,
         max_length=17,
         description="Alamat MAC perangkat (format: XX:XX:XX:XX:XX:XX)",
     )
-    location: Optional[str] = Field(
-        None, max_length=200, description="Lokasi perangkat"
-    )
-    purchase_date: Optional[date] = Field(
-        None, description="Tanggal pembelian perangkat"
-    )
+    location: Optional[str] = Field(None, max_length=200, description="Lokasi perangkat")
+    purchase_date: Optional[date] = Field(None, description="Tanggal pembelian perangkat")
     notes: Optional[str] = Field(None, max_length=500, description="Catatan tambahan")
     item_type_id: Optional[int] = Field(None, gt=0, description="ID tipe perangkat")
     status_id: Optional[int] = Field(None, gt=0, description="ID status perangkat")
@@ -200,15 +188,11 @@ class InventoryItemUpdate(BaseModel):
 
         # Check if it's a valid MAC address (12 hex characters)
         if len(v_clean) != 12:
-            raise ValueError(
-                "Alamat MAC harus terdiri dari 12 karakter hexadesimal (0-9, A-F)"
-            )
+            raise ValueError("Alamat MAC harus terdiri dari 12 karakter hexadesimal (0-9, A-F)")
 
         # Validate that all characters are valid hex characters
         if not all(c in "0123456789ABCDEF" for c in v_clean):
-            raise ValueError(
-                "Alamat MAC hanya boleh mengandung karakter hexadesimal (0-9, A-F)"
-            )
+            raise ValueError("Alamat MAC hanya boleh mengandung karakter hexadesimal (0-9, A-F)")
 
         # Format as XX:XX:XX:XX:XX:XX
         formatted_mac = ":".join([v_clean[i : i + 2] for i in range(0, 12, 2)])
@@ -281,9 +265,7 @@ class InventoryItemUpdate(BaseModel):
 
 class InventoryItemType(BaseModel):
     id: int
-    name: str = Field(
-        ..., min_length=1, max_length=100, description="Nama tipe perangkat"
-    )
+    name: str = Field(..., min_length=1, max_length=100, description="Nama tipe perangkat")
 
     class Config:
         from_attributes = True
@@ -309,9 +291,7 @@ class InventoryItemType(BaseModel):
 
 class InventoryStatus(BaseModel):
     id: int
-    name: str = Field(
-        ..., min_length=1, max_length=50, description="Nama status perangkat"
-    )
+    name: str = Field(..., min_length=1, max_length=50, description="Nama status perangkat")
 
     class Config:
         from_attributes = True

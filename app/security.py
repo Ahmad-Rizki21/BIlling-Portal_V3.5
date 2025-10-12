@@ -5,6 +5,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
 # Inisialisasi cipher suite dengan kunci rahasia dari file config Anda
 def get_cipher_suite():
     """Get cipher suite with proper key handling"""
@@ -33,6 +34,7 @@ def get_cipher_suite():
         new_key = Fernet.generate_key()
         return Fernet(new_key)
 
+
 cipher_suite = get_cipher_suite()
 
 
@@ -48,18 +50,19 @@ def encrypt_password(password: str) -> str:
         logger.error(f"Error encrypting password: {type(e).__name__}")
         return password  # Return original if encryption fails
 
+
 def decrypt_password(encrypted_password: str) -> str:
     """Mendekripsi password yang sudah terenkripsi."""
     if not encrypted_password:
         return ""
 
     # Check if the password is a bcrypt hash (starts with $2b$ or $2a$)
-    if encrypted_password.startswith(('$2b$', '$2a$')):
+    if encrypted_password.startswith(("$2b$", "$2a$")):
         # Password sudah dalam bentuk bcrypt hash, kembalikan sebagai-is untuk verifikasi
         return encrypted_password
 
     # Check if the password does not appear to be a valid Fernet token.
-    if not (isinstance(encrypted_password, str) and encrypted_password.startswith('gAAAAAB')):
+    if not (isinstance(encrypted_password, str) and encrypted_password.startswith("gAAAAAB")):
         # Jika bukan token Fernet, asumsikan ini adalah password plain text (untuk backward compatibility)
         return encrypted_password
 
@@ -71,6 +74,8 @@ def decrypt_password(encrypted_password: str) -> str:
     except Exception as e:
         # If decryption fails, it is a critical error. Do not suppress it.
         # This is most likely due to an incorrect ENCRYPTION_KEY.
-        logger.error(f"FATAL: Error decrypting password. This is likely due to an incorrect ENCRYPTION_KEY. Error: {type(e).__name__}")
+        logger.error(
+            f"FATAL: Error decrypting password. This is likely due to an incorrect ENCRYPTION_KEY. Error: {type(e).__name__}"
+        )
         # Raise a specific exception that can be caught upstream.
         raise ValueError("Decryption failed. The encryption key may be incorrect or the data is corrupted.")

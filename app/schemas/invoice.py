@@ -15,9 +15,7 @@ class InvoiceGenerate(BaseModel):
     Ini adalah satu-satunya data yang dibutuhkan dari user/frontend.
     """
 
-    langganan_id: int = Field(
-        ..., gt=0, description="ID langganan yang akan dibuatkan invoice"
-    )
+    langganan_id: int = Field(..., gt=0, description="ID langganan yang akan dibuatkan invoice")
 
     @validator("langganan_id", pre=True)
     def validate_langganan_id(cls, v):
@@ -47,26 +45,14 @@ class InvoiceUpdate(BaseModel):
     Semua field bersifat opsional.
     """
 
-    status_invoice: Optional[str] = Field(
-        None, max_length=50, description="Status invoice"
-    )
-    payment_link: Optional[str] = Field(
-        None, max_length=500, description="Link pembayaran"
-    )
-    expiry_date: Optional[datetime] = Field(
-        None, description="Tanggal kadaluarsa invoice"
-    )
-    xendit_id: Optional[str] = Field(
-        None, max_length=100, description="ID invoice di Xendit"
-    )
-    xendit_external_id: Optional[str] = Field(
-        None, max_length=200, description="External ID invoice di Xendit"
-    )
+    status_invoice: Optional[str] = Field(None, max_length=50, description="Status invoice")
+    payment_link: Optional[str] = Field(None, max_length=500, description="Link pembayaran")
+    expiry_date: Optional[datetime] = Field(None, description="Tanggal kadaluarsa invoice")
+    xendit_id: Optional[str] = Field(None, max_length=100, description="ID invoice di Xendit")
+    xendit_external_id: Optional[str] = Field(None, max_length=200, description="External ID invoice di Xendit")
     paid_amount: Optional[float] = Field(None, ge=0, description="Jumlah pembayaran")
     paid_at: Optional[datetime] = Field(None, description="Waktu pembayaran")
-    pelanggan_id: Optional[int] = Field(
-        None, gt=0, description="ID pelanggan (harus > 0)"
-    )
+    pelanggan_id: Optional[int] = Field(None, gt=0, description="ID pelanggan (harus > 0)")
 
     @validator("status_invoice", pre=True)
     def validate_status_invoice(cls, v):
@@ -83,9 +69,7 @@ class InvoiceUpdate(BaseModel):
         # Valid status values
         valid_statuses = ["Belum Dibayar", "Lunas", "Kadaluarsa", "Dibatalkan"]
         if v_str not in valid_statuses:
-            raise ValueError(
-                f"Status invoice tidak valid. Pilihan yang tersedia: {', '.join(valid_statuses)}"
-            )
+            raise ValueError(f"Status invoice tidak valid. Pilihan yang tersedia: {', '.join(valid_statuses)}")
 
         return v_str
 
@@ -131,9 +115,7 @@ class InvoiceUpdate(BaseModel):
             return None
 
         if len(v_str) > 200:
-            raise ValueError(
-                "External ID Xendit terlalu panjang (maksimal 200 karakter)"
-            )
+            raise ValueError("External ID Xendit terlalu panjang (maksimal 200 karakter)")
 
         return v_str
 
@@ -182,9 +164,7 @@ class InvoiceUpdate(BaseModel):
 class MarkAsPaidRequest(BaseModel):
     """Skema input untuk menandai lunas secara manual."""
 
-    metode_pembayaran: str = Field(
-        "Cash", max_length=50, description="Metode pembayaran"
-    )
+    metode_pembayaran: str = Field("Cash", max_length=50, description="Metode pembayaran")
 
     @validator("metode_pembayaran", pre=True)
     def validate_metode_pembayaran(cls, v):
@@ -201,9 +181,7 @@ class MarkAsPaidRequest(BaseModel):
         # Valid payment methods
         valid_methods = ["Cash", "Transfer Bank", "E-Wallet", "Lainnya"]
         if v_str not in valid_methods:
-            raise ValueError(
-                f"Metode pembayaran tidak valid. Pilihan yang tersedia: {', '.join(valid_methods)}"
-            )
+            raise ValueError(f"Metode pembayaran tidak valid. Pilihan yang tersedia: {', '.join(valid_methods)}")
 
         return v_str
 
@@ -224,17 +202,13 @@ class InvoiceBase(BaseModel):
     Skema dasar yang berisi field-field utama dari sebuah invoice.
     """
 
-    invoice_number: str = Field(
-        ..., min_length=1, max_length=100, description="Nomor invoice"
-    )
+    invoice_number: str = Field(..., min_length=1, max_length=100, description="Nomor invoice")
     pelanggan_id: int = Field(..., gt=0, description="ID pelanggan")
     total_harga: float = Field(..., ge=0, description="Total harga invoice")
     tgl_invoice: date = Field(..., description="Tanggal pembuatan invoice")
     tgl_jatuh_tempo: date = Field(..., description="Tanggal jatuh tempo pembayaran")
     status_invoice: str = Field(..., max_length=50, description="Status invoice")
-    metode_pembayaran: Optional[str] = Field(
-        None, max_length=50, description="Metode pembayaran"
-    )
+    metode_pembayaran: Optional[str] = Field(None, max_length=50, description="Metode pembayaran")
 
     @validator("invoice_number", pre=True)
     def validate_invoice_number(cls, v):
@@ -322,38 +296,22 @@ class Invoice(InvoiceBase):
     """
 
     id: int
-    id_pelanggan: str = Field(
-        ..., min_length=1, max_length=100, description="ID pelanggan di sistem teknis"
-    )
+    id_pelanggan: str = Field(..., min_length=1, max_length=100, description="ID pelanggan di sistem teknis")
     brand: str = Field(..., min_length=1, max_length=100, description="Brand pelanggan")
-    no_telp: str = Field(
-        ..., min_length=1, max_length=20, description="Nomor telepon pelanggan"
-    )
+    no_telp: str = Field(..., min_length=1, max_length=20, description="Nomor telepon pelanggan")
     email: EmailStr = Field(..., description="Email pelanggan")
-    payment_link: Optional[str] = Field(
-        None, max_length=500, description="Link pembayaran"
-    )
-    expiry_date: Optional[datetime] = Field(
-        None, description="Tanggal kadaluarsa invoice"
-    )
-    xendit_id: Optional[str] = Field(
-        None, max_length=100, description="ID invoice di Xendit"
-    )
-    xendit_external_id: Optional[str] = Field(
-        None, max_length=200, description="External ID invoice di Xendit"
-    )
+    payment_link: Optional[str] = Field(None, max_length=500, description="Link pembayaran")
+    expiry_date: Optional[datetime] = Field(None, description="Tanggal kadaluarsa invoice")
+    xendit_id: Optional[str] = Field(None, max_length=100, description="ID invoice di Xendit")
+    xendit_external_id: Optional[str] = Field(None, max_length=200, description="External ID invoice di Xendit")
     paid_amount: Optional[float] = Field(None, ge=0, description="Jumlah pembayaran")
     paid_at: Optional[datetime] = Field(None, description="Waktu pembayaran")
     created_at: Optional[datetime] = Field(None, description="Waktu pembuatan record")
     updated_at: Optional[datetime] = Field(None, description="Waktu update terakhir")
 
     # Tambahkan field computed untuk status link pembayaran
-    payment_link_status: Optional[str] = Field(
-        None, description="Status link pembayaran (Belum Dibayar/Expired/Lunas)"
-    )
-    is_payment_link_active: Optional[bool] = Field(
-        None, description="True jika link pembayaran masih aktif"
-    )
+    payment_link_status: Optional[str] = Field(None, description="Status link pembayaran (Belum Dibayar/Expired/Lunas)")
+    is_payment_link_active: Optional[bool] = Field(None, description="True jika link pembayaran masih aktif")
 
     class Config:
         from_attributes = True
@@ -372,9 +330,7 @@ class Invoice(InvoiceBase):
             raise ValueError("ID pelanggan teknis tidak boleh kosong")
 
         if len(v_str) > 100:
-            raise ValueError(
-                "ID pelanggan teknis terlalu panjang (maksimal 100 karakter)"
-            )
+            raise ValueError("ID pelanggan teknis terlalu panjang (maksimal 100 karakter)")
 
         return v_str
 

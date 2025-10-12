@@ -25,9 +25,7 @@ class OLT(Base):
 
     # --- TAMBAHAN UNTUK RELASI KE MIKROTIK ---
     # 2. Tambahkan Foreign Key ke tabel mikrotik_servers
-    mikrotik_server_id: Mapped[int | None] = mapped_column(
-        ForeignKey("mikrotik_servers.id")
-    )
+    mikrotik_server_id: Mapped[int | None] = mapped_column(ForeignKey("mikrotik_servers.id"))
 
     # 3. Tambahkan relasi balik ke model MikrotikServer
     mikrotik_server: Mapped["MikrotikServer"] = relationship(back_populates="olts")

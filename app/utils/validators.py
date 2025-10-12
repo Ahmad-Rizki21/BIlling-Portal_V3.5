@@ -2,6 +2,7 @@
 Utility functions untuk validasi yang umum digunakan
 Menghilangkan duplikasi validasi di seluruh aplikasi
 """
+
 import chardet
 import re
 from typing import List, Optional, Any
@@ -11,6 +12,7 @@ from sqlalchemy.future import select
 import logging
 
 logger = logging.getLogger(__name__)
+
 
 class FileValidator:
     """Kumpulan static methods untuk validasi file"""
@@ -22,17 +24,11 @@ class FileValidator:
         Menghilangkan duplikasi validasi CSV di pelanggan.py dan data_teknis.py
         """
         if not file.filename or not file.filename.lower().endswith(".csv"):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="File harus berformat .csv"
-            )
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="File harus berformat .csv")
 
         contents = await file.read()
         if not contents:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="File kosong."
-            )
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="File kosong.")
 
         return contents
 
@@ -48,10 +44,8 @@ class FileValidator:
             return content_str
         except Exception as e:
             logger.error(f"Gagal membaca atau mem-parsing file CSV: {repr(e)}")
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Gagal memproses file CSV: {repr(e)}"
-            )
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Gagal memproses file CSV: {repr(e)}")
+
 
 class FieldValidator:
     """Kumpulan static methods untuk validasi field"""
@@ -59,14 +53,14 @@ class FieldValidator:
     @staticmethod
     def validate_email(email: str) -> bool:
         """Validasi format email dengan regex"""
-        pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+        pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
         return re.match(pattern, email) is not None
 
     @staticmethod
     def validate_phone_number(phone: str) -> bool:
         """Validasi format nomor telepon Indonesia"""
         # Basic validation untuk nomor telepon Indonesia
-        pattern = r'^(\+62|62|0)[0-9]{9,13}$'
+        pattern = r"^(\+62|62|0)[0-9]{9,13}$"
         return re.match(pattern, phone.replace(" ", "")) is not None
 
     @staticmethod
@@ -77,24 +71,21 @@ class FieldValidator:
     @staticmethod
     def validate_ip_address(ip: str) -> bool:
         """Validasi format IP address"""
-        pattern = r'^(\d{1,3}\.){3}\d{1,3}$'
+        pattern = r"^(\d{1,3}\.){3}\d{1,3}$"
         if not re.match(pattern, ip):
             return False
 
         # Check range 0-255 untuk setiap octet
-        octets = ip.split('.')
+        octets = ip.split(".")
         return all(0 <= int(octet) <= 255 for octet in octets)
+
 
 class DatabaseValidator:
     """Kumpulan static methods untuk validasi database-related"""
 
     @staticmethod
     async def check_unique_field(
-        db: AsyncSession,
-        model_class: Any,
-        field_name: str,
-        value: str,
-        exclude_id: Optional[int] = None
+        db: AsyncSession, model_class: Any, field_name: str, value: str, exclude_id: Optional[int] = None
     ) -> bool:
         """
         Check apakah nilai pada field sudah ada di database
@@ -112,42 +103,25 @@ class DatabaseValidator:
 
     @staticmethod
     async def validate_email_uniqueness(
-        db: AsyncSession,
-        email: str,
-        model_class: Any,
-        exclude_id: Optional[int] = None
+        db: AsyncSession, email: str, model_class: Any, exclude_id: Optional[int] = None
     ) -> None:
         """
         Validasi uniqueness email dan raise HTTPException jika conflict
         Menghilangkan duplikasi email validation di multiple routers
         """
         if not FieldValidator.validate_email(email):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Format email tidak valid"
-            )
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Format email tidak valid")
 
         is_unique = await DatabaseValidator.check_unique_field(
-            db=db,
-            model_class=model_class,
-            field_name="email",
-            value=email,
-            exclude_id=exclude_id
+            db=db, model_class=model_class, field_name="email", value=email, exclude_id=exclude_id
         )
 
         if not is_unique:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=f"Email '{email}' sudah ada"
-            )
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Email '{email}' sudah ada")
 
     @staticmethod
     async def validate_multiple_unique_fields(
-        db: AsyncSession,
-        model_class: Any,
-        data: dict,
-        unique_fields: List[str],
-        exclude_id: Optional[int] = None
+        db: AsyncSession, model_class: Any, data: dict, unique_fields: List[str], exclude_id: Optional[int] = None
     ) -> None:
         """
         Validasi multiple unique fields dalam satu panggilan
@@ -156,18 +130,14 @@ class DatabaseValidator:
         for field_name in unique_fields:
             if field_name in data:
                 is_unique = await DatabaseValidator.check_unique_field(
-                    db=db,
-                    model_class=model_class,
-                    field_name=field_name,
-                    value=data[field_name],
-                    exclude_id=exclude_id
+                    db=db, model_class=model_class, field_name=field_name, value=data[field_name], exclude_id=exclude_id
                 )
 
                 if not is_unique:
                     raise HTTPException(
-                        status_code=status.HTTP_409_CONFLICT,
-                        detail=f"{field_name.title()} '{data[field_name]}' sudah ada"
+                        status_code=status.HTTP_409_CONFLICT, detail=f"{field_name.title()} '{data[field_name]}' sudah ada"
                     )
+
 
 class BusinessValidator:
     """Kumpulan static methods untuk validasi business logic"""
@@ -177,6 +147,7 @@ class BusinessValidator:
         """Validasi format tanggal instalasi"""
         try:
             from datetime import datetime
+
             datetime.strptime(date_str, "%Y-%m-%d")
             return True
         except ValueError:

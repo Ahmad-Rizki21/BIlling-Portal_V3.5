@@ -1,6 +1,7 @@
 """
 Centralized CSV export utilities untuk menghilangkan duplikasi export logic
 """
+
 import io
 import csv
 from typing import List, Dict, Any, Optional, Union, Callable
@@ -10,6 +11,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
 class CSVExporter:
     """
     Centralized CSV export utility untuk menghilangkan duplikasi
@@ -18,10 +20,7 @@ class CSVExporter:
 
     @staticmethod
     def create_csv_response(
-        data: List[Dict[str, Any]],
-        filename_prefix: str,
-        headers: Optional[List[str]] = None,
-        include_bom: bool = True
+        data: List[Dict[str, Any]], filename_prefix: str, headers: Optional[List[str]] = None, include_bom: bool = True
     ) -> StreamingResponse:
         """
         Create CSV response dengan format yang konsisten
@@ -53,13 +52,11 @@ class CSVExporter:
             output.seek(0)
 
             # Generate filename dengan timestamp
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             filename = f"{filename_prefix}_{timestamp}.csv"
 
             # Create response headers
-            response_headers = {
-                "Content-Disposition": f'attachment; filename="{filename}"'
-            }
+            response_headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
 
             # Return StreamingResponse
             return StreamingResponse(
@@ -73,11 +70,7 @@ class CSVExporter:
             raise
 
     @staticmethod
-    def create_csv_template(
-        headers: List[str],
-        sample_data: List[Dict[str, Any]],
-        filename_prefix: str
-    ) -> StreamingResponse:
+    def create_csv_template(headers: List[str], sample_data: List[Dict[str, Any]], filename_prefix: str) -> StreamingResponse:
         """
         Create CSV template untuk import dengan sample data
         Menghilangkan duplikasi template creation logic
@@ -95,12 +88,10 @@ class CSVExporter:
 
             output.seek(0)
 
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             filename = f"template_{filename_prefix}_{timestamp}.csv"
 
-            response_headers = {
-                "Content-Disposition": f'attachment; filename="{filename}"'
-            }
+            response_headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
 
             return StreamingResponse(
                 io.BytesIO(output.getvalue().encode("utf-8")),
@@ -117,7 +108,7 @@ class CSVExporter:
         raw_data: List[Any],
         field_mapping: Optional[Dict[str, str]] = None,
         exclude_fields: Optional[List[str]] = None,
-        transform_functions: Optional[Dict[str, Callable]] = None
+        transform_functions: Optional[Dict[str, Callable]] = None,
     ) -> List[Dict[str, Any]]:
         """
         Prepare data untuk export dengan field mapping dan transformations
@@ -127,10 +118,10 @@ class CSVExporter:
 
         for item in raw_data:
             # Convert object to dict
-            if hasattr(item, '__dict__'):
+            if hasattr(item, "__dict__"):
                 item_dict = item.__dict__.copy()
                 # Remove SQLAlchemy internal attributes
-                item_dict = {k: v for k, v in item_dict.items() if not k.startswith('_')}
+                item_dict = {k: v for k, v in item_dict.items() if not k.startswith("_")}
             elif isinstance(item, dict):
                 item_dict = item.copy()
             else:
@@ -167,6 +158,7 @@ class CSVExporter:
 
         return processed_data
 
+
 class CSVImportHelper:
     """
     Helper utilities untuk CSV import operations
@@ -174,9 +166,7 @@ class CSVImportHelper:
 
     @staticmethod
     def validate_csv_headers(
-        expected_headers: List[str],
-        actual_headers: List[str],
-        case_sensitive: bool = False
+        expected_headers: List[str], actual_headers: List[str], case_sensitive: bool = False
     ) -> tuple[bool, List[str]]:
         """
         Validate CSV headers terhadap expected headers
@@ -192,10 +182,7 @@ class CSVImportHelper:
         return is_valid, missing_headers
 
     @staticmethod
-    def normalize_field_names(
-        data_dict: Dict[str, Any],
-        field_mapping: Dict[str, str]
-    ) -> Dict[str, Any]:
+    def normalize_field_names(data_dict: Dict[str, Any], field_mapping: Dict[str, str]) -> Dict[str, Any]:
         """
         Normalize field names berdasarkan mapping
         """
@@ -218,10 +205,11 @@ class CSVImportHelper:
         cleaned = str(value).strip()
 
         # Remove BOM and other invisible characters
-        cleaned = cleaned.replace('\ufeff', '')
-        cleaned = cleaned.replace('\u200b', '')
+        cleaned = cleaned.replace("\ufeff", "")
+        cleaned = cleaned.replace("\u200b", "")
 
         return cleaned
+
 
 # Predefined export configurations untuk common use cases
 class ExportConfigurations:
@@ -230,10 +218,7 @@ class ExportConfigurations:
     """
 
     PELANGGAN_EXPORT = {
-        "headers": [
-            "ID", "Nama", "Email", "No Telepon", "Alamat", "No KTP",
-            "Tanggal Instalasi", "Brand", "Status"
-        ],
+        "headers": ["ID", "Nama", "Email", "No Telepon", "Alamat", "No KTP", "Tanggal Instalasi", "Brand", "Status"],
         "field_mapping": {
             "ID": "id",
             "Nama": "nama",
@@ -243,20 +228,14 @@ class ExportConfigurations:
             "No KTP": "no_ktp",
             "Tanggal Instalasi": "tanggal_instalasi",
             "Brand": "id_brand",
-            "Status": "status"
+            "Status": "status",
         },
         "exclude_fields": ["password", "internal_notes"],
-        "transform_functions": {
-            "Tanggal Instalasi": lambda x: str(x) if x else "",
-            "id": lambda x: str(x) if x else ""
-        }
+        "transform_functions": {"Tanggal Instalasi": lambda x: str(x) if x else "", "id": lambda x: str(x) if x else ""},
     }
 
     DATA_TEKNIS_EXPORT = {
-        "headers": [
-            "ID Pelanggan", "Nama Pelanggan", "IP Pelanggan", "VLAN",
-            "SN ONT", "Port ODP", "Port OLT", "Status"
-        ],
+        "headers": ["ID Pelanggan", "Nama Pelanggan", "IP Pelanggan", "VLAN", "SN ONT", "Port ODP", "Port OLT", "Status"],
         "field_mapping": {
             "ID Pelanggan": "id_pelanggan",
             "Nama Pelanggan": "pelanggan_nama",
@@ -265,15 +244,20 @@ class ExportConfigurations:
             "SN ONT": "sn_ont",
             "Port ODP": "port_odp",
             "Port OLT": "port_olt",
-            "Status": "status"
+            "Status": "status",
         },
-        "exclude_fields": ["internal_config", "secrets"]
+        "exclude_fields": ["internal_config", "secrets"],
     }
 
     INVOICE_EXPORT = {
         "headers": [
-            "Nomor Invoice", "Nama Pelanggan", "Tanggal Invoice",
-            "Jatuh Tempo", "Total Harga", "Status", "Tanggal Bayar"
+            "Nomor Invoice",
+            "Nama Pelanggan",
+            "Tanggal Invoice",
+            "Jatuh Tempo",
+            "Total Harga",
+            "Status",
+            "Tanggal Bayar",
         ],
         "field_mapping": {
             "Nomor Invoice": "nomor_invoice",
@@ -282,15 +266,16 @@ class ExportConfigurations:
             "Jatuh Tempo": "tanggal_jatuh_tempo",
             "Total Harga": "total_harga",
             "Status": "status_invoice",
-            "Tanggal Bayar": "paid_at"
+            "Tanggal Bayar": "paid_at",
         },
         "transform_functions": {
             "Total Harga": lambda x: f"Rp {x:,.0f}" if x else "Rp 0",
             "Tanggal Invoice": lambda x: str(x) if x else "",
             "Jatuh Tempo": lambda x: str(x) if x else "",
-            "Tanggal Bayar": lambda x: str(x) if x else ""
-        }
+            "Tanggal Bayar": lambda x: str(x) if x else "",
+        },
     }
+
 
 # Factory functions untuk common export patterns
 def create_pelanggan_export_response(data: List[Any]) -> StreamingResponse:
@@ -301,43 +286,29 @@ def create_pelanggan_export_response(data: List[Any]) -> StreamingResponse:
         data,
         field_mapping=config["field_mapping"],
         exclude_fields=config["exclude_fields"],
-        transform_functions=config["transform_functions"]
+        transform_functions=config["transform_functions"],
     )
 
-    return CSVExporter.create_csv_response(
-        processed_data,
-        "pelanggan",
-        config["headers"]
-    )
+    return CSVExporter.create_csv_response(processed_data, "pelanggan", config["headers"])
+
 
 def create_data_teknis_export_response(data: List[Any]) -> StreamingResponse:
     """Factory function untuk data teknis export"""
     config = ExportConfigurations.DATA_TEKNIS_EXPORT
 
     processed_data = CSVExporter.prepare_export_data(
-        data,
-        field_mapping=config["field_mapping"],
-        exclude_fields=config["exclude_fields"]
+        data, field_mapping=config["field_mapping"], exclude_fields=config["exclude_fields"]
     )
 
-    return CSVExporter.create_csv_response(
-        processed_data,
-        "data_teknis",
-        config["headers"]
-    )
+    return CSVExporter.create_csv_response(processed_data, "data_teknis", config["headers"])
+
 
 def create_invoice_export_response(data: List[Any]) -> StreamingResponse:
     """Factory function untuk invoice export"""
     config = ExportConfigurations.INVOICE_EXPORT
 
     processed_data = CSVExporter.prepare_export_data(
-        data,
-        field_mapping=config["field_mapping"],
-        transform_functions=config["transform_functions"]
+        data, field_mapping=config["field_mapping"], transform_functions=config["transform_functions"]
     )
 
-    return CSVExporter.create_csv_response(
-        processed_data,
-        "invoice",
-        config["headers"]
-    )
+    return CSVExporter.create_csv_response(processed_data, "invoice", config["headers"])

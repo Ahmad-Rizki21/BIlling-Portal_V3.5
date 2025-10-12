@@ -14,12 +14,8 @@ from ..services.cache_service import get_cached_harga_layanan, invalidate_data_c
 router = APIRouter(prefix="/harga_layanan", tags=["Harga Layanan (Brand)"])
 
 
-@router.post(
-    "/", response_model=HargaLayananSchema, status_code=status.HTTP_201_CREATED
-)
-async def create_brand(
-    brand_data: HargaLayananCreate, db: AsyncSession = Depends(get_db)
-):
+@router.post("/", response_model=HargaLayananSchema, status_code=status.HTTP_201_CREATED)
+async def create_brand(brand_data: HargaLayananCreate, db: AsyncSession = Depends(get_db)):
     db_brand = HargaLayananModel(**brand_data.model_dump())
     db.add(db_brand)
     await db.commit()
@@ -32,10 +28,7 @@ async def create_brand(
 
 
 @router.get("/", response_model=List[HargaLayananSchema])
-async def get_all_brands(
-    response: Response,
-    db: AsyncSession = Depends(get_db)
-):
+async def get_all_brands(response: Response, db: AsyncSession = Depends(get_db)):
     """
     Get all harga layanan dengan caching.
     Cache Strategy: Static data di-cache selama 1 jam untuk mengurangi database load.
@@ -50,6 +43,7 @@ async def get_all_brands(
             # Add cache headers untuk indikasi cache hit
             response.headers["X-Cache"] = "HIT"
             from ..services.cache_service import CACHE_CONFIG
+
             response.headers["X-Cache-TTL"] = str(CACHE_CONFIG["harga_layanan_ttl"])
 
             # Convert cached dict back to model objects
@@ -73,9 +67,7 @@ async def get_brand_by_id(id_brand: str, db: AsyncSession = Depends(get_db)):
 
 
 @router.patch("/{id_brand}", response_model=HargaLayananSchema)
-async def update_brand(
-    id_brand: str, brand_update: HargaLayananUpdate, db: AsyncSession = Depends(get_db)
-):
+async def update_brand(id_brand: str, brand_update: HargaLayananUpdate, db: AsyncSession = Depends(get_db)):
     db_brand = await db.get(HargaLayananModel, id_brand)
     if not db_brand:
         raise HTTPException(status_code=404, detail="Brand tidak ditemukan")

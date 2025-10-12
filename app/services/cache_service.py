@@ -17,22 +17,17 @@ logger = logging.getLogger("app.cache_service")
 
 # In-memory cache storage (dapat diganti dengan Redis di production)
 _cache_store: Dict[str, Any] = {}  # type: ignore
-_cache_stats = {
-    "hits": 0,
-    "misses": 0,
-    "sets": 0,
-    "evictions": 0
-}
+_cache_stats = {"hits": 0, "misses": 0, "sets": 0, "evictions": 0}
 
 # Cache configuration
 CACHE_CONFIG = {
-    "harga_layanan_ttl": 3600,      # 1 jam
-    "paket_layanan_ttl": 3600,      # 1 jam
-    "brand_data_ttl": 1800,         # 30 menit
-    "mikrotik_servers_ttl": 300,    # 5 menit
-    "user_permissions_ttl": 600,    # 10 menit
-    "dashboard_cache_ttl": 300,     # 5 menit
-    "max_cache_size": 1000          # Maximum items in cache
+    "harga_layanan_ttl": 3600,  # 1 jam
+    "paket_layanan_ttl": 3600,  # 1 jam
+    "brand_data_ttl": 1800,  # 30 menit
+    "mikrotik_servers_ttl": 300,  # 5 menit
+    "user_permissions_ttl": 600,  # 10 menit
+    "dashboard_cache_ttl": 300,  # 5 menit
+    "max_cache_size": 1000,  # Maximum items in cache
 }
 
 
@@ -66,10 +61,7 @@ def _evict_expired_items():
     """Hapus cache items yang sudah expired."""
     global _cache_store, _cache_stats
 
-    expired_keys = [
-        key for key, item in _cache_store.items()
-        if item.get('expires_at', 0) < time.time()  # type: ignore
-    ]
+    expired_keys = [key for key, item in _cache_store.items() if item.get("expires_at", 0) < time.time()]  # type: ignore
 
     for key in expired_keys:
         del _cache_store[key]
@@ -87,10 +79,7 @@ def _evict_lru_items(count: int = 1):
         return
 
     # Sort by last accessed time
-    sorted_items = sorted(
-        _cache_store.items(),
-        key=lambda x: x[1].get('last_accessed', 0)  # type: ignore
-    )
+    sorted_items = sorted(_cache_store.items(), key=lambda x: x[1].get("last_accessed", 0))  # type: ignore
 
     # Remove oldest items
     for i in range(min(count, len(sorted_items))):
@@ -107,13 +96,13 @@ def get_from_cache(key: str) -> Optional[Any]:
 
     if key in _cache_store:
         item = _cache_store[key]
-        if item.get('expires_at', 0) >= time.time():  # type: ignore
+        if item.get("expires_at", 0) >= time.time():  # type: ignore
             # Update last access time
-            item['last_accessed'] = time.time()  # type: ignore
-            item['access_count'] = item.get('access_count', 0) + 1  # type: ignore
+            item["last_accessed"] = time.time()  # type: ignore
+            item["access_count"] = item.get("access_count", 0) + 1  # type: ignore
             _cache_stats["hits"] += 1
             logger.debug(f"Cache hit: {key}")
-            return item.get('value')  # type: ignore
+            return item.get("value")  # type: ignore
         else:
             # Remove expired item
             del _cache_store[key]
@@ -133,11 +122,11 @@ def set_to_cache(key: str, value: Any, ttl: int):
         _evict_lru_items()
 
     _cache_store[key] = {
-        'value': value,
-        'created_at': time.time(),
-        'expires_at': time.time() + ttl,
-        'access_count': 0,
-        'last_accessed': time.time()
+        "value": value,
+        "created_at": time.time(),
+        "expires_at": time.time() + ttl,
+        "access_count": 0,
+        "last_accessed": time.time(),
     }
     _cache_stats["sets"] += 1
     logger.debug(f"Cache set: {key} (TTL: {ttl}s)")
@@ -152,15 +141,12 @@ def cache_result(ttl: int, key_prefix: str = ""):
     async def get_harga_layanan():
         # Database query logic
     """
+
     def decorator(func):
         @wraps(func)
         async def wrapper(*args, **kwargs):
             # Generate cache key
-            cache_key = _get_cache_key(
-                f"{key_prefix}:{func.__name__}",
-                args=args,
-                kwargs=kwargs
-            )
+            cache_key = _get_cache_key(f"{key_prefix}:{func.__name__}", args=args, kwargs=kwargs)
 
             # Try to get from cache
             cached_result = get_from_cache(cache_key)
@@ -174,6 +160,7 @@ def cache_result(ttl: int, key_prefix: str = ""):
             return result
 
         return wrapper
+
     return decorator
 
 
@@ -181,10 +168,7 @@ def invalidate_cache_pattern(pattern: str):
     """Invalidate cache items yang match dengan pattern."""
     global _cache_store
 
-    keys_to_remove = [
-        key for key in _cache_store.keys()
-        if pattern in key
-    ]
+    keys_to_remove = [key for key in _cache_store.keys() if pattern in key]
 
     for key in keys_to_remove:
         del _cache_store[key]
@@ -203,7 +187,7 @@ def get_cache_stats() -> Dict[str, Any]:
         "hit_rate_percent": round(hit_rate, 2),
         "cache_size": len(_cache_store),
         "max_size": CACHE_CONFIG["max_cache_size"],
-        "utilization_percent": round(len(_cache_store) / CACHE_CONFIG["max_cache_size"] * 100, 2)
+        "utilization_percent": round(len(_cache_store) / CACHE_CONFIG["max_cache_size"] * 100, 2),
     }
 
 
@@ -220,6 +204,7 @@ def clear_all_cache():
 
 
 # Specific cache functions untuk berbagai jenis data
+
 
 async def get_cached_harga_layanan(db: AsyncSession) -> List[Dict]:
     """Get harga layanan data dengan cache."""
@@ -244,7 +229,7 @@ async def get_cached_harga_layanan(db: AsyncSession) -> List[Dict]:
             "brand": item.brand,
             "layanan": item.layanan,
             "harga": float(item.harga),
-            "created_at": item.created_at.isoformat() if item.created_at else None
+            "created_at": item.created_at.isoformat() if item.created_at else None,
         }
         for item in items
     ]
@@ -274,7 +259,7 @@ async def get_cached_paket_layanan(db: AsyncSession) -> List[Dict]:
             "id": item.id,
             "kecepatan": item.kecepatan,
             "harga": float(item.harga),
-            "created_at": item.created_at.isoformat() if item.created_at else None
+            "created_at": item.created_at.isoformat() if item.created_at else None,
         }
         for item in items
     ]
@@ -299,13 +284,7 @@ async def get_cached_brand_data(db: AsyncSession) -> List[Dict]:
     items = result.all()
 
     # Transform to dict for caching
-    data = [
-        {
-            "id_brand": item.id_brand,
-            "brand": item.brand
-        }
-        for item in items
-    ]
+    data = [{"id_brand": item.id_brand, "brand": item.brand} for item in items]
 
     set_to_cache(cache_key, data, CACHE_CONFIG["brand_data_ttl"])
     return data
@@ -313,12 +292,7 @@ async def get_cached_brand_data(db: AsyncSession) -> List[Dict]:
 
 def invalidate_data_caches():
     """Invalidate semua data-related cache saat ada perubahan data."""
-    patterns = [
-        "harga_layanan",
-        "paket_layanan",
-        "brand_data",
-        "dashboard_data"
-    ]
+    patterns = ["harga_layanan", "paket_layanan", "brand_data", "dashboard_data"]
 
     for pattern in patterns:
         invalidate_cache_pattern(pattern)

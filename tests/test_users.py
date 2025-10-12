@@ -29,11 +29,7 @@ async def test_create_duplicate_user(client: AsyncClient, sample_user_data: dict
 @pytest.mark.unit
 async def test_create_user_invalid_email(client: AsyncClient):
     """Test user creation with invalid email."""
-    invalid_data = {
-        "email": "invalid-email",
-        "username": "testuser",
-        "password": "TestPassword123!"
-    }
+    invalid_data = {"email": "invalid-email", "username": "testuser", "password": "TestPassword123!"}
     response = await client.post("/users/", json=invalid_data)
     assert response.status_code == 422
 
@@ -45,10 +41,7 @@ async def test_login_success(client: AsyncClient, sample_user_data: dict):
     await client.post("/users/", json=sample_user_data)
 
     # Login
-    login_data = {
-        "username": sample_user_data["email"],
-        "password": sample_user_data["password"]
-    }
+    login_data = {"username": sample_user_data["email"], "password": sample_user_data["password"]}
     response = await client.post("/users/token", data=login_data)
     assert response.status_code == 200
     data = response.json()
@@ -59,10 +52,7 @@ async def test_login_success(client: AsyncClient, sample_user_data: dict):
 @pytest.mark.auth
 async def test_login_invalid_credentials(client: AsyncClient):
     """Test login with invalid credentials."""
-    login_data = {
-        "username": "nonexistent@example.com",
-        "password": "wrongpassword"
-    }
+    login_data = {"username": "nonexistent@example.com", "password": "wrongpassword"}
     response = await client.post("/users/token", data=login_data)
     assert response.status_code == 401
     assert "incorrect" in response.json()["detail"].lower()
@@ -96,11 +86,7 @@ async def test_get_current_user_no_token(client: AsyncClient):
 @pytest.mark.unit
 async def test_user_validation_weak_password(client: AsyncClient):
     """Test user creation with weak password."""
-    weak_password_data = {
-        "email": "test@example.com",
-        "username": "testuser",
-        "password": "123"  # Too short
-    }
+    weak_password_data = {"email": "test@example.com", "username": "testuser", "password": "123"}  # Too short
     response = await client.post("/users/", json=weak_password_data)
     assert response.status_code == 422
 

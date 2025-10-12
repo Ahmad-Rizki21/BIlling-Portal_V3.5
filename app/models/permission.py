@@ -21,6 +21,4 @@ class Permission(Base):
     name: Mapped[str] = mapped_column(String(191), unique=True, nullable=False)
 
     # Definisikan relasi balik ke Role
-    roles: Mapped[List["Role"]] = relationship(
-        secondary=role_has_permissions, back_populates="permissions", lazy="selectin"
-    )
+    roles: Mapped[List["Role"]] = relationship(secondary=role_has_permissions, back_populates="permissions", lazy="selectin")

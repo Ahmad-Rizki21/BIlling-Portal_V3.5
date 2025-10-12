@@ -40,9 +40,7 @@ async def get_all_odps(db: AsyncSession = Depends(get_db)):
     )
 
     query = (
-        select(ODPModel, func.coalesce(subquery.c.jumlah_terpakai, 0)).outerjoin(
-            subquery, ODPModel.id == subquery.c.odp_id
-        )
+        select(ODPModel, func.coalesce(subquery.c.jumlah_terpakai, 0)).outerjoin(subquery, ODPModel.id == subquery.c.odp_id)
         # --- ▼▼▼ PERUBAHAN DI SINI ▼▼▼ ---
         # Eager load relasi 'olt' dan 'parent_odp' dalam satu query
         .options(selectinload(ODPModel.olt), selectinload(ODPModel.parent_odp))
@@ -67,11 +65,7 @@ async def get_all_odps(db: AsyncSession = Depends(get_db)):
 @router.get("/{odp_id}", response_model=ODPSchema)
 async def get_odp_by_id(odp_id: int, db: AsyncSession = Depends(get_db)):
     # Query ini dibuat lebih efisien untuk mengambil semua data sekaligus
-    subquery = (
-        select(func.count(DataTeknisModel.id))
-        .where(DataTeknisModel.odp_id == odp_id)
-        .scalar_subquery()
-    )
+    subquery = select(func.count(DataTeknisModel.id)).where(DataTeknisModel.odp_id == odp_id).scalar_subquery()
 
     query = (
         select(ODPModel, func.coalesce(subquery, 0)).filter(ODPModel.id == odp_id)
@@ -93,9 +87,7 @@ async def get_odp_by_id(odp_id: int, db: AsyncSession = Depends(get_db)):
 
 
 @router.patch("/{odp_id}", response_model=ODPSchema)
-async def update_odp(
-    odp_id: int, odp_data: ODPUpdate, db: AsyncSession = Depends(get_db)
-):
+async def update_odp(odp_id: int, odp_data: ODPUpdate, db: AsyncSession = Depends(get_db)):
     db_odp = await db.get(ODPModel, odp_id)
     if not db_odp:
         raise HTTPException(status_code=404, detail="ODP not found")
@@ -117,9 +109,7 @@ async def delete_odp(odp_id: int, db: AsyncSession = Depends(get_db)):
     if not db_odp:
         raise HTTPException(status_code=404, detail="ODP not found")
 
-    result = await db.execute(
-        select(func.count(DataTeknisModel.id)).where(DataTeknisModel.odp_id == odp_id)
-    )
+    result = await db.execute(select(func.count(DataTeknisModel.id)).where(DataTeknisModel.odp_id == odp_id))
     if result.scalar_one() > 0:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

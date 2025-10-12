@@ -35,9 +35,7 @@ async def update_setting(
     """Memperbarui nilai sebuah pengaturan (Hanya Admin)."""
     # Pastikan hanya admin yang bisa mengubah
     if current_user.role.name.lower() != "admin":
-        raise HTTPException(
-            status_code=403, detail="Hanya admin yang dapat mengubah pengaturan."
-        )
+        raise HTTPException(status_code=403, detail="Hanya admin yang dapat mengubah pengaturan.")
 
     stmt = select(SettingModel).where(SettingModel.setting_key == key)
     setting = (await db.execute(stmt)).scalar_one_or_none()

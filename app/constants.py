@@ -1,7 +1,9 @@
 """
 Application constants untuk menghilangkan magic numbers dan hard-coded values
 """
+
 from typing import List, Dict, Any
+
 
 # ================================
 # Pagination & Limits
@@ -12,6 +14,7 @@ class Pagination:
     DEFAULT_EXPORT_LIMIT = 5000
     MAX_EXPORT_LIMIT = 50000
     MIN_SEARCH_LENGTH = 2
+
 
 # ================================
 # Status Constants
@@ -44,6 +47,7 @@ class Status:
     USER_AKTIF = True
     USER_TIDAK_AKTIF = False
 
+
 # ================================
 # HTTP Status Codes (Custom Messages)
 # ================================
@@ -54,6 +58,7 @@ class HTTPMessages:
     CREATE_SUCCESS_TEMPLATE = "Berhasil membuat {resource}"
     UPDATE_SUCCESS_TEMPLATE = "Berhasil mengupdate {resource}"
     DELETE_SUCCESS_TEMPLATE = "Berhasil menghapus {resource}"
+
 
 # ================================
 # Validation Rules
@@ -69,17 +74,18 @@ class Validation:
 
     # File sizes (in bytes)
     MAX_CSV_FILE_SIZE = 10 * 1024 * 1024  # 10MB
-    MAX_IMAGE_SIZE = 5 * 1024 * 1024      # 5MB
+    MAX_IMAGE_SIZE = 5 * 1024 * 1024  # 5MB
 
     # Allowed file extensions
-    ALLOWED_CSV_EXTENSIONS = ['.csv']
-    ALLOWED_IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif']
+    ALLOWED_CSV_EXTENSIONS = [".csv"]
+    ALLOWED_IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".gif"]
 
     # Network validation
     MIN_PORT = 1
     MAX_PORT = 65535
     IP_OCTET_MIN = 0
     IP_OCTET_MAX = 255
+
 
 # ================================
 # Business Rules
@@ -95,14 +101,15 @@ class BusinessRules:
     MIKROTIK_MAX_RETRY_ATTEMPTS = 3
 
     # Cache duration (in seconds)
-    CACHE_DURATION_SHORT = 300     # 5 minutes
-    CACHE_DURATION_MEDIUM = 1800   # 30 minutes
-    CACHE_DURATION_LONG = 3600     # 1 hour
+    CACHE_DURATION_SHORT = 300  # 5 minutes
+    CACHE_DURATION_MEDIUM = 1800  # 30 minutes
+    CACHE_DURATION_LONG = 3600  # 1 hour
 
     # Job scheduling
-    INVOICE_GENERATION_HOUR = 1    # 1 AM
-    SUSPEND_SERVICE_HOUR = 2       # 2 AM
-    PAYMENT_REMINDER_HOUR = 8      # 8 AM
+    INVOICE_GENERATION_HOUR = 1  # 1 AM
+    SUSPEND_SERVICE_HOUR = 2  # 2 AM
+    PAYMENT_REMINDER_HOUR = 8  # 8 AM
+
 
 # ================================
 # Database Constraints
@@ -118,6 +125,7 @@ class DatabaseConstraints:
     # ID constraints
     MIN_ID = 1
 
+
 # ================================
 # API Response Templates
 # ================================
@@ -129,6 +137,7 @@ class APIResponse:
     # Response structures
     SUCCESS_RESPONSE = {"status": "success", "message": ""}
     ERROR_RESPONSE = {"status": "error", "message": "", "detail": ""}
+
 
 # ================================
 # Notification Types
@@ -142,6 +151,7 @@ class NotificationTypes:
     MIKROTIK_ISSUE = "mikrotik_issue"
     SYSTEM_MESSAGE = "system"
 
+
 # ================================
 # Role Names
 # ================================
@@ -154,8 +164,9 @@ class Roles:
     ROLE_COMBINATIONS = {
         "technical_teams": [NOC, CS, ADMIN],
         "finance_only": [FINANCE],
-        "all_teams": [NOC, CS, ADMIN, FINANCE]
+        "all_teams": [NOC, CS, ADMIN, FINANCE],
     }
+
 
 # ================================
 # File Upload Constants
@@ -163,14 +174,20 @@ class Roles:
 class FileUpload:
     # CSV Import templates
     PELANGGAN_CSV_HEADERS = [
-        "Nama", "No KTP", "Email", "No Telepon", "Layanan", "Alamat",
-        "Alamat 2", "Blok", "Unit", "Tanggal Instalasi (YYYY-MM-DD)", "ID Brand"
+        "Nama",
+        "No KTP",
+        "Email",
+        "No Telepon",
+        "Layanan",
+        "Alamat",
+        "Alamat 2",
+        "Blok",
+        "Unit",
+        "Tanggal Instalasi (YYYY-MM-DD)",
+        "ID Brand",
     ]
 
-    DATA_TEKNIS_CSV_HEADERS = [
-        "ID Pelanggan", "IP Pelanggan", "VLAN", "SN ONT",
-        "Port ODP", "Port OLT", "Status"
-    ]
+    DATA_TEKNIS_CSV_HEADERS = ["ID Pelanggan", "IP Pelanggan", "VLAN", "SN ONT", "Port ODP", "Port OLT", "Status"]
 
     # Sample data untuk templates
     PELANGGAN_SAMPLE_DATA = [
@@ -185,9 +202,10 @@ class FileUpload:
             "Blok": "A",
             "Unit": "123",
             "Tanggal Instalasi (YYYY-MM-DD)": "2024-01-15",
-            "ID Brand": "JAKINET"
+            "ID Brand": "JAKINET",
         }
     ]
+
 
 # ================================
 # Error Messages
@@ -220,6 +238,7 @@ class ErrorMessages:
     INVOICE_ALREADY_PAID = "Invoice sudah lunas"
     SERVICE_ALREADY_SUSPENDED = "Layanan sudah di-suspend"
 
+
 # ================================
 # Success Messages
 # ================================
@@ -237,6 +256,7 @@ class SuccessMessages:
 
     FILE_IMPORTED = "File berhasil diimport"
     DATA_EXPORTED = "Data berhasil diekspor"
+
 
 # ================================
 # Log Messages
@@ -257,6 +277,7 @@ class LogMessages:
     DATABASE_CONNECTED = "Database berhasil terkoneksi"
     WEBSOCKET_CONNECTED = "WebSocket terkoneksi untuk user {user_id}"
 
+
 # ================================
 # Configuration Defaults
 # ================================
@@ -270,12 +291,7 @@ class ConfigDefaults:
     PRODUCTION_LOG_LEVEL = "WARNING"
 
     # CORS
-    DEFAULT_ORIGINS = [
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "http://localhost:8000",
-        "http://127.0.0.1:8000"
-    ]
+    DEFAULT_ORIGINS = ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:8000", "http://127.0.0.1:8000"]
 
     # Middleware
     CORS_MAX_AGE = 600  # 10 minutes
@@ -284,15 +300,17 @@ class ConfigDefaults:
     # Session
     SESSION_TIMEOUT = 1800  # 30 minutes
 
+
 # ================================
 # Regex Patterns
 # ================================
 class RegexPatterns:
-    EMAIL = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-    PHONE_INDONESIA = r'^(\+62|62|0)[0-9]{9,13}$'
-    IP_ADDRESS = r'^(\d{1,3}\.){3}\d{1,3}$'
-    NIK = r'^\d{16}$'
-    PASSWORD_STRENGTH = r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$'
+    EMAIL = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
+    PHONE_INDONESIA = r"^(\+62|62|0)[0-9]{9,13}$"
+    IP_ADDRESS = r"^(\d{1,3}\.){3}\d{1,3}$"
+    NIK = r"^\d{16}$"
+    PASSWORD_STRENGTH = r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$"
+
 
 # ================================
 # Time Formats
@@ -302,6 +320,7 @@ class TimeFormats:
     DATETIME = "%Y-%m-%d %H:%M:%S"
     ISO_DATETIME = "%Y-%m-%dT%H:%M:%S"
     TIMESTAMP = "%Y%m%d_%H%M%S"
+
 
 # ================================
 # Export/Import Constants
@@ -319,6 +338,7 @@ class ExportImport:
     EXPORT_FILENAME_PATTERN = "{prefix}_{timestamp}.csv"
     TEMPLATE_FILENAME_PATTERN = "template_{prefix}_{timestamp}.csv"
 
+
 # ================================
 # API Rate Limiting
 # ================================
@@ -328,13 +348,15 @@ class RateLimiting:
     API_REQUESTS_PER_MINUTE = 100
     API_REQUESTS_PER_HOUR = 1000
 
+
 # ================================
 # WebSocket Constants
 # ================================
 class WebSocket:
     CONNECTION_TIMEOUT = 300  # 5 minutes
-    HEARTBEAT_INTERVAL = 30   # 30 seconds
+    HEARTBEAT_INTERVAL = 30  # 30 seconds
     MAX_CONNECTIONS_PER_USER = 5
+
 
 # ================================
 # Feature Flags

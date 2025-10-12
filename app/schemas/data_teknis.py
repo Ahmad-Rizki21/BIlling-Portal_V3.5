@@ -8,9 +8,7 @@ import re
 # ====================================================================
 class DataTeknisBase(BaseModel):
     pelanggan_id: int = Field(..., gt=0, description="ID pelanggan")
-    mikrotik_server_id: Optional[int] = Field(
-        None, gt=0, description="ID server Mikrotik"
-    )
+    mikrotik_server_id: Optional[int] = Field(None, gt=0, description="ID server Mikrotik")
 
     # --- Perbaikan Nama Kolom Sesuai Model ---
     odp_id: Optional[int] = Field(None, gt=0, description="ID ODP")
@@ -19,28 +17,16 @@ class DataTeknisBase(BaseModel):
     port_odp: Optional[int] = Field(None, ge=0, le=16, description="Port ODP (1-16)")
 
     id_vlan: Optional[str] = Field(None, max_length=20, description="ID VLAN")
-    id_pelanggan: Optional[str] = Field(
-        None, min_length=1, max_length=100, description="ID pelanggan PPPoE"
-    )
-    password_pppoe: Optional[str] = Field(
-        None, min_length=1, max_length=100, description="Password PPPoE"
-    )
+    id_pelanggan: Optional[str] = Field(None, min_length=1, max_length=100, description="ID pelanggan PPPoE")
+    password_pppoe: Optional[str] = Field(None, min_length=1, max_length=100, description="Password PPPoE")
     ip_pelanggan: Optional[str] = Field(None, max_length=15, description="IP pelanggan")
-    profile_pppoe: Optional[str] = Field(
-        None, min_length=1, max_length=100, description="Profile PPPoE"
-    )
+    profile_pppoe: Optional[str] = Field(None, min_length=1, max_length=100, description="Profile PPPoE")
     olt: Optional[str] = Field(None, max_length=100, description="Nama OLT")
-    olt_custom: Optional[str] = Field(
-        None, max_length=100, description="Nama OLT kustom"
-    )
+    olt_custom: Optional[str] = Field(None, max_length=100, description="Nama OLT kustom")
     pon: Optional[int] = Field(None, ge=0, le=16, description="Port PON (0-16)")
     onu_power: Optional[int] = Field(None, ge=-40, le=10, description="Power ONU (dBm)")
-    sn: Optional[str] = Field(
-        None, max_length=50, description="Serial Number perangkat"
-    )
-    speedtest_proof: Optional[str] = Field(
-        None, max_length=255, description="Bukti speedtest"
-    )
+    sn: Optional[str] = Field(None, max_length=50, description="Serial Number perangkat")
+    speedtest_proof: Optional[str] = Field(None, max_length=255, description="Bukti speedtest")
 
     class Config:
         # Izinkan field yang tidak didefinisikan dalam model
@@ -166,9 +152,7 @@ class DataTeknisBase(BaseModel):
 
         # Check for valid characters
         if not re.match(r"^[a-zA-Z0-9\-_\.]+$", v_str):
-            raise ValueError(
-                "ID pelanggan hanya boleh mengandung huruf, angka, dash, underscore, dan titik"
-            )
+            raise ValueError("ID pelanggan hanya boleh mengandung huruf, angka, dash, underscore, dan titik")
 
         return v_str
 
@@ -321,15 +305,9 @@ class DataTeknisCreate(DataTeknisBase):
     # Timpa (override) field dari Base untuk membuatnya wajib diisi saat create.
     # Cukup deklarasikan ulang tanpa 'Optional' dan tanpa nilai default.
 
-    profile_pppoe: str = Field(
-        ..., min_length=1, max_length=100, description="Profile PPPoE (wajib)"
-    )
-    id_pelanggan: str = Field(
-        ..., min_length=1, max_length=100, description="ID pelanggan PPPoE (wajib)"
-    )
-    password_pppoe: str = Field(
-        ..., min_length=1, max_length=100, description="Password PPPoE (wajib)"
-    )
+    profile_pppoe: str = Field(..., min_length=1, max_length=100, description="Profile PPPoE (wajib)")
+    id_pelanggan: str = Field(..., min_length=1, max_length=100, description="ID pelanggan PPPoE (wajib)")
+    password_pppoe: str = Field(..., min_length=1, max_length=100, description="Password PPPoE (wajib)")
     ip_pelanggan: str = Field(..., max_length=15, description="IP pelanggan (wajib)")
     mikrotik_server_id: int = Field(..., gt=0, description="ID server Mikrotik (wajib)")
 
@@ -361,9 +339,7 @@ class DataTeknisCreate(DataTeknisBase):
     @validator("mikrotik_server_id")
     def validate_mikrotik_server_id_required(cls, v):
         if not v or v <= 0:
-            raise ValueError(
-                "ID server Mikrotik tidak boleh kosong dan harus lebih besar dari 0"
-            )
+            raise ValueError("ID server Mikrotik tidak boleh kosong dan harus lebih besar dari 0")
         return v
 
     class Config:
@@ -378,9 +354,7 @@ class DataTeknisCreate(DataTeknisBase):
 # ====================================================================
 class DataTeknisUpdate(BaseModel):
     pelanggan_id: Optional[int] = Field(None, gt=0, description="ID pelanggan")
-    mikrotik_server_id: Optional[int] = Field(
-        None, gt=0, description="ID server Mikrotik"
-    )
+    mikrotik_server_id: Optional[int] = Field(None, gt=0, description="ID server Mikrotik")
 
     # --- Perbaikan Nama Kolom Sesuai Model ---
     odp_id: Optional[int] = Field(None, gt=0, description="ID ODP")
@@ -389,28 +363,16 @@ class DataTeknisUpdate(BaseModel):
     port_odp: Optional[int] = Field(None, ge=0, le=16, description="Port ODP (1-16)")
 
     id_vlan: Optional[str] = Field(None, max_length=20, description="ID VLAN")
-    id_pelanggan: Optional[str] = Field(
-        None, min_length=1, max_length=100, description="ID pelanggan PPPoE"
-    )
-    password_pppoe: Optional[str] = Field(
-        None, min_length=1, max_length=100, description="Password PPPoE"
-    )
+    id_pelanggan: Optional[str] = Field(None, min_length=1, max_length=100, description="ID pelanggan PPPoE")
+    password_pppoe: Optional[str] = Field(None, min_length=1, max_length=100, description="Password PPPoE")
     ip_pelanggan: Optional[str] = Field(None, max_length=15, description="IP pelanggan")
-    profile_pppoe: Optional[str] = Field(
-        None, min_length=1, max_length=100, description="Profile PPPoE"
-    )
+    profile_pppoe: Optional[str] = Field(None, min_length=1, max_length=100, description="Profile PPPoE")
     olt: Optional[str] = Field(None, max_length=100, description="Nama OLT")
-    olt_custom: Optional[str] = Field(
-        None, max_length=100, description="Nama OLT kustom"
-    )
+    olt_custom: Optional[str] = Field(None, max_length=100, description="Nama OLT kustom")
     pon: Optional[int] = Field(None, ge=0, le=16, description="Port PON (0-16)")
     onu_power: Optional[int] = Field(None, ge=-40, le=10, description="Power ONU (dBm)")
-    sn: Optional[str] = Field(
-        None, max_length=50, description="Serial Number perangkat"
-    )
-    speedtest_proof: Optional[str] = Field(
-        None, max_length=255, description="Bukti speedtest"
-    )
+    sn: Optional[str] = Field(None, max_length=50, description="Serial Number perangkat")
+    speedtest_proof: Optional[str] = Field(None, max_length=255, description="Bukti speedtest")
 
     class Config:
         # Izinkan field yang tidak didefinisikan dalam model
@@ -428,33 +390,21 @@ class DataTeknisImport(BaseModel):
     email_pelanggan: str = Field(..., description="Email pelanggan")
     # --- UBAH BAGIAN INI ---
     # Terima 'olt' dari CSV, tapi simpan sebagai 'nama_mikrotik_server' di dalam kode
-    nama_mikrotik_server: str = Field(
-        ..., alias="olt", description="Nama server Mikrotik"
-    )
+    nama_mikrotik_server: str = Field(..., alias="olt", description="Nama server Mikrotik")
 
     kode_odp: Optional[str] = Field(None, max_length=50, description="Kode ODP")
     port_odp: Optional[int] = Field(None, ge=0, le=16, description="Port ODP")
     id_vlan: str = Field(..., max_length=20, description="ID VLAN")
-    id_pelanggan: str = Field(
-        ..., min_length=1, max_length=100, description="ID pelanggan PPPoE"
-    )
-    password_pppoe: str = Field(
-        ..., min_length=1, max_length=100, description="Password PPPoE"
-    )
+    id_pelanggan: str = Field(..., min_length=1, max_length=100, description="ID pelanggan PPPoE")
+    password_pppoe: str = Field(..., min_length=1, max_length=100, description="Password PPPoE")
     ip_pelanggan: str = Field(..., max_length=15, description="IP pelanggan")
-    profile_pppoe: str = Field(
-        ..., min_length=1, max_length=100, description="Profile PPPoE"
-    )
-    olt_custom: Optional[str] = Field(
-        None, max_length=100, description="Nama OLT kustom"
-    )
+    profile_pppoe: str = Field(..., min_length=1, max_length=100, description="Profile PPPoE")
+    olt_custom: Optional[str] = Field(None, max_length=100, description="Nama OLT kustom")
     pon: Optional[int] = Field(None, ge=0, le=16, description="Port PON")
     otb: Optional[int] = Field(None, ge=0, description="ID OTB")
     odc: Optional[int] = Field(None, ge=0, description="ID ODC")
     onu_power: Optional[int] = Field(None, ge=-40, le=10, description="Power ONU (dBm)")
-    sn: Optional[str] = Field(
-        None, max_length=50, description="Serial Number perangkat"
-    )
+    sn: Optional[str] = Field(None, max_length=50, description="Serial Number perangkat")
 
     class Config:
         from_attributes = True
@@ -490,9 +440,7 @@ class DataTeknisImport(BaseModel):
             raise ValueError("Nama server Mikrotik tidak boleh kosong")
 
         if len(v_str) > 100:
-            raise ValueError(
-                "Nama server Mikrotik terlalu panjang (maksimal 100 karakter)"
-            )
+            raise ValueError("Nama server Mikrotik terlalu panjang (maksimal 100 karakter)")
 
         return v_str
 
@@ -553,9 +501,7 @@ class DataTeknisImport(BaseModel):
 
         # Check for valid characters
         if not re.match(r"^[a-zA-Z0-9\-_\.]+$", v_str):
-            raise ValueError(
-                "ID pelanggan hanya boleh mengandung huruf, angka, dash, underscore, dan titik"
-            )
+            raise ValueError("ID pelanggan hanya boleh mengandung huruf, angka, dash, underscore, dan titik")
 
         return v_str
 
@@ -715,9 +661,7 @@ class DataTeknis(DataTeknisBase):
 
 class IPCheckRequest(BaseModel):
     ip_address: str = Field(..., max_length=15, description="Alamat IP yang akan dicek")
-    current_id: Optional[int] = Field(
-        None, description="ID data teknis saat ini (untuk mode edit)"
-    )
+    current_id: Optional[int] = Field(None, description="ID data teknis saat ini (untuk mode edit)")
 
     @validator("ip_address", pre=True)
     def validate_ip_address(cls, v):

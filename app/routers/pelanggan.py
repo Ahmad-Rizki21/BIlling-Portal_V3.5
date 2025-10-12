@@ -41,9 +41,7 @@ logger = logging.getLogger(__name__)
 
 
 @router.post("/", response_model=PelangganSchema, status_code=status.HTTP_201_CREATED)
-async def create_pelanggan(
-    pelanggan: PelangganCreate, db: AsyncSession = Depends(get_db)
-):
+async def create_pelanggan(pelanggan: PelangganCreate, db: AsyncSession = Depends(get_db)):
     """
     Membuat data pelanggan baru.
     """
@@ -58,11 +56,7 @@ async def create_pelanggan(
     try:
         # Cari semua user ID dengan role 'NOC' atau 'CS'
         target_roles = ["NOC", "CS", "Admin"]  # Sesuaikan nama role jika perlu
-        query = (
-            select(UserModel.id)
-            .join(RoleModel)
-            .where(func.lower(RoleModel.name).in_([r.lower() for r in target_roles]))
-        )
+        query = select(UserModel.id).join(RoleModel).where(func.lower(RoleModel.name).in_([r.lower() for r in target_roles]))
         result = await db.execute(query)
         target_user_ids = result.scalars().all()
 
@@ -277,9 +271,7 @@ async def download_csv_template():
     output.seek(0)
 
     # Mengatur nama file saat di-download
-    response_headers = {
-        "Content-Disposition": 'attachment; filename="template_import_pelanggan.csv"'
-    }
+    response_headers = {"Content-Disposition": 'attachment; filename="template_import_pelanggan.csv"'}
 
     return StreamingResponse(
         io.BytesIO(output.getvalue().encode("utf-8")),
@@ -299,9 +291,7 @@ async def export_to_csv(db: AsyncSession = Depends(get_db)):
     pelanggan_list = result.scalars().all()
 
     if not pelanggan_list:
-        raise HTTPException(
-            status_code=404, detail="Tidak ada data pelanggan untuk diekspor."
-        )
+        raise HTTPException(status_code=404, detail="Tidak ada data pelanggan untuk diekspor.")
 
     output = io.StringIO()
     output.write("\ufeff")  # BOM for Excel compatibility
@@ -327,9 +317,7 @@ async def export_to_csv(db: AsyncSession = Depends(get_db)):
 
 # --- FUNGSI BARU: IMPORT DATA DARI CSV (SANGAT ROBUST) ---
 @router.post("/import")
-async def import_from_csv(
-    file: UploadFile = File(...), db: AsyncSession = Depends(get_db)
-):
+async def import_from_csv(file: UploadFile = File(...), db: AsyncSession = Depends(get_db)):
     """
     Mengimpor data pelanggan dari file CSV dengan validasi mendalam dan laporan error.
     """
@@ -349,9 +337,7 @@ async def import_from_csv(
             raise HTTPException(status_code=400, detail="Header CSV tidak ditemukan.")
     except Exception as e:
         logger.error(f"Gagal membaca atau mem-parsing file CSV: {repr(e)}")
-        raise HTTPException(
-            status_code=400, detail=f"Gagal memproses file CSV: {repr(e)}"
-        )
+        raise HTTPException(status_code=400, detail=f"Gagal memproses file CSV: {repr(e)}")
 
     column_mapping = {
         "Nama": "nama",
@@ -405,28 +391,20 @@ async def import_from_csv(
 
             # Validasi duplikat di file CSV
             if email_lower in processed_emails_in_file:
-                errors.append(
-                    f"Baris {row_num}: Email '{customer_schema.email}' duplikat di dalam file CSV."
-                )
+                errors.append(f"Baris {row_num}: Email '{customer_schema.email}' duplikat di dalam file CSV.")
                 continue
 
             # Validasi duplikat di database
             if email_lower in existing_emails_in_db:
-                errors.append(
-                    f"Baris {row_num}: Email '{customer_schema.email}' sudah terdaftar di database."
-                )
+                errors.append(f"Baris {row_num}: Email '{customer_schema.email}' sudah terdaftar di database.")
                 continue
 
             new_customers.append(PelangganModel(**customer_schema.model_dump()))
             processed_emails_in_file.add(email_lower)
-            logger.info(
-                f"Valid customer prepared from row {row_num}: {data.get('nama')}"
-            )
+            logger.info(f"Valid customer prepared from row {row_num}: {data.get('nama')}")
 
         except ValidationError as e:
-            error_details = "; ".join(
-                [f"{err['loc'][0]}: {err['msg']}" for err in e.errors()]
-            )
+            error_details = "; ".join([f"{err['loc'][0]}: {err['msg']}" for err in e.errors()])
             errors.append(f"Baris {row_num}: {error_details}")
         except Exception as e:
             # Gunakan repr(e) untuk penanganan error yang aman
@@ -442,9 +420,7 @@ async def import_from_csv(
         )
 
     if not new_customers:
-        raise HTTPException(
-            status_code=400, detail="Tidak ada data pelanggan yang valid untuk diimpor."
-        )
+        raise HTTPException(status_code=400, detail="Tidak ada data pelanggan yang valid untuk diimpor.")
 
     try:
         db.add_all(new_customers)
@@ -452,13 +428,9 @@ async def import_from_csv(
     except Exception as e:
         await db.rollback()
         logger.error(f"Database error during import: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=500, detail=f"Gagal menyimpan ke database: {repr(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Gagal menyimpan ke database: {repr(e)}")
 
-    return {
-        "message": f"Sukses! Berhasil mengimpor {len(new_customers)} pelanggan baru."
-    }
+    return {"message": f"Sukses! Berhasil mengimpor {len(new_customers)} pelanggan baru."}
 
 
 # ========================================================== IMPORT DAN EXPORT ==========================================================

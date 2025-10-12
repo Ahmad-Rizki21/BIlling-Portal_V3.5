@@ -9,7 +9,7 @@ from .logging_enhanced import (
     log_database_event,
     log_payment_event,
     log_scheduler_event,
-    log_exception
+    log_exception,
 )
 import logging
 from datetime import datetime
@@ -18,14 +18,14 @@ from typing import Optional, Dict, Any
 # Get dashboard specific logger
 dashboard_logger = get_logger("app.dashboard")
 
+
 class DashboardLogger:
     """Specialized logger for dashboard operations"""
 
     def __init__(self):
         self.logger = dashboard_logger
 
-    def log_widget_load(self, widget_name: str, status: str,
-                       data_count: int = 0, duration: float = 0):
+    def log_widget_load(self, widget_name: str, status: str, data_count: int = 0, duration: float = 0):
         """Log widget loading events"""
         icon = "📊" if status == "success" else "⚠️" if status == "warning" else "❌"
         message = f"{icon} Widget '{widget_name}' loaded"
@@ -46,8 +46,7 @@ class DashboardLogger:
         else:
             self.logger.error(message)
 
-    def log_chart_render(self, chart_name: str, chart_type: str,
-                         data_points: int, render_time: float):
+    def log_chart_render(self, chart_name: str, chart_type: str, data_points: int, render_time: float):
         """Log chart rendering performance"""
         icon = "📈"
         message = f"{icon} Chart '{chart_name}' ({chart_type}) rendered"
@@ -59,15 +58,9 @@ class DashboardLogger:
         else:
             self.logger.info(message)
 
-    def log_data_fetch(self, endpoint: str, status: str,
-                       record_count: int = 0, duration: float = 0):
+    def log_data_fetch(self, endpoint: str, status: str, record_count: int = 0, duration: float = 0):
         """Log data fetching operations"""
-        icons = {
-            "success": "✅",
-            "failed": "❌",
-            "cached": "💾",
-            "empty": "📭"
-        }
+        icons = {"success": "✅", "failed": "❌", "cached": "💾", "empty": "📭"}
 
         icon = icons.get(status, "📄")
         message = f"{icon} Data fetch from '{endpoint}'"
@@ -86,17 +79,9 @@ class DashboardLogger:
         else:
             self.logger.info(message)
 
-    def log_user_action(self, action: str, user_id: str,
-                        target: str = "", details: str = ""):
+    def log_user_action(self, action: str, user_id: str, target: str = "", details: str = ""):
         """Log user interactions with dashboard"""
-        action_icons = {
-            "view": "👁️",
-            "click": "🖱️",
-            "download": "💾",
-            "filter": "🔍",
-            "refresh": "🔄",
-            "export": "📤"
-        }
+        action_icons = {"view": "👁️", "click": "🖱️", "download": "💾", "filter": "🔍", "refresh": "🔄", "export": "📤"}
 
         icon = action_icons.get(action, "🎯")
         message = f"{icon} User {action}"
@@ -110,8 +95,7 @@ class DashboardLogger:
 
         self.logger.info(message)
 
-    def log_performance_metric(self, metric_name: str, value: float,
-                             unit: str = "", threshold: Optional[float] = None):
+    def log_performance_metric(self, metric_name: str, value: float, unit: str = "", threshold: Optional[float] = None):
         """Log performance metrics with threshold warnings"""
         icon = "⚡"
         message = f"{icon} Performance: {metric_name} = {value}{unit}"
@@ -122,8 +106,7 @@ class DashboardLogger:
         else:
             self.logger.info(message)
 
-    def log_cache_event(self, operation: str, key: str,
-                       hit: bool = False, duration: float = 0):
+    def log_cache_event(self, operation: str, key: str, hit: bool = False, duration: float = 0):
         """Log cache operations"""
         icon = "💾" if hit else "🔄"
         status = "HIT" if hit else "MISS"
@@ -134,8 +117,7 @@ class DashboardLogger:
 
         self.logger.info(message)
 
-    def log_real_time_update(self, update_type: str, source: str,
-                             affected_widgets: list):
+    def log_real_time_update(self, update_type: str, source: str, affected_widgets: list):
         """Log real-time data updates"""
         icon = "🔄"
         message = f"{icon} Real-time update: {update_type}"
@@ -147,8 +129,7 @@ class DashboardLogger:
 
         self.logger.info(message)
 
-    def log_error_recovery(self, error_type: str, widget: str,
-                          recovery_action: str, success: bool):
+    def log_error_recovery(self, error_type: str, widget: str, recovery_action: str, success: bool):
         """Log error recovery attempts"""
         icon = "🔧" if success else "⚠️"
         message = f"{icon} Error recovery: {error_type} in '{widget}'"
@@ -176,8 +157,7 @@ class DashboardLogger:
 
         self.logger.info(message)
 
-    def debug_query(self, query_name: str, sql: str, params: Optional[Dict] = None,
-                   execution_time: float = 0):
+    def debug_query(self, query_name: str, sql: str, params: Optional[Dict] = None, execution_time: float = 0):
         """Debug SQL queries (only in debug mode)"""
         icon = "🔍"
         message = f"{icon} Query: {query_name}"
@@ -191,10 +171,12 @@ class DashboardLogger:
         self.logger.debug(f"SQL: {sql}")
         self.logger.debug(message)
 
+
 # --- Convenience Functions ---
 def get_dashboard_logger() -> DashboardLogger:
     """Get dashboard logger instance"""
     return DashboardLogger()
+
 
 # --- Default logger instance ---
 dashboard_log = get_dashboard_logger()

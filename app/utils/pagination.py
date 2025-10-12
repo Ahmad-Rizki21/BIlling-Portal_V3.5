@@ -8,15 +8,19 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import DeclarativeBase
 
-T = TypeVar('T')
+T = TypeVar("T")
+
 
 class PaginationParams(BaseModel):
     """Standard pagination parameters for API endpoints."""
+
     skip: int = Field(default=0, ge=0, description="Number of records to skip")
     limit: int = Field(default=100, ge=1, le=10000, description="Maximum 10,000 records per request")
 
+
 class PaginatedResponse(BaseModel, Generic[T]):
     """Standard paginated response format."""
+
     data: List[T]
     total: int
     skip: int
@@ -26,6 +30,7 @@ class PaginatedResponse(BaseModel, Generic[T]):
     class Config:
         arbitrary_types_allowed = True
 
+
 async def get_paginated_results(
     db: AsyncSession,
     model: Type[DeclarativeBase],
@@ -33,7 +38,7 @@ async def get_paginated_results(
     limit: int = 100,
     where_conditions: Optional[List[Any]] = None,
     order_by: Optional[Any] = None,
-    include_joins: Optional[List[Any]] = None
+    include_joins: Optional[List[Any]] = None,
 ) -> PaginatedResponse[DeclarativeBase]:
     """
     Get paginated results with total count for any model.
@@ -78,13 +83,8 @@ async def get_paginated_results(
     result = await db.execute(query)
     data = result.scalars().all()
 
-    return PaginatedResponse(
-        data=list(data),
-        total=total,
-        skip=skip,
-        limit=limit,
-        has_more=(skip + limit) < total
-    )
+    return PaginatedResponse(data=list(data), total=total, skip=skip, limit=limit, has_more=(skip + limit) < total)
+
 
 def validate_pagination_params(skip: int, limit: int, max_limit: int = 10000) -> tuple[int, int]:
     """
@@ -101,6 +101,7 @@ def validate_pagination_params(skip: int, limit: int, max_limit: int = 10000) ->
     skip = max(0, skip)
     limit = max(1, min(limit, max_limit))
     return skip, limit
+
 
 def get_pagination_headers(skip: int, limit: int, total: int) -> Dict[str, str]:
     """
@@ -119,5 +120,5 @@ def get_pagination_headers(skip: int, limit: int, total: int) -> Dict[str, str]:
         "X-Skip": str(skip),
         "X-Limit": str(limit),
         "X-Has-More": str((skip + limit) < total),
-        "Access-Control-Expose-Headers": "X-Total-Count, X-Skip, X-Limit, X-Has-More"
+        "Access-Control-Expose-Headers": "X-Total-Count, X-Skip, X-Limit, X-Has-More",
     }

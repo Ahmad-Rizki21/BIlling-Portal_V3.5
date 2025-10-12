@@ -1,6 +1,7 @@
 """
 Pelanggan Service Layer - Menghilangkan duplikasi business logic dari routers
 """
+
 from typing import List, Optional, Dict, Any
 import logging
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -23,6 +24,7 @@ from ..constants import Status, Pagination, Validation, HTTPMessages  # type: ig
 
 logger = logging.getLogger(__name__)
 
+
 class PelangganService(BaseService[PelangganModel, PelangganCreate, PelangganUpdate]):
     """
     Service layer untuk Pelanggan dengan business logic terpusat
@@ -34,11 +36,7 @@ class PelangganService(BaseService[PelangganModel, PelangganCreate, PelangganUpd
         self.search_fields = ["nama", "email", "no_telp"]
 
     @handle_errors("membuat pelanggan baru")
-    async def create_pelanggan(
-        self,
-        pelanggan_data: PelangganCreate,
-        current_user_id: int
-    ) -> PelangganModel:
+    async def create_pelanggan(self, pelanggan_data: PelangganCreate, current_user_id: int) -> PelangganModel:
         """
         Create pelanggan baru dengan validasi lengkap dan notification
         Menghilangkan duplikasi create logic dari router
@@ -48,10 +46,7 @@ class PelangganService(BaseService[PelangganModel, PelangganCreate, PelangganUpd
 
         # Check unique constraints
         await DatabaseValidator.validate_multiple_unique_fields(
-            self.db,
-            PelangganModel,
-            pelanggan_data.model_dump(),
-            ["email", "no_ktp"]
+            self.db, PelangganModel, pelanggan_data.model_dump(), ["email", "no_ktp"]
         )
 
         # Create pelanggan
@@ -65,17 +60,14 @@ class PelangganService(BaseService[PelangganModel, PelangganCreate, PelangganUpd
             operation="membuat",
             resource_name="pelanggan",
             identifier=pelanggan_obj.id,
-            additional_info={"created_by": current_user_id}
+            additional_info={"created_by": current_user_id},
         )
 
         return pelanggan_obj
 
     @handle_errors("mengupdate pelanggan")
     async def update_pelanggan(
-        self,
-        pelanggan_id: int,
-        pelanggan_data: PelangganUpdate,
-        current_user_id: int
+        self, pelanggan_id: int, pelanggan_data: PelangganUpdate, current_user_id: int
     ) -> PelangganModel:
         """
         Update pelanggan dengan validasi dan error handling
@@ -90,11 +82,7 @@ class PelangganService(BaseService[PelangganModel, PelangganCreate, PelangganUpd
         update_dict = pelanggan_data.model_dump(exclude_unset=True)
         if update_dict:
             await DatabaseValidator.validate_multiple_unique_fields(
-                self.db,
-                PelangganModel,
-                update_dict,
-                ["email", "no_ktp"],
-                exclude_id=pelanggan_id
+                self.db, PelangganModel, update_dict, ["email", "no_ktp"], exclude_id=pelanggan_id
             )
 
         # Update pelanggan
@@ -105,23 +93,17 @@ class PelangganService(BaseService[PelangganModel, PelangganCreate, PelangganUpd
             operation="mengupdate",
             resource_name="pelanggan",
             identifier=pelanggan_id,
-            additional_info={"updated_by": current_user_id}
+            additional_info={"updated_by": current_user_id},
         )
 
         return updated_pelanggan
 
-    async def get_pelanggan_with_relations(
-        self,
-        pelanggan_id: int
-    ) -> PelangganModel:
+    async def get_pelanggan_with_relations(self, pelanggan_id: int) -> PelangganModel:
         """
         Get pelanggan dengan relasi (harga_layanan, data_teknis)
         Menghilangkan duplikasi query logic
         """
-        return await self.get_by_id_with_relations(
-            pelanggan_id,
-            relations=["harga_layanan", "data_teknis"]
-        )
+        return await self.get_by_id_with_relations(pelanggan_id, relations=["harga_layanan", "data_teknis"])
 
     async def search_pelanggan(
         self,
@@ -130,7 +112,7 @@ class PelangganService(BaseService[PelangganModel, PelangganCreate, PelangganUpd
         search: Optional[str] = None,
         alamat: Optional[str] = None,
         id_brand: Optional[str] = None,
-        fields: Optional[str] = None
+        fields: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Search pelanggan dengan multiple filters dan field selection
@@ -146,7 +128,7 @@ class PelangganService(BaseService[PelangganModel, PelangganCreate, PelangganUpd
                 search_conditions = [
                     PelangganModel.nama.ilike(search_term),
                     PelangganModel.email.ilike(search_term),
-                    PelangganModel.no_telp.ilike(search_term)
+                    PelangganModel.no_telp.ilike(search_term),
                 ]
                 query = query.where(or_(*search_conditions))
 
@@ -164,7 +146,7 @@ class PelangganService(BaseService[PelangganModel, PelangganCreate, PelangganUpd
                 search_conditions = [
                     PelangganModel.nama.ilike(search_term),
                     PelangganModel.email.ilike(search_term),
-                    PelangganModel.no_telp.ilike(search_term)
+                    PelangganModel.no_telp.ilike(search_term),
                 ]
                 count_query = count_query.where(or_(*search_conditions))
 
@@ -192,30 +174,14 @@ class PelangganService(BaseService[PelangganModel, PelangganCreate, PelangganUpd
 
             # Apply field selection if specified
             if fields:
-                field_list = [f.strip() for f in fields.split(',')]
-                pelanggan_list = [
-                    self._select_fields(pelanggan, field_list)
-                    for pelanggan in pelanggan_list
-                ]
+                field_list = [f.strip() for f in fields.split(",")]
+                pelanggan_list = [self._select_fields(pelanggan, field_list) for pelanggan in pelanggan_list]
 
-            return {
-                "data": pelanggan_list,
-                "total_count": total_count,
-                "skip": skip,
-                "limit": limit
-            }
+            return {"data": pelanggan_list, "total_count": total_count, "skip": skip, "limit": limit}
 
         except Exception as e:
             ErrorHandler.handle_internal_server_error(
-                e,
-                "search pelanggan",
-                {
-                    "skip": skip,
-                    "limit": limit,
-                    "search": search,
-                    "alamat": alamat,
-                    "id_brand": id_brand
-                }
+                e, "search pelanggan", {"skip": skip, "limit": limit, "search": search, "alamat": alamat, "id_brand": id_brand}
             )
             return {"data": [], "total_count": 0, "skip": skip, "limit": limit}
 
@@ -225,7 +191,7 @@ class PelangganService(BaseService[PelangganModel, PelangganCreate, PelangganUpd
         limit: int = Pagination.DEFAULT_EXPORT_LIMIT,
         search: Optional[str] = None,
         alamat: Optional[str] = None,
-        id_brand: Optional[str] = None
+        id_brand: Optional[str] = None,
     ):
         """
         Export pelanggan data ke CSV dengan format standar
@@ -234,11 +200,7 @@ class PelangganService(BaseService[PelangganModel, PelangganCreate, PelangganUpd
         try:
             # Get data dengan filter yang sama seperti search
             search_result = await self.search_pelanggan(
-                skip=skip,
-                limit=min(limit, Pagination.MAX_EXPORT_LIMIT),
-                search=search,
-                alamat=alamat,
-                id_brand=id_brand
+                skip=skip, limit=min(limit, Pagination.MAX_EXPORT_LIMIT), search=search, alamat=alamat, id_brand=id_brand
             )
 
             # Prepare data untuk export
@@ -247,28 +209,20 @@ class PelangganService(BaseService[PelangganModel, PelangganCreate, PelangganUpd
                 search_result["data"],
                 field_mapping=config["field_mapping"],
                 exclude_fields=config["exclude_fields"],
-                transform_functions=config["transform_functions"]
+                transform_functions=config["transform_functions"],
             )
 
             # Create CSV response
-            return CSVExporter.create_csv_response(
-                processed_data,
-                "pelanggan",
-                config["headers"]
-            )
+            return CSVExporter.create_csv_response(processed_data, "pelanggan", config["headers"])
 
         except Exception as e:
             ErrorHandler.handle_internal_server_error(
                 e,
                 "export pelanggan CSV",
-                {"limit": limit, "filters": {"search": search, "alamat": alamat, "id_brand": id_brand}}
+                {"limit": limit, "filters": {"search": search, "alamat": alamat, "id_brand": id_brand}},
             )
 
-    async def import_from_csv(
-        self,
-        csv_data: List[Dict[str, Any]],
-        current_user_id: int
-    ) -> Dict[str, Any]:
+    async def import_from_csv(self, csv_data: List[Dict[str, Any]], current_user_id: int) -> Dict[str, Any]:
         """
         Import pelanggan dari CSV data dengan validasi
         Menghilangkan duplikasi import logic
@@ -288,10 +242,7 @@ class PelangganService(BaseService[PelangganModel, PelangganCreate, PelangganUpd
 
                     # Check uniqueness
                     await DatabaseValidator.validate_multiple_unique_fields(
-                        self.db,
-                        PelangganModel,
-                        pelanggan_data.model_dump(),
-                        ["email", "no_ktp"]
+                        self.db, PelangganModel, pelanggan_data.model_dump(), ["email", "no_ktp"]
                     )
 
                     # Create pelanggan
@@ -300,11 +251,7 @@ class PelangganService(BaseService[PelangganModel, PelangganCreate, PelangganUpd
 
                 except Exception as e:
                     error_count += 1
-                    errors.append({
-                        "row": row_num,
-                        "data": row_data.get("Nama", "Unknown"),
-                        "error": str(e)
-                    })
+                    errors.append({"row": row_num, "data": row_data.get("Nama", "Unknown"), "error": str(e)})
 
             # Send notification for batch import
             if created_count > 0:
@@ -312,31 +259,25 @@ class PelangganService(BaseService[PelangganModel, PelangganCreate, PelangganUpd
                     self.db,
                     f"Import batch selesai: {created_count} pelanggan baru berhasil diimport",
                     "batch_import_complete",
-                    data={
-                        "created_count": created_count,
-                        "error_count": error_count,
-                        "imported_by": current_user_id
-                    }
+                    data={"created_count": created_count, "error_count": error_count, "imported_by": current_user_id},
                 )
 
             return {
                 "message": f"Import selesai. {created_count} pelanggan berhasil dibuat, {error_count} gagal.",
                 "created_count": created_count,
                 "error_count": error_count,
-                "errors": errors[:10]  # Return only first 10 errors
+                "errors": errors[:10],  # Return only first 10 errors
             }
 
         except Exception as e:
             ErrorHandler.handle_internal_server_error(
-                e,
-                "import pelanggan CSV",
-                {"row_count": len(csv_data), "imported_by": current_user_id}
+                e, "import pelanggan CSV", {"row_count": len(csv_data), "imported_by": current_user_id}
             )
             return {
                 "message": "Import failed due to an error",
                 "created_count": 0,
                 "error_count": len(csv_data),
-                "errors": [{"error": str(e)}]
+                "errors": [{"error": str(e)}],
             }
 
     async def get_unique_lokasi(self) -> List[str]:
@@ -375,11 +316,7 @@ class PelangganService(BaseService[PelangganModel, PelangganCreate, PelangganUpd
         if not FieldValidator.validate_nik(pelanggan_data.no_ktp):
             raise ErrorHandler.handle_bad_request("NIK harus 16 digit angka")
 
-    async def _validate_update_data(
-        self,
-        pelanggan_data: PelangganUpdate,
-        exclude_id: int
-    ) -> None:
+    async def _validate_update_data(self, pelanggan_data: PelangganUpdate, exclude_id: int) -> None:
         """Validate data untuk update pelanggan"""
         update_dict = pelanggan_data.model_dump(exclude_unset=True)
 
@@ -405,7 +342,7 @@ class PelangganService(BaseService[PelangganModel, PelangganCreate, PelangganUpd
         for field in fields:
             if hasattr(pelanggan, field):
                 value = getattr(pelanggan, field)
-                if hasattr(value, '__dict__'):  # Handle related objects
+                if hasattr(value, "__dict__"):  # Handle related objects
                     value = str(value)
                 result[field] = value  # type: ignore
 
@@ -425,7 +362,7 @@ class PelangganService(BaseService[PelangganModel, PelangganCreate, PelangganUpd
             "Blok": "blok",
             "Unit": "unit",
             "Tanggal Instalasi (YYYY-MM-DD)": "tanggal_instalasi",
-            "ID Brand": "id_brand"
+            "ID Brand": "id_brand",
         }
 
         mapped_data = {}
@@ -443,7 +380,7 @@ class PelangganService(BaseService[PelangganModel, PelangganCreate, PelangganUpd
                 "nama": pelanggan.nama,
                 "alamat": pelanggan.alamat,
                 "no_telp": pelanggan.no_telp,
-                "email": pelanggan.email
+                "email": pelanggan.email,
             }
 
             await NotificationService.notify_new_customer(self.db, customer_data)

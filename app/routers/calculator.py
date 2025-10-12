@@ -14,9 +14,7 @@ router = APIRouter(prefix="/calculator", tags=["Calculator"])
 
 
 @router.post("/prorate", response_model=ProrateCalculationResponse)
-async def calculate_prorate_price(
-    request: ProrateCalculationRequest, db: AsyncSession = Depends(get_db)
-):
+async def calculate_prorate_price(request: ProrateCalculationRequest, db: AsyncSession = Depends(get_db)):
     # 1. Ambil data paket dan brand dari database
     paket = await db.get(PaketLayananModel, request.paket_layanan_id)
     if not paket:

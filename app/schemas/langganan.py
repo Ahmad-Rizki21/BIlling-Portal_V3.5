@@ -55,9 +55,7 @@ class HargaLayananInPelanggan(BaseModel):
 class PelangganInLangganan(BaseModel):
     id: int = Field(..., gt=0, description="ID pelanggan")
     nama: str = Field(..., min_length=1, max_length=100, description="Nama pelanggan")
-    alamat: str = Field(
-        ..., min_length=1, max_length=200, description="Alamat pelanggan"
-    )
+    alamat: str = Field(..., min_length=1, max_length=200, description="Alamat pelanggan")
     harga_layanan: Optional[HargaLayananInPelanggan] = None
 
     class Config:
@@ -116,12 +114,8 @@ class LanggananBase(BaseModel):
     harga_awal: Optional[float] = Field(None, ge=0, description="Harga awal langganan")
     status: str = Field(..., max_length=50, description="Status langganan")
     tgl_jatuh_tempo: Optional[date] = Field(None, description="Tanggal jatuh tempo")
-    tgl_invoice_terakhir: Optional[date] = Field(
-        None, description="Tanggal invoice terakhir"
-    )
-    tgl_mulai_langganan: Optional[date] = Field(
-        None, description="Tanggal mulai langganan"
-    )
+    tgl_invoice_terakhir: Optional[date] = Field(None, description="Tanggal invoice terakhir")
+    tgl_mulai_langganan: Optional[date] = Field(None, description="Tanggal mulai langganan")
 
     @validator("pelanggan_id", pre=True)
     def validate_pelanggan_id(cls, v):
@@ -168,9 +162,7 @@ class LanggananBase(BaseModel):
         # Valid payment methods
         valid_methods = ["Otomatis", "Prorate"]
         if v_str not in valid_methods:
-            raise ValueError(
-                f"Metode pembayaran tidak valid. Pilihan yang tersedia: {', '.join(valid_methods)}"
-            )
+            raise ValueError(f"Metode pembayaran tidak valid. Pilihan yang tersedia: {', '.join(valid_methods)}")
 
         return v_str
 
@@ -204,9 +196,7 @@ class LanggananBase(BaseModel):
         # Valid statuses
         valid_statuses = ["Aktif", "Suspended", "Berhenti"]
         if v_str not in valid_statuses:
-            raise ValueError(
-                f"Status tidak valid. Pilihan yang tersedia: {', '.join(valid_statuses)}"
-            )
+            raise ValueError(f"Status tidak valid. Pilihan yang tersedia: {', '.join(valid_statuses)}")
 
         return v_str
 
@@ -217,12 +207,8 @@ class LanggananCreate(BaseModel):
     paket_layanan_id: int = Field(..., gt=0, description="ID paket layanan")
     status: str = Field(..., max_length=50, description="Status langganan")
     metode_pembayaran: str = Field(..., max_length=50, description="Metode pembayaran")
-    tgl_mulai_langganan: Optional[date] = Field(
-        None, description="Tanggal mulai langganan"
-    )
-    sertakan_bulan_depan: bool = Field(
-        False, description="Sertakan bulan depan dalam tagihan"
-    )
+    tgl_mulai_langganan: Optional[date] = Field(None, description="Tanggal mulai langganan")
+    sertakan_bulan_depan: bool = Field(False, description="Sertakan bulan depan dalam tagihan")
 
     @validator("pelanggan_id", pre=True)
     def validate_pelanggan_id_create(cls, v):
@@ -269,9 +255,7 @@ class LanggananCreate(BaseModel):
         # Valid statuses
         valid_statuses = ["Aktif", "Suspended", "Berhenti"]
         if v_str not in valid_statuses:
-            raise ValueError(
-                f"Status tidak valid. Pilihan yang tersedia: {', '.join(valid_statuses)}"
-            )
+            raise ValueError(f"Status tidak valid. Pilihan yang tersedia: {', '.join(valid_statuses)}")
 
         return v_str
 
@@ -290,9 +274,7 @@ class LanggananCreate(BaseModel):
         # Valid payment methods
         valid_methods = ["Otomatis", "Prorate"]
         if v_str not in valid_methods:
-            raise ValueError(
-                f"Metode pembayaran tidak valid. Pilihan yang tersedia: {', '.join(valid_methods)}"
-            )
+            raise ValueError(f"Metode pembayaran tidak valid. Pilihan yang tersedia: {', '.join(valid_methods)}")
 
         return v_str
 
@@ -302,9 +284,7 @@ class LanggananUpdate(BaseModel):
     paket_layanan_id: Optional[int] = Field(None, gt=0, description="ID paket layanan")
     status: Optional[str] = Field(None, max_length=50, description="Status langganan")
     tgl_jatuh_tempo: Optional[date] = Field(None, description="Tanggal jatuh tempo")
-    metode_pembayaran: Optional[str] = Field(
-        None, max_length=50, description="Metode pembayaran"
-    )
+    metode_pembayaran: Optional[str] = Field(None, max_length=50, description="Metode pembayaran")
     harga_awal: Optional[float] = Field(None, ge=0, description="Harga awal langganan")
 
     @validator("paket_layanan_id", pre=True)
@@ -337,9 +317,7 @@ class LanggananUpdate(BaseModel):
         # Valid statuses
         valid_statuses = ["Aktif", "Suspended", "Berhenti"]
         if v_str not in valid_statuses:
-            raise ValueError(
-                f"Status tidak valid. Pilihan yang tersedia: {', '.join(valid_statuses)}"
-            )
+            raise ValueError(f"Status tidak valid. Pilihan yang tersedia: {', '.join(valid_statuses)}")
 
         return v_str
 
@@ -358,9 +336,7 @@ class LanggananUpdate(BaseModel):
         # Valid payment methods
         valid_methods = ["Otomatis", "Prorate"]
         if v_str not in valid_methods:
-            raise ValueError(
-                f"Metode pembayaran tidak valid. Pilihan yang tersedia: {', '.join(valid_methods)}"
-            )
+            raise ValueError(f"Metode pembayaran tidak valid. Pilihan yang tersedia: {', '.join(valid_methods)}")
 
         return v_str
 
@@ -384,13 +360,9 @@ class LanggananUpdate(BaseModel):
 class LanggananImport(BaseModel):
     email_pelanggan: str = Field(..., description="Email pelanggan")
     id_brand: str = Field(..., max_length=50, description="ID brand")
-    nama_paket_layanan: str = Field(
-        ..., max_length=100, description="Nama paket layanan"
-    )
+    nama_paket_layanan: str = Field(..., max_length=100, description="Nama paket layanan")
     status: str = Field("Aktif", max_length=50, description="Status langganan")
-    metode_pembayaran: str = Field(
-        "Otomatis", max_length=50, description="Metode pembayaran"
-    )
+    metode_pembayaran: str = Field("Otomatis", max_length=50, description="Metode pembayaran")
     tgl_jatuh_tempo: Optional[date] = Field(None, description="Tanggal jatuh tempo")
 
     @validator("email_pelanggan", pre=True)
@@ -432,9 +404,7 @@ class LanggananImport(BaseModel):
             raise ValueError("Nama paket layanan tidak boleh kosong")
 
         if len(v_str) > 100:
-            raise ValueError(
-                "Nama paket layanan terlalu panjang (maksimal 100 karakter)"
-            )
+            raise ValueError("Nama paket layanan terlalu panjang (maksimal 100 karakter)")
 
         return v_str
 
@@ -453,9 +423,7 @@ class LanggananImport(BaseModel):
         # Valid statuses
         valid_statuses = ["Aktif", "Suspended", "Berhenti"]
         if v_str not in valid_statuses:
-            raise ValueError(
-                f"Status tidak valid. Pilihan yang tersedia: {', '.join(valid_statuses)}"
-            )
+            raise ValueError(f"Status tidak valid. Pilihan yang tersedia: {', '.join(valid_statuses)}")
 
         return v_str
 
@@ -474,9 +442,7 @@ class LanggananImport(BaseModel):
         # Valid payment methods
         valid_methods = ["Otomatis", "Prorate"]
         if v_str not in valid_methods:
-            raise ValueError(
-                f"Metode pembayaran tidak valid. Pilihan yang tersedia: {', '.join(valid_methods)}"
-            )
+            raise ValueError(f"Metode pembayaran tidak valid. Pilihan yang tersedia: {', '.join(valid_methods)}")
 
         return v_str
 

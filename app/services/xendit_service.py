@@ -90,9 +90,7 @@ async def create_xendit_invoice(
     # Langsung format tanggal jatuh tempo dari invoice tanpa menambahkan bulan
     bulan_tahun = invoice.tgl_jatuh_tempo.strftime("%B-%Y")  # type: ignore
 
-    payload["external_id"] = (
-        f"{brand_prefix}/ftth/{nama_user}/{bulan_tahun}/{lokasi_singkat}/{invoice.id}"
-    )
+    payload["external_id"] = f"{brand_prefix}/ftth/{nama_user}/{bulan_tahun}/{lokasi_singkat}/{invoice.id}"
     # bulan_tahun = invoice.tgl_jatuh_tempo.strftime('%B-%Y')
     # payload["external_id"] = f"{brand_prefix}/ftth/{nama_user}/{bulan_tahun}/{invoice.id}"
 
@@ -100,17 +98,13 @@ async def create_xendit_invoice(
 
     async with httpx.AsyncClient(timeout=30.0) as client:  # Tambahkan timeout
         try:
-            response = await client.post(
-                settings.XENDIT_API_URL, json=payload, headers=headers
-            )
+            response = await client.post(settings.XENDIT_API_URL, json=payload, headers=headers)
             response.raise_for_status()
             result = response.json()
             logger.info(f"Respons dari Xendit: {json.dumps(result, indent=2)}")
             return result
         except httpx.HTTPStatusError as e:
-            logger.error(
-                f"Error saat membuat invoice Xendit. Payload: {json.dumps(payload, indent=2)}"
-            )
+            logger.error(f"Error saat membuat invoice Xendit. Payload: {json.dumps(payload, indent=2)}")
             logger.error(f"Respons Error dari Xendit: {e.response.text}")
             raise e
         except httpx.RequestError as e:
@@ -127,9 +121,7 @@ async def get_paid_invoice_ids_since(days: int) -> list[str]:
 
     for brand_name, api_key in settings.XENDIT_API_KEYS.items():
         if not api_key:
-            logger.warning(
-                f"Kunci API Xendit untuk brand '{brand_name}' tidak ditemukan, dilewati."
-            )
+            logger.warning(f"Kunci API Xendit untuk brand '{brand_name}' tidak ditemukan, dilewati.")
             continue
 
         logger.info(f"Memeriksa pembayaran lunas untuk brand: {brand_name}")
@@ -143,31 +135,17 @@ async def get_paid_invoice_ids_since(days: int) -> list[str]:
         async with httpx.AsyncClient(timeout=30.0) as client:
             try:
                 # httpx akan meng-encode 'statuses[]' dengan benar menjadi statuses%5B%5D=PAID
-                response = await client.get(
-                    base_url, headers=headers, params=query_params
-                )
+                response = await client.get(base_url, headers=headers, params=query_params)
                 response.raise_for_status()
 
                 # Cek apakah response.json() menghasilkan dict dan punya key 'data'
                 response_data = response.json()
-                invoices_data = (
-                    response_data.get("data", [])
-                    if isinstance(response_data, dict)
-                    else []
-                )
+                invoices_data = response_data.get("data", []) if isinstance(response_data, dict) else []
 
-                brand_paid_ids = [
-                    inv.get("external_id")
-                    for inv in invoices_data
-                    if inv.get("external_id")
-                ]
+                brand_paid_ids = [inv.get("external_id") for inv in invoices_data if inv.get("external_id")]
                 all_paid_ids.extend(brand_paid_ids)
-                logger.info(
-                    f"Ditemukan {len(brand_paid_ids)} pembayaran lunas untuk brand {brand_name}."
-                )
+                logger.info(f"Ditemukan {len(brand_paid_ids)} pembayaran lunas untuk brand {brand_name}.")
             except httpx.HTTPStatusError as e:
-                logger.error(
-                    f"Error saat mengambil data dari Xendit untuk brand {brand_name}: {e.response.text}"
-                )
+                logger.error(f"Error saat mengambil data dari Xendit untuk brand {brand_name}: {e.response.text}")
 
     return all_paid_ids

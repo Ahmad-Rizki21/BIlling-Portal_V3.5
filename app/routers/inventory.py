@@ -27,12 +27,8 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/inventory", tags=["Inventory"])
 
 
-@router.post(
-    "/", response_model=InventoryItemResponse, status_code=status.HTTP_201_CREATED
-)
-async def create_inventory_item(
-    item: InventoryItemCreate, db: AsyncSession = Depends(get_db)
-):
+@router.post("/", response_model=InventoryItemResponse, status_code=status.HTTP_201_CREATED)
+async def create_inventory_item(item: InventoryItemCreate, db: AsyncSession = Depends(get_db)):
     try:
         db_item = InventoryItemModel(**item.model_dump())
         db.add(db_item)
@@ -72,9 +68,7 @@ async def get_inventory_items(db: AsyncSession = Depends(get_db)):
 
 
 @router.patch("/{item_id}", response_model=InventoryItemResponse)
-async def update_inventory_item(
-    item_id: int, item_update: InventoryItemUpdate, db: AsyncSession = Depends(get_db)
-):
+async def update_inventory_item(item_id: int, item_update: InventoryItemUpdate, db: AsyncSession = Depends(get_db)):
     try:
         db_item = await db.get(InventoryItemModel, item_id)
         if not db_item:
@@ -124,9 +118,7 @@ async def delete_inventory_item(item_id: int, db: AsyncSession = Depends(get_db)
 @router.get("/types", response_model=List[InventoryItemTypeSchema])
 async def get_item_types(db: AsyncSession = Depends(get_db)):
     try:
-        result = await db.execute(
-            select(InventoryItemTypeModel).order_by(InventoryItemTypeModel.name)
-        )
+        result = await db.execute(select(InventoryItemTypeModel).order_by(InventoryItemTypeModel.name))
         return result.scalars().all()
     except Exception as e:
         logger.error(f"Error retrieving item types: {str(e)}")
@@ -139,9 +131,7 @@ async def get_item_types(db: AsyncSession = Depends(get_db)):
 @router.get("/statuses", response_model=List[InventoryStatusSchema])
 async def get_statuses(db: AsyncSession = Depends(get_db)):
     try:
-        result = await db.execute(
-            select(InventoryStatusModel).order_by(InventoryStatusModel.name)
-        )
+        result = await db.execute(select(InventoryStatusModel).order_by(InventoryStatusModel.name))
         return result.scalars().all()
     except Exception as e:
         logger.error(f"Error retrieving statuses: {str(e)}")

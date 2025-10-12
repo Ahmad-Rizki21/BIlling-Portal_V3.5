@@ -48,7 +48,7 @@ class ResponseOptimizationMiddleware(BaseHTTPMiddleware):
 
         # Add performance headers
         response.headers["X-Process-Time"] = str(round(process_time, 4))
-        response.headers["X-Response-Size"] = str(len(response.body) if hasattr(response, 'body') else 0)
+        response.headers["X-Response-Size"] = str(len(response.body) if hasattr(response, "body") else 0)
 
         return response
 
@@ -56,7 +56,7 @@ class ResponseOptimizationMiddleware(BaseHTTPMiddleware):
         """Optimize JSON responses dengan compression dan monitoring."""
         try:
             # Get response body
-            if hasattr(response, 'body'):
+            if hasattr(response, "body"):
                 body = response.body
             else:
                 # For streaming responses, return as-is
@@ -67,14 +67,15 @@ class ResponseOptimizationMiddleware(BaseHTTPMiddleware):
             # Log response size for monitoring
             if original_size > 50000:  # Log responses > 50KB
                 logger.warning(
-                    f"Large response detected: {original_size} bytes for {request.url.path} "
-                    f"took {process_time:.4f}s"
+                    f"Large response detected: {original_size} bytes for {request.url.path} " f"took {process_time:.4f}s"
                 )
 
             # Apply compression if beneficial
-            if (self.compression_enabled and
-                original_size >= self.compress_min_size and
-                "gzip" not in request.headers.get("accept-encoding", "")):
+            if (
+                self.compression_enabled
+                and original_size >= self.compress_min_size
+                and "gzip" not in request.headers.get("accept-encoding", "")
+            ):
 
                 compressed_body = self._compress_data(body)
                 compressed_size = len(compressed_body)
@@ -104,7 +105,7 @@ class ResponseOptimizationMiddleware(BaseHTTPMiddleware):
     def _compress_data(self, data: bytes) -> bytes:
         """Compress data using gzip."""
         buffer = BytesIO()
-        with gzip.GzipFile(fileobj=buffer, mode='wb', compresslevel=6) as gz_file:
+        with gzip.GzipFile(fileobj=buffer, mode="wb", compresslevel=6) as gz_file:
             gz_file.write(data)
         return buffer.getvalue()
 
@@ -115,7 +116,7 @@ class ResponseSizeLogger:
     @staticmethod
     def log_optimization(endpoint: str, original_size: int, optimized_size: int):
         """Log hasil optimasi response."""
-        reduction_pct = round((1 - optimized_size/original_size) * 100, 1) if original_size > 0 else 0
+        reduction_pct = round((1 - optimized_size / original_size) * 100, 1) if original_size > 0 else 0
 
         if reduction_pct > 20:
             logger.info(
@@ -124,8 +125,7 @@ class ResponseSizeLogger:
             )
         elif reduction_pct > 5:
             logger.info(
-                f"✓ Good optimization: {endpoint} - "
-                f"{original_size} -> {optimized_size} bytes ({reduction_pct}% reduction)"
+                f"✓ Good optimization: {endpoint} - " f"{original_size} -> {optimized_size} bytes ({reduction_pct}% reduction)"
             )
         else:
             logger.debug(
@@ -137,7 +137,4 @@ class ResponseSizeLogger:
     def log_large_response(endpoint: str, size: int, threshold: int = 50000):
         """Log large responses yang perlu optimasi."""
         if size > threshold:
-            logger.warning(
-                f"⚠️  Large response detected: {endpoint} - {size:,} bytes "
-                f"(threshold: {threshold:,} bytes)"
-            )
+            logger.warning(f"⚠️  Large response detected: {endpoint} - {size:,} bytes " f"(threshold: {threshold:,} bytes)")

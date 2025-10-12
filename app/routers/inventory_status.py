@@ -16,22 +16,12 @@ from ..schemas.inventory_status import (
 router = APIRouter(prefix="/inventory-statuses", tags=["Inventory Statuses"])
 
 
-@router.post(
-    "/", response_model=InventoryStatusSchema, status_code=status.HTTP_201_CREATED
-)
-async def create_status(
-    status_data: InventoryStatusCreate, db: AsyncSession = Depends(get_db)
-):
+@router.post("/", response_model=InventoryStatusSchema, status_code=status.HTTP_201_CREATED)
+async def create_status(status_data: InventoryStatusCreate, db: AsyncSession = Depends(get_db)):
     # Cek duplikat
-    res = await db.execute(
-        select(InventoryStatusModel).where(
-            InventoryStatusModel.name == status_data.name
-        )
-    )
+    res = await db.execute(select(InventoryStatusModel).where(InventoryStatusModel.name == status_data.name))
     if res.scalar_one_or_none():
-        raise HTTPException(
-            status_code=409, detail=f"Status '{status_data.name}' sudah ada."
-        )
+        raise HTTPException(status_code=409, detail=f"Status '{status_data.name}' sudah ada.")
 
     db_status = InventoryStatusModel(**status_data.model_dump())
     db.add(db_status)
@@ -42,9 +32,7 @@ async def create_status(
 
 @router.get("/", response_model=List[InventoryStatusSchema])
 async def get_all_statuses(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(
-        select(InventoryStatusModel).order_by(InventoryStatusModel.name)
-    )
+    result = await db.execute(select(InventoryStatusModel).order_by(InventoryStatusModel.name))
     return result.scalars().all()
 
 

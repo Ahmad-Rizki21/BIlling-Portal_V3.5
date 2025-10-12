@@ -26,16 +26,16 @@ environment = os.getenv("ENVIRONMENT", "development")
 # Dynamic pool configuration berdasarkan environment
 if environment == "production":
     # Production: Optimized untuk real-world usage
-    POOL_SIZE = 8        # Reduced dari 20 → 8 (memory efficient)
-    MAX_OVERFLOW = 12    # Reduced dari 30 → 12 (total max = 20)
-    POOL_TIMEOUT = 15    # Faster timeout untuk production
+    POOL_SIZE = 8  # Reduced dari 20 → 8 (memory efficient)
+    MAX_OVERFLOW = 12  # Reduced dari 30 → 12 (total max = 20)
+    POOL_TIMEOUT = 15  # Faster timeout untuk production
     POOL_RECYCLE = 1800  # 30 menit (lebih sering recycle)
 else:
     # Development: Resources yang lebih kecil
-    POOL_SIZE = 5        # Development tidak butuh banyak connections
-    MAX_OVERFLOW = 10    # Total max = 15 connections
-    POOL_TIMEOUT = 10    # Quick timeout untuk development
-    POOL_RECYCLE = 900   # 15 menit (faster recycle)
+    POOL_SIZE = 5  # Development tidak butuh banyak connections
+    MAX_OVERFLOW = 10  # Total max = 15 connections
+    POOL_TIMEOUT = 10  # Quick timeout untuk development
+    POOL_RECYCLE = 900  # 15 menit (faster recycle)
 
 # Membuat engine database dengan SMART connection pool configuration
 engine = create_async_engine(
@@ -50,7 +50,7 @@ engine = create_async_engine(
         "connect_timeout": 10,  # Connection timeout 10 detik
         "charset": "utf8mb4",  # Unicode support
         "sql_mode": "STRICT_TRANS_TABLES",  # Strict mode untuk data consistency
-    }
+    },
 )
 
 # Log pool configuration untuk monitoring
@@ -77,31 +77,31 @@ from .encryption_utils import encrypt_sensitive_data, decrypt_sensitive_data
 # ENHANCED CONNECTION POOL MONITORING
 # Dynamic thresholds berdasarkan environment
 if environment == "production":
-    CONNECTION_POOL_WARN_THRESHOLD = 70   # Lower threshold untuk production
+    CONNECTION_POOL_WARN_THRESHOLD = 70  # Lower threshold untuk production
     CONNECTION_POOL_CRITICAL_THRESHOLD = 90
 else:
-    CONNECTION_POOL_WARN_THRESHOLD = 80   # Development lebih toleran
+    CONNECTION_POOL_WARN_THRESHOLD = 80  # Development lebih toleran
     CONNECTION_POOL_CRITICAL_THRESHOLD = 95
+
 
 async def monitor_connection_pool():
     """Enhanced monitor connection pool with auto-cleanup suggestions."""
     try:
         status = await get_connection_pool_status()
-        
+
         # Since we're using mock values, we'll use estimated values
         utilization = status["utilization_percent"]
         checked_out = status["checked_out"]
         total_capacity = status["total_capacity"]
 
         # Enhanced logging dengan actionable insights
-        logger.debug(
-            f"✅ Connection Pool Status: Mock status - {total_capacity} total capacity"
-        )
+        logger.debug(f"✅ Connection Pool Status: Mock status - {total_capacity} total capacity")
 
         return status
     except Exception as e:
         logger.error(f"Failed to monitor connection pool: {e}")
         return None
+
 
 # Auto-cleanup function for idle connections
 async def cleanup_idle_connections():
@@ -109,13 +109,12 @@ async def cleanup_idle_connections():
     try:
         # SQLAlchemy pool doesn't have invalid() method, so we return a mock value
         logger.info("Connection cleanup routine executed")
-        
-        return {
-            "status": "cleanup_executed"
-        }
+
+        return {"status": "cleanup_executed"}
     except Exception as e:
         logger.error(f"Failed to cleanup idle connections: {e}")
         return {"error": str(e)}
+
 
 # Initialize encryption after all models are loaded
 # This will be called from the main application after importing all models
@@ -140,18 +139,18 @@ async def get_connection_pool_status():
     # We'll use a simulated approach since SQLAlchemy async doesn't expose all pool metrics
     # In a real implementation, you would need to track this differently
     pool = engine.pool
-    
+
     # Return mock data since the actual methods don't exist in async pool
     return {
-        "pool_size": getattr(pool, 'size', 0),  # This might not be available in async pool
+        "pool_size": getattr(pool, "size", 0),  # This might not be available in async pool
         "checked_out": 0,  # Not available in async pool
-        "checked_in": 0,   # Not available in async pool
-        "overflow": 0,     # Not available in async pool
-        "invalid": 0,      # Not available in async pool
+        "checked_in": 0,  # Not available in async pool
+        "overflow": 0,  # Not available in async pool
+        "invalid": 0,  # Not available in async pool
         "total_capacity": POOL_SIZE + MAX_OVERFLOW,
         "utilization_percent": 0,  # Not calculable without actual pool metrics
         "available_connections": POOL_SIZE,  # Estimated
-        "status": "healthy"
+        "status": "healthy",
     }
 
 

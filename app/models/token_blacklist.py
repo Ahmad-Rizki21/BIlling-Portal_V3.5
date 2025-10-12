@@ -12,22 +12,22 @@ if TYPE_CHECKING:
 
 class TokenBlacklist(Base):
     __tablename__ = "token_blacklist"
-    
+
     # Tambahkan index untuk query yang sering digunakan
     __table_args__ = (
-        Index('idx_token_blacklist_jti', 'jti'),
-        Index('idx_token_blacklist_user_id', 'user_id'),
-        Index('idx_token_blacklist_expires_at', 'expires_at'),
-        Index('idx_token_blacklist_created_at', 'created_at'),
-        Index('idx_token_blacklist_token_type', 'token_type'),
-        Index('idx_token_blacklist_revoked', 'revoked'),
-        Index('idx_token_blacklist_revoked_at', 'revoked_at'),
-        Index('idx_token_blacklist_user_type', 'user_id', 'token_type'),
-        Index('idx_token_blacklist_expires_revoked', 'expires_at', 'revoked'),
-        Index('idx_token_blacklist_created_revoked', 'created_at', 'revoked'),
-        Index('idx_token_blacklist_user_expires', 'user_id', 'expires_at'),
-        Index('idx_token_blacklist_type_revoked', 'token_type', 'revoked'),
-        Index('idx_token_blacklist_jti_revoked', 'jti', 'revoked'),
+        Index("idx_token_blacklist_jti", "jti"),
+        Index("idx_token_blacklist_user_id", "user_id"),
+        Index("idx_token_blacklist_expires_at", "expires_at"),
+        Index("idx_token_blacklist_created_at", "created_at"),
+        Index("idx_token_blacklist_token_type", "token_type"),
+        Index("idx_token_blacklist_revoked", "revoked"),
+        Index("idx_token_blacklist_revoked_at", "revoked_at"),
+        Index("idx_token_blacklist_user_type", "user_id", "token_type"),
+        Index("idx_token_blacklist_expires_revoked", "expires_at", "revoked"),
+        Index("idx_token_blacklist_created_revoked", "created_at", "revoked"),
+        Index("idx_token_blacklist_user_expires", "user_id", "expires_at"),
+        Index("idx_token_blacklist_type_revoked", "token_type", "revoked"),
+        Index("idx_token_blacklist_jti_revoked", "jti", "revoked"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, index=True)

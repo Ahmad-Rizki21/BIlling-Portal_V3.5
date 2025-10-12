@@ -28,9 +28,7 @@ async def get_olt_topology(olt_id: int, db: AsyncSession = Depends(get_db)):
         olt_id,
         options=[
             selectinload(OLTModel.mikrotik_server),
-            selectinload(OLTModel.odps)
-            .selectinload(ODPModel.data_teknis)
-            .selectinload(DataTeknisModel.pelanggan),
+            selectinload(OLTModel.odps).selectinload(ODPModel.data_teknis).selectinload(DataTeknisModel.pelanggan),
         ],
     )
 
@@ -57,9 +55,7 @@ async def get_olt_topology(olt_id: int, db: AsyncSession = Depends(get_db)):
     # Level 2 (ODP) dan Level 3 (Pelanggan)
     for odp in olt.odps:
         kapasitas_str = f"{len(odp.data_teknis)}/{odp.kapasitas_port}"
-        odp_node = TopologyNode(
-            name=odp.kode_odp, type="ODP", kapasitas=kapasitas_str, children=[]
-        )
+        odp_node = TopologyNode(name=odp.kode_odp, type="ODP", kapasitas=kapasitas_str, children=[])
 
         for dt in odp.data_teknis:
             if dt.pelanggan:

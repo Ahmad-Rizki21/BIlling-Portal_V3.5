@@ -58,11 +58,7 @@ async def get_all_invoices(
         select(InvoiceModel).join(InvoiceModel.pelanggan)
         # PERBAIKAN: Eager load relasi turunan untuk mencegah N+1 query
         # saat skema respons membutuhkan data dari relasi ini (misal: nama brand).
-        .options(
-            selectinload(InvoiceModel.pelanggan).selectinload(
-                PelangganModel.harga_layanan
-            )
-        )
+        .options(selectinload(InvoiceModel.pelanggan).selectinload(PelangganModel.harga_layanan))
     )
 
     if search:
@@ -104,16 +100,12 @@ def parse_xendit_datetime(iso_datetime_str: str) -> datetime:
         return datetime.now(pytz.utc)
 
 
-async def _process_successful_payment(
-    db: AsyncSession, invoice: InvoiceModel, payload: dict = None
-):
+async def _process_successful_payment(db: AsyncSession, invoice: InvoiceModel, payload: dict = None):
     """Fungsi terpusat untuk menangani logika setelah invoice lunas."""
 
     pelanggan = invoice.pelanggan
     if not pelanggan or not pelanggan.langganan:
-        logger.error(
-            f"Pelanggan atau langganan tidak ditemukan untuk invoice {invoice.invoice_number}"
-        )
+        logger.error(f"Pelanggan atau langganan tidak ditemukan untuk invoice {invoice.invoice_number}")
         return
 
     langganan = pelanggan.langganan[0]
@@ -141,9 +133,7 @@ async def _process_successful_payment(
         current_due_date = invoice.tgl_jatuh_tempo
 
         if not paket or not brand:
-            logger.error(
-                f"Data paket/brand tidak lengkap untuk langganan ID {langganan.id}"
-            )
+            logger.error(f"Data paket/brand tidak lengkap untuk langganan ID {langganan.id}")
             # Set fallback jika data tidak ada, agar tidak crash
             next_due_date = (current_due_date + relativedelta(months=1)).replace(day=1)
         else:
@@ -155,20 +145,12 @@ async def _process_successful_payment(
             # Logika Pembeda: Apakah ini tagihan prorate biasa atau gabungan?
             if invoice.total_harga > (harga_normal_full + 1):
                 # Skenario 1: INI ADALAH TAGIHAN GABUNGAN
-                next_due_date = (current_due_date + relativedelta(months=2)).replace(
-                    day=1
-                )
-                logger.info(
-                    f"Tagihan gabungan terdeteksi. Jatuh tempo berikutnya diatur ke {next_due_date}"
-                )
+                next_due_date = (current_due_date + relativedelta(months=2)).replace(day=1)
+                logger.info(f"Tagihan gabungan terdeteksi. Jatuh tempo berikutnya diatur ke {next_due_date}")
             else:
                 # Skenario 2: INI ADALAH TAGIHAN PRORATE BIASA
-                next_due_date = (current_due_date + relativedelta(months=1)).replace(
-                    day=1
-                )
-                logger.info(
-                    f"Tagihan prorate biasa terdeteksi. Jatuh tempo berikutnya diatur ke {next_due_date}"
-                )
+                next_due_date = (current_due_date + relativedelta(months=1)).replace(day=1)
+                logger.info(f"Tagihan prorate biasa terdeteksi. Jatuh tempo berikutnya diatur ke {next_due_date}")
 
             # Reset harga langganan ke harga normal untuk bulan-bulan berikutnya
             langganan.harga_awal = round(harga_normal_full, 0)
@@ -188,9 +170,7 @@ async def _process_successful_payment(
     if is_suspended_or_inactive:
         data_teknis = pelanggan.data_teknis
         if not data_teknis:
-            logger.error(
-                f"Data Teknis tidak ditemukan untuk pelanggan ID {pelanggan.id}. Mikrotik update dilewati."
-            )
+            logger.error(f"Data Teknis tidak ditemukan untuk pelanggan ID {pelanggan.id}. Mikrotik update dilewati.")
         else:
             try:
                 # Panggil fungsi dengan SEMUA argumen yang dibutuhkan
@@ -200,9 +180,7 @@ async def _process_successful_payment(
                     data_teknis,
                     data_teknis.id_pelanggan,  # old_id_pelanggan diisi dengan id saat ini
                 )
-                logger.info(
-                    f"Berhasil trigger re-aktivasi Mikrotik untuk langganan ID {langganan.id}"
-                )
+                logger.info(f"Berhasil trigger re-aktivasi Mikrotik untuk langganan ID {langganan.id}")
 
                 # Jika berhasil, set flag pending sync (jika ada) kembali ke False
                 if data_teknis.mikrotik_sync_pending:
@@ -217,18 +195,12 @@ async def _process_successful_payment(
                 data_teknis.mikrotik_sync_pending = True
                 db.add(data_teknis)
     else:
-        logger.info(
-            f"Langganan ID {langganan.id} sudah Aktif. Mikrotik update dilewati."
-        )
+        logger.info(f"Langganan ID {langganan.id} sudah Aktif. Mikrotik update dilewati.")
 
     # Notif ke frontend
     try:
         target_roles = ["Admin", "NOC", "Finance"]
-        query = (
-            select(UserModel.id)
-            .join(RoleModel)
-            .where(func.lower(RoleModel.name).in_([r.lower() for r in target_roles]))
-        )
+        query = select(UserModel.id).join(RoleModel).where(func.lower(RoleModel.name).in_([r.lower() for r in target_roles]))
         result = await db.execute(query)
         target_user_ids = result.scalars().all()
 
@@ -244,22 +216,14 @@ async def _process_successful_payment(
                 },
             }
             # Tambahkan log ini untuk memastikan user ID ditemukan
-            logger.info(
-                f"Mencoba mengirim notifikasi pembayaran ke user IDs: {target_user_ids}"
-            )
+            logger.info(f"Mencoba mengirim notifikasi pembayaran ke user IDs: {target_user_ids}")
             await manager.broadcast_to_roles(notification_payload, target_user_ids)
-            logger.info(
-                f"Notifikasi pembayaran berhasil dikirim untuk invoice {invoice.invoice_number}"
-            )
+            logger.info(f"Notifikasi pembayaran berhasil dikirim untuk invoice {invoice.invoice_number}")
         else:
-            logger.warning(
-                f"Tidak ada user dengan role Admin/CS yang ditemukan untuk dikirimi notifikasi."
-            )
+            logger.warning(f"Tidak ada user dengan role Admin/CS yang ditemukan untuk dikirimi notifikasi.")
 
     except Exception as e:
-        logger.error(
-            f"Gagal mengirim notifikasi pembayaran untuk invoice {invoice.invoice_number}: {e}"
-        )
+        logger.error(f"Gagal mengirim notifikasi pembayaran untuk invoice {invoice.invoice_number}: {e}")
 
     logger.info(f"Payment processed successfully for invoice {invoice.invoice_number}")
 
@@ -310,9 +274,7 @@ async def handle_xendit_callback(
 
     external_id = payload.get("external_id")
     if not external_id:
-        raise HTTPException(
-            status_code=400, detail="External ID tidak ditemukan di payload"
-        )
+        raise HTTPException(status_code=400, detail="External ID tidak ditemukan di payload")
 
     brand_prefix = None
     try:
@@ -354,9 +316,7 @@ async def handle_xendit_callback(
     # Jika tidak ada token yang cocok, kembalikan 401
     if not correct_token:
         logger.warning("Invalid callback token received.")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid callback token"
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid callback token")
     xendit_status = payload.get("status")
 
     # PERBAIKAN: Eager load semua relasi yang dibutuhkan oleh _process_successful_payment
@@ -367,9 +327,7 @@ async def handle_xendit_callback(
         .options(
             selectinload(InvoiceModel.pelanggan).options(
                 selectinload(PelangganModel.harga_layanan),
-                selectinload(PelangganModel.langganan).selectinload(
-                    LanggananModel.paket_layanan
-                ),
+                selectinload(PelangganModel.langganan).selectinload(LanggananModel.paket_layanan),
                 selectinload(PelangganModel.data_teknis),
             )
         )
@@ -377,9 +335,7 @@ async def handle_xendit_callback(
     invoice = (await db.execute(stmt)).scalar_one_or_none()
 
     if not invoice:
-        logger.warning(
-            f"Invoice with external_id {external_id} not found, but callback is valid."
-        )
+        logger.warning(f"Invoice with external_id {external_id} not found, but callback is valid.")
         return {"message": "Callback valid, invoice not found."}
 
     if invoice.status_invoice == "Lunas":
@@ -396,12 +352,8 @@ async def handle_xendit_callback(
         await db.commit()
     except Exception as e:
         await db.rollback()
-        logger.error(
-            f"Error processing Xendit callback for external_id {external_id}: {str(e)}"
-        )
-        raise HTTPException(
-            status_code=500, detail="Internal server error while processing callback."
-        )
+        logger.error(f"Error processing Xendit callback for external_id {external_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error while processing callback.")
 
     return {"message": "Callback processed successfully"}
 
@@ -412,20 +364,14 @@ async def handle_xendit_callback(
     status_code=status.HTTP_201_CREATED,
     dependencies=[Depends(has_permission("create_invoices"))],
 )
-async def generate_manual_invoice(
-    invoice_data: InvoiceGenerate, db: AsyncSession = Depends(get_db)
-):
+async def generate_manual_invoice(invoice_data: InvoiceGenerate, db: AsyncSession = Depends(get_db)):
     """Membuat satu invoice secara manual berdasarkan langganan_id."""
     langganan = await db.get(
         LanggananModel,
         invoice_data.langganan_id,
         options=[
-            selectinload(LanggananModel.pelanggan).selectinload(
-                PelangganModel.harga_layanan
-            ),
-            selectinload(LanggananModel.pelanggan).selectinload(
-                PelangganModel.data_teknis
-            ),
+            selectinload(LanggananModel.pelanggan).selectinload(PelangganModel.harga_layanan),
+            selectinload(LanggananModel.pelanggan).selectinload(PelangganModel.data_teknis),
             selectinload(LanggananModel.paket_layanan),
         ],
     )
@@ -440,12 +386,7 @@ async def generate_manual_invoice(
 
     pelanggan = langganan.pelanggan
     paket = langganan.paket_layanan
-    if (
-        not pelanggan
-        or not paket
-        or not pelanggan.harga_layanan
-        or not pelanggan.data_teknis
-    ):
+    if not pelanggan or not paket or not pelanggan.harga_layanan or not pelanggan.data_teknis:
         raise HTTPException(
             status_code=400,
             detail=f"Data pendukung (pelanggan, paket, brand, teknis) tidak lengkap untuk langganan ID {langganan.id}",
@@ -455,21 +396,19 @@ async def generate_manual_invoice(
     data_teknis = pelanggan.data_teknis
 
     if not paket.harga or not brand.pajak:
-        raise HTTPException(
-            status_code=400, detail="Harga paket atau pajak tidak valid"
-        )
+        raise HTTPException(status_code=400, detail="Harga paket atau pajak tidak valid")
 
     existing_invoice_stmt = select(InvoiceModel.id).where(
         InvoiceModel.pelanggan_id == langganan.pelanggan_id,
         InvoiceModel.tgl_jatuh_tempo == langganan.tgl_jatuh_tempo,
     )
     if (await db.execute(existing_invoice_stmt)).scalar_one_or_none():
-        raise HTTPException(
-            status_code=409, detail="Invoice untuk periode ini sudah ada."
-        )
+        raise HTTPException(status_code=409, detail="Invoice untuk periode ini sudah ada.")
 
     jatuh_tempo_str = langganan.tgl_jatuh_tempo.strftime("%d/%m/%Y")
-    nomor_invoice = f"INV-{pelanggan.nama.replace(' ', '')}-{langganan.tgl_jatuh_tempo.strftime('%Y%m')}-{uuid.uuid4().hex[:4].upper()}"
+    nomor_invoice = (
+        f"INV-{pelanggan.nama.replace(' ', '')}-{langganan.tgl_jatuh_tempo.strftime('%Y%m')}-{uuid.uuid4().hex[:4].upper()}"
+    )
 
     # Ambil total harga langsung dari data langganan yang sudah dihitung (prorate + PPN).
     total_harga = float(langganan.harga_awal)
@@ -518,9 +457,7 @@ async def generate_manual_invoice(
                 start_day = db_invoice.tgl_invoice.day
                 end_day = db_invoice.tgl_jatuh_tempo.day
                 periode_prorate_str = db_invoice.tgl_jatuh_tempo.strftime("%B %Y")
-                periode_berikutnya_str = (
-                    db_invoice.tgl_jatuh_tempo + relativedelta(months=1)
-                ).strftime("%B %Y")
+                periode_berikutnya_str = (db_invoice.tgl_jatuh_tempo + relativedelta(months=1)).strftime("%B %Y")
 
                 deskripsi_xendit = (
                     f"Biaya internet up to {paket.kecepatan} Mbps. "
@@ -555,9 +492,7 @@ async def generate_manual_invoice(
             db_invoice, pelanggan, paket, deskripsi_xendit, pajak, no_telp_xendit
         )
 
-        db_invoice.payment_link = xendit_response.get(
-            "short_url", xendit_response.get("invoice_url")
-        )
+        db_invoice.payment_link = xendit_response.get("short_url", xendit_response.get("invoice_url"))
         db_invoice.xendit_id = xendit_response.get("id")
         db_invoice.xendit_external_id = xendit_response.get("external_id")
         await db.commit()
@@ -565,9 +500,7 @@ async def generate_manual_invoice(
     except Exception as e:
         await db.rollback()
         logger.error(f"Gagal membuat invoice di Xendit: {str(e)}")
-        raise HTTPException(
-            status_code=500, detail=f"Gagal membuat invoice di Xendit: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Gagal membuat invoice di Xendit: {str(e)}")
 
     return db_invoice
 
@@ -577,9 +510,7 @@ async def generate_manual_invoice(
     response_model=InvoiceSchema,
     dependencies=[Depends(has_permission("edit_invoices"))],
 )
-async def mark_invoice_as_paid(
-    invoice_id: int, payload: MarkAsPaidRequest, db: AsyncSession = Depends(get_db)
-):
+async def mark_invoice_as_paid(invoice_id: int, payload: MarkAsPaidRequest, db: AsyncSession = Depends(get_db)):
     """Menandai sebuah invoice sebagai lunas secara manual."""
     # PERBAIKAN: Eager load semua relasi yang dibutuhkan oleh _process_successful_payment
     # untuk menghindari N+1 query dan membuat proses lebih efisien.
@@ -589,9 +520,7 @@ async def mark_invoice_as_paid(
         .options(
             selectinload(InvoiceModel.pelanggan).options(
                 selectinload(PelangganModel.harga_layanan),
-                selectinload(PelangganModel.langganan).selectinload(
-                    LanggananModel.paket_layanan
-                ),
+                selectinload(PelangganModel.langganan).selectinload(LanggananModel.paket_layanan),
                 selectinload(PelangganModel.data_teknis),
             )
         )
@@ -611,9 +540,7 @@ async def mark_invoice_as_paid(
     await db.commit()
     await db.refresh(invoice)
 
-    logger.info(
-        f"Invoice {invoice.invoice_number} ditandai lunas secara manual via {payload.metode_pembayaran}"
-    )
+    logger.info(f"Invoice {invoice.invoice_number} ditandai lunas secara manual via {payload.metode_pembayaran}")
 
     return invoice
 
@@ -708,17 +635,13 @@ async def update_overdue_invoices(db: AsyncSession = Depends(get_db)):
                             data_teknis.id_pelanggan,
                         )
                         suspended_count += 1
-                        logger.info(
-                            f"Layanan untuk {pelanggan.nama} (Invoice: {invoice.invoice_number}) telah di-suspend."
-                        )
+                        logger.info(f"Layanan untuk {pelanggan.nama} (Invoice: {invoice.invoice_number}) telah di-suspend.")
                     else:
                         logger.error(
                             f"Data Teknis tidak ditemukan untuk pelanggan {pelanggan.nama}, suspend di Mikrotik dilewati."
                         )
         except Exception as e:
-            logger.error(
-                f"Gagal men-suspend layanan untuk invoice {invoice.invoice_number}: {e}"
-            )
+            logger.error(f"Gagal men-suspend layanan untuk invoice {invoice.invoice_number}: {e}")
 
     await db.commit()
 

@@ -21,9 +21,7 @@ test_engine = create_async_engine(
 )
 
 # Create test session factory
-TestSessionLocal = async_sessionmaker(
-    test_engine, class_=AsyncSession, expire_on_commit=False
-)
+TestSessionLocal = async_sessionmaker(test_engine, class_=AsyncSession, expire_on_commit=False)
 
 
 @pytest_asyncio.fixture(scope="session")
@@ -71,7 +69,7 @@ def sample_user_data():
         "password": "TestPassword123!",
         "full_name": "Test User",
         "is_active": True,
-        "is_superuser": False
+        "is_superuser": False,
     }
 
 
@@ -85,7 +83,7 @@ def sample_pelanggan_data():
         "alamat": "Test Address 123",
         "kode_pos": "12345",
         "kota": "Test City",
-        "provinsi": "Test Province"
+        "provinsi": "Test Province",
     }
 
 
@@ -98,7 +96,7 @@ def sample_paket_layanan_data():
         "harga": 150000,
         "kecepatan": "100 Mbps",
         "tipe": "Fiber",
-        "is_active": True
+        "is_active": True,
     }
 
 
@@ -110,7 +108,7 @@ def sample_invoice_data():
         "jumlah_tagihan": 150000,
         "tanggal_jatuh_tempo": "2024-12-31",
         "status": "unpaid",
-        "deskripsi": "Test invoice description"
+        "deskripsi": "Test invoice description",
     }
 
 
@@ -121,10 +119,7 @@ async def auth_headers(client: AsyncClient, sample_user_data: dict) -> dict:
     await client.post("/users/", json=sample_user_data)
 
     # Login to get token
-    login_data = {
-        "username": sample_user_data["email"],
-        "password": sample_user_data["password"]
-    }
+    login_data = {"username": sample_user_data["email"], "password": sample_user_data["password"]}
     response = await client.post("/users/token", data=login_data)
 
     assert response.status_code == 200
@@ -143,17 +138,14 @@ async def auth_headers_admin(client: AsyncClient) -> dict:
         "password": "AdminPassword123!",
         "full_name": "Admin User",
         "is_active": True,
-        "is_superuser": True
+        "is_superuser": True,
     }
 
     # Create admin user
     await client.post("/users/", json=admin_data)
 
     # Login to get token
-    login_data = {
-        "username": admin_data["email"],
-        "password": admin_data["password"]
-    }
+    login_data = {"username": admin_data["email"], "password": admin_data["password"]}
     response = await client.post("/users/token", data=login_data)
 
     assert response.status_code == 200
@@ -169,7 +161,7 @@ def mock_xendit_service():
     """Mock Xendit service for testing."""
     from unittest.mock import Mock, patch
 
-    with patch('app.services.xendit_service.XenditService') as mock:
+    with patch("app.services.xendit_service.XenditService") as mock:
         mock_instance = Mock()
         mock.return_value = mock_instance
         yield mock_instance
@@ -180,7 +172,7 @@ def mock_mikrotik_service():
     """Mock Mikrotik service for testing."""
     from unittest.mock import Mock, patch
 
-    with patch('app.services.mikrotik_service.MikrotikService') as mock:
+    with patch("app.services.mikrotik_service.MikrotikService") as mock:
         mock_instance = Mock()
         mock.return_value = mock_instance
         yield mock_instance
@@ -191,7 +183,7 @@ def mock_email_service():
     """Mock email service for testing."""
     from unittest.mock import Mock, patch
 
-    with patch('app.services.email_service.EmailService') as mock:
+    with patch("app.services.email_service.EmailService") as mock:
         mock_instance = Mock()
         mock.return_value = mock_instance
         yield mock_instance

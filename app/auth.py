@@ -51,9 +51,7 @@ def verify_access_token(token: str) -> dict:
         raise JWTError("Invalid token")
 
 
-async def get_current_active_user(
-    token: str = Depends(oauth2_scheme), db: AsyncSession = Depends(get_db)
-) -> User:
+async def get_current_active_user(token: str = Depends(oauth2_scheme), db: AsyncSession = Depends(get_db)) -> User:
     """Mengambil pengguna aktif berdasarkan token JWT untuk rute HTTP."""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -68,11 +66,7 @@ async def get_current_active_user(
     except JWTError:
         raise credentials_exception
 
-    query = (
-        select(User)
-        .where(User.id == int(user_id))
-        .options(selectinload(User.role).selectinload(Role.permissions))
-    )
+    query = select(User).where(User.id == int(user_id)).options(selectinload(User.role).selectinload(Role.permissions))
     result = await db.execute(query)
     user = result.scalar_one_or_none()
 
@@ -120,11 +114,7 @@ async def get_user_from_token(token: str, db: AsyncSession) -> User | None:
         raise credentials_exception
 
     # Ambil user dari database
-    query = (
-        select(User)
-        .where(User.id == int(user_id))
-        .options(selectinload(User.role).selectinload(Role.permissions))
-    )
+    query = select(User).where(User.id == int(user_id)).options(selectinload(User.role).selectinload(Role.permissions))
     user = (await db.execute(query)).scalar_one_or_none()
 
     if user is None:

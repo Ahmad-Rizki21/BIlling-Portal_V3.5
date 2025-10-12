@@ -42,16 +42,12 @@ class PaginatedActivityLogResponse(BaseModel):
 
 # --- Endpoint ---
 @router.get("/", response_model=PaginatedActivityLogResponse)
-async def get_activity_logs(
-    skip: int = 0, limit: int = 10, db: AsyncSession = Depends(get_db)
-):
+async def get_activity_logs(skip: int = 0, limit: int = 10, db: AsyncSession = Depends(get_db)):
     """Mengambil daftar log aktivitas dengan paginasi."""
 
     # Query untuk mengambil total item
     total_query = select(ActivityLogModel)
-    total_result = await db.execute(
-        select(func.count()).select_from(total_query.subquery())
-    )
+    total_result = await db.execute(select(func.count()).select_from(total_query.subquery()))
     total = total_result.scalar_one()
 
     # Query untuk mengambil item dengan paginasi dan relasi

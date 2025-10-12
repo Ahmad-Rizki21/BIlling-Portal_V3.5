@@ -30,12 +30,12 @@ class TokenService:
     def create_access_token(self, data: dict, expires_delta: Optional[timedelta] = None) -> str:
         """Create JWT access token"""
         to_encode = data.copy()
-        
+
         if expires_delta:
             expire = datetime.utcnow() + expires_delta
         else:
             expire = datetime.utcnow() + timedelta(minutes=self.access_token_expire_minutes)
-            
+
         to_encode.update({"exp": expire, "iat": datetime.utcnow()})
         encoded_jwt = jwt.encode(to_encode, self.secret_key, algorithm=self.algorithm)
         return encoded_jwt
@@ -43,20 +43,17 @@ class TokenService:
     def create_refresh_token(self, data: dict, expires_delta: Optional[timedelta] = None) -> str:
         """Create refresh token"""
         to_encode = data.copy()
-        
+
         if expires_delta:
             expire = datetime.utcnow() + expires_delta
         else:
             expire = datetime.utcnow() + timedelta(days=self.refresh_token_expire_days)
-            
+
         # Add refresh token specific claims
-        to_encode.update({
-            "exp": expire,
-            "iat": datetime.utcnow(),
-            "type": "refresh",
-            "jti": str(uuid.uuid4())  # JWT ID for blacklisting
-        })
-        
+        to_encode.update(
+            {"exp": expire, "iat": datetime.utcnow(), "type": "refresh", "jti": str(uuid.uuid4())}  # JWT ID for blacklisting
+        )
+
         encoded_jwt = jwt.encode(to_encode, self.secret_key, algorithm=self.algorithm)
         return encoded_jwt
 
@@ -69,9 +66,15 @@ class TokenService:
             logger.error(f"Token verification failed: {e}")
             return None
 
-    async def blacklist_token(self, db: AsyncSession, jti: str, user_id: int,
-                             token_type: str, expires_at: datetime,
-                             reason: str = "Token expired or revoked") -> None:
+    async def blacklist_token(
+        self,
+        db: AsyncSession,
+        jti: str,
+        user_id: int,
+        token_type: str,
+        expires_at: datetime,
+        reason: str = "Token expired or revoked",
+    ) -> None:
         """Add token to blacklist, checking for existence first to ensure idempotency."""
         try:
             # Check if the token is already blacklisted
@@ -87,7 +90,7 @@ class TokenService:
                 expires_at=expires_at,
                 revoked=True,
                 revoked_at=datetime.utcnow(),
-                revoked_reason=reason
+                revoked_reason=reason,
             )
 
             db_blacklist = TokenBlacklistModel(**blacklist_data.model_dump())
@@ -103,12 +106,7 @@ class TokenService:
     async def is_token_blacklisted_db(self, db: AsyncSession, jti: str) -> bool:
         """Check if token is blacklisted in database"""
         try:
-            stmt = select(TokenBlacklistModel).where(
-                and_(
-                    TokenBlacklistModel.jti == jti,
-                    TokenBlacklistModel.revoked == True
-                )
-            )
+            stmt = select(TokenBlacklistModel).where(and_(TokenBlacklistModel.jti == jti, TokenBlacklistModel.revoked == True))
             result = await db.execute(stmt)
             blacklist_entry = result.scalar_one_or_none()
             return blacklist_entry is not None
@@ -155,15 +153,11 @@ class TokenService:
         new_access_token = self.create_access_token(
             data={"sub": str(user.id), "email": user.email}, expires_delta=access_token_expires
         )
-        new_refresh_token = self.create_refresh_token(
-            data={"sub": str(user.id), "email": user.email}
-        )
+        new_refresh_token = self.create_refresh_token(data={"sub": str(user.id), "email": user.email})
 
         # Blacklist the old refresh token
         old_exp = datetime.fromtimestamp(payload.get("exp", 0))
-        await self.blacklist_token(
-            db, jti, int(user_id), "refresh", old_exp, "Token refreshed - old token invalidated"
-        )
+        await self.blacklist_token(db, jti, int(user_id), "refresh", old_exp, "Token refreshed - old token invalidated")
 
         return new_access_token, new_refresh_token, int(access_token_expires.total_seconds())
 
@@ -190,25 +184,23 @@ class TokenService:
         try:
             # Get current time
             now = datetime.utcnow()
-            
+
             # Delete expired blacklist entries (older than 30 days)
             thirty_days_ago = now - timedelta(days=30)
-            
-            stmt = select(TokenBlacklistModel).where(
-                TokenBlacklistModel.expires_at < thirty_days_ago
-            )
+
+            stmt = select(TokenBlacklistModel).where(TokenBlacklistModel.expires_at < thirty_days_ago)
             result = await db.execute(stmt)
             expired_tokens = result.scalars().all()
-            
+
             count = len(expired_tokens)
             for token in expired_tokens:
                 await db.delete(token)
-                
+
             await db.commit()
             logger.info(f"Cleaned up {count} expired tokens from blacklist")
-            
+
             return count
-            
+
         except Exception as e:
             await db.rollback()
             logger.error(f"Failed to cleanup expired tokens: {e}")

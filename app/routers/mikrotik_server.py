@@ -30,12 +30,8 @@ router = APIRouter(
 )
 
 
-@router.post(
-    "/", response_model=MikrotikServerSchema, status_code=status.HTTP_201_CREATED
-)
-async def create_mikrotik_server(
-    server_data: MikrotikServerCreate, db: AsyncSession = Depends(get_db)
-):
+@router.post("/", response_model=MikrotikServerSchema, status_code=status.HTTP_201_CREATED)
+async def create_mikrotik_server(server_data: MikrotikServerCreate, db: AsyncSession = Depends(get_db)):
     """
     Membuat (mendaftarkan) server Mikrotik baru.
     """
@@ -69,9 +65,7 @@ async def get_all_mikrotik_servers(
     if is_active is not None:
         query = query.where(MikrotikServerModel.is_active == is_active)
     if last_connection_status:
-        query = query.where(
-            MikrotikServerModel.last_connection_status == last_connection_status
-        )
+        query = query.where(MikrotikServerModel.last_connection_status == last_connection_status)
     result = await db.execute(query)
     servers = result.scalars().all()
     return servers
@@ -104,7 +98,7 @@ async def update_mikrotik_server(
     update_data = server_update.model_dump(exclude_unset=True)
     if "password" in update_data and not update_data["password"]:
         del update_data["password"]
-    
+
     for key, value in update_data.items():
         setattr(db_server, key, value)
 
@@ -177,52 +171,35 @@ async def test_mikrotik_connection(server_id: int, db: AsyncSession = Depends(ge
     await db.commit()
     await db.refresh(db_server)
 
-    final_response = {
-        "test_result": test_result,
-        "updated_server": db_server
-    }
+    final_response = {"test_result": test_result, "updated_server": db_server}
 
     return JSONResponse(status_code=http_status_code, content=jsonable_encoder(final_response))
 
 
 @router.get("/connection-health/{server_id}")
-async def get_connection_health(
-    server_id: int,
-    db: AsyncSession = Depends(get_db)
-):
+async def get_connection_health(server_id: int, db: AsyncSession = Depends(get_db)):
     """Get detailed connection health status for a specific Mikrotik server."""
     try:
         # Get server from database
-        result = await db.execute(
-            select(MikrotikServerModel).where(MikrotikServerModel.id == server_id)
-        )
+        result = await db.execute(select(MikrotikServerModel).where(MikrotikServerModel.id == server_id))
         server = result.scalar_one_or_none()
 
         if not server:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Mikrotik server dengan ID {server_id} tidak ditemukan"
+                status_code=status.HTTP_404_NOT_FOUND, detail=f"Mikrotik server dengan ID {server_id} tidak ditemukan"
             )
 
         # Get connection health status
-        health_status = mikrotik_pool.get_connection_health_status(
-            host_ip=server.host_ip,
-            port=server.port
-        )
+        health_status = mikrotik_pool.get_connection_health_status(host_ip=server.host_ip, port=server.port)
 
-        return {
-            "server_id": server_id,
-            "server_name": server.nama_server,
-            "connection_health": health_status
-        }
+        return {"server_id": server_id, "server_name": server.nama_server, "connection_health": health_status}
 
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error getting connection health for server {server_id}: {e}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Gagal mengambil status koneksi: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Gagal mengambil status koneksi: {str(e)}"
         )
 
 
@@ -236,8 +213,7 @@ async def get_all_connection_health():
     except Exception as e:
         logger.error(f"Error getting all connection health status: {e}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Gagal mengambil status koneksi: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Gagal mengambil status koneksi: {str(e)}"
         )
 
 
@@ -246,17 +222,11 @@ async def cleanup_connections():
     """Manually trigger cleanup of stale connections."""
     try:
         cleanup_stats = mikrotik_pool.cleanup_stale_connections()
-        return {
-            "message": "Connection cleanup completed successfully",
-            "cleanup_statistics": cleanup_stats
-        }
+        return {"message": "Connection cleanup completed successfully", "cleanup_statistics": cleanup_stats}
 
     except Exception as e:
         logger.error(f"Error during connection cleanup: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Gagal membersihkan koneksi: {str(e)}"
-        )
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Gagal membersihkan koneksi: {str(e)}")
 
 
 @router.get("/pool-config")
@@ -264,14 +234,10 @@ async def get_pool_config():
     """Get current connection pool configuration."""
     try:
         config = mikrotik_pool.get_pool_config()
-        return {
-            "message": "Pool configuration retrieved successfully",
-            "configuration": config
-        }
+        return {"message": "Pool configuration retrieved successfully", "configuration": config}
 
     except Exception as e:
         logger.error(f"Error getting pool config: {e}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Gagal mengambil konfigurasi pool: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Gagal mengambil konfigurasi pool: {str(e)}"
         )

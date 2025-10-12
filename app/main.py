@@ -119,25 +119,14 @@ async def maintenance_mode_middleware(request: Request, call_next):
 
     async with AsyncSessionLocal() as db:
         # Ambil status maintenance dari database dengan query berdasarkan key
-        stmt_active = select(SettingModel).where(
-            SettingModel.setting_key == "maintenance_active"
-        )
-        maintenance_active_setting = (
-            await db.execute(stmt_active)
-        ).scalar_one_or_none()
-        is_active = (
-            maintenance_active_setting
-            and maintenance_active_setting.setting_value.lower() == "true"
-        )
+        stmt_active = select(SettingModel).where(SettingModel.setting_key == "maintenance_active")
+        maintenance_active_setting = (await db.execute(stmt_active)).scalar_one_or_none()
+        is_active = maintenance_active_setting and maintenance_active_setting.setting_value.lower() == "true"
 
         if is_active:
             # Jika maintenance aktif, ambil pesannya
-            stmt_message = select(SettingModel).where(
-                SettingModel.setting_key == "maintenance_message"
-            )
-            maintenance_message_setting = (
-                await db.execute(stmt_message)
-            ).scalar_one_or_none()
+            stmt_message = select(SettingModel).where(SettingModel.setting_key == "maintenance_message")
+            maintenance_message_setting = (await db.execute(stmt_message)).scalar_one_or_none()
             message = (
                 maintenance_message_setting.setting_value
                 if maintenance_message_setting
@@ -160,9 +149,7 @@ async def maintenance_mode_middleware(request: Request, call_next):
 
 
 # --- FUNGSI BANTU UNTUK MENDAPATKAN USER DARI TOKEN (VERSI AMAN UNTUK LOGGING) ---
-async def get_user_from_token_for_logging(
-    token: str, db: AsyncSession
-) -> UserModel | None:
+async def get_user_from_token_for_logging(token: str, db: AsyncSession) -> UserModel | None:
     """
     Mendekode token dan mengambil data user untuk keperluan logging.
     Fungsi ini aman dan akan mengembalikan None jika terjadi error, tanpa menghentikan aplikasi.
@@ -170,9 +157,7 @@ async def get_user_from_token_for_logging(
     if not token:
         return None
     try:
-        payload = jwt.decode(
-            token, config.settings.SECRET_KEY, algorithms=[config.settings.ALGORITHM]
-        )
+        payload = jwt.decode(token, config.settings.SECRET_KEY, algorithms=[config.settings.ALGORITHM])
         user_id: str | None = payload.get("sub")
         if user_id is None:
             return None
@@ -206,9 +191,7 @@ async def log_requests_and_activity(request: Request, call_next):
 
     # Jika ini adalah webhook Xendit, log lebih detail
     if "xendit-callback" in str(request.url):
-        logger.info(
-            f"Xendit webhook body: {req_body_bytes.decode('utf-8') if req_body_bytes else 'Empty body'}"
-        )
+        logger.info(f"Xendit webhook body: {req_body_bytes.decode('utf-8') if req_body_bytes else 'Empty body'}")
 
     response = await call_next(request_with_body)
 
@@ -216,10 +199,7 @@ async def log_requests_and_activity(request: Request, call_next):
     logger.info(f"Response status: {response.status_code} in {process_time:.2f}s")
 
     # --- LOGIKA BARU: SIMPAN ACTIVITY LOG KE DATABASE ---
-    if (
-        request.method in ["POST", "PATCH", "DELETE"]
-        and 200 <= response.status_code < 300
-    ):
+    if request.method in ["POST", "PATCH", "DELETE"] and 200 <= response.status_code < 300:
         if "/token" not in str(request.url) and "/login" not in str(request.url):
             async with AsyncSessionLocal() as db:
                 try:
@@ -241,9 +221,7 @@ async def log_requests_and_activity(request: Request, call_next):
                         )
                         db.add(log_entry)
                         await db.commit()
-                        logger.info(
-                            f"Activity logged for user {user.email}: {log_entry.action}"
-                        )
+                        logger.info(f"Activity logged for user {user.email}: {log_entry.action}")
                 except Exception as e:
                     logger.error(f"Failed to log activity: {e}", exc_info=True)
 

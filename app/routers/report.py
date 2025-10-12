@@ -106,7 +106,7 @@ async def get_revenue_report_details(
             InvoiceModel.pelanggan_id,
             PelangganModel.nama,
             PelangganModel.alamat,
-            PelangganModel.id_brand
+            PelangganModel.id_brand,
         )
         .join(InvoiceModel.pelanggan)
         .where(and_(*filter_conditions))
@@ -125,13 +125,11 @@ async def get_revenue_report_details(
 
     # Ambil semua id_brand unik untuk query harga_layanan
     id_brands = [data.id_brand for data in invoice_pelanggan_data if data.id_brand]
-    
+
     # Query harga_layanan terkait
     brand_harga_layanan = {}
     if id_brands:
-        harga_layanan_query = select(HargaLayananMode).where(
-            HargaLayananMode.id_brand.in_(id_brands)
-        )
+        harga_layanan_query = select(HargaLayananMode).where(HargaLayananMode.id_brand.in_(id_brands))
         harga_layanan_result = await db.execute(harga_layanan_query)
         for harga_layanan in harga_layanan_result.scalars().all():
             brand_harga_layanan[harga_layanan.id_brand] = harga_layanan

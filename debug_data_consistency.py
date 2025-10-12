@@ -12,6 +12,7 @@ from app.database import get_db, engine
 from app.models.langganan import Langganan
 from app.models.pelanggan import Pelanggan
 
+
 async def debug_data_consistency():
     """Cek konsistensi data antara langganan dan pelanggan"""
 
@@ -32,13 +33,15 @@ async def debug_data_consistency():
         print("\n🚨 Mengecek data yang tidak konsisten...")
 
         # Query untuk menemukan pelanggan_id yang ada di langganan tapi tidak ada di pelanggan
-        query = text("""
+        query = text(
+            """
             SELECT DISTINCT l.pelanggan_id, l.id as langganan_id, l.status
             FROM langganan l
             LEFT JOIN pelanggan p ON l.pelanggan_id = p.id
             WHERE p.id IS NULL
             ORDER BY l.pelanggan_id
-        """)
+        """
+        )
 
         result = await conn.execute(query)
         orphaned_langganan = result.fetchall()
@@ -62,12 +65,16 @@ async def debug_data_consistency():
 
         if langganan_244 > 0:
             # Cek detail langganan ID 244
-            detail_244 = await conn.execute(text("""
+            detail_244 = await conn.execute(
+                text(
+                    """
                 SELECT l.id, l.pelanggan_id, l.status, p.nama as pelanggan_nama
                 FROM langganan l
                 LEFT JOIN pelanggan p ON l.pelanggan_id = p.id
                 WHERE l.id = 244
-            """))
+            """
+                )
+            )
             row_244 = detail_244.fetchone()
 
             if row_244:
@@ -84,11 +91,15 @@ async def debug_data_consistency():
 
         if pelanggan_258 > 0:
             # Cek detail pelanggan ID 258
-            detail_258 = await conn.execute(text("""
+            detail_258 = await conn.execute(
+                text(
+                    """
                 SELECT p.id, p.nama, p.no_telp, p.email
                 FROM pelanggan p
                 WHERE p.id = 258
-            """))
+            """
+                )
+            )
             row_258 = detail_258.fetchone()
 
             if row_258:
@@ -109,10 +120,13 @@ async def debug_data_consistency():
 
             print("\n-- Opsi 2: Update ke pelanggan dummy (lebih aman)")
             print("-- Pertama, buat pelanggan dummy:")
-            print("INSERT INTO pelanggan (id, nama, alamat, no_telp, email) VALUES (999999, 'PELANGGAN DUMMY', 'Alamat Dummy', '0000000000', 'dummy@example.com') ON CONFLICT (id) DO NOTHING;")
+            print(
+                "INSERT INTO pelanggan (id, nama, alamat, no_telp, email) VALUES (999999, 'PELANGGAN DUMMY', 'Alamat Dummy', '0000000000', 'dummy@example.com') ON CONFLICT (id) DO NOTHING;"
+            )
             print("-- Kemudian update langganan:")
             for row in orphaned_langganan:
                 print(f"UPDATE langganan SET pelanggan_id = 999999 WHERE id = {row[1]};")
+
 
 async def main():
     """Main function"""
@@ -124,6 +138,7 @@ async def main():
     except Exception as e:
         print(f"❌ Error: {e}")
         sys.exit(1)
+
 
 if __name__ == "__main__":
     asyncio.run(main())

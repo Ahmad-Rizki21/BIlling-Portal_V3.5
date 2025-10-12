@@ -64,9 +64,7 @@ logger = logging.getLogger(__name__)
 
 
 @router.post("/", response_model=DataTeknisSchema, status_code=status.HTTP_201_CREATED)
-async def create_data_teknis(
-    data_teknis: DataTeknisCreate, db: AsyncSession = Depends(get_db)
-):
+async def create_data_teknis(data_teknis: DataTeknisCreate, db: AsyncSession = Depends(get_db)):
     """
     Membuat data teknis baru untuk seorang pelanggan.
     """
@@ -80,9 +78,7 @@ async def create_data_teknis(
 
     # Cek apakah pelanggan ini sudah punya data teknis
     existing_data_teknis_query = await db.execute(
-        select(DataTeknisModel).where(
-            DataTeknisModel.pelanggan_id == data_teknis.pelanggan_id
-        )
+        select(DataTeknisModel).where(DataTeknisModel.pelanggan_id == data_teknis.pelanggan_id)
     )
     if existing_data_teknis_query.scalar_one_or_none():
         raise HTTPException(
@@ -93,17 +89,11 @@ async def create_data_teknis(
     db_data_teknis = DataTeknisModel(**data_teknis.model_dump())
     db.add(db_data_teknis)
     await db.commit()
-    await db.refresh(
-        db_data_teknis, attribute_names=["pelanggan"]
-    )  # Eager load pelanggan
+    await db.refresh(db_data_teknis, attribute_names=["pelanggan"])  # Eager load pelanggan
 
     try:
         # 1. Cari semua user ID dengan role "Finance"
-        finance_role_query = (
-            select(UserModel.id)
-            .join(RoleModel)
-            .where(func.lower(RoleModel.name) == "Finance")
-        )
+        finance_role_query = select(UserModel.id).join(RoleModel).where(func.lower(RoleModel.name) == "Finance")
         result = await db.execute(finance_role_query)
         finance_user_ids = result.scalars().all()
 
@@ -113,19 +103,13 @@ async def create_data_teknis(
                 "type": "new_technical_data",
                 "data": {
                     "pelanggan_id": db_data_teknis.pelanggan_id,  # <-- TAMBAHKAN BARIS INI
-                    "pelanggan_nama": (
-                        db_data_teknis.pelanggan.nama
-                        if db_data_teknis.pelanggan
-                        else "N/A"
-                    ),
+                    "pelanggan_nama": (db_data_teknis.pelanggan.nama if db_data_teknis.pelanggan else "N/A"),
                     "message": f"Data teknis untuk {db_data_teknis.pelanggan.nama} telah ditambahkan. Siap dibuatkan langganan.",
                 },
             }
             # 3. Kirim notifikasi ke semua user Finance yang online
             await manager.broadcast_to_roles(notification_payload, finance_user_ids)
-            logger.info(
-                f"Notifikasi data teknis baru dikirim ke {len(finance_user_ids)} user Finance."
-            )
+            logger.info(f"Notifikasi data teknis baru dikirim ke {len(finance_user_ids)} user Finance.")
     except Exception as e:
         logger.error(f"Gagal mengirim notifikasi data teknis baru: {str(e)}")
 
@@ -135,10 +119,7 @@ async def create_data_teknis(
     except Exception as e:
         # Jika gagal membuat secret, jangan batalkan proses.
         # Cukup catat errornya. Data teknis tetap berhasil dibuat.
-        logger.error(
-            f"Data teknis ID {db_data_teknis.id} berhasil disimpan, "
-            f"namun gagal membuat secret di Mikrotik: {e}"
-        )
+        logger.error(f"Data teknis ID {db_data_teknis.id} berhasil disimpan, " f"namun gagal membuat secret di Mikrotik: {e}")
 
     return db_data_teknis
 
@@ -158,9 +139,7 @@ async def read_all_data_teknis(
 
     if search:
         search_term = f"%{search}%"
-        query = query.join(
-            PelangganModel, DataTeknisModel.pelanggan_id == PelangganModel.id
-        ).where(
+        query = query.join(PelangganModel, DataTeknisModel.pelanggan_id == PelangganModel.id).where(
             or_(
                 func.coalesce(PelangganModel.nama, "").ilike(search_term),
                 func.coalesce(DataTeknisModel.id_pelanggan, "").ilike(search_term),
@@ -188,9 +167,7 @@ async def read_all_data_teknis(
 
 
 @router.get("/{data_teknis_id}", response_model=DataTeknisSchema)
-async def read_data_teknis_by_id(
-    data_teknis_id: int, db: AsyncSession = Depends(get_db)
-):
+async def read_data_teknis_by_id(data_teknis_id: int, db: AsyncSession = Depends(get_db)):
     """
     Mengambil satu data teknis berdasarkan ID.
     """
@@ -212,11 +189,7 @@ async def update_data_teknis(
     db_data_teknis = await db.get(
         DataTeknisModel,
         data_teknis_id,
-        options=[
-            selectinload(DataTeknisModel.pelanggan).selectinload(
-                PelangganModel.langganan
-            )
-        ],
+        options=[selectinload(DataTeknisModel.pelanggan).selectinload(PelangganModel.langganan)],
     )
     if not db_data_teknis:
         raise HTTPException(status_code=404, detail="Data Teknis not found")
@@ -239,13 +212,9 @@ async def update_data_teknis(
         if db_data_teknis.pelanggan and db_data_teknis.pelanggan.langganan:
             langganan_terkait = db_data_teknis.pelanggan.langganan[0]
 
-            logger.info(
-                f"Mentrigger update Mikrotik untuk Data Teknis ID: {db_data_teknis.id}"
-            )
+            logger.info(f"Mentrigger update Mikrotik untuk Data Teknis ID: {db_data_teknis.id}")
             # Panggil service dengan argumen baru: nama lama
-            await mikrotik_service.trigger_mikrotik_update(
-                db, langganan_terkait, db_data_teknis, old_id_pelanggan
-            )
+            await mikrotik_service.trigger_mikrotik_update(db, langganan_terkait, db_data_teknis, old_id_pelanggan)
         else:
             logger.warning(
                 f"Data Teknis ID {db_data_teknis.id} diupdate, "
@@ -253,8 +222,7 @@ async def update_data_teknis(
             )
     except Exception as e:
         logger.error(
-            f"Data teknis ID {db_data_teknis.id} berhasil diupdate di DB, "
-            f"namun GAGAL sinkronisasi ke Mikrotik: {e}"
+            f"Data teknis ID {db_data_teknis.id} berhasil diupdate di DB, " f"namun GAGAL sinkronisasi ke Mikrotik: {e}"
         )
 
     return db_data_teknis
@@ -278,9 +246,7 @@ async def delete_data_teknis(data_teknis_id: int, db: AsyncSession = Depends(get
 @router.post("/check-ip", response_model=IPCheckResponse)
 async def check_ip_address(request: IPCheckRequest, db: AsyncSession = Depends(get_db)):
     # 1. Pengecekan ke database (tetap sama)
-    query = select(DataTeknisModel).where(
-        DataTeknisModel.ip_pelanggan == request.ip_address
-    )
+    query = select(DataTeknisModel).where(DataTeknisModel.ip_pelanggan == request.ip_address)
     if request.current_id:
         query = query.where(DataTeknisModel.id != request.current_id)
 
@@ -301,9 +267,7 @@ async def check_ip_address(request: IPCheckRequest, db: AsyncSession = Depends(g
         api, connection = mikrotik_service.get_api_connection(server)
         if api:
             try:
-                owner_name = mikrotik_service.check_ip_in_secrets(
-                    api, request.ip_address
-                )
+                owner_name = mikrotik_service.check_ip_in_secrets(api, request.ip_address)
                 if owner_name:
                     return IPCheckResponse(
                         is_taken=True,
@@ -378,9 +342,7 @@ async def download_csv_template_teknis():
     writer.writerows(sample_data)
     output.seek(0)
 
-    response_headers = {
-        "Content-Disposition": 'attachment; filename="template_import_teknis.csv"'
-    }
+    response_headers = {"Content-Disposition": 'attachment; filename="template_import_teknis.csv"'}
     return StreamingResponse(
         io.BytesIO(output.getvalue().encode("utf-8")),
         headers=response_headers,
@@ -403,9 +365,7 @@ async def export_to_csv_teknis(db: AsyncSession = Depends(get_db)):
     data_list = result.scalars().unique().all()
 
     if not data_list:
-        raise HTTPException(
-            status_code=404, detail="Tidak ada data teknis untuk diekspor."
-        )
+        raise HTTPException(status_code=404, detail="Tidak ada data teknis untuk diekspor.")
 
     output = io.StringIO()
     output.write("\ufeff")
@@ -421,9 +381,7 @@ async def export_to_csv_teknis(db: AsyncSession = Depends(get_db)):
                 "Profile PPPoE": d.profile_pppoe,
                 "VLAN": d.id_vlan,
                 # DIUBAH: Tampilkan nama server, bukan ID
-                "Nama Mikrotik Server": (
-                    d.mikrotik_server.name if d.mikrotik_server else "N/A"
-                ),
+                "Nama Mikrotik Server": (d.mikrotik_server.name if d.mikrotik_server else "N/A"),
                 # DIUBAH: Tampilkan kode ODP, bukan ID
                 "Kode ODP": d.odp.kode_odp if d.odp else "N/A",
                 "Port ODP": d.port_odp,  # BARU
@@ -437,9 +395,7 @@ async def export_to_csv_teknis(db: AsyncSession = Depends(get_db)):
         )
 
     if not rows_to_write:
-        raise HTTPException(
-            status_code=404, detail="Tidak ada data valid untuk diekspor."
-        )
+        raise HTTPException(status_code=404, detail="Tidak ada data valid untuk diekspor.")
 
     writer = csv.DictWriter(output, fieldnames=rows_to_write[0].keys())
     writer.writeheader()
@@ -456,9 +412,7 @@ async def export_to_csv_teknis(db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/import/csv")
-async def import_from_csv_teknis(
-    file: UploadFile = File(...), db: AsyncSession = Depends(get_db)
-):
+async def import_from_csv_teknis(file: UploadFile = File(...), db: AsyncSession = Depends(get_db)):
     """
     Mengimpor data teknis dari file CSV dengan validasi relasi berdasarkan nama/kode.
     """
@@ -484,53 +438,31 @@ async def import_from_csv_teknis(
         reader = list(reader_object)
     except Exception as e:
         logger.error(f"Gagal membaca atau mem-parsing file CSV: {repr(e)}")
-        raise HTTPException(
-            status_code=400, detail=f"Gagal memproses file CSV: {repr(e)}"
-        )
+        raise HTTPException(status_code=400, detail=f"Gagal memproses file CSV: {repr(e)}")
 
     # --- OPTIMISASI: PRE-FETCH DATA SEBELUM LOOP (MENGHINDARI N+1 QUERY) ---
     # 1. Kumpulkan semua data unik yang perlu dicari dari CSV
-    emails_to_find = {
-        row.get("email_pelanggan", "").lower().strip()
-        for row in reader
-        if row.get("email_pelanggan")
-    }
-    server_names_to_find = {
-        row.get("olt", "").strip() for row in reader if row.get("olt")
-    }
-    odp_codes_to_find = {
-        row.get("kode_odp", "").strip() for row in reader if row.get("kode_odp")
-    }
+    emails_to_find = {row.get("email_pelanggan", "").lower().strip() for row in reader if row.get("email_pelanggan")}
+    server_names_to_find = {row.get("olt", "").strip() for row in reader if row.get("olt")}
+    odp_codes_to_find = {row.get("kode_odp", "").strip() for row in reader if row.get("kode_odp")}
 
     # 2. Lakukan query besar-besaran di luar loop untuk efisiensi
     # Ambil semua pelanggan yang relevan dalam satu query
-    pelanggan_q = await db.execute(
-        select(PelangganModel).where(
-            func.lower(PelangganModel.email).in_(emails_to_find)
-        )
-    )
+    pelanggan_q = await db.execute(select(PelangganModel).where(func.lower(PelangganModel.email).in_(emails_to_find)))
     pelanggan_map = {p.email.lower(): p for p in pelanggan_q.scalars().all()}
 
     # Ambil semua server yang relevan dalam satu query
-    server_q = await db.execute(
-        select(MikrotikServerModel).where(
-            MikrotikServerModel.name.in_(server_names_to_find)
-        )
-    )
+    server_q = await db.execute(select(MikrotikServerModel).where(MikrotikServerModel.name.in_(server_names_to_find)))
     server_map = {s.name: s for s in server_q.scalars().all()}
 
     # Ambil semua ODP yang relevan dalam satu query
-    odp_q = await db.execute(
-        select(ODPModel).where(ODPModel.kode_odp.in_(odp_codes_to_find))
-    )
+    odp_q = await db.execute(select(ODPModel).where(ODPModel.kode_odp.in_(odp_codes_to_find)))
     odp_map = {o.kode_odp: o for o in odp_q.scalars().all()}
 
     # Ambil semua data teknis yang sudah ada untuk pelanggan yang ditemukan
     pelanggan_ids_found = [p.id for p in pelanggan_map.values()]
     existing_teknis_q = await db.execute(
-        select(DataTeknisModel.pelanggan_id).where(
-            DataTeknisModel.pelanggan_id.in_(pelanggan_ids_found)
-        )
+        select(DataTeknisModel.pelanggan_id).where(DataTeknisModel.pelanggan_id.in_(pelanggan_ids_found))
     )
     existing_teknis_pelanggan_ids = set(existing_teknis_q.scalars().all())
     # --- AKHIR OPTIMISASI ---
@@ -548,21 +480,15 @@ async def import_from_csv_teknis(
             # 2. Validasi dari data yang sudah di-prefetch (tanpa query baru)
             pelanggan = pelanggan_map.get(email)
             if not pelanggan:
-                errors.append(
-                    f"Baris {row_num}: Pelanggan dengan email '{email}' tidak ditemukan."
-                )
+                errors.append(f"Baris {row_num}: Pelanggan dengan email '{email}' tidak ditemukan.")
                 continue
 
             # Cek duplikasi email di file & apakah pelanggan sudah punya data teknis
             if email in processed_emails:
-                errors.append(
-                    f"Baris {row_num}: Email '{email}' duplikat di dalam file."
-                )
+                errors.append(f"Baris {row_num}: Email '{email}' duplikat di dalam file.")
                 continue
             if pelanggan.id in existing_teknis_pelanggan_ids:
-                errors.append(
-                    f"Baris {row_num}: Pelanggan '{pelanggan.nama}' sudah memiliki data teknis."
-                )
+                errors.append(f"Baris {row_num}: Pelanggan '{pelanggan.nama}' sudah memiliki data teknis.")
                 continue
 
             # 3. Validasi Relasi ke Mikrotik Server (OLT)
@@ -578,16 +504,12 @@ async def import_from_csv_teknis(
             if data_import.kode_odp:
                 odp = odp_map.get(data_import.kode_odp)
                 if not odp:
-                    errors.append(
-                        f"Baris {row_num}: ODP dengan kode '{data_import.kode_odp}' tidak ditemukan."
-                    )
+                    errors.append(f"Baris {row_num}: ODP dengan kode '{data_import.kode_odp}' tidak ditemukan.")
                     continue
                 odp_id = odp.id
 
             # 5. Siapkan data untuk disimpan ke database
-            teknis_data_dict = data_import.model_dump(
-                exclude={"email_pelanggan", "nama_mikrotik_server", "kode_odp"}
-            )
+            teknis_data_dict = data_import.model_dump(exclude={"email_pelanggan", "nama_mikrotik_server", "kode_odp"})
 
             teknis_data_dict["pelanggan_id"] = pelanggan.id
             teknis_data_dict["mikrotik_server_id"] = mikrotik_server.id
@@ -600,9 +522,7 @@ async def import_from_csv_teknis(
             processed_emails.add(email)
 
         except ValidationError as e:
-            error_details = "; ".join(
-                [f"{err['loc'][0]}: {err['msg']}" for err in e.errors()]
-            )
+            error_details = "; ".join([f"{err['loc'][0]}: {err['msg']}" for err in e.errors()])
             errors.append(f"Baris {row_num}: {error_details}")
         except Exception as e:
             errors.append(f"Baris {row_num}: Terjadi error tak terduga - {repr(e)}")
@@ -614,9 +534,7 @@ async def import_from_csv_teknis(
         )
 
     if not data_to_create:
-        raise HTTPException(
-            status_code=400, detail="Tidak ada data valid untuk diimpor."
-        )
+        raise HTTPException(status_code=400, detail="Tidak ada data valid untuk diimpor.")
 
     try:
         db.add_all(data_to_create)
@@ -624,9 +542,7 @@ async def import_from_csv_teknis(
     except Exception as e:
         await db.rollback()
         logger.error(f"Database error during import: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=500, detail=f"Gagal menyimpan ke database: {repr(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Gagal menyimpan ke database: {repr(e)}")
 
     return {"message": f"Berhasil mengimpor {len(data_to_create)} data teknis baru."}
 
@@ -658,9 +574,7 @@ async def get_available_profiles(
         raise HTTPException(status_code=404, detail="Paket Layanan tidak ditemukan")
 
     # 2. Coba cari Data Teknis yang sudah ada untuk pelanggan ini (untuk mode EDIT)
-    data_teknis_stmt = select(DataTeknisModel).where(
-        DataTeknisModel.pelanggan_id == pelanggan_id
-    )
+    data_teknis_stmt = select(DataTeknisModel).where(DataTeknisModel.pelanggan_id == pelanggan_id)
     data_teknis = (await db.execute(data_teknis_stmt)).scalar_one_or_none()
 
     # 3. Tentukan ID server yang akan digunakan
@@ -668,9 +582,7 @@ async def get_available_profiles(
     if data_teknis and data_teknis.mikrotik_server_id:
         # Prioritas 1: Gunakan ID dari data teknis yang sudah ada (mode EDIT)
         server_id_to_use = data_teknis.mikrotik_server_id
-        logger.info(
-            f"Mode Edit: Menggunakan server ID {server_id_to_use} dari database."
-        )
+        logger.info(f"Mode Edit: Menggunakan server ID {server_id_to_use} dari database.")
     elif mikrotik_server_id:
         # Prioritas 2: Gunakan ID dari query param (mode CREATE)
         server_id_to_use = mikrotik_server_id
@@ -685,9 +597,7 @@ async def get_available_profiles(
     # 4. Ambil info server Mikrotik berdasarkan ID yang sudah ditentukan
     mikrotik_server_info = await db.get(MikrotikServerModel, server_id_to_use)
     if not mikrotik_server_info:
-        logger.error(
-            f"Server Mikrotik dengan ID {server_id_to_use} tidak ditemukan di database."
-        )
+        logger.error(f"Server Mikrotik dengan ID {server_id_to_use} tidak ditemukan di database.")
         raise HTTPException(
             status_code=404,
             detail=f"Server Mikrotik untuk pelanggan ini tidak ditemukan.",
@@ -708,15 +618,11 @@ async def get_available_profiles(
         relevant_profiles = [p for p in all_profiles_on_router if kecepatan_str in p]
 
         if not relevant_profiles:
-            logger.info(
-                f"Tidak ada profile dengan '{kecepatan_str}' ditemukan di Mikrotik."
-            )
+            logger.info(f"Tidak ada profile dengan '{kecepatan_str}' ditemukan di Mikrotik.")
             return []
 
         active_connections = mikrotik_service.get_active_connections(api)
-        active_profile_names = [
-            conn.get("profile") for conn in active_connections if "profile" in conn
-        ]
+        active_profile_names = [conn.get("profile") for conn in active_connections if "profile" in conn]
         profile_usage_map = Counter(active_profile_names)
 
         response_data = []
@@ -733,9 +639,7 @@ async def get_available_profiles(
 
     except Exception as e:
         logger.error(f"Terjadi error saat mengambil data profile dari Mikrotik: {e}")
-        raise HTTPException(
-            status_code=500, detail="Gagal memproses data dari Mikrotik."
-        )
+        raise HTTPException(status_code=500, detail="Gagal memproses data dari Mikrotik.")
     finally:
         if connection:
             logger.info("Menutup koneksi Mikrotik.")
@@ -748,17 +652,11 @@ async def get_available_profiles(
     response_model=List[ProfileUsage],
     include_in_schema=False,
 )
-async def get_available_profiles_legacy(
-    paket_layanan_id: int, db: AsyncSession = Depends(get_db)
-):
+async def get_available_profiles_legacy(paket_layanan_id: int, db: AsyncSession = Depends(get_db)):
     """Fungsi lama, gunakan yang baru dengan pelanggan_id."""
-    logger.warning(
-        "Memanggil endpoint lama /available-profiles/{paket_layanan_id}. Gunakan yang baru."
-    )
+    logger.warning("Memanggil endpoint lama /available-profiles/{paket_layanan_id}. Gunakan yang baru.")
     # Fallback ke server aktif pertama
-    server_result = await db.execute(
-        select(MikrotikServerModel).where(MikrotikServerModel.is_active == True)
-    )
+    server_result = await db.execute(select(MikrotikServerModel).where(MikrotikServerModel.is_active == True))
     server_to_check = server_result.scalars().first()
 
     if not server_to_check:
@@ -772,18 +670,14 @@ async def get_available_profiles_legacy(
     kecepatan_str = f"{paket.kecepatan}Mbps"
     api, connection = mikrotik_service.get_api_connection(server_to_check)
     if not api:
-        raise HTTPException(
-            status_code=503, detail="Tidak dapat terhubung ke Mikrotik."
-        )
+        raise HTTPException(status_code=503, detail="Tidak dapat terhubung ke Mikrotik.")
 
     try:
         all_profiles_on_router = mikrotik_service.get_all_ppp_profiles(api)
         relevant_profiles = [p for p in all_profiles_on_router if kecepatan_str in p]
 
         active_connections = mikrotik_service.get_active_connections(api)
-        active_profile_names = [
-            conn.get("profile") for conn in active_connections if "profile" in conn
-        ]
+        active_profile_names = [conn.get("profile") for conn in active_connections if "profile" in conn]
 
         profile_usage_map = Counter(active_profile_names)
 

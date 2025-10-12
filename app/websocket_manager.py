@@ -34,11 +34,11 @@ class ConnectionManager:
 
         # Performance metrics
         self.metrics = {
-            'total_connections': 0,
-            'messages_sent': 0,
-            'messages_failed': 0,
-            'avg_response_time': 0,
-            'connection_duration': defaultdict(list)
+            "total_connections": 0,
+            "messages_sent": 0,
+            "messages_failed": 0,
+            "avg_response_time": 0,
+            "connection_duration": defaultdict(list),
         }
 
     async def connect(self, websocket: WebSocket, user_id: int):
@@ -63,17 +63,15 @@ class ConnectionManager:
 
         # Track connection metadata for performance monitoring
         self.connection_metadata[user_id] = {
-            'connected_at': time.time(),
-            'last_ping': time.time(),
-            'messages_sent': 0,
-            'last_activity': time.time()
+            "connected_at": time.time(),
+            "last_ping": time.time(),
+            "messages_sent": 0,
+            "last_activity": time.time(),
         }
 
-        self.metrics['total_connections'] += 1
+        self.metrics["total_connections"] += 1
 
-        logger.info(
-            f"User {user_id} connected. Total connections: {len(self.active_connections)}"
-        )
+        logger.info(f"User {user_id} connected. Total connections: {len(self.active_connections)}")
 
         # Start heartbeat if not already running
         if self._heartbeat_task is None:
@@ -84,8 +82,8 @@ class ConnectionManager:
         if user_id in self.active_connections:
             # Track connection duration
             if user_id in self.connection_metadata:
-                duration = time.time() - self.connection_metadata[user_id]['connected_at']
-                self.metrics['connection_duration'][user_id].append(duration)
+                duration = time.time() - self.connection_metadata[user_id]["connected_at"]
+                self.metrics["connection_duration"][user_id].append(duration)
                 del self.connection_metadata[user_id]
 
             # Clean up role tracking
@@ -93,9 +91,7 @@ class ConnectionManager:
                 del self.user_roles[user_id]
 
             del self.active_connections[user_id]
-            logger.info(
-                f"User {user_id} disconnected. Total connections: {len(self.active_connections)}"
-            )
+            logger.info(f"User {user_id} disconnected. Total connections: {len(self.active_connections)}")
 
     async def add_user_role(self, user_id: int, role: str):
         """Add role to user for targeted broadcasting."""
@@ -162,9 +158,7 @@ class ConnectionManager:
 
         # Update metrics
         process_time = time.time() - start_time
-        self.metrics['avg_response_time'] = (
-            (self.metrics['avg_response_time'] + process_time) / 2
-        )
+        self.metrics["avg_response_time"] = (self.metrics["avg_response_time"] + process_time) / 2
 
     async def _direct_broadcast(self, message_json: str, user_ids: List[int]):
         """Direct broadcast untuk small batches."""
@@ -178,9 +172,7 @@ class ConnectionManager:
                 tasks.append(websocket.send_text(message_json))
 
         if tasks:
-            logger.info(
-                f"Broadcasting to {len(tasks)} user(s)."
-            )
+            logger.info(f"Broadcasting to {len(tasks)} user(s).")
             # Gunakan return_exceptions=True untuk mencegah satu error menghentikan semua
             results = await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -188,28 +180,23 @@ class ConnectionManager:
             success_count = 0
             for i, result in enumerate(results):
                 if isinstance(result, Exception):
-                    self.metrics['messages_failed'] += 1
-                    logger.error(
-                        f"Failed to send message to user {active_user_ids[i]}: {result}"
-                    )
+                    self.metrics["messages_failed"] += 1
+                    logger.error(f"Failed to send message to user {active_user_ids[i]}: {result}")
                 else:
                     success_count += 1
                     # Update user activity
                     if active_user_ids[i] in self.connection_metadata:
-                        self.connection_metadata[active_user_ids[i]]['last_activity'] = time.time()
-                        self.connection_metadata[active_user_ids[i]]['messages_sent'] += 1
+                        self.connection_metadata[active_user_ids[i]]["last_activity"] = time.time()
+                        self.connection_metadata[active_user_ids[i]]["messages_sent"] += 1
 
-            self.metrics['messages_sent'] += success_count
+            self.metrics["messages_sent"] += success_count
 
     async def _batch_broadcast(self, message_json: str, user_ids: List[int]):
         """Batch processing untuk large broadcasts."""
         logger.info(f"Starting batch broadcast to {len(user_ids)} users")
 
         # Split into batches
-        batches = [
-            user_ids[i:i + self._batch_size]
-            for i in range(0, len(user_ids), self._batch_size)
-        ]
+        batches = [user_ids[i : i + self._batch_size] for i in range(0, len(user_ids), self._batch_size)]
 
         for batch in batches:
             active_batch = [uid for uid in batch if uid in self.active_connections]
@@ -243,7 +230,7 @@ class ConnectionManager:
             try:
                 # Check if connection is stale (no activity for 2x heartbeat interval)
                 if user_id in self.connection_metadata:
-                    last_activity = self.connection_metadata[user_id]['last_activity']
+                    last_activity = self.connection_metadata[user_id]["last_activity"]
                     if ping_time - last_activity > (self._heartbeat_interval * 2):
                         stale_connections.append(user_id)
                         continue
@@ -253,7 +240,7 @@ class ConnectionManager:
 
                 # Update metadata
                 if user_id in self.connection_metadata:
-                    self.connection_metadata[user_id]['last_ping'] = ping_time
+                    self.connection_metadata[user_id]["last_ping"] = ping_time
 
             except Exception as e:
                 logger.warning(f"Heartbeat failed for user {user_id}: {e}")
@@ -268,30 +255,26 @@ class ConnectionManager:
         active_connections = len(self.active_connections)
 
         # Calculate average connection duration
-        if self.metrics['connection_duration']:
-            total_duration = sum(
-                sum(durations) for durations in self.metrics['connection_duration'].values()
-            )
-            total_sessions = sum(
-                len(durations) for durations in self.metrics['connection_duration'].values()
-            )
+        if self.metrics["connection_duration"]:
+            total_duration = sum(sum(durations) for durations in self.metrics["connection_duration"].values())
+            total_sessions = sum(len(durations) for durations in self.metrics["connection_duration"].values())
             avg_duration = total_duration / total_sessions if total_sessions > 0 else 0
         else:
             avg_duration = 0
 
         return {
-            'active_connections': active_connections,
-            'total_connections': self.metrics['total_connections'],
-            'messages_sent': self.metrics['messages_sent'],
-            'messages_failed': self.metrics['messages_failed'],
-            'success_rate': (
-                self.metrics['messages_sent'] /
-                (self.metrics['messages_sent'] + self.metrics['messages_failed']) * 100
-                if (self.metrics['messages_sent'] + self.metrics['messages_failed']) > 0 else 100
+            "active_connections": active_connections,
+            "total_connections": self.metrics["total_connections"],
+            "messages_sent": self.metrics["messages_sent"],
+            "messages_failed": self.metrics["messages_failed"],
+            "success_rate": (
+                self.metrics["messages_sent"] / (self.metrics["messages_sent"] + self.metrics["messages_failed"]) * 100
+                if (self.metrics["messages_sent"] + self.metrics["messages_failed"]) > 0
+                else 100
             ),
-            'avg_response_time_ms': round(self.metrics['avg_response_time'] * 1000, 2),
-            'avg_connection_duration_min': round(avg_duration / 60, 2),
-            'heartbeat_interval_s': self._heartbeat_interval
+            "avg_response_time_ms": round(self.metrics["avg_response_time"] * 1000, 2),
+            "avg_connection_duration_min": round(avg_duration / 60, 2),
+            "heartbeat_interval_s": self._heartbeat_interval,
         }
 
     async def cleanup(self):

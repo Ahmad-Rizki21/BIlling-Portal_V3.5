@@ -17,6 +17,7 @@ except ImportError:
         def filter(self, record):
             return True
 
+
 # --- ASCII Art Banner (Windows Compatible) ---
 ARTACOM_ASCII = """
 +===============================================================+
@@ -94,9 +95,7 @@ def log_scheduler_event(logger, job_name: str, status: str, details: str = ""):
         logger.info(message)
 
 
-def log_mikrotik_operation(
-    logger, operation: str, customer_id: str, status: str, details: str = ""
-):
+def log_mikrotik_operation(logger, operation: str, customer_id: str, status: str, details: str = ""):
     """Enhanced MikroTik operation logging"""
     if USE_UNICODE:
         status_icons = {
@@ -128,9 +127,7 @@ def log_mikrotik_operation(
         logger.info(message)
 
 
-def log_payment_event(
-    logger, event: str, invoice_id: str, amount: str = "", details: str = ""
-):
+def log_payment_event(logger, event: str, invoice_id: str, amount: str = "", details: str = ""):
     """Enhanced payment event logging"""
     if USE_UNICODE:
         event_icons = {
@@ -164,9 +161,7 @@ def log_payment_event(
         logger.info(message)
 
 
-def log_database_event(
-    logger, operation: str, table: str, status: str, details: str = ""
-):
+def log_database_event(logger, operation: str, table: str, status: str, details: str = ""):
     """Database operation logging"""
     if USE_UNICODE:
         status_icons = {
@@ -194,22 +189,12 @@ def log_database_event(
         logger.info(message)
 
 
-def log_api_request(
-    logger, method: str, endpoint: str, status_code: int, duration: float | None = None
-):
+def log_api_request(logger, method: str, endpoint: str, status_code: int, duration: float | None = None):
     """API request logging"""
     if USE_UNICODE:
-        status_icon = (
-            "✅"
-            if 200 <= status_code < 300
-            else "⚠️" if 300 <= status_code < 400 else "❌"
-        )
+        status_icon = "✅" if 200 <= status_code < 300 else "⚠️" if 300 <= status_code < 400 else "❌"
     else:
-        status_icon = (
-            "[OK]"
-            if 200 <= status_code < 300
-            else "[WARN]" if 300 <= status_code < 400 else "[ERR]"
-        )
+        status_icon = "[OK]" if 200 <= status_code < 300 else "[WARN]" if 300 <= status_code < 400 else "[ERR]"
 
     message = f"{status_icon} [{method}] {endpoint} -> {status_code}"
     if duration:
@@ -393,9 +378,7 @@ def setup_logging():
 
     # Print startup banner with dynamic info (safe characters only)
     current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    startup_info = STARTUP_BANNER.format(
-        timestamp=current_time, log_path=str(log_dir.absolute())[:45] + "..."
-    )
+    startup_info = STARTUP_BANNER.format(timestamp=current_time, log_path=str(log_dir.absolute())[:45] + "...")
     print(startup_info)
 
     # Log startup messages (safe characters only)
@@ -438,9 +421,7 @@ if __name__ == "__main__":
     test_logger = setup_logging()
 
     # Test different log types
-    log_scheduler_event(
-        test_logger, "daily_billing", "started", "Processing 150 customers"
-    )
+    log_scheduler_event(test_logger, "daily_billing", "started", "Processing 150 customers")
     log_mikrotik_operation(
         test_logger,
         "disconnect_user",
@@ -448,12 +429,8 @@ if __name__ == "__main__":
         "success",
         "User disconnected successfully",
     )
-    log_payment_event(
-        test_logger, "paid", "INV-2024-001", "Rp 150,000", "Payment via bank transfer"
-    )
-    log_database_event(
-        test_logger, "backup", "customers", "success", "1,250 records backed up"
-    )
+    log_payment_event(test_logger, "paid", "INV-2024-001", "Rp 150,000", "Payment via bank transfer")
+    log_database_event(test_logger, "backup", "customers", "success", "1,250 records backed up")
     log_api_request(test_logger, "POST", "/api/v1/customers", 201, 145.5)
 
     test_logger.debug("Debug message test")

@@ -6,6 +6,7 @@ Script sederhana untuk testing API response tanpa dependencies external
 import subprocess
 import json
 
+
 def test_api_with_curl():
     """Test API endpoints menggunakan curl"""
 
@@ -17,10 +18,9 @@ def test_api_with_curl():
     # 1. Test endpoint pelanggan
     print("\n1️⃣ Testing GET /pelanggan/")
     try:
-        result = subprocess.run([
-            "curl", "-s", "-w", "%{http_code}",
-            f"{base_url}/pelanggan/"
-        ], capture_output=True, text=True, timeout=10)
+        result = subprocess.run(
+            ["curl", "-s", "-w", "%{http_code}", f"{base_url}/pelanggan/"], capture_output=True, text=True, timeout=10
+        )
 
         if len(result.stdout) >= 3:
             response_text = result.stdout[:-3]
@@ -34,14 +34,14 @@ def test_api_with_curl():
                         print(f"   📊 Total pelanggan: {len(data)}")
 
                         # Cek pelanggan ID 258
-                        pelanggan_258 = [p for p in data if p.get('id') == 258]
+                        pelanggan_258 = [p for p in data if p.get("id") == 258]
                         if pelanggan_258:
                             print(f"   ✅ Pelanggan ID 258: {pelanggan_258[0].get('nama', 'N/A')}")
                         else:
                             print("   ❌ Pelanggan ID 258 TIDAK ditemukan!")
                             if data:
-                                max_id = max(p.get('id', 0) for p in data)
-                                min_id = min(p.get('id', 0) for p in data)
+                                max_id = max(p.get("id", 0) for p in data)
+                                min_id = min(p.get("id", 0) for p in data)
                                 print(f"   📊 Range ID: {min_id} - {max_id}")
                     else:
                         print(f"   ❌ Response bukan array: {type(data)}")
@@ -58,10 +58,12 @@ def test_api_with_curl():
     # 2. Test endpoint langganan for invoice selection
     print("\n2️⃣ Testing GET /langganan/?for_invoice_selection=true")
     try:
-        result = subprocess.run([
-            "curl", "-s", "-w", "%{http_code}",
-            f"{base_url}/langganan/?for_invoice_selection=true"
-        ], capture_output=True, text=True, timeout=10)
+        result = subprocess.run(
+            ["curl", "-s", "-w", "%{http_code}", f"{base_url}/langganan/?for_invoice_selection=true"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
 
         if len(result.stdout) >= 3:
             response_text = result.stdout[:-3]
@@ -75,25 +77,25 @@ def test_api_with_curl():
                         print(f"   📊 Total langganan: {len(data)}")
 
                         # Cek langganan ID 244
-                        langganan_244 = [l for l in data if l.get('id') == 244]
+                        langganan_244 = [l for l in data if l.get("id") == 244]
                         if langganan_244:
                             langg = langganan_244[0]
                             print(f"   ✅ Langganan ID 244:")
                             print(f"      pelanggan_id: {langg.get('pelanggan_id')}")
                             print(f"      status: {langg.get('status')}")
-                            if langg.get('pelanggan'):
+                            if langg.get("pelanggan"):
                                 print(f"      nama pelanggan: {langg['pelanggan'].get('nama', 'N/A')}")
                             else:
                                 print("      ❌ Data pelanggan tidak ada!")
                         else:
                             print("   ❌ Langganan ID 244 TIDAK ditemukan!")
                             if data:
-                                max_id = max(l.get('id', 0) for l in data)
-                                min_id = min(l.get('id', 0) for l in data)
+                                max_id = max(l.get("id", 0) for l in data)
+                                min_id = min(l.get("id", 0) for l in data)
                                 print(f"   📊 Range ID: {min_id} - {max_id}")
 
                                 # Cari yang punya pelanggan_id 258
-                                pelanggan_258 = [l for l in data if l.get('pelanggan_id') == 258]
+                                pelanggan_258 = [l for l in data if l.get("pelanggan_id") == 258]
                                 if pelanggan_258:
                                     print(f"   ℹ️ {len(pelanggan_258)} langganan dengan pelanggan_id 258:")
                                     for l in pelanggan_258:
@@ -115,10 +117,9 @@ def test_api_with_curl():
     # 3. Test endpoint langganan tanpa filter
     print("\n3️⃣ Testing GET /langganan/ (tanpa filter)")
     try:
-        result = subprocess.run([
-            "curl", "-s", "-w", "%{http_code}",
-            f"{base_url}/langganan/"
-        ], capture_output=True, text=True, timeout=10)
+        result = subprocess.run(
+            ["curl", "-s", "-w", "%{http_code}", f"{base_url}/langganan/"], capture_output=True, text=True, timeout=10
+        )
 
         if len(result.stdout) >= 3:
             response_text = result.stdout[:-3]
@@ -132,7 +133,7 @@ def test_api_with_curl():
                         print(f"   📊 Total langganan (tanpa filter): {len(data)}")
 
                         # Cek langganan ID 244
-                        langganan_244 = [l for l in data if l.get('id') == 244]
+                        langganan_244 = [l for l in data if l.get("id") == 244]
                         if langganan_244:
                             print("   ✅ Langganan ID 244 ditemukan dalam data lengkap")
                         else:
@@ -147,12 +148,24 @@ def test_api_with_curl():
     # 4. Test generate invoice
     print("\n4️⃣ Testing POST /invoices/generate (untuk lihat error)")
     try:
-        result = subprocess.run([
-            "curl", "-s", "-w", "%{http_code}", "-X", "POST",
-            "-H", "Content-Type: application/json",
-            "-d", '{"langganan_id": 244}',
-            f"{base_url}/invoices/generate"
-        ], capture_output=True, text=True, timeout=10)
+        result = subprocess.run(
+            [
+                "curl",
+                "-s",
+                "-w",
+                "%{http_code}",
+                "-X",
+                "POST",
+                "-H",
+                "Content-Type: application/json",
+                "-d",
+                '{"langganan_id": 244}',
+                f"{base_url}/invoices/generate",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
 
         if len(result.stdout) >= 3:
             response_text = result.stdout[:-3]
@@ -178,6 +191,7 @@ def test_api_with_curl():
     print("   1. Cek pagination/limit di backend")
     print("   2. Cek user permissions")
     print("   3. Cek filter yang aktif")
+
 
 if __name__ == "__main__":
     test_api_with_curl()

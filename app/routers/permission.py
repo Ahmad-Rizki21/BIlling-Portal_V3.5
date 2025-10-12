@@ -30,13 +30,9 @@ async def generate_permissions(db: AsyncSession = Depends(get_db)):
     actions = ["create", "view", "edit", "delete"]
     for menu in settings.MENUS:
         for action in actions:
-            permission_name = (
-                f"{action}_{menu.lower().replace(' & ', '_').replace(' ', '_')}"
-            )
+            permission_name = f"{action}_{menu.lower().replace(' & ', '_').replace(' ', '_')}"
 
-            result = await db.execute(
-                select(PermissionModel).where(PermissionModel.name == permission_name)
-            )
+            result = await db.execute(select(PermissionModel).where(PermissionModel.name == permission_name))
             existing_permission = result.scalars().first()
 
             if not existing_permission:
@@ -51,9 +47,7 @@ async def generate_permissions(db: AsyncSession = Depends(get_db)):
     for widget in settings.DASHBOARD_WIDGETS:
         permission_name = f"{widget_action}_{widget}"
 
-        result = await db.execute(
-            select(PermissionModel).where(PermissionModel.name == permission_name)
-        )
+        result = await db.execute(select(PermissionModel).where(PermissionModel.name == permission_name))
         existing_permission = result.scalars().first()
 
         if not existing_permission:

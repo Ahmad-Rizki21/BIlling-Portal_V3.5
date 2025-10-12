@@ -35,9 +35,7 @@ router = APIRouter(prefix="/langganan", tags=["Langganan"])
 
 
 @router.post("/", response_model=LanggananSchema, status_code=status.HTTP_201_CREATED)
-async def create_langganan(
-    langganan_data: LanggananCreate, db: AsyncSession = Depends(get_db)
-):
+async def create_langganan(langganan_data: LanggananCreate, db: AsyncSession = Depends(get_db)):
     """
     Membuat langganan baru dengan perhitungan harga otomatis di backend.
     Mendukung metode pembayaran 'Otomatis' dan 'Prorate' (biasa atau gabungan).
@@ -48,9 +46,7 @@ async def create_langganan(
         options=[selectinload(PelangganModel.harga_layanan)],
     )
     if not pelanggan or not pelanggan.harga_layanan:
-        raise HTTPException(
-            status_code=404, detail="Data Brand pelanggan tidak ditemukan."
-        )
+        raise HTTPException(status_code=404, detail="Data Brand pelanggan tidak ditemukan.")
 
     paket = await db.get(PaketLayananModel, langganan_data.paket_layanan_id)
     if not paket:
@@ -83,9 +79,7 @@ async def create_langganan(
         else:
             harga_awal_final = harga_prorate_final
 
-        tgl_jatuh_tempo_final = date(
-            start_date.year, start_date.month, last_day_of_month
-        )
+        tgl_jatuh_tempo_final = date(start_date.year, start_date.month, last_day_of_month)
 
     db_langganan = LanggananModel(
         pelanggan_id=langganan_data.pelanggan_id,
@@ -104,9 +98,7 @@ async def create_langganan(
         select(LanggananModel)
         .where(LanggananModel.id == db_langganan.id)
         .options(
-            selectinload(LanggananModel.pelanggan).selectinload(
-                PelangganModel.harga_layanan
-            ),
+            selectinload(LanggananModel.pelanggan).selectinload(PelangganModel.harga_layanan),
             selectinload(LanggananModel.paket_layanan),
         )
     )
@@ -166,9 +158,7 @@ async def get_all_langganan(
     if for_invoice_selection and langganan_list:
         pelanggan_ids = {l.pelanggan_id for l in langganan_list}
         invoice_counts_stmt = (
-            select(
-                InvoiceModel.pelanggan_id, func.count(InvoiceModel.id).label("count")
-            )
+            select(InvoiceModel.pelanggan_id, func.count(InvoiceModel.id).label("count"))
             .where(InvoiceModel.pelanggan_id.in_(pelanggan_ids))
             .group_by(InvoiceModel.pelanggan_id)
         )
@@ -210,9 +200,7 @@ async def update_langganan(
         select(LanggananModel)
         .where(LanggananModel.id == db_langganan.id)
         .options(
-            selectinload(LanggananModel.pelanggan).selectinload(
-                PelangganModel.harga_layanan
-            ),
+            selectinload(LanggananModel.pelanggan).selectinload(PelangganModel.harga_layanan),
             selectinload(LanggananModel.paket_layanan),
         )
     )
@@ -250,9 +238,7 @@ class LanggananCalculateResponse(BaseModel):
 
 
 @router.post("/calculate-price", response_model=LanggananCalculateResponse)
-async def calculate_langganan_price(
-    request_data: LanggananCalculateRequest, db: AsyncSession = Depends(get_db)
-):
+async def calculate_langganan_price(request_data: LanggananCalculateRequest, db: AsyncSession = Depends(get_db)):
     """Menghitung harga awal dan tanggal jatuh tempo untuk frontend."""
     pelanggan = await db.get(
         PelangganModel,
@@ -260,9 +246,7 @@ async def calculate_langganan_price(
         options=[selectinload(PelangganModel.harga_layanan)],
     )
     if not pelanggan or not pelanggan.harga_layanan:
-        raise HTTPException(
-            status_code=404, detail="Data Brand pelanggan tidak ditemukan."
-        )
+        raise HTTPException(status_code=404, detail="Data Brand pelanggan tidak ditemukan.")
 
     paket = await db.get(PaketLayananModel, request_data.paket_layanan_id)
     if not paket:
@@ -289,13 +273,9 @@ async def calculate_langganan_price(
         harga_per_hari = harga_paket / last_day_of_month
         prorated_price_before_tax = harga_per_hari * remaining_days
         harga_awal_final = prorated_price_before_tax * (1 + (pajak_persen / 100))
-        tgl_jatuh_tempo_final = date(
-            start_date.year, start_date.month, last_day_of_month
-        )
+        tgl_jatuh_tempo_final = date(start_date.year, start_date.month, last_day_of_month)
 
-    return LanggananCalculateResponse(
-        harga_awal=round(harga_awal_final, 0), tgl_jatuh_tempo=tgl_jatuh_tempo_final
-    )
+    return LanggananCalculateResponse(harga_awal=round(harga_awal_final, 0), tgl_jatuh_tempo=tgl_jatuh_tempo_final)
 
 
 # --- Endpoint untuk Import, Export, dan Template CSV ---
@@ -330,9 +310,7 @@ async def download_csv_template_langganan():
     writer.writerows(sample_data)
     output.seek(0)
 
-    response_headers = {
-        "Content-Disposition": 'attachment; filename="template_import_langganan.csv"'
-    }
+    response_headers = {"Content-Disposition": 'attachment; filename="template_import_langganan.csv"'}
     return StreamingResponse(
         io.BytesIO(output.getvalue().encode("utf-8")),
         headers=response_headers,
@@ -351,9 +329,7 @@ async def export_to_csv_langganan(db: AsyncSession = Depends(get_db)):
     langganan_list = result.scalars().unique().all()
 
     if not langganan_list:
-        raise HTTPException(
-            status_code=404, detail="Tidak ada data langganan untuk diekspor."
-        )
+        raise HTTPException(status_code=404, detail="Tidak ada data langganan untuk diekspor.")
 
     output = io.StringIO()
     output.write("\ufeff")
@@ -361,17 +337,9 @@ async def export_to_csv_langganan(db: AsyncSession = Depends(get_db)):
     for langganan in langganan_list:
         rows_to_write.append(
             {
-                "Nama Pelanggan": (
-                    langganan.pelanggan.nama if langganan.pelanggan else "N/A"
-                ),
-                "Email Pelanggan": (
-                    langganan.pelanggan.email if langganan.pelanggan else "N/A"
-                ),
-                "Paket Layanan": (
-                    langganan.paket_layanan.nama_paket
-                    if langganan.paket_layanan
-                    else "N/A"
-                ),
+                "Nama Pelanggan": (langganan.pelanggan.nama if langganan.pelanggan else "N/A"),
+                "Email Pelanggan": (langganan.pelanggan.email if langganan.pelanggan else "N/A"),
+                "Paket Layanan": (langganan.paket_layanan.nama_paket if langganan.paket_layanan else "N/A"),
                 "Status": langganan.status,
                 "Metode Pembayaran": langganan.metode_pembayaran,
                 "Harga": langganan.harga_awal,
@@ -395,9 +363,7 @@ async def export_to_csv_langganan(db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/import/csv")
-async def import_from_csv_langganan(
-    file: UploadFile = File(...), db: AsyncSession = Depends(get_db)
-):
+async def import_from_csv_langganan(file: UploadFile = File(...), db: AsyncSession = Depends(get_db)):
     """Mengimpor data langganan dari file CSV."""
     if not file.filename or not file.filename.lower().endswith(".csv"):
         raise HTTPException(status_code=400, detail="File harus berformat .csv")
@@ -412,25 +378,13 @@ async def import_from_csv_langganan(
     errors = []
     langganan_to_create = []
 
-    emails_to_find = {
-        row.get("email_pelanggan", "").lower().strip()
-        for row in reader
-        if row.get("email_pelanggan")
-    }
+    emails_to_find = {row.get("email_pelanggan", "").lower().strip() for row in reader if row.get("email_pelanggan")}
     paket_names_to_find = {
-        row.get("nama_paket_layanan", "").lower().strip()
-        for row in reader
-        if row.get("nama_paket_layanan")
+        row.get("nama_paket_layanan", "").lower().strip() for row in reader if row.get("nama_paket_layanan")
     }
-    brand_ids_to_find = {
-        row.get("id_brand", "").strip() for row in reader if row.get("id_brand")
-    }
+    brand_ids_to_find = {row.get("id_brand", "").strip() for row in reader if row.get("id_brand")}
 
-    pelanggan_q = await db.execute(
-        select(PelangganModel).where(
-            func.lower(PelangganModel.email).in_(emails_to_find)
-        )
-    )
+    pelanggan_q = await db.execute(select(PelangganModel).where(func.lower(PelangganModel.email).in_(emails_to_find)))
     pelanggan_map = {p.email.lower(): p for p in pelanggan_q.scalars().all()}
 
     paket_q = await db.execute(
@@ -443,9 +397,7 @@ async def import_from_csv_langganan(
 
     pelanggan_ids_found = [p.id for p in pelanggan_map.values()]
     existing_langganan_q = await db.execute(
-        select(LanggananModel.pelanggan_id).where(
-            LanggananModel.pelanggan_id.in_(pelanggan_ids_found)
-        )
+        select(LanggananModel.pelanggan_id).where(LanggananModel.pelanggan_id.in_(pelanggan_ids_found))
     )
     subscribed_pelanggan_ids = set(existing_langganan_q.scalars().all())
 
@@ -455,9 +407,7 @@ async def import_from_csv_langganan(
 
             pelanggan = pelanggan_map.get(data_import.email_pelanggan.lower())
             if not pelanggan:
-                errors.append(
-                    f"Baris {row_num}: Pelanggan dengan email '{data_import.email_pelanggan}' tidak ditemukan."
-                )
+                errors.append(f"Baris {row_num}: Pelanggan dengan email '{data_import.email_pelanggan}' tidak ditemukan.")
                 continue
 
             paket_key = (data_import.nama_paket_layanan.lower(), data_import.id_brand)
@@ -469,9 +419,7 @@ async def import_from_csv_langganan(
                 continue
 
             if pelanggan.id in subscribed_pelanggan_ids:
-                errors.append(
-                    f"Baris {row_num}: Pelanggan '{pelanggan.nama}' sudah memiliki langganan."
-                )
+                errors.append(f"Baris {row_num}: Pelanggan '{pelanggan.nama}' sudah memiliki langganan.")
                 continue
 
             new_langganan_data = {
@@ -485,9 +433,7 @@ async def import_from_csv_langganan(
             langganan_to_create.append(LanggananModel(**new_langganan_data))
 
         except ValidationError as e:
-            error_messages = "; ".join(
-                [f"{err['loc'][0]}: {err['msg']}" for err in e.errors()]
-            )
+            error_messages = "; ".join([f"{err['loc'][0]}: {err['msg']}" for err in e.errors()])
             errors.append(f"Baris {row_num}: {error_messages}")
         except Exception as e:
             errors.append(f"Baris {row_num}: Terjadi error - {str(e)}")
@@ -499,9 +445,7 @@ async def import_from_csv_langganan(
         )
 
     if not langganan_to_create:
-        raise HTTPException(
-            status_code=400, detail="Tidak ada data valid untuk diimpor."
-        )
+        raise HTTPException(status_code=400, detail="Tidak ada data valid untuk diimpor.")
 
     try:
         db.add_all(langganan_to_create)
@@ -527,9 +471,7 @@ class LanggananCalculateProratePlusFullResponse(BaseModel):
     "/calculate-prorate-plus-full",
     response_model=LanggananCalculateProratePlusFullResponse,
 )
-async def calculate_langganan_price_plus_full(
-    request_data: LanggananCalculateRequest, db: AsyncSession = Depends(get_db)
-):
+async def calculate_langganan_price_plus_full(request_data: LanggananCalculateRequest, db: AsyncSession = Depends(get_db)):
     """
     Menghitung harga gabungan: prorate bulan ini + harga penuh bulan depan.
     """
@@ -539,9 +481,7 @@ async def calculate_langganan_price_plus_full(
         options=[selectinload(PelangganModel.harga_layanan)],
     )
     if not pelanggan or not pelanggan.harga_layanan:
-        raise HTTPException(
-            status_code=404, detail="Data Brand pelanggan tidak ditemukan."
-        )
+        raise HTTPException(status_code=404, detail="Data Brand pelanggan tidak ditemukan.")
 
     paket = await db.get(PaketLayananModel, request_data.paket_layanan_id)
     if not paket:
@@ -580,9 +520,7 @@ async def get_all_pelanggan_with_status(db: AsyncSession = Depends(get_db)):
     Mengambil daftar semua pelanggan, dengan status langganan mereka.
     """
     result = await db.execute(
-        select(PelangganModel)
-        .options(selectinload(PelangganModel.langganan))
-        .order_by(PelangganModel.nama)
+        select(PelangganModel).options(selectinload(PelangganModel.langganan)).order_by(PelangganModel.nama)
     )
     pelanggan = result.scalars().unique().all()
 

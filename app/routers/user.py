@@ -29,9 +29,6 @@ router = APIRouter(
 )
 
 
-
-
-
 # Endpoint /me sekarang menggunakan dependency yang sudah eager loading
 @router.get("/me", response_model=UserSchema)
 async def get_current_user_info(
@@ -47,9 +44,7 @@ async def create_user(user: UserCreate, db: AsyncSession = Depends(get_db)):
     ✅ PASSWORD SECURE: Hanya password kuat yang diterima.
     """
     # 1. Check existing email
-    existing_user_query = await db.execute(
-        select(UserModel).where(UserModel.email == user.email)
-    )
+    existing_user_query = await db.execute(select(UserModel).where(UserModel.email == user.email))
     if existing_user_query.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -58,6 +53,7 @@ async def create_user(user: UserCreate, db: AsyncSession = Depends(get_db)):
 
     # 2. Validate password strength BEFORE hashing
     from ..auth import validate_password_strength
+
     is_valid, errors = validate_password_strength(user.password)
 
     if not is_valid:
@@ -71,15 +67,15 @@ async def create_user(user: UserCreate, db: AsyncSession = Depends(get_db)):
                     "require_lowercase": True,
                     "require_digit": True,
                     "require_special": True,
-                    "no_whitespace": True
+                    "no_whitespace": True,
                 },
-                "errors": errors
-            }
+                "errors": errors,
+            },
         )
 
     # 3. Hash password (only if validation passes)
     user_data = user.model_dump()
-    role_id = user_data.pop('role_id', None)
+    role_id = user_data.pop("role_id", None)
     hashed_password = get_password_hash(user.password)
     user_data["password"] = hashed_password
     # Set password_changed_at to current time when creating user
@@ -114,9 +110,7 @@ async def read_all_users(
     """
     Mengambil daftar semua user dengan paginasi dan filter.
     """
-    query = select(UserModel).options(
-        selectinload(UserModel.role).selectinload(RoleModel.permissions)
-    )
+    query = select(UserModel).options(selectinload(UserModel.role).selectinload(RoleModel.permissions))
 
     # Terapkan filter pencarian (nama, email)
     if search:
@@ -156,9 +150,7 @@ async def get_user_by_id(user_id: int, db: AsyncSession = Depends(get_db)):
 
 
 @router.patch("/{user_id}", response_model=UserSchema)
-async def update_user(
-    user_id: int, user_update: UserUpdate, db: AsyncSession = Depends(get_db)
-):
+async def update_user(user_id: int, user_update: UserUpdate, db: AsyncSession = Depends(get_db)):
     db_user = await db.get(UserModel, user_id)
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -171,9 +163,7 @@ async def update_user(
         if role_id is not None:
             role = await db.get(RoleModel, role_id)
             if not role:
-                raise HTTPException(
-                    status_code=404, detail=f"Role dengan id {role_id} tidak ditemukan."
-                )
+                raise HTTPException(status_code=404, detail=f"Role dengan id {role_id} tidak ditemukan.")
             db_user.role = role
         else:
             db_user.role = None
@@ -181,6 +171,7 @@ async def update_user(
     if "password" in update_data and update_data["password"]:
         # 🔒 Validate password strength BEFORE hashing
         from ..auth import validate_password_strength
+
         is_valid, errors = validate_password_strength(update_data["password"])
 
         if not is_valid:
@@ -194,10 +185,10 @@ async def update_user(
                         "require_lowercase": True,
                         "require_digit": True,
                         "require_special": True,
-                        "no_whitespace": True
+                        "no_whitespace": True,
                     },
-                    "errors": errors
-                }
+                    "errors": errors,
+                },
             )
 
         # Only hash if validation passes
@@ -264,12 +255,8 @@ async def forgot_password(email: str, db: AsyncSession = Depends(get_db)):
 
 # === Endpoint Baru untuk Reset Password ===
 @router.post("/reset-password")
-async def reset_password(
-    email: str, new_password: str, token: str, db: AsyncSession = Depends(get_db)
-):
-    query = select(UserModel).where(
-        UserModel.email == email, UserModel.reset_token == token
-    )
+async def reset_password(email: str, new_password: str, token: str, db: AsyncSession = Depends(get_db)):
+    query = select(UserModel).where(UserModel.email == email, UserModel.reset_token == token)
     user = (await db.execute(query)).scalar_one_or_none()
 
     if not user:
@@ -296,6 +283,4 @@ async def reset_password(
     db.add(user)
     await db.commit()
 
-    return {
-        "message": "Password berhasil diatur ulang. Silakan login dengan password baru."
-    }
+    return {"message": "Password berhasil diatur ulang. Silakan login dengan password baru."}

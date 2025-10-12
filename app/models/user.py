@@ -17,18 +17,12 @@ class User(Base):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, index=True)
     name: Mapped[str] = mapped_column(String(191))
-    email: Mapped[str] = mapped_column(
-        String(191), unique=True, index=True, nullable=False
-    )
+    email: Mapped[str] = mapped_column(String(191), unique=True, index=True, nullable=False)
     email_verified_at: Mapped[datetime | None] = mapped_column(TIMESTAMP, nullable=True)
     password: Mapped[str] = mapped_column(String(191), nullable=False)
     remember_token: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    created_at: Mapped[datetime | None] = mapped_column(
-        DateTime, server_default=func.now()
-    )
-    updated_at: Mapped[datetime | None] = mapped_column(
-        DateTime, server_default=func.now(), onupdate=func.now()
-    )
+    created_at: Mapped[datetime | None] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
     # AKTIFKAN KEMBALI RELASI INI - Ini adalah kunci perbaikannya
     role_id: Mapped[int | None] = mapped_column(ForeignKey("roles.id"))

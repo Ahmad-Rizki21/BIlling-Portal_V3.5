@@ -7,6 +7,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from ..database import Base
 
+
 class PaymentCallbackLog(Base):
     __tablename__ = "payment_callback_logs"
 
@@ -18,13 +19,13 @@ class PaymentCallbackLog(Base):
     status: Mapped[str] = mapped_column(String(50), nullable=False)  # PAID, EXPIRED, dll
     processed_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-    
+
     # Tambahkan indeks untuk optimasi pencarian
     __table_args__ = (
-        Index('idx_callback_log_xendit_id', 'xendit_id'),
-        Index('idx_callback_log_external_id', 'external_id'),
-        Index('idx_callback_log_idempotency_key', 'idempotency_key'),
-        Index('idx_callback_log_status', 'status'),
+        Index("idx_callback_log_xendit_id", "xendit_id"),
+        Index("idx_callback_log_external_id", "external_id"),
+        Index("idx_callback_log_idempotency_key", "idempotency_key"),
+        Index("idx_callback_log_status", "status"),
     )
 
     def __repr__(self):

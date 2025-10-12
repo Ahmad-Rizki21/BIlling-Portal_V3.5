@@ -12,9 +12,7 @@ class PelangganCreate(BaseModel):
     nama: str = Field(..., min_length=1, description="Nama lengkap (wajib)")
     alamat: str = Field(..., min_length=1, description="Alamat utama (wajib)")
     alamat_2: Optional[str] = Field(None, description="Alamat tambahan (opsional)")
-    tgl_instalasi: Optional[date] = Field(
-        None, description="Tanggal instalasi (opsional)"
-    )
+    tgl_instalasi: Optional[date] = Field(None, description="Tanggal instalasi (opsional)")
     blok: str = Field(..., min_length=1, description="Blok (wajib)")
     unit: str = Field(..., min_length=1, description="Unit (wajib)")
     no_telp: str = Field(..., min_length=1, description="Nomor telepon (wajib)")

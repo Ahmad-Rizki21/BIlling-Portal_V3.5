@@ -89,7 +89,7 @@ class Settings(BaseSettings):
     class Config:
         # Be explicit about the .env file path and encoding
         env_file = ENV_FILE_PATH
-        env_file_encoding = 'utf-8'
+        env_file_encoding = "utf-8"
         extra = "ignore"
 
 

@@ -9,7 +9,7 @@ import sys
 import os
 
 # Tambahkan direktori app ke Python path
-sys.path.append(os.path.join(os.path.dirname(__file__), 'app'))
+sys.path.append(os.path.join(os.path.dirname(__file__), "app"))
 
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.future import select
@@ -18,6 +18,7 @@ from app.models.langganan import Langganan as LanggananModel
 from app.models.paket_layanan import PaketLayanan as PaketLayananModel
 from app.models.pelanggan import Pelanggan as PelangganModel
 from app.config import get_settings
+
 
 async def check_paket_consistency():
     """Memeriksa konsistensi data paket layanan"""
@@ -40,12 +41,8 @@ async def check_paket_consistency():
 
         # 2. Get all langganan dengan paket data
         print("\n📋 MEMERIKSA LANGGANAN DENGAN PAKET DATA:")
-        langganan_query = (
-            select(LanggananModel)
-            .options(
-                joinedload(LanggananModel.pelanggan),
-                joinedload(LanggananModel.paket_layanan)
-            )
+        langganan_query = select(LanggananModel).options(
+            joinedload(LanggananModel.pelanggan), joinedload(LanggananModel.paket_layanan)
         )
         langganan_result = await session.execute(langganan_query)
         all_langganan = langganan_result.scalars().unique().all()
@@ -64,7 +61,9 @@ async def check_paket_consistency():
             print(f"\n❌ Ditemukan {len(problematic_langganan)} langganan dengan paket_id yang tidak valid:")
             for langganan in problematic_langganan[:10]:  # Limit to 10
                 pelanggan_nama = langganan.pelanggan.nama if langganan.pelanggan else "PELANGGAN TIDAK ADA"
-                print(f"  - Langganan ID: {langganan.id}, Pelanggan: {pelanggan_nama}, Paket ID: {langganan.paket_layanan_id} (TIDAK VALID)")
+                print(
+                    f"  - Langganan ID: {langganan.id}, Pelanggan: {pelanggan_nama}, Paket ID: {langganan.paket_layanan_id} (TIDAK VALID)"
+                )
         else:
             print("\n✅ Semua langganan memiliki paket_id yang valid")
 
@@ -128,6 +127,7 @@ async def check_paket_consistency():
             print("\n✅ Data konsistensi paket layanan NORMAL")
 
         await engine.dispose()
+
 
 if __name__ == "__main__":
     asyncio.run(check_paket_consistency())

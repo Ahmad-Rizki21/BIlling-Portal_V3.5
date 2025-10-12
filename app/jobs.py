@@ -78,9 +78,7 @@ async def generate_single_invoice(db, langganan: LanggananModel):
                 start_day = db_invoice.tgl_invoice.day
                 end_day = db_invoice.tgl_jatuh_tempo.day
                 periode_prorate_str = db_invoice.tgl_jatuh_tempo.strftime("%B %Y")
-                periode_berikutnya_str = (
-                    db_invoice.tgl_jatuh_tempo + relativedelta(months=1)
-                ).strftime("%B %Y")
+                periode_berikutnya_str = (db_invoice.tgl_jatuh_tempo + relativedelta(months=1)).strftime("%B %Y")
 
                 deskripsi_xendit = (
                     f"Biaya internet up to {paket.kecepatan} Mbps. "
@@ -103,29 +101,21 @@ async def generate_single_invoice(db, langganan: LanggananModel):
                 f"jatuh tempo pembayaran tanggal {jatuh_tempo_str_lengkap}"
             )
 
-        no_telp_xendit = (
-            f"+62{pelanggan.no_telp.lstrip('0')}" if pelanggan.no_telp else None
-        )
+        no_telp_xendit = f"+62{pelanggan.no_telp.lstrip('0')}" if pelanggan.no_telp else None
 
         xendit_response = await xendit_service.create_xendit_invoice(
             db_invoice, pelanggan, paket, deskripsi_xendit, pajak, no_telp_xendit
         )
 
-        db_invoice.payment_link = xendit_response.get(
-            "short_url", xendit_response.get("invoice_url")
-        )
+        db_invoice.payment_link = xendit_response.get("short_url", xendit_response.get("invoice_url"))
         db_invoice.xendit_id = xendit_response.get("id")
         db_invoice.xendit_external_id = xendit_response.get("external_id")
 
         db.add(db_invoice)
-        logger.info(
-            f"Invoice {db_invoice.invoice_number} berhasil dibuat untuk Langganan ID {langganan.id}"
-        )
+        logger.info(f"Invoice {db_invoice.invoice_number} berhasil dibuat untuk Langganan ID {langganan.id}")
 
     except Exception as e:
-        logger.error(
-            f"Gagal membuat invoice untuk Langganan ID {langganan.id}: {e}\n{traceback.format_exc()}"
-        )
+        logger.error(f"Gagal membuat invoice untuk Langganan ID {langganan.id}: {e}\n{traceback.format_exc()}")
 
 
 # ==========================================================
@@ -150,20 +140,14 @@ async def job_generate_invoices():
                         LanggananModel.status == "Aktif",
                     )
                     .options(
-                        selectinload(LanggananModel.pelanggan).selectinload(
-                            PelangganModel.harga_layanan
-                        ),
-                        selectinload(LanggananModel.pelanggan).selectinload(
-                            PelangganModel.data_teknis
-                        ),
+                        selectinload(LanggananModel.pelanggan).selectinload(PelangganModel.harga_layanan),
+                        selectinload(LanggananModel.pelanggan).selectinload(PelangganModel.data_teknis),
                         selectinload(LanggananModel.paket_layanan),
                     )
                 )
 
                 batch_stmt = base_stmt.offset(offset).limit(BATCH_SIZE)
-                subscriptions_batch = (
-                    (await db.execute(batch_stmt)).scalars().unique().all()
-                )
+                subscriptions_batch = (await db.execute(batch_stmt)).scalars().unique().all()
 
                 if not subscriptions_batch:
                     break
@@ -174,9 +158,7 @@ async def job_generate_invoices():
                     InvoiceModel.pelanggan_id.in_(pelanggan_ids_in_batch),
                     InvoiceModel.tgl_jatuh_tempo == target_due_date,
                 )
-                existing_invoices_pelanggan_ids = {
-                    row[0] for row in await db.execute(existing_invoices_stmt)
-                }
+                existing_invoices_pelanggan_ids = {row[0] for row in await db.execute(existing_invoices_stmt)}
 
                 for langganan in subscriptions_batch:
                     # Cek dari data yang sudah di-prefetch, bukan query baru
@@ -190,9 +172,7 @@ async def job_generate_invoices():
             except Exception as e:
                 await db.rollback()
                 error_details = traceback.format_exc()
-                logger.error(
-                    f"[FAIL] Scheduler 'job_generate_invoices' failed at offset {offset}. Details:\n{error_details}"
-                )
+                logger.error(f"[FAIL] Scheduler 'job_generate_invoices' failed at offset {offset}. Details:\n{error_details}")
                 break
 
     if total_invoices_created > 0:
@@ -241,14 +221,8 @@ async def job_suspend_services():
                         LanggananModel.status == "Aktif",
                         InvoiceModel.status_invoice == "Belum Dibayar",
                     )
-                    .distinct(
-                        LanggananModel.id
-                    )  # <-- TAMBAHAN: Pastikan setiap langganan hanya diproses sekali
-                    .options(
-                        selectinload(LanggananModel.pelanggan).selectinload(
-                            PelangganModel.data_teknis
-                        )
-                    )
+                    .distinct(LanggananModel.id)  # <-- TAMBAHAN: Pastikan setiap langganan hanya diproses sekali
+                    .options(selectinload(LanggananModel.pelanggan).selectinload(PelangganModel.data_teknis))
                 )
 
                 batch_stmt = base_stmt.offset(offset).limit(BATCH_SIZE)
@@ -258,9 +232,7 @@ async def job_suspend_services():
                     break
 
                 for langganan in overdue_batch:
-                    logger.warning(
-                        f"Melakukan suspend layanan untuk Langganan ID: {langganan.id}..."
-                    )
+                    logger.warning(f"Melakukan suspend layanan untuk Langganan ID: {langganan.id}...")
 
                     # 1. Ubah status invoice terkait menjadi 'Kadaluarsa'
                     # Ini lebih efisien daripada menjalankan job terpisah.
@@ -279,14 +251,10 @@ async def job_suspend_services():
 
                     data_teknis = langganan.pelanggan.data_teknis
                     if data_teknis:
-                        await mikrotik_service.trigger_mikrotik_update(
-                            db, langganan, data_teknis, data_teknis.id_pelanggan
-                        )
+                        await mikrotik_service.trigger_mikrotik_update(db, langganan, data_teknis, data_teknis.id_pelanggan)
                         total_services_suspended += 1
                     else:
-                        logger.error(
-                            f"Data Teknis tidak ditemukan untuk langganan ID {langganan.id}, skip update Mikrotik."
-                        )
+                        logger.error(f"Data Teknis tidak ditemukan untuk langganan ID {langganan.id}, skip update Mikrotik.")
 
                 await db.commit()
                 offset += BATCH_SIZE
@@ -341,9 +309,7 @@ async def job_send_payment_reminders():
 
                 for langganan in reminder_batch:
                     pelanggan = langganan.pelanggan
-                    logger.info(
-                        f"Mengirim pengingat pembayaran untuk pelanggan ID: {pelanggan.id} ({pelanggan.nama})"
-                    )
+                    logger.info(f"Mengirim pengingat pembayaran untuk pelanggan ID: {pelanggan.id} ({pelanggan.nama})")
                     # Di sini Anda bisa menambahkan logika pengiriman notifikasi (WA, Email, dll)
                     total_reminders_sent += 1
 
@@ -403,22 +369,16 @@ async def job_verify_payments():
                 .options(
                     selectinload(InvoiceModel.pelanggan).options(
                         selectinload(PelangganModel.harga_layanan),
-                        selectinload(PelangganModel.langganan).selectinload(
-                            LanggananModel.paket_layanan
-                        ),
+                        selectinload(PelangganModel.langganan).selectinload(LanggananModel.paket_layanan),
                         selectinload(PelangganModel.data_teknis),
                     )
                 )
             )
-            invoices_to_process = (
-                (await db.execute(unprocessed_stmt)).scalars().unique().all()
-            )
+            invoices_to_process = (await db.execute(unprocessed_stmt)).scalars().unique().all()
 
             processed_count = 0
             if invoices_to_process:
-                logger.warning(
-                    f"[VERIFY] Menemukan {len(invoices_to_process)} pembayaran terlewat. Memproses..."
-                )
+                logger.warning(f"[VERIFY] Menemukan {len(invoices_to_process)} pembayaran terlewat. Memproses...")
                 for invoice in invoices_to_process:
                     await _process_successful_payment(db, invoice)
                     processed_count += 1
@@ -434,9 +394,7 @@ async def job_verify_payments():
         except Exception as e:
             await db.rollback()
             error_details = traceback.format_exc()
-            logger.error(
-                f"[FAIL] Scheduler 'job_verify_payments' failed. Details:\n{error_details}"
-            )
+            logger.error(f"[FAIL] Scheduler 'job_verify_payments' failed. Details:\n{error_details}")
 
 
 async def job_retry_mikrotik_syncs():
@@ -448,11 +406,7 @@ async def job_retry_mikrotik_syncs():
             stmt = (
                 select(DataTeknisModel)
                 .where(DataTeknisModel.mikrotik_sync_pending == True)
-                .options(
-                    selectinload(DataTeknisModel.pelanggan).selectinload(
-                        PelangganModel.langganan
-                    )
-                )
+                .options(selectinload(DataTeknisModel.pelanggan).selectinload(PelangganModel.langganan))
             )
             pending_syncs = (await db.execute(stmt)).scalars().all()
 
@@ -470,22 +424,16 @@ async def job_retry_mikrotik_syncs():
                 try:
                     langganan = data_teknis.pelanggan.langganan[0]
                     # Coba jalankan lagi fungsi update ke Mikrotik DENGAN ARGUMEN LENGKAP
-                    await mikrotik_service.trigger_mikrotik_update(
-                        db, langganan, data_teknis, data_teknis.id_pelanggan
-                    )
+                    await mikrotik_service.trigger_mikrotik_update(db, langganan, data_teknis, data_teknis.id_pelanggan)
 
                     # Jika berhasil, set flag kembali ke False
                     data_teknis.mikrotik_sync_pending = False
                     db.add(data_teknis)
-                    logger.info(
-                        f"Successfully synced pending update for Data Teknis ID: {data_teknis.id}"
-                    )
+                    logger.info(f"Successfully synced pending update for Data Teknis ID: {data_teknis.id}")
                     total_retried += 1
                 except Exception as e:
                     # Jika masih gagal, biarkan flag tetap True dan catat error
-                    logger.error(
-                        f"Still failing to sync Mikrotik for Data Teknis ID {data_teknis.id}: {e}"
-                    )
+                    logger.error(f"Still failing to sync Mikrotik for Data Teknis ID {data_teknis.id}: {e}")
 
             await db.commit()
             log_scheduler_event(
@@ -496,6 +444,4 @@ async def job_retry_mikrotik_syncs():
             )
         except Exception as e:
             await db.rollback()
-            logger.error(
-                f"[FAIL] Scheduler 'job_retry_mikrotik_syncs' encountered an error: {traceback.format_exc()}"
-            )
+            logger.error(f"[FAIL] Scheduler 'job_retry_mikrotik_syncs' encountered an error: {traceback.format_exc()}")

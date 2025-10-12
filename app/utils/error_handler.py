@@ -1,6 +1,7 @@
 """
 Centralized error handling untuk menghilangkan duplikasi error patterns
 """
+
 import logging
 from typing import Optional, Any, Dict, Union
 from fastapi import HTTPException, status
@@ -8,6 +9,7 @@ from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from pydantic import ValidationError
 
 logger = logging.getLogger(__name__)
+
 
 def safe_assign(obj, attr: str, fallback: Any = None) -> Any:
     """Safe assignment dengan fallback"""
@@ -17,16 +19,18 @@ def safe_assign(obj, attr: str, fallback: Any = None) -> Any:
     except AttributeError:
         return fallback
 
+
 def safe_extend(list_obj: list, items: list) -> bool:
     """Safe list extension dengan error handling"""
     try:
-        if items and hasattr(list_obj, 'extend'):
+        if items and hasattr(list_obj, "extend"):
             list_obj.extend(items)
             return True
         return False
     except (AttributeError, TypeError):
         logger.warning(f"Cannot extend {type(list_obj)} - {list_obj}")
         return False
+
 
 def safe_getattr(obj: Any, attr: str, fallback: Any = None) -> Any:
     """Safe attribute access dengan fallback"""
@@ -35,12 +39,14 @@ def safe_getattr(obj: Any, attr: str, fallback: Any = None) -> Any:
     except (AttributeError, TypeError):
         return fallback
 
+
 def safe_get_dict(dict_obj: dict, key: str, fallback: Any = None) -> Any:
     """Safe dict access dengan fallback"""
     try:
         return dict_obj.get(key, fallback)
     except (AttributeError, TypeError):
         return fallback
+
 
 def handle_error_result(data_type: str, result: Any) -> Optional[Any]:
     """
@@ -53,6 +59,7 @@ def handle_error_result(data_type: str, result: Any) -> Optional[Any]:
         logger.warning(f"{data_type} returned None")
         return None
     return result
+
 
 def handle_task_result(task_name: str, result: Any) -> Optional[Any]:
     """Handle task result dengan proper error handling"""
@@ -72,6 +79,7 @@ import uuid
 
 class GracefulError(Exception):
     """Custom exception untuk graceful degradation scenarios."""
+
     def __init__(self, message: str, fallback_data: Any = None, operation: str = "unknown"):
         super().__init__(message)
         self.fallback_data = fallback_data
@@ -79,10 +87,7 @@ class GracefulError(Exception):
 
 
 async def safe_execute_with_fallback(
-    operation_name: str,
-    async_operation,
-    fallback_data: Any,
-    context: Optional[Dict[str, Any]] = None
+    operation_name: str, async_operation, fallback_data: Any, context: Optional[Dict[str, Any]] = None
 ):
     """
     Execute async operation dengan safe fallback.
@@ -108,7 +113,7 @@ async def safe_execute_with_fallback(
         logger.error(
             f"Operation {operation_name} failed, using fallback: {str(e)}",
             exc_info=True,
-            extra={"operation": operation_name, "context": context or {}}
+            extra={"operation": operation_name, "context": context or {}},
         )
         return fallback_data
 
@@ -117,11 +122,7 @@ def create_fallback_dashboard():
     """Create empty dashboard structure for graceful degradation."""
     from ..schemas.dashboard import DashboardData, ChartData, RevenueSummary, InvoiceSummary
 
-    empty_revenue_summary = RevenueSummary(
-        total=0.0,
-        periode="bulan",
-        breakdown=[]  # Empty BrandRevenueItem list
-    )
+    empty_revenue_summary = RevenueSummary(total=0.0, periode="bulan", breakdown=[])  # Empty BrandRevenueItem list
 
     empty_chart = ChartData(labels=[], data=[])
     empty_invoice_summary = InvoiceSummary(labels=[], total=[], lunas=[], menunggu=[], kadaluarsa=[])
@@ -135,21 +136,18 @@ def create_fallback_dashboard():
         invoice_summary_chart=empty_invoice_summary,  # Use correct type
         status_langganan_chart=empty_chart,
         pelanggan_per_alamat_chart=empty_chart,
-        loyalitas_pembayaran_chart=empty_chart
+        loyalitas_pembayaran_chart=empty_chart,
     )
 
 
 def create_fallback_chart():
     """Create empty chart for graceful degradation."""
     from ..routers.dashboard import ChartData
+
     return ChartData(labels=[], data=[])
 
 
-def handle_critical_notification_failure(
-    operation: str,
-    notification_data: Dict[str, Any],
-    error: Exception
-):
+def handle_critical_notification_failure(operation: str, notification_data: Dict[str, Any], error: Exception):
     """
     Handle critical notification failures gracefully.
     Notification failures should not crash the main operation.
@@ -160,17 +158,12 @@ def handle_critical_notification_failure(
         extra={
             "operation": operation,
             "notification_type": notification_data.get("type", "unknown"),
-            "fallback_applied": True
-        }
+            "fallback_applied": True,
+        },
     )
 
     # Return success indicator - notification failure is non-critical
-    return {
-        "notification_sent": False,
-        "error": str(error),
-        "main_operation_success": True,
-        "graceful_degradation": True
-    }
+    return {"notification_sent": False, "error": str(error), "main_operation_success": True, "graceful_degradation": True}
 
 
 def log_performance_issue(operation: str, execution_time: float, threshold: float = 2.0):
@@ -184,8 +177,8 @@ def log_performance_issue(operation: str, execution_time: float, threshold: floa
                 "operation": operation,
                 "execution_time": execution_time,
                 "threshold": threshold,
-                "performance_issue": True
-            }
+                "performance_issue": True,
+            },
         )
 
 
@@ -210,13 +203,13 @@ class ErrorTracker:
             "error_message": str(error),
             "count": self.error_counts[error_key],
             "last_occurrence": datetime.now().isoformat(),
-            "context": context or {}
+            "context": context or {},
         }
 
         # Log error tracking
         logger.error(
             f"Error tracked: {error_key} (count: {self.error_counts[error_key]})",
-            extra={"error_tracking": self.error_details[error_key]}
+            extra={"error_tracking": self.error_details[error_key]},
         )
 
     def get_error_summary(self) -> Dict[str, Any]:
@@ -224,7 +217,7 @@ class ErrorTracker:
         return {
             "total_errors": sum(self.error_counts.values()),
             "unique_errors": len(self.error_counts),
-            "error_details": self.error_details
+            "error_details": self.error_details,
         }
 
 

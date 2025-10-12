@@ -31,9 +31,7 @@ class UserBase(BaseModel):
 
         # Check for valid characters (letters, spaces, dots, dashes, apostrophes)
         if not re.match(r"^[a-zA-Z\s\.\-\']+$", v_str):
-            raise ValueError(
-                "Nama hanya boleh mengandung huruf, spasi, titik, tanda hubung, dan apostrof"
-            )
+            raise ValueError("Nama hanya boleh mengandung huruf, spasi, titik, tanda hubung, dan apostrof")
 
         return v_str.title()  # Capitalize first letter of each word
 
@@ -129,9 +127,7 @@ class UserUpdate(BaseModel):
 
         # Check for valid characters
         if not re.match(r"^[a-zA-Z\s\.\-\']+$", v_str):
-            raise ValueError(
-                "Nama hanya boleh mengandung huruf, spasi, titik, tanda hubung, dan apostrof"
-            )
+            raise ValueError("Nama hanya boleh mengandung huruf, spasi, titik, tanda hubung, dan apostrof")
 
         return v_str.title()
 

@@ -25,9 +25,12 @@ OPTIONAL_ENV_VARS = {
     "CORS_ORIGINS": "",
 }
 
+
 class EnvironmentValidationError(Exception):
     """Exception untuk environment validation errors."""
+
     pass
+
 
 def validate_environment() -> Dict[str, Any]:
     """
@@ -101,6 +104,7 @@ def validate_environment() -> Dict[str, Any]:
     logger.info("🎉 Environment validation completed successfully!")
     return config
 
+
 def get_security_headers() -> Dict[str, str]:
     """
     Get security headers berdasarkan environment configuration.
@@ -120,12 +124,15 @@ def get_security_headers() -> Dict[str, str]:
 
     # Production-specific headers
     if environment == "production":
-        security_headers.update({
-            "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
-            "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline';",
-        })
+        security_headers.update(
+            {
+                "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+                "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline';",
+            }
+        )
 
     return security_headers
+
 
 def log_security_status():
     """Log security status configuration."""
@@ -164,6 +171,7 @@ def log_security_status():
     except EnvironmentValidationError as e:
         logger.error(f"🚨 Environment Validation Failed: {e}")
         raise
+
 
 # Validate environment saat module di-import
 try:

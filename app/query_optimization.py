@@ -10,6 +10,7 @@ from app.models.invoice import Invoice
 from app.models.langganan import Langganan
 from app.models.data_teknis import DataTeknis
 
+
 def optimize_pelanggan_query_with_stats(query):
     """
     Optimasi query pelanggan dengan statistik agregat untuk menghindari N+1 problem
@@ -18,33 +19,27 @@ def optimize_pelanggan_query_with_stats(query):
     invoice_count_subq = (
         select(
             Invoice.pelanggan_id,
-            func.count(Invoice.id).label('invoice_count'),
-            func.sum(Invoice.total_harga).label('total_invoice_amount')
+            func.count(Invoice.id).label("invoice_count"),
+            func.sum(Invoice.total_harga).label("total_invoice_amount"),
         )
         .group_by(Invoice.pelanggan_id)
         .subquery()
     )
-    
+
     # Tambahkan subquery untuk menghitung jumlah langganan per pelanggan
     langganan_count_subq = (
-        select(
-            Langganan.pelanggan_id,
-            func.count(Langganan.id).label('langganan_count')
-        )
+        select(Langganan.pelanggan_id, func.count(Langganan.id).label("langganan_count"))
         .group_by(Langganan.pelanggan_id)
         .subquery()
     )
-    
+
     # Gabungkan query utama dengan subquery statistik
-    optimized_query = query.outerjoin(
-        invoice_count_subq, 
-        Pelanggan.id == invoice_count_subq.c.pelanggan_id
-    ).outerjoin(
-        langganan_count_subq,
-        Pelanggan.id == langganan_count_subq.c.pelanggan_id
+    optimized_query = query.outerjoin(invoice_count_subq, Pelanggan.id == invoice_count_subq.c.pelanggan_id).outerjoin(
+        langganan_count_subq, Pelanggan.id == langganan_count_subq.c.pelanggan_id
     )
-    
+
     return optimized_query
+
 
 def optimize_invoice_query_with_related(query):
     """
@@ -54,10 +49,11 @@ def optimize_invoice_query_with_related(query):
     optimized_query = query.options(
         joinedload(Invoice.pelanggan).joinedload(Pelanggan.harga_layanan),
         joinedload(Invoice.pelanggan).joinedload(Pelanggan.langganan).joinedload(Langganan.paket_layanan),
-        joinedload(Invoice.pelanggan).joinedload(Pelanggan.data_teknis)
+        joinedload(Invoice.pelanggan).joinedload(Pelanggan.data_teknis),
     )
-    
+
     return optimized_query
+
 
 def add_pagination_optimization(query, skip=0, limit=100):
     """
@@ -68,6 +64,7 @@ def add_pagination_optimization(query, skip=0, limit=100):
     optimized_query = query.offset(skip).limit(limit)
     return optimized_query
 
+
 def get_pelanggan_with_aggregate_stats(db, skip=0, limit=100):
     """
     Query pelanggan dengan statistik agregat untuk menghindari N+1 problem
@@ -76,14 +73,14 @@ def get_pelanggan_with_aggregate_stats(db, skip=0, limit=100):
     invoice_stats = (
         select(
             Invoice.pelanggan_id,
-            func.count(Invoice.id).label('total_invoices'),
-            func.sum(Invoice.total_harga).label('total_amount'),
-            func.count(func.filter(Invoice.status_invoice == 'Lunas')).label('paid_invoices')
+            func.count(Invoice.id).label("total_invoices"),
+            func.sum(Invoice.total_harga).label("total_amount"),
+            func.count(func.filter(Invoice.status_invoice == "Lunas")).label("paid_invoices"),
         )
         .group_by(Invoice.pelanggan_id)
         .subquery()
     )
-    
+
     # Query utama dengan statistik
     query = (
         select(Pelanggan, invoice_stats)
@@ -91,5 +88,5 @@ def get_pelanggan_with_aggregate_stats(db, skip=0, limit=100):
         .offset(skip)
         .limit(limit)
     )
-    
+
     return query

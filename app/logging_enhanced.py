@@ -48,6 +48,7 @@ SHUTDOWN_BANNER = """
 +-------------------------------------------------------------+
 """
 
+
 # --- Logging Levels with Icons ---
 class LogLevel(Enum):
     DEBUG = "DEBUG"
@@ -55,6 +56,7 @@ class LogLevel(Enum):
     WARNING = "WARNING"
     ERROR = "ERROR"
     CRITICAL = "CRITICAL"
+
 
 # --- Detect Terminal Capabilities ---
 def can_use_unicode():
@@ -70,58 +72,61 @@ def can_use_unicode():
     except:
         return False
 
+
 USE_UNICODE = can_use_unicode()
 
 # --- Icon Sets for Different Log Types ---
 ICONS = {
-    'unicode': {
-        'startup': '🚀',
-        'shutdown': '🛑',
-        'success': '✅',
-        'error': '❌',
-        'warning': '⚠️',
-        'info': 'ℹ️',
-        'debug': '🔍',
-        'database': '🗄️',
-        'api': '🌐',
-        'scheduler': '⏰',
-        'payment': '💳',
-        'mikrotik': '📡',
-        'websocket': '🔌',
-        'auth': '🔐',
-        'maintenance': '🔧',
-        'health': '💊',
-        'performance': '⚡',
-        'security': '🛡️',
+    "unicode": {
+        "startup": "🚀",
+        "shutdown": "🛑",
+        "success": "✅",
+        "error": "❌",
+        "warning": "⚠️",
+        "info": "ℹ️",
+        "debug": "🔍",
+        "database": "🗄️",
+        "api": "🌐",
+        "scheduler": "⏰",
+        "payment": "💳",
+        "mikrotik": "📡",
+        "websocket": "🔌",
+        "auth": "🔐",
+        "maintenance": "🔧",
+        "health": "💊",
+        "performance": "⚡",
+        "security": "🛡️",
     },
-    'ascii': {
-        'startup': '[START]',
-        'shutdown': '[STOP]',
-        'success': '[OK]',
-        'error': '[FAIL]',
-        'warning': '[WARN]',
-        'info': '[INFO]',
-        'debug': '[DEBUG]',
-        'database': '[DB]',
-        'api': '[API]',
-        'scheduler': '[SCHED]',
-        'payment': '[PAY]',
-        'mikrotik': '[MIKRO]',
-        'websocket': '[WS]',
-        'auth': '[AUTH]',
-        'maintenance': '[MAINT]',
-        'health': '[HEALTH]',
-        'performance': '[PERF]',
-        'security': '[SEC]',
-    }
+    "ascii": {
+        "startup": "[START]",
+        "shutdown": "[STOP]",
+        "success": "[OK]",
+        "error": "[FAIL]",
+        "warning": "[WARN]",
+        "info": "[INFO]",
+        "debug": "[DEBUG]",
+        "database": "[DB]",
+        "api": "[API]",
+        "scheduler": "[SCHED]",
+        "payment": "[PAY]",
+        "mikrotik": "[MIKRO]",
+        "websocket": "[WS]",
+        "auth": "[AUTH]",
+        "maintenance": "[MAINT]",
+        "health": "[HEALTH]",
+        "performance": "[PERF]",
+        "security": "[SEC]",
+    },
 }
 
 # Get appropriate icon set
-ICONS_SET = ICONS['unicode'] if USE_UNICODE else ICONS['ascii']
+ICONS_SET = ICONS["unicode"] if USE_UNICODE else ICONS["ascii"]
+
 
 # --- Color Definitions ---
 class Colors:
     """ANSI color codes for terminal output"""
+
     if USE_UNICODE:
         # Full color support
         RESET = "\033[0m"
@@ -160,6 +165,7 @@ class Colors:
         BRIGHT_MAGENTA = ""
         BRIGHT_CYAN = ""
         BRIGHT_WHITE = ""
+
 
 # --- Enhanced Formatters ---
 class EnhancedColoredFormatter(logging.Formatter):
@@ -201,6 +207,7 @@ class EnhancedColoredFormatter(logging.Formatter):
 
         return f"{timestamp} {separator} {module_name} {separator} {level_name} {separator} {formatted}"
 
+
 class JSONFormatter(logging.Formatter):
     """JSON formatter for structured logging"""
 
@@ -218,11 +225,13 @@ class JSONFormatter(logging.Formatter):
         if record.exc_info:
             log_entry["exception"] = self.formatException(record.exc_info)
 
-        if hasattr(record, 'extra_data'):
+        if hasattr(record, "extra_data"):
             log_entry.update(record.extra_data)  # type: ignore
 
         import json
+
         return json.dumps(log_entry, ensure_ascii=False)
+
 
 class FileFormatter(logging.Formatter):
     """Clean formatter for file output without colors"""
@@ -230,6 +239,7 @@ class FileFormatter(logging.Formatter):
     def format(self, record):
         record.name = record.name.replace("app.", "").upper()
         return super().format(record)
+
 
 # --- Specialized Logger Classes ---
 class StructuredLogger:
@@ -239,17 +249,17 @@ class StructuredLogger:
         self.logger = logging.getLogger(name)
         self.name = name
 
-    def _log_with_structure(self, level: int, message: str, icon: str = "",
-                          extra: Optional[Dict[str, Any]] = None,
-                          color: str = ""):
+    def _log_with_structure(
+        self, level: int, message: str, icon: str = "", extra: Optional[Dict[str, Any]] = None, color: str = ""
+    ):
         """Internal method for structured logging"""
         if extra:
             extra_data = extra.copy()
             # Add icon to extra data
             if icon:
-                extra_data['icon'] = icon
+                extra_data["icon"] = icon
             if color:
-                extra_data['color'] = color
+                extra_data["color"] = color
             self.logger.log(level, message, extra={"extra_data": extra_data})
         else:
             if icon and color:
@@ -259,39 +269,39 @@ class StructuredLogger:
                 self.logger.log(level, message)
 
     def debug(self, message: str, **kwargs):
-        icon = ICONS_SET.get('debug', '')
+        icon = ICONS_SET.get("debug", "")
         self._log_with_structure(logging.DEBUG, message, icon, extra=kwargs, color=Colors.CYAN)
 
     def info(self, message: str, **kwargs):
-        icon = ICONS_SET.get('info', '')
+        icon = ICONS_SET.get("info", "")
         self._log_with_structure(logging.INFO, message, icon, extra=kwargs, color=Colors.GREEN)
 
     def warning(self, message: str, **kwargs):
-        icon = ICONS_SET.get('warning', '')
+        icon = ICONS_SET.get("warning", "")
         self._log_with_structure(logging.WARNING, message, icon, extra=kwargs, color=Colors.YELLOW)
 
     def error(self, message: str, exc_info: bool = False, **kwargs):
-        icon = ICONS_SET.get('error', '')
+        icon = ICONS_SET.get("error", "")
         if exc_info:
             self.logger.error(message, exc_info=True)
         else:
             self._log_with_structure(logging.ERROR, message, icon, extra=kwargs, color=Colors.RED)
 
     def critical(self, message: str, **kwargs):
-        icon = ICONS_SET.get('error', '')
+        icon = ICONS_SET.get("error", "")
         self._log_with_structure(logging.CRITICAL, message, icon, extra=kwargs, color=Colors.BRIGHT_RED)
 
+
 # --- Helper Functions for Specific Log Types ---
-def log_system_event(logger, event_type: str, message: str, status: str = "info",
-                    details: str = ""):
+def log_system_event(logger, event_type: str, message: str, status: str = "info", details: str = ""):
     """Log system events with appropriate icons"""
     icons = {
-        "startup": ICONS_SET.get('startup', ''),
-        "shutdown": ICONS_SET.get('shutdown', ''),
-        "health": ICONS_SET.get('health', ''),
-        "maintenance": ICONS_SET.get('maintenance', ''),
-        "performance": ICONS_SET.get('performance', ''),
-        "security": ICONS_SET.get('security', ''),
+        "startup": ICONS_SET.get("startup", ""),
+        "shutdown": ICONS_SET.get("shutdown", ""),
+        "health": ICONS_SET.get("health", ""),
+        "maintenance": ICONS_SET.get("maintenance", ""),
+        "performance": ICONS_SET.get("performance", ""),
+        "security": ICONS_SET.get("security", ""),
     }
 
     status_colors = {
@@ -301,7 +311,7 @@ def log_system_event(logger, event_type: str, message: str, status: str = "info"
         "info": Colors.BLUE,
     }
 
-    icon = icons.get(event_type, ICONS_SET.get('info', ''))
+    icon = icons.get(event_type, ICONS_SET.get("info", ""))
     color = status_colors.get(status, Colors.BLUE)
 
     colored_message = f"{color}{icon} {message}{Colors.RESET}"
@@ -316,16 +326,17 @@ def log_system_event(logger, event_type: str, message: str, status: str = "info"
     else:
         logger.info(colored_message)
 
+
 def log_scheduler_event(logger, job_name: str, status: str, details: str = ""):
     """Enhanced scheduler logging"""
     status_icons = {
-        "started": ICONS_SET.get('scheduler', ''),
-        "completed": ICONS_SET.get('success', ''),
-        "failed": ICONS_SET.get('error', ''),
-        "skipped": ICONS_SET.get('warning', ''),
+        "started": ICONS_SET.get("scheduler", ""),
+        "completed": ICONS_SET.get("success", ""),
+        "failed": ICONS_SET.get("error", ""),
+        "skipped": ICONS_SET.get("warning", ""),
     }
 
-    icon = status_icons.get(status, ICONS_SET.get('info', ''))
+    icon = status_icons.get(status, ICONS_SET.get("info", ""))
     message = f"{icon} Scheduler '{job_name}' {status}"
 
     if details:
@@ -338,18 +349,18 @@ def log_scheduler_event(logger, job_name: str, status: str, details: str = ""):
     else:
         logger.info(message)
 
-def log_mikrotik_operation(logger, operation: str, customer_id: str,
-                           status: str, details: str = ""):
+
+def log_mikrotik_operation(logger, operation: str, customer_id: str, status: str, details: str = ""):
     """Enhanced MikroTik operation logging"""
     status_icons = {
-        "success": ICONS_SET.get('success', ''),
-        "failed": ICONS_SET.get('error', ''),
-        "info": ICONS_SET.get('info', ''),
-        "connecting": ICONS_SET.get('websocket', ''),
-        "timeout": ICONS_SET.get('warning', ''),
+        "success": ICONS_SET.get("success", ""),
+        "failed": ICONS_SET.get("error", ""),
+        "info": ICONS_SET.get("info", ""),
+        "connecting": ICONS_SET.get("websocket", ""),
+        "timeout": ICONS_SET.get("warning", ""),
     }
 
-    icon = status_icons.get(status, ICONS_SET.get('info', ''))
+    icon = status_icons.get(status, ICONS_SET.get("info", ""))
     message = f"{icon} MikroTik | {operation} for Customer: '{customer_id}'"
 
     if details:
@@ -362,19 +373,19 @@ def log_mikrotik_operation(logger, operation: str, customer_id: str,
     else:
         logger.info(message)
 
-def log_payment_event(logger, event: str, invoice_id: str,
-                     amount: str = "", details: str = ""):
+
+def log_payment_event(logger, event: str, invoice_id: str, amount: str = "", details: str = ""):
     """Enhanced payment event logging"""
     event_icons = {
-        "created": ICONS_SET.get('info', ''),
-        "paid": ICONS_SET.get('success', ''),
-        "failed": ICONS_SET.get('error', ''),
-        "pending": ICONS_SET.get('warning', ''),
-        "cancelled": ICONS_SET.get('error', ''),
-        "refunded": ICONS_SET.get('info', ''),
+        "created": ICONS_SET.get("info", ""),
+        "paid": ICONS_SET.get("success", ""),
+        "failed": ICONS_SET.get("error", ""),
+        "pending": ICONS_SET.get("warning", ""),
+        "cancelled": ICONS_SET.get("error", ""),
+        "refunded": ICONS_SET.get("info", ""),
     }
 
-    icon = event_icons.get(event.lower(), ICONS_SET.get('payment', ''))
+    icon = event_icons.get(event.lower(), ICONS_SET.get("payment", ""))
     message = f"{icon} Invoice: {invoice_id}"
 
     if amount:
@@ -387,17 +398,17 @@ def log_payment_event(logger, event: str, invoice_id: str,
     else:
         logger.info(message)
 
-def log_database_event(logger, operation: str, table: str,
-                       status: str, details: str = ""):
+
+def log_database_event(logger, operation: str, table: str, status: str, details: str = ""):
     """Database operation logging"""
     status_icons = {
-        "success": ICONS_SET.get('success', ''),
-        "failed": ICONS_SET.get('error', ''),
-        "connecting": ICONS_SET.get('info', ''),
-        "migrating": ICONS_SET.get('warning', ''),
+        "success": ICONS_SET.get("success", ""),
+        "failed": ICONS_SET.get("error", ""),
+        "connecting": ICONS_SET.get("info", ""),
+        "migrating": ICONS_SET.get("warning", ""),
     }
 
-    icon = status_icons.get(status, ICONS_SET.get('database', ''))
+    icon = status_icons.get(status, ICONS_SET.get("database", ""))
     message = f"{icon} Database | {operation} on '{table}'"
 
     if details:
@@ -408,22 +419,15 @@ def log_database_event(logger, operation: str, table: str,
     else:
         logger.info(message)
 
-def log_api_request(logger, method: str, endpoint: str,
-                   status_code: int, duration: float | None = None,
-                   user_info: str = "Anonymous"):
+
+def log_api_request(
+    logger, method: str, endpoint: str, status_code: int, duration: float | None = None, user_info: str = "Anonymous"
+):
     """API request logging with performance metrics"""
     if USE_UNICODE:
-        status_icon = (
-            "✅" if 200 <= status_code < 300
-            else "⚠️" if 300 <= status_code < 400
-            else "❌"
-        )
+        status_icon = "✅" if 200 <= status_code < 300 else "⚠️" if 300 <= status_code < 400 else "❌"
     else:
-        status_icon = (
-            "[OK]" if 200 <= status_code < 300
-            else "[WARN]" if 300 <= status_code < 400
-            else "[ERR]"
-        )
+        status_icon = "[OK]" if 200 <= status_code < 300 else "[WARN]" if 300 <= status_code < 400 else "[ERR]"
 
     message = f"{status_icon} [{method}] {endpoint} -> {status_code}"
 
@@ -438,17 +442,17 @@ def log_api_request(logger, method: str, endpoint: str,
     else:
         logger.info(message)
 
-def log_websocket_event(logger, event: str, user_id: str,
-                        details: str = ""):
+
+def log_websocket_event(logger, event: str, user_id: str, details: str = ""):
     """WebSocket event logging"""
     event_icons = {
-        "connect": ICONS_SET.get('websocket', ''),
-        "disconnect": ICONS_SET.get('warning', ''),
-        "message": ICONS_SET.get('info', ''),
-        "error": ICONS_SET.get('error', ''),
+        "connect": ICONS_SET.get("websocket", ""),
+        "disconnect": ICONS_SET.get("warning", ""),
+        "message": ICONS_SET.get("info", ""),
+        "error": ICONS_SET.get("error", ""),
     }
 
-    icon = event_icons.get(event, ICONS_SET.get('info', ''))
+    icon = event_icons.get(event, ICONS_SET.get("info", ""))
     message = f"{icon} WebSocket | {event} for User: '{user_id}'"
 
     if details:
@@ -459,18 +463,18 @@ def log_websocket_event(logger, event: str, user_id: str,
     else:
         logger.info(message)
 
-def log_auth_event(logger, event: str, user_id: str = "",
-                  details: str = ""):
+
+def log_auth_event(logger, event: str, user_id: str = "", details: str = ""):
     """Authentication event logging"""
     event_icons = {
-        "login": ICONS_SET.get('success', ''),
-        "logout": ICONS_SET.get('warning', ''),
-        "failed": ICONS_SET.get('error', ''),
-        "token_expired": ICONS_SET.get('warning', ''),
-        "unauthorized": ICONS_SET.get('error', ''),
+        "login": ICONS_SET.get("success", ""),
+        "logout": ICONS_SET.get("warning", ""),
+        "failed": ICONS_SET.get("error", ""),
+        "token_expired": ICONS_SET.get("warning", ""),
+        "unauthorized": ICONS_SET.get("error", ""),
     }
 
-    icon = event_icons.get(event, ICONS_SET.get('auth', ''))
+    icon = event_icons.get(event, ICONS_SET.get("auth", ""))
     message = f"{icon} Auth | {event}"
 
     if user_id:
@@ -483,6 +487,7 @@ def log_auth_event(logger, event: str, user_id: str = "",
         logger.warning(message)
     else:
         logger.info(message)
+
 
 # --- Core Logging Setup ---
 def setup_logging():
@@ -635,10 +640,7 @@ def setup_logging():
 
     # Print startup banner
     current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    startup_info = STARTUP_BANNER.format(
-        timestamp=current_time,
-        log_path=str(log_dir.absolute())[:45] + "..."
-    )
+    startup_info = STARTUP_BANNER.format(timestamp=current_time, log_path=str(log_dir.absolute())[:45] + "...")
     print(startup_info)
 
     # Log startup messages
@@ -653,10 +655,12 @@ def setup_logging():
 
     return main_logger
 
+
 # --- Utility Functions ---
 def get_logger(name: str) -> StructuredLogger:
     """Get a structured logger instance"""
     return StructuredLogger(name)
+
 
 def log_exception(logger, exception: Exception, context: str = ""):
     """Log exception with full traceback"""
@@ -665,20 +669,19 @@ def log_exception(logger, exception: Exception, context: str = ""):
 
     logger.error(f"{error_msg}\n{tb}")
 
+
 # --- Shutdown Handler ---
 def setup_shutdown_handler(start_time: datetime):
     """Setup graceful shutdown logging"""
+
     def shutdown_handler():
         # Calculate uptime
         uptime = datetime.now() - start_time
-        uptime_str = str(uptime).split('.')[0]  # Remove microseconds
+        uptime_str = str(uptime).split(".")[0]  # Remove microseconds
 
         # Print shutdown banner
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        shutdown_info = SHUTDOWN_BANNER.format(
-            timestamp=current_time,
-            duration=uptime_str
-        )
+        shutdown_info = SHUTDOWN_BANNER.format(timestamp=current_time, duration=uptime_str)
         print(shutdown_info)
 
         # Log shutdown
@@ -686,6 +689,7 @@ def setup_shutdown_handler(start_time: datetime):
         log_system_event(logger, "shutdown", "Application shutdown complete", "success")
 
     return shutdown_handler
+
 
 # --- Quick Test Function ---
 if __name__ == "__main__":

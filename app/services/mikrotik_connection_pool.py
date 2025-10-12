@@ -12,17 +12,20 @@ import routeros_api
 
 logger = logging.getLogger(__name__)
 
+
 # Circuit Breaker States
 class CircuitState(Enum):
-    CLOSED = "closed"      # Normal operation
-    OPEN = "open"         # Circuit tripped, no requests
+    CLOSED = "closed"  # Normal operation
+    OPEN = "open"  # Circuit tripped, no requests
     HALF_OPEN = "half_open"  # Testing if service recovered
+
 
 @dataclass
 class CircuitBreakerConfig:
-    failure_threshold: int = 5      # Number of failures before tripping
-    recovery_timeout: int = 60      # Seconds to wait before trying again
+    failure_threshold: int = 5  # Number of failures before tripping
+    recovery_timeout: int = 60  # Seconds to wait before trying again
     expected_exception: tuple = (Exception,)  # Exceptions that count as failures
+
 
 @dataclass
 class ConnectionMetrics:
@@ -31,6 +34,7 @@ class ConnectionMetrics:
     failed_connections: int = 0
     retry_attempts: int = 0
     circuit_breaker_trips: int = 0
+
 
 class MikrotikConnectionPool:
     def __init__(self, max_connections=10, timeout=30, idle_timeout=300):
@@ -53,7 +57,7 @@ class MikrotikConnectionPool:
         # Connection health monitoring
         self.connection_health: Dict[str, Dict] = {}
         self.last_health_check: Dict[str, float] = {}
-        
+
     def _get_pool_key(self, host_ip: str, port: int) -> str:
         """Generate a unique key for each Mikrotik server connection."""
         return f"{host_ip}:{port}"
@@ -65,11 +69,11 @@ class MikrotikConnectionPool:
             self.circuit_failures[pool_key] = 0
             self.circuit_last_failure[pool_key] = 0.0
             self.connection_health[pool_key] = {
-                'healthy': True,
-                'last_check': 0.0,
-                'consecutive_failures': 0,
-                'total_requests': 0,
-                'successful_requests': 0
+                "healthy": True,
+                "last_check": 0.0,
+                "consecutive_failures": 0,
+                "total_requests": 0,
+                "successful_requests": 0,
             }
 
     def _check_circuit_breaker(self, pool_key: str) -> bool:
@@ -110,9 +114,9 @@ class MikrotikConnectionPool:
 
         # Update health metrics
         health = self.connection_health[pool_key]
-        health['healthy'] = True
-        health['consecutive_failures'] = 0
-        health['successful_requests'] += 1
+        health["healthy"] = True
+        health["consecutive_failures"] = 0
+        health["successful_requests"] += 1
 
     def _record_failure(self, pool_key: str, error: Exception):
         """Record failed connection and potentially trip circuit breaker."""
@@ -125,8 +129,8 @@ class MikrotikConnectionPool:
 
             # Update health metrics
             health = self.connection_health[pool_key]
-            health['healthy'] = False
-            health['consecutive_failures'] += 1
+            health["healthy"] = False
+            health["consecutive_failures"] += 1
             self.metrics.failed_connections += 1
 
             logger.warning(f"Connection failure recorded for {pool_key}: {error}")
@@ -134,8 +138,7 @@ class MikrotikConnectionPool:
 
             # Check if we should trip the circuit breaker
             state = self.circuit_states[pool_key]
-            if (state == CircuitState.CLOSED and
-                self.circuit_failures[pool_key] >= self.circuit_config.failure_threshold):
+            if state == CircuitState.CLOSED and self.circuit_failures[pool_key] >= self.circuit_config.failure_threshold:
 
                 logger.error(f"CIRCUIT BREAKER TRIPPED for {pool_key}!")
                 self.circuit_states[pool_key] = CircuitState.OPEN
@@ -146,38 +149,34 @@ class MikrotikConnectionPool:
                 logger.error(f"Circuit breaker for {pool_key} re-tripped to OPEN")
                 self.circuit_states[pool_key] = CircuitState.OPEN
                 self.circuit_last_failure[pool_key] = time.time()
-    
+
     def _get_connection(self, host_ip: str, port: int, username: str, password: str):
         """Create a new Mikrotik API connection."""
         try:
             connection = routeros_api.RouterOsApiPool(
-                host_ip,
-                username=username,
-                password=password,
-                port=port,
-                plaintext_login=True
+                host_ip, username=username, password=password, port=port, plaintext_login=True
             )
             api = connection.get_api()
-            
+
             # Store connection metadata
             pool_key = self._get_pool_key(host_ip, port)
             connection_info = {
-                'connection': connection,
-                'api': api,
-                'created_at': time.time(),
-                'last_used': time.time(),
-                'host': host_ip,
-                'port': port
+                "connection": connection,
+                "api": api,
+                "created_at": time.time(),
+                "last_used": time.time(),
+                "host": host_ip,
+                "port": port,
             }
-            
+
             # Track as active connection
             self.active_connections[str(id(connection))] = connection_info  # type: ignore
-            
+
             return api, connection
         except Exception as e:
             logger.error(f"Failed to create connection to {host_ip}:{port}: {e}")
             raise e
-    
+
     def get_connection(self, host_ip: str, port: int, username: str, password: str):
         """Get an available connection from the pool or create a new one."""
         pool_key = self._get_pool_key(host_ip, port)
@@ -191,7 +190,7 @@ class MikrotikConnectionPool:
             # Update metrics
             self.metrics.total_connections += 1
             health = self.connection_health.get(pool_key, {})
-            health['total_requests'] = health.get('total_requests', 0) + 1
+            health["total_requests"] = health.get("total_requests", 0) + 1
 
             # Check if we have a connection pool for this server
             if pool_key not in self.connections:
@@ -204,21 +203,23 @@ class MikrotikConnectionPool:
             current_time = time.time()
             to_remove = []
             for conn_key, conn_info in list(pool.items()):
-                if current_time - conn_info['last_used'] > self.idle_timeout:
+                if current_time - conn_info["last_used"] > self.idle_timeout:
                     to_remove.append(conn_key)
-                    logger.warning(f"Connection {conn_key} to {pool_key} expired ({current_time - conn_info['last_used']:.1f}s > {self.idle_timeout}s)")
+                    logger.warning(
+                        f"Connection {conn_key} to {pool_key} expired ({current_time - conn_info['last_used']:.1f}s > {self.idle_timeout}s)"
+                    )
 
             # Remove expired connections with proper cleanup
             for conn_key in to_remove:
                 if conn_key in pool:
                     conn_info = pool.pop(conn_key)
                     try:
-                        conn_info['connection'].disconnect()
+                        conn_info["connection"].disconnect()
                         logger.info(f"Cleaned up expired connection to {pool_key}")
                     except Exception as e:
                         logger.error(f"Error disconnecting expired connection {conn_key}: {e}")
                     # Remove from active connections tracking
-                    conn_id = str(id(conn_info['connection']))
+                    conn_id = str(id(conn_info["connection"]))
                     if conn_id in self.active_connections:
                         del self.active_connections[conn_id]  # type: ignore
 
@@ -230,31 +231,31 @@ class MikrotikConnectionPool:
                 # Quick health check - test if connection is still alive
                 try:
                     # Simple test command to check connection health
-                    test_result = conn_info['api'].get_resource('/system/identity').get()
+                    test_result = conn_info["api"].get_resource("/system/identity").get()
                     if test_result:
                         pool[conn_key] = conn_info  # Put it back at the end (most recently used)
-                        conn_info['last_used'] = current_time
+                        conn_info["last_used"] = current_time
                         logger.info(f"Reusing healthy connection to {pool_key}")
                         self._record_success(pool_key)
-                        return conn_info['api'], conn_info['connection']
+                        return conn_info["api"], conn_info["connection"]
                     else:
                         # Connection seems dead, remove it
                         logger.warning(f"Dead connection detected for {pool_key}, removing")
                         try:
-                            conn_info['connection'].disconnect()
+                            conn_info["connection"].disconnect()
                         except:
                             pass
-                        conn_id = str(id(conn_info['connection']))
+                        conn_id = str(id(conn_info["connection"]))
                         if conn_id in self.active_connections:
                             del self.active_connections[conn_id]  # type: ignore
                 except Exception as e:
                     # Connection is unhealthy
                     logger.warning(f"Unhealthy connection for {pool_key}: {e}")
                     try:
-                        conn_info['connection'].disconnect()
+                        conn_info["connection"].disconnect()
                     except:
                         pass
-                    conn_id = str(id(conn_info['connection']))
+                    conn_id = str(id(conn_info["connection"]))
                     if conn_id in self.active_connections:
                         del self.active_connections[conn_id]  # type: ignore
                     self._record_failure(pool_key, e)
@@ -267,13 +268,13 @@ class MikrotikConnectionPool:
                     # Add to pool
                     conn_key = f"{host_ip}:{port}:{len(pool)}"  # Unique connection key
                     conn_info = {
-                        'connection': connection,
-                        'api': api,
-                        'created_at': current_time,
-                        'last_used': current_time,
-                        'host': host_ip,
-                        'port': port,
-                        'pool_key': pool_key
+                        "connection": connection,
+                        "api": api,
+                        "created_at": current_time,
+                        "last_used": current_time,
+                        "host": host_ip,
+                        "port": port,
+                        "pool_key": pool_key,
                     }
                     pool[conn_key] = conn_info
 
@@ -296,7 +297,7 @@ class MikrotikConnectionPool:
                 except Exception as e:
                     self._record_failure(pool_key, e)
                     raise e
-    
+
     def return_connection(self, connection, host_ip: str, port: int):
         """Return a connection to the pool for reuse."""
         pool_key = self._get_pool_key(host_ip, port)
@@ -311,13 +312,13 @@ class MikrotikConnectionPool:
                 # Check if this connection is already in the pool
                 conn_key = None
                 for key, conn_info in pool.items():
-                    if conn_info['connection'] is connection:
+                    if conn_info["connection"] is connection:
                         conn_key = key
                         break
 
                 # If it's a pooled connection, update its usage time
                 if conn_key:
-                    pool[conn_key]['last_used'] = time.time()
+                    pool[conn_key]["last_used"] = time.time()
                     # Move to the end (most recently used)
                     pool.move_to_end(conn_key, last=True)
                     logger.info(f"Returned connection to pool for {pool_key}")
@@ -352,7 +353,7 @@ class MikrotikConnectionPool:
                     conn_id = str(id(connection))  # type: ignore
                     if conn_id in self.active_connections:
                         del self.active_connections[conn_id]
-    
+
     def close_all_connections(self):
         """Close all connections in the pool with proper cleanup."""
         with self.lock:
@@ -362,17 +363,17 @@ class MikrotikConnectionPool:
                 connections_to_clean = list(pool.items())
                 for conn_key, conn_info in connections_to_clean:
                     try:
-                        conn_info['connection'].disconnect()
+                        conn_info["connection"].disconnect()
                         logger.info(f"Closed pooled connection {conn_key} to {pool_key}")
                         total_cleaned += 1
                         # Remove from active connections tracking
-                        conn_id = id(conn_info['connection'])
+                        conn_id = id(conn_info["connection"])
                         if conn_id in self.active_connections:
                             del self.active_connections[conn_id]
                     except Exception as e:
                         logger.error(f"Error closing connection {conn_key} to {pool_key}: {e}")
                         # Force cleanup even on error
-                        conn_id = id(conn_info['connection'])
+                        conn_id = id(conn_info["connection"])
                         if conn_id in self.active_connections:
                             del self.active_connections[conn_id]
 
@@ -383,7 +384,7 @@ class MikrotikConnectionPool:
             remaining_connections = list(self.active_connections.items())
             for conn_id, conn_info in remaining_connections:
                 try:
-                    conn_info['connection'].disconnect()
+                    conn_info["connection"].disconnect()
                     logger.info(f"Force cleaned remaining connection {conn_id}")
                     total_cleaned += 1
                 except Exception as e:
@@ -407,9 +408,10 @@ class MikrotikConnectionPool:
         finally:
             if connection:
                 self.return_connection(connection, host_ip, port)
-    
-    def execute_with_retry(self, host_ip: str, port: int, username: str, password: str,
-                          operation_func, max_retries=3, retry_delay=1):
+
+    def execute_with_retry(
+        self, host_ip: str, port: int, username: str, password: str, operation_func, max_retries=3, retry_delay=1
+    ):
         """Execute an operation with enhanced retry mechanism and circuit breaker integration."""
         pool_key = self._get_pool_key(host_ip, port)
         last_error = None
@@ -480,7 +482,7 @@ class MikrotikConnectionPool:
                 # Check if we should retry
                 if attempt < max_retries - 1:
                     # Use exponential backoff with jitter to prevent thundering herd
-                    base_delay = retry_delay * (2 ** attempt)  # Exponential: 1, 2, 4, 8...
+                    base_delay = retry_delay * (2**attempt)  # Exponential: 1, 2, 4, 8...
                     jitter = base_delay * 0.1  # Add 10% jitter
                     actual_delay = base_delay + jitter
 
@@ -513,8 +515,8 @@ class MikrotikConnectionPool:
 
         # Calculate health metrics
         success_rate = 0.0
-        if health['total_requests'] > 0:
-            success_rate = (health['successful_requests'] / health['total_requests']) * 100
+        if health["total_requests"] > 0:
+            success_rate = (health["successful_requests"] / health["total_requests"]) * 100
 
         # Determine overall health status
         if circuit_state == CircuitState.OPEN:
@@ -523,7 +525,7 @@ class MikrotikConnectionPool:
         elif circuit_state == CircuitState.HALF_OPEN:
             status = "WARNING"
             status_message = "Circuit breaker HALF_OPEN - testing service recovery"
-        elif health['consecutive_failures'] > 3:
+        elif health["consecutive_failures"] > 3:
             status = "DEGRADED"
             status_message = f"Multiple consecutive failures ({health['consecutive_failures']})"
         elif success_rate < 80.0:
@@ -541,10 +543,9 @@ class MikrotikConnectionPool:
                 "pool_size": len(pool),
                 "max_connections": self.max_connections,
                 "pool_utilization": f"{(len(pool) / self.max_connections) * 100:.1f}%",
-                "expired_connections": len([
-                    conn for conn in pool.values()
-                    if current_time - conn['last_used'] > self.idle_timeout
-                ])
+                "expired_connections": len(
+                    [conn for conn in pool.values() if current_time - conn["last_used"] > self.idle_timeout]
+                ),
             }
 
         return {
@@ -556,17 +557,17 @@ class MikrotikConnectionPool:
                 "failures": self.circuit_failures[pool_key],
                 "last_failure": self.circuit_last_failure[pool_key],
                 "threshold": self.circuit_config.failure_threshold,
-                "recovery_timeout": self.circuit_config.recovery_timeout
+                "recovery_timeout": self.circuit_config.recovery_timeout,
             },
             "health_metrics": {
-                "total_requests": health['total_requests'],
-                "successful_requests": health['successful_requests'],
+                "total_requests": health["total_requests"],
+                "successful_requests": health["successful_requests"],
                 "success_rate": f"{success_rate:.1f}%",
-                "consecutive_failures": health['consecutive_failures'],
-                "last_check": health['last_check']
+                "consecutive_failures": health["consecutive_failures"],
+                "last_check": health["last_check"],
             },
             "pool_statistics": pool_stats,
-            "timestamp": current_time
+            "timestamp": current_time,
         }
 
     def get_all_servers_health(self) -> Dict[str, Any]:
@@ -578,7 +579,7 @@ class MikrotikConnectionPool:
         for pool_key in self.connections.keys():
             # Extract host and port from pool_key
             try:
-                host_ip, port = pool_key.split(':')
+                host_ip, port = pool_key.split(":")
                 port = int(port)
                 servers_health[pool_key] = self.get_connection_health_status(host_ip, port)
             except ValueError:
@@ -596,7 +597,7 @@ class MikrotikConnectionPool:
                 "critical_servers": len([h for h in servers_health.values() if h["status"] in ["WARNING", "CRITICAL"]]),
                 "total_active_connections": total_active,
                 "total_pooled_connections": total_pooled,
-                "timestamp": current_time
+                "timestamp": current_time,
             },
             "servers": servers_health,
             "system_metrics": {
@@ -604,19 +605,14 @@ class MikrotikConnectionPool:
                 "failed_connections": self.metrics.failed_connections,
                 "retry_attempts": self.metrics.retry_attempts,
                 "circuit_breaker_trips": self.metrics.circuit_breaker_trips,
-                "active_connections": self.metrics.active_connections
-            }
+                "active_connections": self.metrics.active_connections,
+            },
         }
 
     def cleanup_stale_connections(self) -> Dict[str, int]:
         """Clean up stale connections and return cleanup statistics."""
         current_time = time.time()
-        cleanup_stats = {
-            "expired_connections": 0,
-            "unhealthy_connections": 0,
-            "orphaned_connections": 0,
-            "total_cleaned": 0
-        }
+        cleanup_stats = {"expired_connections": 0, "unhealthy_connections": 0, "orphaned_connections": 0, "total_cleaned": 0}
 
         with self.lock:
             for pool_key, pool in list(self.connections.items()):
@@ -627,7 +623,7 @@ class MikrotikConnectionPool:
                     remove_reason = ""
 
                     # Check for expired connections
-                    if current_time - conn_info['last_used'] > self.idle_timeout:
+                    if current_time - conn_info["last_used"] > self.idle_timeout:
                         should_remove = True
                         remove_reason = "expired"
                         cleanup_stats["expired_connections"] += 1
@@ -636,7 +632,7 @@ class MikrotikConnectionPool:
                     if not should_remove:
                         try:
                             # Quick health check
-                            test_result = conn_info['api'].get_resource('/system/identity').get()
+                            test_result = conn_info["api"].get_resource("/system/identity").get()
                             if not test_result:
                                 should_remove = True
                                 remove_reason = "unhealthy"
@@ -656,13 +652,13 @@ class MikrotikConnectionPool:
                     if conn_key in pool:
                         pool.pop(conn_key)
                         try:
-                            conn_info['connection'].disconnect()
+                            conn_info["connection"].disconnect()
                             logger.info(f"Cleaned up {reason} connection {conn_key} from {pool_key}")
                         except Exception as e:
                             logger.error(f"Error disconnecting {reason} connection {conn_key}: {e}")
                         finally:
                             # Remove from active connections tracking
-                            conn_id = id(conn_info['connection'])
+                            conn_id = id(conn_info["connection"])
                             if conn_id in self.active_connections:
                                 del self.active_connections[conn_id]
 
@@ -677,7 +673,7 @@ class MikrotikConnectionPool:
                 # Check if connection is still in any pool
                 found_in_pool = False
                 for pool in self.connections.values():
-                    if any(c_info['connection'] is conn_info['connection'] for c_info in pool.values()):
+                    if any(c_info["connection"] is conn_info["connection"] for c_info in pool.values()):
                         found_in_pool = True
                         break
 
@@ -689,7 +685,7 @@ class MikrotikConnectionPool:
             # Clean up orphaned connections
             for conn_id, conn_info in orphaned_connections:
                 try:
-                    conn_info['connection'].disconnect()
+                    conn_info["connection"].disconnect()
                     logger.info(f"Cleaned up orphaned connection {conn_id}")
                 except Exception as e:
                     logger.error(f"Error disconnecting orphaned connection {conn_id}: {e}")
@@ -709,9 +705,9 @@ class MikrotikConnectionPool:
             "circuit_breaker": {
                 "failure_threshold": self.circuit_config.failure_threshold,
                 "recovery_timeout": self.circuit_config.recovery_timeout,
-                "expected_exceptions": [exc.__name__ for exc in self.circuit_config.expected_exception]
+                "expected_exceptions": [exc.__name__ for exc in self.circuit_config.expected_exception],
             },
-            "active_servers": list(self.connections.keys())
+            "active_servers": list(self.connections.keys()),
         }
 
 

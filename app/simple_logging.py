@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 from datetime import datetime
 
+
 def setup_simple_logging():
     """Setup simple logging without changing existing behavior"""
 
@@ -17,15 +18,12 @@ def setup_simple_logging():
 
     # Create handlers
     console_handler = logging.StreamHandler(sys.stdout)
-    file_handler = logging.FileHandler(log_dir / "app.log", encoding='utf-8')
-    error_handler = logging.FileHandler(log_dir / "errors.log", encoding='utf-8')
+    file_handler = logging.FileHandler(log_dir / "app.log", encoding="utf-8")
+    error_handler = logging.FileHandler(log_dir / "errors.log", encoding="utf-8")
     error_handler.setLevel(logging.ERROR)
 
     # Set formatter
-    formatter = logging.Formatter(
-        '%(asctime)s | %(levelname)-8s | %(name)-15s | %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S'
-    )
+    formatter = logging.Formatter("%(asctime)s | %(levelname)-8s | %(name)-15s | %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
     console_handler.setFormatter(formatter)
     file_handler.setFormatter(formatter)
     error_handler.setFormatter(formatter)
@@ -48,9 +46,11 @@ def setup_simple_logging():
 
     return logger
 
+
 def get_logger(name):
     """Get a logger instance"""
     return logging.getLogger(name)
+
 
 # Quick test function
 if __name__ == "__main__":
