@@ -1,19 +1,21 @@
 # app/services/token_service.py
 
+import hashlib
 import logging
 import uuid
 from datetime import datetime, timedelta
 from typing import Optional, Tuple
+
 from jose import jwt
 from jose.exceptions import JWTError
+from sqlalchemy import and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from sqlalchemy import and_
-from ..models.user import User as UserModel
-from ..models.token_blacklist import TokenBlacklist as TokenBlacklistModel
+
 from ..config import settings
+from ..models.token_blacklist import TokenBlacklist as TokenBlacklistModel
+from ..models.user import User as UserModel
 from ..schemas.token_blacklist import TokenBlacklistCreate
-import hashlib
 
 logger = logging.getLogger(__name__)
 

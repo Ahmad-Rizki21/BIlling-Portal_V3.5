@@ -1,15 +1,15 @@
 # app/routers/permission.py
+from typing import List
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from typing import List
-
-from ..models.permission import Permission as PermissionModel
-from ..database import get_db
-from ..schemas.permission import Permission as PermissionSchema
 
 # --- PERBAIKAN DI SINI ---
 from ..config import settings  # Impor 'settings' bukan 'MENUS'
+from ..database import get_db
+from ..models.permission import Permission as PermissionModel
+from ..schemas.permission import Permission as PermissionSchema
 
 router = APIRouter(
     prefix="/permissions",

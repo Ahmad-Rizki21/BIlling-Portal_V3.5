@@ -1,4 +1,5 @@
 from cryptography.fernet import Fernet
+
 from .config import settings
 
 # Inisialisasi cipher suite dengan kunci rahasia dari file config Anda

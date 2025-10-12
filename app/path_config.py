@@ -2,8 +2,8 @@
 Path configuration untuk解决 import issues
 """
 
-import sys
 import os
+import sys
 
 # Add app directory to Python path
 APP_DIR = os.path.dirname(os.path.abspath(__file__))

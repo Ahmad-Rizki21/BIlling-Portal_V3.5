@@ -2,7 +2,7 @@
 Application constants untuk menghilangkan magic numbers dan hard-coded values
 """
 
-from typing import List, Dict, Any
+from typing import Any, Dict, List
 
 
 # ================================

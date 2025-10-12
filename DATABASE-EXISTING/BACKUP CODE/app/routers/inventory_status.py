@@ -1,17 +1,15 @@
 # app/routers/inventory_status.py
 
+from typing import List
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from typing import List
 
 from ..database import get_db
 from ..models.inventory_status import InventoryStatus as InventoryStatusModel
-from ..schemas.inventory_status import (
-    InventoryStatus as InventoryStatusSchema, 
-    InventoryStatusCreate, 
-    InventoryStatusUpdate
-)
+from ..schemas.inventory_status import InventoryStatus as InventoryStatusSchema
+from ..schemas.inventory_status import InventoryStatusCreate, InventoryStatusUpdate
 
 router = APIRouter(prefix="/inventory-statuses", tags=["Inventory Statuses"])
 

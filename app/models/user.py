@@ -1,15 +1,16 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING, List  # <-- Tambahkan List
-from datetime import datetime
 
-from sqlalchemy import String, BigInteger, func, DateTime, TIMESTAMP, ForeignKey
-from sqlalchemy.orm import relationship, Mapped, mapped_column
+from datetime import datetime
+from typing import TYPE_CHECKING, List  # <-- Tambahkan List
+
+from sqlalchemy import TIMESTAMP, BigInteger, DateTime, ForeignKey, String, func
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..database import Base
 
 if TYPE_CHECKING:
-    from .role import Role
     from .activity_log import ActivityLog  # <-- Tambahkan import ActivityLog
+    from .role import Role
 
 
 class User(Base):

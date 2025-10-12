@@ -3,8 +3,8 @@
 Script sederhana untuk testing API response tanpa dependencies external
 """
 
-import subprocess
 import json
+import subprocess
 
 
 def test_api_with_curl():

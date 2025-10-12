@@ -1,16 +1,19 @@
 from __future__ import annotations
-from sqlalchemy import BigInteger, String, Date, Text, ForeignKey, Column, Integer
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 from typing import TYPE_CHECKING, Optional
 
+from sqlalchemy import BigInteger, Column, Date, ForeignKey, Integer, String, Text
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 from app.models.data_teknis import DataTeknis
+
 from ..database import Base
 
 if TYPE_CHECKING:
     from .data_teknis import DataTeknis
-    from .langganan import Langganan
-    from .invoice import Invoice
     from .harga_layanan import HargaLayanan
+    from .invoice import Invoice
+    from .langganan import Langganan
     from .mikrotik_server import MikrotikServer
 
 class Pelanggan(Base):

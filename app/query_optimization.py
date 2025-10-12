@@ -5,10 +5,11 @@ Query Optimization Utilities for Eliminating N+1 Problems
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import joinedload, selectinload
-from app.models.pelanggan import Pelanggan
+
+from app.models.data_teknis import DataTeknis
 from app.models.invoice import Invoice
 from app.models.langganan import Langganan
-from app.models.data_teknis import DataTeknis
+from app.models.pelanggan import Pelanggan
 
 
 def optimize_pelanggan_query_with_stats(query):

@@ -5,19 +5,20 @@ Script ini akan membantu mengidentifikasi masalah dengan paket layanan yang tida
 """
 
 import asyncio
-import sys
 import os
+import sys
 
 # Tambahkan direktori app ke Python path
 sys.path.append(os.path.join(os.path.dirname(__file__), "app"))
 
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.future import select
 from sqlalchemy.orm import joinedload
+
+from app.config import get_settings
 from app.models.langganan import Langganan as LanggananModel
 from app.models.paket_layanan import PaketLayanan as PaketLayananModel
 from app.models.pelanggan import Pelanggan as PelangganModel
-from app.config import get_settings
 
 
 async def check_paket_consistency():

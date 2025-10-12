@@ -3,14 +3,15 @@ Middleware for API Response Optimization.
 Menyediakan response compression, monitoring, dan optimization.
 """
 
-import time
 import gzip
+import logging
+import time
 from io import BytesIO
 from typing import Callable
+
 from fastapi import Request, Response
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
-import logging
 
 logger = logging.getLogger("app.response_optimization")
 

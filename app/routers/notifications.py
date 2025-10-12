@@ -1,28 +1,29 @@
 # app/routers/notifications.py
 
-import logging
 import json
+import logging
+from typing import List, Optional
+
 from fastapi import (
     APIRouter,
+    Depends,
+    Header,
+    HTTPException,
+    Query,
     WebSocket,
     WebSocketDisconnect,
-    Depends,
-    Query,
-    HTTPException,
     status,
-    Header,
 )
+from pydantic import BaseModel
+from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from sqlalchemy import func
 from sqlalchemy.orm import selectinload
-from typing import List, Optional
-from pydantic import BaseModel
 
+from ..auth import get_current_active_user, get_user_from_token
 from ..database import get_db
-from ..auth import get_user_from_token, get_current_active_user
-from ..models.user import User as UserModel
 from ..models.activity_log import ActivityLog as ActivityLogModel
+from ..models.user import User as UserModel
 from ..websocket_manager import manager
 
 # Setup logger

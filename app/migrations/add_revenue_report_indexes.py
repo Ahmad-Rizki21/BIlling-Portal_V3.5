@@ -5,8 +5,9 @@ Revises: previous_migration
 Create Date: 2024-01-01
 
 """
-from alembic import op
 import sqlalchemy as sa
+
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = 'add_revenue_report_indexes'

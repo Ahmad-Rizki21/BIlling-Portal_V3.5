@@ -1,26 +1,28 @@
+import uuid
+from datetime import datetime, timedelta
 from operator import or_
+from typing import List, Optional
+
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload  # <-- Pastikan diimpor
-from typing import List, Optional
-import uuid
-from datetime import datetime, timedelta
 
-from fastapi.security import OAuth2PasswordRequestForm
-
-# Impor model dan skema secara langsung
-from ..models.user import User as UserModel
-from ..models.role import Role as RoleModel
-from ..schemas.user import User as UserSchema, UserCreate, UserUpdate
-from ..database import get_db
-from ..auth import (
+from .. import auth
+from ..auth import (  # <-- Impor get_password_hash dan verify_password dari auth
     get_current_active_user,
     get_password_hash,
     verify_password,
-)  # <-- Impor get_password_hash dan verify_password dari auth
-from .. import auth
+)
 from ..config import settings
+from ..database import get_db
+from ..models.role import Role as RoleModel
+
+# Impor model dan skema secara langsung
+from ..models.user import User as UserModel
+from ..schemas.user import User as UserSchema
+from ..schemas.user import UserCreate, UserUpdate
 
 router = APIRouter(
     prefix="/users",

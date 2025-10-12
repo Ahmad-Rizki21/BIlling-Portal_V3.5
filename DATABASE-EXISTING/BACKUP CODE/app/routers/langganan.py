@@ -8,7 +8,7 @@ import chardet
 from dateutil.relativedelta import relativedelta
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, ValidationError, Field
+from pydantic import BaseModel, Field, ValidationError
 from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -20,8 +20,8 @@ from ..models.invoice import Invoice as InvoiceModel
 from ..models.langganan import Langganan as LanggananModel
 from ..models.paket_layanan import PaketLayanan as PaketLayananModel
 from ..models.pelanggan import Pelanggan as PelangganModel
+from ..schemas.langganan import Langganan as LanggananSchema
 from ..schemas.langganan import (
-    Langganan as LanggananSchema,
     LanggananCreate,
     LanggananImport,
     LanggananUpdate,

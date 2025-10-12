@@ -1,18 +1,20 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
 from datetime import datetime
 from typing import List, Optional
+
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import or_
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
+
+from ..database import get_db
 
 # Impor model dan skema secara langsung
 from ..models.mikrotik_server import MikrotikServer as MikrotikServerModel
+from ..schemas.mikrotik_server import MikrotikServer as MikrotikServerSchema
 from ..schemas.mikrotik_server import (
-    MikrotikServer as MikrotikServerSchema,
     MikrotikServerCreate,
     MikrotikServerUpdate,
 )
-from ..database import get_db
 from ..services import mikrotik_service
 
 # Pastikan variabel 'router' didefinisikan di sini

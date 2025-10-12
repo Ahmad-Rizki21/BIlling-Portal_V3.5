@@ -3,10 +3,11 @@ Centralized error handling untuk menghilangkan duplikasi error patterns
 """
 
 import logging
-from typing import Optional, Any, Dict, Union
+from typing import Any, Dict, Optional, Union
+
 from fastapi import HTTPException, status
-from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from pydantic import ValidationError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -72,9 +73,10 @@ def handle_task_result(task_name: str, result: Any) -> Optional[Any]:
     return result
 
 
+import uuid
+
 # 🛡️ GRACEFUL DEGRADATION UTILITIES
 from datetime import datetime
-import uuid
 
 
 class GracefulError(Exception):
@@ -120,7 +122,7 @@ async def safe_execute_with_fallback(
 
 def create_fallback_dashboard():
     """Create empty dashboard structure for graceful degradation."""
-    from ..schemas.dashboard import DashboardData, ChartData, RevenueSummary, InvoiceSummary
+    from ..schemas.dashboard import ChartData, DashboardData, InvoiceSummary, RevenueSummary
 
     empty_revenue_summary = RevenueSummary(total=0.0, periode="bulan", breakdown=[])  # Empty BrandRevenueItem list
 

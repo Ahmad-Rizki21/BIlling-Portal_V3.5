@@ -1,16 +1,18 @@
 # app/services/mikrotik_service.py
 
+import logging
+from datetime import datetime
+
 import routeros_api
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
-import logging
-from datetime import datetime
+
+from ..models.data_teknis import DataTeknis as DataTeknisModel
 
 # Impor model yang dibutuhkan
 from ..models.langganan import Langganan as LanggananModel
 from ..models.mikrotik_server import MikrotikServer as MikrotikServerModel
-from ..models.data_teknis import DataTeknis as DataTeknisModel
 
 # Setup logger
 logger = logging.getLogger(__name__)

@@ -2,17 +2,19 @@
 
 from datetime import datetime, timedelta
 from typing import Union
-from jose import JWTError, jwt
-from passlib.context import CryptContext
+
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
+from jose import JWTError, jwt
+from passlib.context import CryptContext
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from .config import settings
-from .models.user import User
 from sqlalchemy.orm import selectinload
+
+from .config import settings
 from .database import get_db
 from .models.role import Role
+from .models.user import User
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 ALGORITHM = "HS256"

@@ -2,8 +2,7 @@ import os
 import sys
 from logging.config import fileConfig
 
-from sqlalchemy import engine_from_config
-from sqlalchemy import pool
+from sqlalchemy import engine_from_config, pool
 
 from alembic import context
 
@@ -21,23 +20,23 @@ from app.database import Base
 #    Ini akan "mendaftarkan" semua tabel Anda ke 'Base.metadata'.
 from app.models.data_teknis import DataTeknis
 from app.models.harga_layanan import HargaLayanan
+from app.models.inventory_history import InventoryHistory
+from app.models.inventory_item import InventoryItem
+from app.models.inventory_item_type import InventoryItemType
+from app.models.inventory_status import InventoryStatus
 from app.models.invoice import Invoice
 from app.models.langganan import Langganan
 from app.models.mikrotik_server import MikrotikServer
+from app.models.odp import ODP
+from app.models.olt import OLT
 from app.models.paket_layanan import PaketLayanan
 from app.models.pelanggan import Pelanggan
-from app.models.role import Role, role_has_permissions
 from app.models.permission import Permission
-from app.models.user import User
+from app.models.role import Role, role_has_permissions
 from app.models.sk import SK
-from app.models.olt import OLT
-from app.models.odp import ODP
 from app.models.system_setting import SystemSetting
+from app.models.user import User
 
-from app.models.inventory_item_type import InventoryItemType
-from app.models.inventory_status import InventoryStatus
-from app.models.inventory_item import InventoryItem
-from app.models.inventory_history import InventoryHistory
 # ====================================================================
 
 

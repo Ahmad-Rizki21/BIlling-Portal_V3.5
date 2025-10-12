@@ -1,7 +1,9 @@
-from sqlalchemy import Integer, String, Text, DateTime, func
-from sqlalchemy.orm import Mapped, mapped_column
-from ..database import Base
 from datetime import datetime
+
+from sqlalchemy import DateTime, Integer, String, Text, func
+from sqlalchemy.orm import Mapped, mapped_column
+
+from ..database import Base
 
 
 class SystemLog(Base):

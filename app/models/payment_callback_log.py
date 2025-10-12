@@ -1,8 +1,9 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING
-from datetime import datetime
 
-from sqlalchemy import String, BigInteger, func, DateTime, Index
+from datetime import datetime
+from typing import TYPE_CHECKING
+
+from sqlalchemy import BigInteger, DateTime, Index, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from ..database import Base

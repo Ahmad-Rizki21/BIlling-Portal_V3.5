@@ -2,16 +2,16 @@
 
 from fastapi import (
     APIRouter,
-    WebSocket,
-    WebSocketDisconnect,
     Depends,
     Query,
+    WebSocket,
+    WebSocketDisconnect,
     status,
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..database import get_db
 from ..auth import get_user_from_token
+from ..database import get_db
 from ..websocket_manager import manager
 
 router = APIRouter(tags=["Notifications"])

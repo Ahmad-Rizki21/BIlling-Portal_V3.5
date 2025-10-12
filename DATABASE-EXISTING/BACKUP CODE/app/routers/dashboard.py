@@ -1,39 +1,39 @@
-from fastapi import APIRouter, Depends, HTTPException
-from typing import List, Dict, Optional
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import func, select, case, or_, and_, not_
-from datetime import datetime, timedelta
-from dateutil.relativedelta import relativedelta
 import asyncio
-from pydantic import BaseModel
-from collections import defaultdict
 import locale
+from collections import defaultdict
+from datetime import datetime, timedelta
+from typing import Dict, List, Optional
 
-# Impor model dengan nama yang akan kita gunakan secara konsisten
-from ..models import (
-    Invoice,
-    Pelanggan,
-    HargaLayanan,
-    MikrotikServer,
-    PaketLayanan,
-    Langganan,
-)
+from dateutil.relativedelta import relativedelta
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+from sqlalchemy import and_, case, func, not_, or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
-from ..models.user import User as UserModel
-from ..models.role import Role as RoleModel
 
 from ..auth import get_current_active_user
 from ..database import get_db
-from ..services import mikrotik_service
 
+# Impor model dengan nama yang akan kita gunakan secara konsisten
+from ..models import (
+    HargaLayanan,
+    Invoice,
+    Langganan,
+    MikrotikServer,
+    PaketLayanan,
+    Pelanggan,
+)
+from ..models.role import Role as RoleModel
+from ..models.user import User as UserModel
 from ..schemas.dashboard import (
-    DashboardData,
-    StatCard,
+    BrandRevenueItem,
     ChartData,
+    DashboardData,
     InvoiceSummary,
     RevenueSummary,
-    BrandRevenueItem,
+    StatCard,
 )
+from ..services import mikrotik_service
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 

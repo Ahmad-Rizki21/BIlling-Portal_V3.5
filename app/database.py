@@ -1,10 +1,11 @@
-import os
 import asyncio
 import logging
+import os
 from typing import AsyncGenerator
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from sqlalchemy.orm import sessionmaker, declarative_base
+
 from dotenv import load_dotenv
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.orm import declarative_base, sessionmaker
 
 # Setup logger
 logger = logging.getLogger(__name__)
@@ -72,7 +73,7 @@ AsyncSessionLocal: async_sessionmaker[AsyncSession] = async_sessionmaker(
 Base = declarative_base()
 
 # Import dan inisialisasi enkripsi
-from .encryption_utils import encrypt_sensitive_data, decrypt_sensitive_data
+from .encryption_utils import decrypt_sensitive_data, encrypt_sensitive_data
 
 # ENHANCED CONNECTION POOL MONITORING
 # Dynamic thresholds berdasarkan environment
@@ -132,9 +133,10 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 # Health check function untuk monitoring connection pool
 async def get_connection_pool_status():
     """Get current connection pool status for monitoring."""
+    import threading
+
     from sqlalchemy import event
     from sqlalchemy.pool import Pool
-    import threading
 
     # We'll use a simulated approach since SQLAlchemy async doesn't expose all pool metrics
     # In a real implementation, you would need to track this differently

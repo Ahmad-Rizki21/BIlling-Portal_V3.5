@@ -1,8 +1,9 @@
 # app/config.py
 import os
-from pydantic_settings import BaseSettings
-from dotenv import load_dotenv
 from typing import List
+
+from dotenv import load_dotenv
+from pydantic_settings import BaseSettings
 
 # Get the absolute path to the project root
 # This makes the .env file path robust regardless of where the app is run from

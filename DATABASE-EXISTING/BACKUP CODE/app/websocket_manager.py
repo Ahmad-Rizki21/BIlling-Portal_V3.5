@@ -1,10 +1,11 @@
 # app/websocket_manager.py
 
 import asyncio
-from fastapi import WebSocket, WebSocketDisconnect
-from typing import Dict, List
 import json
 import logging
+from typing import Dict, List
+
+from fastapi import WebSocket, WebSocketDisconnect
 
 logger = logging.getLogger(__name__)
 

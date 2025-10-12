@@ -1,4 +1,5 @@
-from sqlalchemy import Table, Column, ForeignKey, BigInteger
+from sqlalchemy import BigInteger, Column, ForeignKey, Table
+
 from ..database import Base
 
 # Ini bukan kelas Model, tetapi definisi tabel langsung untuk relasi many-to-many.

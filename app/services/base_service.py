@@ -2,14 +2,15 @@
 Base Service Layer untuk menghilangkan duplikasi kode CRUD operations
 """
 
-from typing import TypeVar, Type, Generic, List, Optional, Dict, Any, Sequence
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
-from sqlalchemy import func, or_
-from sqlalchemy.orm import joinedload
+import logging
+from typing import Any, Dict, Generic, List, Optional, Sequence, Type, TypeVar
+
 from fastapi import HTTPException, status
 from pydantic import BaseModel
-import logging
+from sqlalchemy import func, or_
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
+from sqlalchemy.orm import joinedload
 
 # Type variables untuk generics
 ModelType = TypeVar("ModelType")

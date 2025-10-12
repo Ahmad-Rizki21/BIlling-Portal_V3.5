@@ -1,38 +1,34 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Request, Header
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
-from sqlalchemy.future import select
-from sqlalchemy import func, or_
-from datetime import date, timedelta, datetime, timezone
-from dateutil.relativedelta import relativedelta
-import uuid
-from typing import List, Optional
 import json
 import logging
-import pytz
-from ..websocket_manager import manager
 import math
-from sqlalchemy import and_
+import uuid
+from datetime import date, datetime, timedelta, timezone
+from typing import List, Optional
 
-from typing import Optional
+import pytz
+from dateutil.relativedelta import relativedelta
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
+from sqlalchemy import and_, func, or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
+from sqlalchemy.orm import selectinload
 
 # Impor semua model dan skema yang dibutuhkan
 from ..auth import has_permission
+from ..config import settings
+from ..database import get_db
 from ..models.invoice import Invoice as InvoiceModel
 from ..models.langganan import Langganan as LanggananModel
 from ..models.pelanggan import Pelanggan as PelangganModel
-from ..models.user import User as UserModel
 from ..models.role import Role as RoleModel
+from ..models.user import User as UserModel
+from ..schemas.invoice import Invoice as InvoiceSchema
 from ..schemas.invoice import (
-    Invoice as InvoiceSchema,
     InvoiceGenerate,
     MarkAsPaidRequest,
 )
-from ..database import get_db
-from sqlalchemy import select, func
-from ..services import mikrotik_service
-from ..config import settings
-from ..services import xendit_service, mikrotik_service
+from ..services import mikrotik_service, xendit_service
+from ..websocket_manager import manager
 
 logger = logging.getLogger("app.routers.invoice")
 

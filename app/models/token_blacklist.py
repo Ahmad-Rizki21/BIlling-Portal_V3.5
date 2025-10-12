@@ -1,10 +1,12 @@
 from __future__ import annotations
-from sqlalchemy import BigInteger, String, DateTime, ForeignKey, Column, Integer, Text, Index
-from sqlalchemy.orm import Mapped, mapped_column, relationship
-from typing import TYPE_CHECKING, Optional
+
 from datetime import datetime
+from typing import TYPE_CHECKING, Optional
+
+from sqlalchemy import BigInteger, Column, DateTime, ForeignKey, Index, Integer, String, Text, func
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 from ..database import Base
-from sqlalchemy import func
 
 if TYPE_CHECKING:
     from .user import User

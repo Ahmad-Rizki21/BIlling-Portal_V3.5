@@ -1,8 +1,9 @@
 from sqlalchemy import event
 from sqlalchemy.orm import Session
-from .models.user import User
-from .models.mikrotik_server import MikrotikServer
+
 from .encryption import encryption_service
+from .models.mikrotik_server import MikrotikServer
+from .models.user import User
 
 
 # Import models inside functions to avoid circular imports

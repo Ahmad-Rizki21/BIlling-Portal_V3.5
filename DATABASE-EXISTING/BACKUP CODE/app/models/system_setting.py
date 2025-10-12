@@ -1,8 +1,10 @@
 # REVISI: Tidak ada perubahan, kode sudah benar.
 
-from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy import String
+from sqlalchemy.orm import Mapped, mapped_column
+
 from ..database import Base
+
 
 class SystemSetting(Base):
     __tablename__ = "system_settings"

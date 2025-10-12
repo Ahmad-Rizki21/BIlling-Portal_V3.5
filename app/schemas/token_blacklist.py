@@ -1,9 +1,10 @@
 # app/schemas/token_blacklist.py
 
-from pydantic import BaseModel, Field, validator
-from typing import Optional
-from datetime import datetime
 import re
+from datetime import datetime
+from typing import Optional
+
+from pydantic import BaseModel, Field, validator
 
 
 class TokenBlacklistBase(BaseModel):

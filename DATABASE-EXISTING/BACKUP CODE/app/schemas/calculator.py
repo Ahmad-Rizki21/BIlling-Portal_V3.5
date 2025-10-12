@@ -1,6 +1,7 @@
 # app/schemas/calculator.py
-from pydantic import BaseModel
 from datetime import date
+
+from pydantic import BaseModel
 
 
 class ProrateCalculationRequest(BaseModel):

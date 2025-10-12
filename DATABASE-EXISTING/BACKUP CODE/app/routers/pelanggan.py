@@ -1,35 +1,32 @@
-import pandas as pd
-from typing import List
-import openpyxl
-from io import BytesIO
-from typing import Optional
-from datetime import datetime, timedelta
-import io
 import csv
+import io
+import logging
+from datetime import datetime, timedelta
+from io import BytesIO
+from typing import List, Optional
+
 import chardet  # Add this import for encoding detection
-
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
-from fastapi.responses import StreamingResponse
+import openpyxl
+import pandas as pd
 from dateutil import parser
-
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi.responses import StreamingResponse
+from pydantic import ValidationError
 from sqlalchemy import func, or_
-from ..models.user import User as UserModel
-from ..models.role import Role as RoleModel
-from ..websocket_manager import manager
-
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
-from pydantic import ValidationError
-import logging
 
+from ..database import get_db
 from ..models.pelanggan import Pelanggan as PelangganModel
+from ..models.role import Role as RoleModel
+from ..models.user import User as UserModel
+from ..schemas.pelanggan import Pelanggan as PelangganSchema
 from ..schemas.pelanggan import (
-    Pelanggan as PelangganSchema,
     PelangganCreate,
     PelangganUpdate,
 )
-from ..database import get_db
+from ..websocket_manager import manager
 
 router = APIRouter(
     prefix="/pelanggan",

@@ -1,38 +1,65 @@
 # app/main.py
 
-import os
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query, Request
-from fastapi.staticfiles import StaticFiles
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
-import logging
-
 # --- TAMBAHAN IMPORT UNTUK ACTIVITY LOG ---
 import json
+import logging
+import os
 import time
-from jose import jwt, JWTError
-from . import config
-from .models.activity_log import ActivityLog
-from .models.user import User as UserModel
-from .config import settings
-# --- AKHIR TAMBAHAN IMPORT ---
 
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from fastapi import FastAPI, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from jose import JWTError, jwt
 from sqlalchemy.ext.asyncio import AsyncSession
 
-
-from .database import Base, engine, get_db, AsyncSessionLocal
-from .routers import (
-    pelanggan, user, role, data_teknis, harga_layanan,
-    paket_layanan, langganan, invoice, mikrotik_server,
-    uploads, notifications, dashboard, permission, sk,
-    calculator, report, olt, odp, topology, settings,
-    inventory, inventory_status, inventory_type, dashboard_pelanggan,
-    activity_log
-)
-from .jobs import job_generate_invoices, job_suspend_services, job_verify_payments, job_send_payment_reminders, job_retry_mikrotik_syncs
-from .logging_config import setup_logging
+from . import config
 from .auth import get_user_from_token
+from .config import settings
+from .database import AsyncSessionLocal, Base, engine, get_db
+from .jobs import (
+    job_generate_invoices,
+    job_retry_mikrotik_syncs,
+    job_send_payment_reminders,
+    job_suspend_services,
+    job_verify_payments,
+)
+from .logging_config import setup_logging
+from .models.activity_log import ActivityLog
+from .models.user import User as UserModel
+from .routers import (
+    activity_log,
+    calculator,
+    dashboard,
+    dashboard_pelanggan,
+    data_teknis,
+    harga_layanan,
+    inventory,
+    inventory_status,
+    inventory_type,
+    invoice,
+    langganan,
+    mikrotik_server,
+    notifications,
+    odp,
+    olt,
+    paket_layanan,
+    pelanggan,
+    permission,
+    report,
+    role,
+    settings,
+    sk,
+    topology,
+    uploads,
+    user,
+)
 from .websocket_manager import manager
+
+# --- AKHIR TAMBAHAN IMPORT ---
+
+
+
 
 # Fungsi untuk membuat tabel di database saat aplikasi pertama kali dijalankan
 async def create_tables():

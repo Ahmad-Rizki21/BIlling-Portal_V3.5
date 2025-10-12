@@ -1,7 +1,9 @@
 # app/schemas/odp.py
 
-from pydantic import BaseModel, Field
 from typing import Optional
+
+from pydantic import BaseModel, Field
+
 
 # Skema OLT sederhana untuk ditampilkan di dalam respons ODP
 class OLTSimple(BaseModel):

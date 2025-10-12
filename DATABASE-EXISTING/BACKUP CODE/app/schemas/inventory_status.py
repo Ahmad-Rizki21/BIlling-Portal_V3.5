@@ -2,6 +2,7 @@
 
 from pydantic import BaseModel
 
+
 class InventoryStatusBase(BaseModel):
     name: str
 

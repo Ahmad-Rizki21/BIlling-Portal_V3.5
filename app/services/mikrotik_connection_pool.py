@@ -1,12 +1,12 @@
 import asyncio
+import logging
 import threading
 import time
-import logging
 from collections import OrderedDict
-from typing import Dict, Optional, Callable, Any
 from contextlib import contextmanager
-from enum import Enum
 from dataclasses import dataclass
+from enum import Enum
+from typing import Any, Callable, Dict, Optional
 
 import routeros_api
 

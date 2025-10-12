@@ -1,17 +1,15 @@
 # app/routers/inventory_type.py
 
+from typing import List
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from typing import List
 
 from ..database import get_db
 from ..models.inventory_item_type import InventoryItemType as InventoryItemTypeModel
-from ..schemas.inventory_type import (
-    InventoryItemType as InventoryItemTypeSchema,
-    InventoryItemTypeCreate,
-    InventoryItemTypeUpdate
-)
+from ..schemas.inventory_type import InventoryItemType as InventoryItemTypeSchema
+from ..schemas.inventory_type import InventoryItemTypeCreate, InventoryItemTypeUpdate
 
 router = APIRouter(prefix="/inventory-types", tags=["Inventory Types"])
 

@@ -1,23 +1,26 @@
 # app/models/invoice.py - OPTIMIZED VERSION
 
 from __future__ import annotations
-from typing import TYPE_CHECKING
+
 from datetime import date, datetime, timedelta
+from typing import TYPE_CHECKING
+
 from sqlalchemy import (
+    TIMESTAMP,
     BigInteger,
-    String,
+    Boolean,
+    CheckConstraint,
     Date,
     DateTime,
-    Text,
     ForeignKey,
-    Numeric,
-    Boolean,
-    func,
-    TIMESTAMP,
-    CheckConstraint,
     Index,
+    Numeric,
+    String,
+    Text,
+    func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 from ..database import Base
 
 if TYPE_CHECKING:

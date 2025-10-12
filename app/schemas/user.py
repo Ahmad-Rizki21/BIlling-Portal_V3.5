@@ -1,7 +1,9 @@
-from pydantic import BaseModel, EmailStr, validator, Field
-from typing import Optional
-from datetime import datetime
 import re
+from datetime import datetime
+from typing import Optional
+
+from pydantic import BaseModel, EmailStr, Field, validator
+
 from .role import Role
 
 

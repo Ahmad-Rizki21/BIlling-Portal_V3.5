@@ -1,19 +1,21 @@
-from sqlalchemy import (
-    BigInteger,
-    String,
-    Date,
-    DateTime,
-    Text,
-    ForeignKey,
-    Numeric,
-    Boolean,
-    func,
-    TIMESTAMP,
-)
-from sqlalchemy.orm import Mapped, mapped_column, relationship
-from ..database import Base
 from datetime import datetime
 from typing import TYPE_CHECKING
+
+from sqlalchemy import (
+    TIMESTAMP,
+    BigInteger,
+    Boolean,
+    Date,
+    DateTime,
+    ForeignKey,
+    Numeric,
+    String,
+    Text,
+    func,
+)
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from ..database import Base
 
 if TYPE_CHECKING:
     from .pelanggan import Pelanggan

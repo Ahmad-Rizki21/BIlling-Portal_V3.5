@@ -1,15 +1,17 @@
 # app/models/mikrotik_server.py
 
 from __future__ import annotations
-from typing import List, TYPE_CHECKING  # Pastikan List dan TYPE_CHECKING diimpor
-from datetime import datetime
 
-from sqlalchemy import String, BigInteger, Boolean, func, DateTime, Integer, Text
-from sqlalchemy.orm import (
+from datetime import datetime
+from typing import TYPE_CHECKING, List  # Pastikan List dan TYPE_CHECKING diimpor
+
+from sqlalchemy import BigInteger, Boolean, DateTime, Integer, String, Text, func
+from sqlalchemy.orm import (  # Pastikan relationship diimpor
     Mapped,
     mapped_column,
     relationship,
-)  # Pastikan relationship diimpor
+)
+
 from ..database import Base
 
 # Tambahkan blok ini untuk type hinting relasi

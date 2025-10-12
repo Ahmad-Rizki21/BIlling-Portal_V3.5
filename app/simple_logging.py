@@ -5,8 +5,8 @@
 import logging
 import logging.config
 import sys
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 
 
 def setup_simple_logging():

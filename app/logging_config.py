@@ -2,11 +2,11 @@
 
 import logging
 import logging.config
-import sys
 import os
-from pathlib import Path
-from datetime import datetime
 import platform
+import sys
+from datetime import datetime
+from pathlib import Path
 
 # Import our custom logging utilities
 try:

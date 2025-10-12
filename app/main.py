@@ -1,65 +1,68 @@
 # app/main.py
-import os
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query, Request, status
-from fastapi.responses import JSONResponse
-from fastapi.staticfiles import StaticFiles
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
-import logging
-
 # --- TAMBAHAN IMPORT UNTUK ACTIVITY LOG ---
 import json
+import logging
+import os
 import time
-from jose import jwt, JWTError
-from . import config
-from .models.activity_log import ActivityLog
-from .models.user import User as UserModel
-from .models.system_setting import SystemSetting as SettingModel
-from .config import settings
 
-# --- AKHIR TAMBAHAN IMPORT ---
-
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from fastapi import FastAPI, Query, Request, WebSocket, WebSocketDisconnect, status
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
+from jose import JWTError, jwt
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from .database import Base, engine, get_db, AsyncSessionLocal
+from . import config
+from .auth import get_user_from_token
+from .config import settings
+from .database import AsyncSessionLocal, Base, engine, get_db
+from .jobs import (
+    job_generate_invoices,
+    job_retry_mikrotik_syncs,
+    job_send_payment_reminders,
+    job_suspend_services,
+    job_verify_payments,
+)
+from .logging_config import setup_logging
+from .models.activity_log import ActivityLog
+from .models.system_setting import SystemSetting as SettingModel
+from .models.user import User as UserModel
 from .routers import (
-    pelanggan,
-    user,
-    role,
+    activity_log,
+    calculator,
+    dashboard,
+    dashboard_pelanggan,
     data_teknis,
     harga_layanan,
-    paket_layanan,
-    langganan,
-    invoice,
-    mikrotik_server,
-    uploads,
-    notifications,
-    dashboard,
-    permission,
-    sk,
-    calculator,
-    report,
-    olt,
-    odp,
-    topology,
-    settings as settings_router,
     inventory,
     inventory_status,
     inventory_type,
-    dashboard_pelanggan,
-    activity_log,
+    invoice,
+    langganan,
+    mikrotik_server,
+    notifications,
+    odp,
+    olt,
+    paket_layanan,
+    pelanggan,
+    permission,
+    report,
+    role,
 )
-from .jobs import (
-    job_generate_invoices,
-    job_suspend_services,
-    job_verify_payments,
-    job_send_payment_reminders,
-    job_retry_mikrotik_syncs,
+from .routers import settings as settings_router
+from .routers import (
+    sk,
+    topology,
+    uploads,
+    user,
 )
-from .logging_config import setup_logging
-from .auth import get_user_from_token
 from .websocket_manager import manager
+
+# --- AKHIR TAMBAHAN IMPORT ---
+
+
 
 
 # Fungsi untuk membuat tabel di database saat aplikasi pertama kali dijalankan

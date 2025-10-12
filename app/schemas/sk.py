@@ -1,7 +1,8 @@
 # app/schemas/sk.py
-from pydantic import BaseModel
 from datetime import datetime
 from typing import Optional
+
+from pydantic import BaseModel
 
 
 class SKBase(BaseModel):

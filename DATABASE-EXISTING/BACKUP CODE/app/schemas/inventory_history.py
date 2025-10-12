@@ -1,8 +1,11 @@
 # app/schemas/inventory_history.py
 
-from pydantic import BaseModel
 from datetime import datetime
+
+from pydantic import BaseModel
+
 from .user import UserSimple  # Asumsi Anda punya skema UserSimple (id, nama)
+
 
 class InventoryHistoryBase(BaseModel):
     id: int

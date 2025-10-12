@@ -2,18 +2,19 @@
 # ============================
 # Specialized logging for dashboard operations and events
 
-from .logging_enhanced import (
-    get_logger,
-    log_system_event,
-    log_api_request,
-    log_database_event,
-    log_payment_event,
-    log_scheduler_event,
-    log_exception,
-)
 import logging
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
+
+from .logging_enhanced import (
+    get_logger,
+    log_api_request,
+    log_database_event,
+    log_exception,
+    log_payment_event,
+    log_scheduler_event,
+    log_system_event,
+)
 
 # Get dashboard specific logger
 dashboard_logger = get_logger("app.dashboard")

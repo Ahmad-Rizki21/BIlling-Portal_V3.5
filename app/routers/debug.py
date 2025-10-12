@@ -3,16 +3,18 @@ Debug router untuk analisis data consistency
 Hanya untuk development/debugging, disable di production!
 """
 
+from typing import Any, Dict, List
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import joinedload
-from typing import List, Dict, Any
+
+from ..auth import get_current_active_user
 from ..database import get_db
 from ..models.langganan import Langganan as LanggananModel
 from ..models.pelanggan import Pelanggan as PelangganModel
 from ..models.user import User as UserModel
-from ..auth import get_current_active_user
 
 router = APIRouter(prefix="/debug", tags=["Debug"], include_in_schema=False)
 

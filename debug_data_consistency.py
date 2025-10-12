@@ -6,9 +6,11 @@ Gunakan script ini di server production untuk mengidentifikasi data yang tidak k
 
 import asyncio
 import sys
+
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.database import get_db, engine
+
+from app.database import engine, get_db
 from app.models.langganan import Langganan
 from app.models.pelanggan import Pelanggan
 

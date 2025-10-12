@@ -3,9 +3,10 @@
 Script untuk testing API response dan mencari masalah data loading
 """
 
-import subprocess
 import json
+import subprocess
 import sys
+
 
 def run_curl(url, method="GET", data=None):
     """Run curl command and return response"""

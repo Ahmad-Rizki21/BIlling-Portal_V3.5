@@ -1,6 +1,7 @@
-from pydantic import BaseModel, Field, validator
-from typing import Optional
 import re
+from typing import Optional
+
+from pydantic import BaseModel, Field, validator
 
 
 # ====================================================================

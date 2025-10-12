@@ -1,5 +1,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from ..models.activity_log import ActivityLog
+
 
 async def create_activity_log(
     db: AsyncSession, 

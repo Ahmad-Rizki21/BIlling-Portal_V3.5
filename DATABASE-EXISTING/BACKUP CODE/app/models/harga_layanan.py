@@ -1,12 +1,15 @@
 from __future__ import annotations
-from typing import List, TYPE_CHECKING
-from sqlalchemy import String, Numeric
-from sqlalchemy.orm import relationship, Mapped, mapped_column
+
+from typing import TYPE_CHECKING, List
+
+from sqlalchemy import Numeric, String
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 from ..database import Base
 
 if TYPE_CHECKING:
-    from .pelanggan import Pelanggan
     from .paket_layanan import PaketLayanan  # <-- Tambahkan impor ini
+    from .pelanggan import Pelanggan
 
 
 class HargaLayanan(Base):
