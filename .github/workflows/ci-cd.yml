@@ -35,6 +35,8 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
         pip install pytest pytest-cov pytest-asyncio flake8 black isort mypy safety bandit
+        # Additional dependencies for testing
+        pip install aiosqlite httpx
 
     - name: Setup Node.js
       uses: actions/setup-node@v4
@@ -92,23 +94,27 @@ jobs:
     needs: code-quality
 
     services:
-      postgres:
-        image: postgres:15
+      mysql:
+        image: mysql:8.0
         env:
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_USER: postgres
-          POSTGRES_DB: test_billing
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: test_billing
         options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=3
         ports:
-          - 5432:5432
+          - 3306:3306
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+
+    - name: Setup MySQL Client
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y mysql-client
 
     - name: Setup Python
       uses: actions/setup-python@v4
@@ -125,19 +131,19 @@ jobs:
     - name: Setup test environment
       run: |
         cp .env.example .env.test
-        echo "DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/test_billing" >> .env.test
+        echo "DATABASE_URL=mysql+aiomysql://root:root@localhost:3306/test_billing" >> .env.test
         echo "SECRET_KEY=test-secret-key-for-ci-only" >> .env.test
         echo "ALGORITHM=HS256" >> .env.test
         echo "ACCESS_TOKEN_EXPIRE_MINUTES=30" >> .env.test
 
     - name: Run database migrations
       run: |
-        export DATABASE_URL="postgresql+asyncpg://postgres:postgres@localhost:5432/test_billing"
+        export DATABASE_URL="mysql+aiomysql://root:root@localhost:3306/test_billing"
         alembic upgrade head
 
     - name: Run Python tests with coverage
       env:
-        DATABASE_URL: "postgresql+asyncpg://postgres:postgres@localhost:5432/test_billing"
+        DATABASE_URL: "mysql+aiomysql://root:root@localhost:3306/test_billing"
       run: |
         pytest tests/ -v \
           --cov=app \
