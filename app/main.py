@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from . import config
 from .auth import get_user_from_token
 from .config import settings
-from .database import AsyncSessionLocal, Base, engine, get_db
+from .database import AsyncSessionLocal, Base, engine, get_db, init_encryption
 from .jobs import (
     job_generate_invoices,
     job_retry_mikrotik_syncs,
@@ -31,6 +31,7 @@ from .models.system_setting import SystemSetting as SettingModel
 from .models.user import User as UserModel
 from .routers import (
     activity_log,
+    auth,
     calculator,
     dashboard,
     dashboard_pelanggan,
@@ -88,8 +89,14 @@ origins = [
     # "http://192.168.222.20",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "http://localhost:8080",
+    "http://127.0.0.1:8080",
+    "ws://localhost:3000",
+    "ws://127.0.0.1:3000",
     "tauri://localhost",
-    # "http://tauri.localhost"
+    "http://localhost:8000",  # Backend origin
+    "http://127.0.0.1:8000",  # Backend origin
+    "*"  # Allow all origins for development
 ]
 
 app.add_middleware(
@@ -108,10 +115,15 @@ app.add_middleware(
 async def maintenance_mode_middleware(request: Request, call_next):
     # Daftar path yang diizinkan selama maintenance
     allowed_paths = [
-        "/api/users/token",  # Izinkan login
-        "/api/settings/maintenance",  # Izinkan admin mengubah status maintenance
+        "/auth/token",  # Izinkan login
+        "/auth/refresh",  # Izinkan refresh token
+        "/auth/logout",  # Izinkan logout
+        "/users/token",  # Izinkan login (backup path)
+        "/pelanggan",  # Izinkan akses pelanggan
+        "/settings/maintenance",  # Izinkan admin mengubah status maintenance
         "/docs",  # Izinkan akses dokumentasi API
         "/openapi.json",
+        "/ws/test",  # Izinkan WebSocket test
     ]
 
     # Jika path request ada di daftar yang diizinkan, lewati pengecekan
@@ -242,58 +254,58 @@ def websocket_test():
 
 
 # WebSocket endpoint
-# @app.websocket("/ws/notifications")
-# async def websocket_notifications(websocket: WebSocket, token: str = Query(...)):
-#     """WebSocket endpoint untuk notifications real-time."""
-#     db = None
-#     logger = logging.getLogger("app.websocket")
-#     logger.info(f"WebSocket connection attempt with token: {token[:20]}...")
+@app.websocket("/ws/notifications")
+async def websocket_notifications(websocket: WebSocket, token: str = Query(...)):
+    """WebSocket endpoint untuk notifications real-time."""
+    db = None
+    logger = logging.getLogger("app.websocket")
+    logger.info(f"WebSocket connection attempt with token: {token[:20]}...")
 
-#     try:
-#         # Dapatkan database session
-#         db_generator = get_db()
-#         db = await db_generator.__anext__()
+    try:
+        # Dapatkan database session
+        db_generator = get_db()
+        db = await db_generator.__anext__()
 
-#         # Verifikasi token dan dapatkan user
-#         user = await get_user_from_token(token, db)
-#         if not user:
-#             logger.error("Invalid token provided")
-#             await websocket.close(code=4001, reason="Invalid token")
-#             return
+        # Verifikasi token dan dapatkan user
+        user = await get_user_from_token(token, db)
+        if not user:
+            logger.error("Invalid token provided")
+            await websocket.close(code=4001, reason="Invalid token")
+            return
 
-#         # Connect WebSocket menggunakan manager
-#         await manager.connect(websocket, user.id)
-#         logger.info(f"WebSocket connected for user {user.id}")
+        # Connect WebSocket menggunakan manager
+        await manager.connect(websocket, user.id)
+        logger.info(f"WebSocket connected for user {user.id}")
 
-#         try:
-#             # Keep connection alive dan handle incoming messages
-#             while True:
-#                 # Tunggu pesan dari client (bisa berupa ping/pong atau commands)
-#                 data = await websocket.receive_text()
-#                 logger.debug(f"Received message from user {user.id}: {data}")
+        try:
+            # Keep connection alive dan handle incoming messages
+            while True:
+                # Tunggu pesan dari client (bisa berupa ping/pong atau commands)
+                data = await websocket.receive_text()
+                logger.debug(f"Received message from user {user.id}: {data}")
 
-#                 # Handle ping/pong untuk keep-alive
-#                 if data == "ping":
-#                     await websocket.send_text("pong")
+                # Handle ping/pong untuk keep-alive
+                if data == "ping":
+                    await websocket.send_text("pong")
 
-#         except WebSocketDisconnect:
-#             logger.info(f"WebSocket disconnected for user {user.id}")
-#         except Exception as e:
-#             logger.error(f"WebSocket error for user {user.id}: {e}")
-#         finally:
-#             manager.disconnect(user.id)
+        except WebSocketDisconnect:
+            logger.info(f"WebSocket disconnected for user {user.id}")
+        except Exception as e:
+            logger.error(f"WebSocket error for user {user.id}: {e}")
+        finally:
+            await manager.disconnect(user.id)
 
-#     except Exception as e:
-#         logger.error(f"WebSocket connection error: {e}")
-#         try:
-#             await websocket.close(code=4000, reason="Connection error")
-#         except Exception as e:
-#             #  Cukup log sebagai debug, karena ini bukan error kritis
-#             logger.debug(f"Failed to cleanly close WebSocket during final cleanup: {e}")
-#     finally:
-#         # Tutup database session
-#         if db:
-#             await db.close()
+    except Exception as e:
+        logger.error(f"WebSocket connection error: {e}")
+        try:
+            await websocket.close(code=4000, reason="Connection error")
+        except Exception as e:
+            #  Cukup log sebagai debug, karena ini bukan error kritis
+            logger.debug(f"Failed to cleanly close WebSocket during final cleanup: {e}")
+    finally:
+        # Tutup database session
+        if db:
+            await db.close()
 
 
 # Event handler untuk startup aplikasi
@@ -306,7 +318,11 @@ async def startup_event():
     await create_tables()
     print("Tabel telah diperiksa/dibuat.")
 
-    # 2. Tambahkan tugas-tugas terjadwal
+    # 2. Inisialisasi enkripsi/dekripsi untuk data sensitif
+    init_encryption()
+    print("Enkripsi/Deskripsi data sensitif telah diinisialisasi.")
+
+    # 3. Tambahkan tugas-tugas terjadwal
     # Setiap job diberi 'id' unik untuk mencegah duplikasi penjadwalan.
     # 'replace_existing=True' memastikan jika server restart, job lama akan diganti.
 
@@ -325,7 +341,7 @@ async def startup_event():
     # Mencoba ulang sinkronisasi Mikrotik yang gagal setiap 5 menit.
     # scheduler.add_job(job_retry_mikrotik_syncs, 'interval', minutes=5, id="retry_mikrotik_syncs_job", replace_existing=True)
 
-    # 3. Mulai scheduler
+    # 4. Mulai scheduler
     scheduler.start()
     print("Scheduler telah dimulai...")
     logger.info("Application startup complete")
@@ -341,6 +357,7 @@ async def shutdown_event():
 # API_PREFIX = os.getenv("API_PREFIX", "")
 
 # Meng-include semua router
+app.include_router(auth.router)
 app.include_router(pelanggan.router)
 app.include_router(user.router)
 app.include_router(role.router)

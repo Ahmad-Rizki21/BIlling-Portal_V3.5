@@ -1,5 +1,6 @@
 # app/auth.py
 
+import uuid
 from datetime import datetime, timedelta
 from typing import Union
 
@@ -39,9 +40,87 @@ def create_access_token(data: dict, expires_delta: Union[timedelta, None] = None
     else:
         expire = datetime.utcnow() + timedelta(minutes=15)
 
-    to_encode.update({"exp": expire})
+    to_encode.update({"exp": expire, "iat": datetime.utcnow()})
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
+
+
+def create_refresh_token(data: dict, expires_delta: Union[timedelta, None] = None):
+    """Membuat JWT refresh token."""
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(days=7)
+
+    to_encode.update({
+        "exp": expire,
+        "iat": datetime.utcnow(),
+        "type": "refresh",
+        "jti": str(uuid.uuid4())  # JWT ID for blacklisting
+    })
+    encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+
+async def authenticate_user(email: str, password: str, db: AsyncSession):
+    """Autentikasi user berdasarkan email dan password."""
+    query = select(User).where(User.email == email)
+    result = await db.execute(query)
+    user = result.scalar_one_or_none()
+
+    if not user or not verify_password(password, user.password):
+        return None
+
+    return user
+
+
+def get_password_requirements():
+    """Get password requirements untuk frontend validation."""
+    return {
+        "min_length": 8,
+        "require_uppercase": True,
+        "require_lowercase": True,
+        "require_digit": True,
+        "require_special": True,
+        "no_whitespace": True,
+    }
+
+
+def validate_password_strength(password: str):
+    """Validasi strength password sesuai requirements."""
+    requirements = get_password_requirements()
+    errors = []
+
+    if len(password) < requirements["min_length"]:
+        errors.append(f"Password harus minimal {requirements['min_length']} karakter")
+
+    if not any(c.isupper() for c in password):
+        errors.append("Password harus mengandung huruf besar")
+
+    if not any(c.islower() for c in password):
+        errors.append("Password harus mengandung huruf kecil")
+
+    if not any(c.isdigit() for c in password):
+        errors.append("Password harus mengandung angka")
+
+    special_chars = "!@#$%^&*()_+-=[]{}|;:,.<>?"
+    if not any(c in special_chars for c in password):
+        errors.append("Password harus mengandung karakter khusus")
+
+    if any(c.isspace() for c in password):
+        errors.append("Password tidak boleh mengandung spasi")
+
+    return len(errors) == 0, errors
+
+
+# Token data class untuk Pydantic models
+class Token:
+    def __init__(self, access_token: str, token_type: str, expires_in: int, refresh_token: str = None):
+        self.access_token = access_token
+        self.token_type = token_type
+        self.expires_in = expires_in
+        self.refresh_token = refresh_token
 
 
 def verify_access_token(token: str) -> dict:
@@ -103,22 +182,20 @@ async def get_user_from_token(token: str, db: AsyncSession) -> User | None:
     Mendekode token JWT dan mengambil data user dari database.
     Didesain untuk digunakan di luar dependency injection standar (untuk WebSocket).
     """
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-    )
     try:
         payload = verify_access_token(token)
         user_id: str = payload.get("sub")
         if user_id is None:
-            raise credentials_exception
-    except JWTError:
-        raise credentials_exception
+            return None
+    except (JWTError, ValueError, TypeError):
+        # Return None instead of raising exception for WebSocket compatibility
+        return None
 
     # Ambil user dari database
-    query = select(User).where(User.id == int(user_id)).options(selectinload(User.role).selectinload(Role.permissions))
-    user = (await db.execute(query)).scalar_one_or_none()
-
-    if user is None:
-        raise credentials_exception
-    return user
+    try:
+        query = select(User).where(User.id == int(user_id)).options(selectinload(User.role).selectinload(Role.permissions))
+        user = (await db.execute(query)).scalar_one_or_none()
+        return user
+    except (ValueError, Exception):
+        # Handle conversion errors and database errors
+        return None

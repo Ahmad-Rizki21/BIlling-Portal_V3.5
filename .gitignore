@@ -1,100 +1,16 @@
-# Python
-__pycache__/
-*.pyc
-.venv/
-venv/
-
-# Node.js
-/frontend/node_modules/
-/frontend/dist/
-.npm/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# Lainnya
+*.iml
+.gradle
+/local.properties
+/.idea/caches
+/.idea/libraries
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
 .DS_Store
-
-/.env
-
-logs
-
-# Dependencies
-node_modules/
-
-# Build files
-dist/
-frontend/release/
-frontend/release/
-frontend/release/win-unpacked/
-frontend/release/linux-unpacked/
-frontend/release/mac/
-*.exe
-*.dmg
-*.deb
-*.rpm
-*.AppImage
-
-# Android build files (untuk keamanan)
-/frontend/android/app/build/
-/frontend/android/app/build/outputs/
-/frontend/android/app/build/intermediates/
-frontend/android/local.properties
-/frontend/android/app/key.jks
-
-# Development files
-*.log
-*.debug
-*.cache
-.vscode/
-
-# OS files
-.DS_Store
-Thumbs.db
-*.swp
-*.swo
-
-# Database files
-*.db
-*.sqlite
-*.sqlite3
-DATABASE-EXISTING/
-
-# Log files
-logs/
-*.log
-*.err
-*.trace
-
-# Environment files
-.env
-.env.production
-.env.development
-.env.test
-
-# Backup files
-*.bak
-*.backup
-*.old
-
-# Editor files
-.vscode/settings.json
-.idea/
-*.swp
-*.swo
-
-# Release notes
-CHANGELOG.md
-NOTES.md
-
-# Documentation drafts
-*.md.tmp
-*~
-
-# CI/CD generated files
-bandit-report.json
-safety-report.json
-*-temp.json
-coverage.xml
-htmlcov/
-test-results.xml
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+node_modules

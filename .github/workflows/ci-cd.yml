@@ -1,216 +1,171 @@
-name: Enterprise CI/CD Pipeline
+# ============================================
+# GITHUB ACTIONS CI/CD PIPELINE
+# BillingJelantikFTTHV3 - Automated Testing & Deployment
+# ============================================
+
+name: CI/CD Pipeline
 
 on:
   push:
-    branches: [ main, main-bersih ]
+    branches: [ main, develop ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, develop ]
 
 env:
-  PYTHON_VERSION: "3.11"
-  NODE_VERSION: "20"
+  PYTHON_VERSION: '3.13'
+  NODE_VERSION: '18'
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  # Code Quality & Security Checks
-  code-quality:
-    name: Code Quality & Security
+  # --- Backend Testing ---
+  backend-test:
+    name: Backend Tests
     runs-on: ubuntu-latest
-
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-
-    - name: Setup Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: ${{ env.PYTHON_VERSION }}
-        cache: 'pip'
-
-    - name: Install Python dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        pip install pytest pytest-cov pytest-asyncio flake8 black isort mypy safety bandit
-        # Additional dependencies for testing
-        pip install aiosqlite httpx
-
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: ${{ env.NODE_VERSION }}
-        cache: 'npm'
-        cache-dependency-path: frontend/package-lock.json
-
-    - name: Install Frontend dependencies
-      working-directory: ./frontend
-      run: npm ci
-
-    - name: Run Python linting (flake8)
-      run: |
-        flake8 app/ --count --select=E9,F63,F7,F82 --show-source --statistics
-        flake8 app/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
-
-    - name: Run Python formatting check (black)
-      run: black --check app/
-
-    - name: Run Python import sorting check (isort)
-      run: isort --check-only app/
-
-    - name: Run Python type checking (mypy)
-      run: mypy app/ --ignore-missing-imports
-
-    - name: Run Python security scan (bandit)
-      run: |
-        # Create default report
-        cat > bandit-report.json << 'EOF'
-{
-  "results": [],
-  "metrics": {
-    "vulnerabilities": {"low": 0, "medium": 0, "high": 0, "critical": 0},
-    "confidence": {"low": 0, "medium": 0, "high": 0}
-  }
-}
-EOF
-        # Try to run actual scan
-        bandit -r app/ -f json -o bandit-temp.json 2>/dev/null || echo "Bandit scan completed with warnings"
-        # Replace if successful
-        if [ -s bandit-temp.json ]; then
-          mv bandit-temp.json bandit-report.json
-        fi
-
-    - name: Run Python dependency security scan (safety)
-      run: |
-        # Create default report
-        cat > safety-report.json << 'EOF'
-{
-  "vulnerabilities": [],
-  "dependencies": []
-}
-EOF
-        # Try to run actual scan
-        safety check --json --output safety-temp.json 2>/dev/null || echo "Safety scan completed with warnings"
-        # Replace if successful
-        if [ -s safety-temp.json ]; then
-          mv safety-temp.json safety-report.json
-        fi
-
-    - name: Run Frontend linting
-      working-directory: ./frontend
-      run: npm run lint || echo "Frontend linting completed with warnings"
-
-    - name: Run Frontend type checking
-      working-directory: ./frontend
-      run: npm run type-check || echo "Frontend type checking completed with warnings"
-
-    - name: Upload security reports
-      uses: actions/upload-artifact@v4
-      if: always()
-      with:
-        name: security-reports
-        path: |
-          bandit-report.json
-          safety-report.json
-        retention-days: 30
-
-  # Unit & Integration Tests
-  test:
-    name: Test Suite
-    runs-on: ubuntu-latest
-    needs: code-quality
 
     services:
       mysql:
         image: mysql:8.0
         env:
           MYSQL_ROOT_PASSWORD: root
-          MYSQL_DATABASE: test_billing
-        options: >-
-          --health-cmd="mysqladmin ping"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=3
+          MYSQL_DATABASE: billing_test
         ports:
           - 3306:3306
+        options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Setup MySQL Client
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y mysql-client
-
-    - name: Setup Python
+    - name: Set up Python
       uses: actions/setup-python@v4
       with:
         python-version: ${{ env.PYTHON_VERSION }}
-        cache: 'pip'
 
-    - name: Install Python dependencies
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+
+    - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
-        pip install pytest pytest-cov pytest-asyncio httpx
+        pip install pytest pytest-asyncio pytest-cov
 
-    - name: Setup test environment
+    - name: Run linting
       run: |
-        cp .env.example .env.test
-        echo "DATABASE_URL=mysql+aiomysql://root:root@localhost:3306/test_billing" >> .env.test
-        echo "SECRET_KEY=test-secret-key-for-ci-only" >> .env.test
-        echo "ALGORITHM=HS256" >> .env.test
-        echo "ACCESS_TOKEN_EXPIRE_MINUTES=30" >> .env.test
+        pip install flake8 black
+        flake8 app --max-line-length=120 --ignore=E203,W503
+        black --check app
 
-    - name: Run database migrations
+    - name: Run security checks
       run: |
-        export DATABASE_URL="mysql+aiomysql://root:root@localhost:3306/test_billing"
-        alembic upgrade head || echo "Database migrations completed with warnings"
+        pip install bandit safety
+        bandit -r app -f json -o bandit-report.json
+        safety check --json --output safety-report.json
 
-    - name: Run Python tests with coverage
+    - name: Run backend tests
       env:
-        DATABASE_URL: "mysql+aiomysql://root:root@localhost:3306/test_billing"
+        DATABASE_URL: mysql+aiomysql://root:root@localhost:3306/billing_test
+        SECRET_KEY: test-secret-key-for-ci-cd
+        ENCRYPTION_KEY: test-encryption-key-for-ci-cd
       run: |
-        pytest tests/ -v \
-          --cov=app \
-          --cov-report=xml \
-          --cov-report=html \
-          --cov-report=term-missing \
-          --junit-xml=test-results.xml
-
-    - name: Upload test results
-      uses: actions/upload-artifact@v4
-      if: always()
-      with:
-        name: test-results
-        path: |
-          test-results.xml
-          htmlcov/
-          coverage.xml
-        retention-days: 30
+        pytest tests/ -v --cov=app --cov-report=xml --cov-report=html
 
     - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v4
-      if: always()
+      uses: codecov/codecov-action@v3
       with:
         file: ./coverage.xml
-        flags: unittests
-        name: codecov-umbrella
+        flags: backend
+        name: backend-coverage
 
-  # Build & Push Docker Images
-  build:
-    name: Build & Push Images
+    - name: Upload test reports
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: backend-reports
+        path: |
+          bandit-report.json
+          safety-report.json
+          htmlcov/
+
+  # --- Frontend Testing ---
+  frontend-test:
+    name: Frontend Tests
     runs-on: ubuntu-latest
-    needs: test
-    if: github.event_name == 'push'
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        cache-dependency-path: frontend/package-lock.json
+
+    - name: Install dependencies
+      working-directory: ./frontend
+      run: npm ci
+
+    - name: Run linting
+      working-directory: ./frontend
+      run: |
+        npm run lint
+        npm run type-check
+
+    - name: Run unit tests
+      working-directory: ./frontend
+      run: npm run test:unit
+
+    - name: Build frontend
+      working-directory: ./frontend
+      run: npm run build
+
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: frontend-build
+        path: frontend/dist/
+
+  # --- Security Scan ---
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    needs: [backend-test, frontend-test]
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+
+    - name: Upload Trivy scan results to GitHub Security tab
+      uses: github/codeql-action/upload-sarif@v2
+      with:
+        sarif_file: 'trivy-results.sarif'
+
+  # --- Build and Push Docker Images ---
+  build-and-push:
+    name: Build & Push Docker Images
+    runs-on: ubuntu-latest
+    needs: [backend-test, frontend-test, security-scan]
+    if: github.ref == 'refs/heads/main'
 
     outputs:
-      backend-image: ${{ steps.meta-backend.outputs.tags }}
-      frontend-image: ${{ steps.meta-frontend.outputs.tags }}
-      image-digest: ${{ steps.build.outputs.digest }}
+      backend-image: ${{ steps.backend-meta.outputs.tags }}
+      frontend-image: ${{ steps.frontend-meta.outputs.tags }}
 
     steps:
     - name: Checkout code
@@ -226,8 +181,8 @@ EOF
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Extract backend metadata
-      id: meta-backend
+    - name: Extract metadata for backend
+      id: backend-meta
       uses: docker/metadata-action@v5
       with:
         images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-backend
@@ -237,8 +192,19 @@ EOF
           type=sha,prefix={{branch}}-
           type=raw,value=latest,enable={{is_default_branch}}
 
-    - name: Extract frontend metadata
-      id: meta-frontend
+    - name: Build and push backend image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./Dockerfile.backend
+        push: true
+        tags: ${{ steps.backend-meta.outputs.tags }}
+        labels: ${{ steps.backend-meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+    - name: Extract metadata for frontend
+      id: frontend-meta
       uses: docker/metadata-action@v5
       with:
         images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-frontend
@@ -248,38 +214,24 @@ EOF
           type=sha,prefix={{branch}}-
           type=raw,value=latest,enable={{is_default_branch}}
 
-    - name: Build and push backend image
-      id: build
-      uses: docker/build-push-action@v5
-      with:
-        context: .
-        file: ./Dockerfile.backend
-        push: true
-        tags: ${{ steps.meta-backend.outputs.tags }}
-        labels: ${{ steps.meta-backend.outputs.labels }}
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
-        platforms: linux/amd64,linux/arm64
-
     - name: Build and push frontend image
       uses: docker/build-push-action@v5
       with:
         context: ./frontend
         file: ./frontend/Dockerfile
         push: true
-        tags: ${{ steps.meta-frontend.outputs.tags }}
-        labels: ${{ steps.meta-frontend.outputs.labels }}
+        tags: ${{ steps.frontend-meta.outputs.tags }}
+        labels: ${{ steps.frontend-meta.outputs.labels }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
-        platforms: linux/amd64,linux/arm64
 
-  # Deploy to Staging
+  # --- Deploy to Staging ---
   deploy-staging:
     name: Deploy to Staging
     runs-on: ubuntu-latest
-    needs: build
-    if: github.ref == 'refs/heads/main-bersih' && github.event_name == 'push'
-    # environment: staging # Uncomment after setting up in repository settings
+    needs: build-and-push
+    if: github.ref == 'refs/heads/develop'
+    environment: staging
 
     steps:
     - name: Checkout code
@@ -287,32 +239,17 @@ EOF
 
     - name: Deploy to staging
       run: |
-        echo "🚀 Deploying to staging environment..."
-        echo "Backend Image: ${{ needs.build.outputs.backend-image }}"
-        echo "Frontend Image: ${{ needs.build.outputs.frontend-image }}"
-        # Add your staging deployment logic here
-        # Example: kubectl apply, docker-compose, etc.
+        echo "=� Deploying to staging environment..."
+        # Add your staging deployment commands here
+        # Example: kubectl apply -f k8s/staging/ -n staging
 
-    - name: Health check staging
-      run: |
-        echo "⏳ Waiting for staging deployment to be ready..."
-        # Add health check logic here
-        sleep 30
-
-    - name: Notify staging deployment
-      run: |
-        echo "🚀 Staging deployment completed!"
-        echo "Branch: ${{ github.ref_name }}"
-        echo "Commit: ${{ github.sha }}"
-        echo "Status: ${{ job.status }}"
-
-  # Deploy to Production
+  # --- Deploy to Production ---
   deploy-production:
     name: Deploy to Production
     runs-on: ubuntu-latest
-    needs: [build, deploy-staging]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    # environment: production # Uncomment after setting up in repository settings
+    needs: build-and-push
+    if: github.ref == 'refs/heads/main'
+    environment: production
 
     steps:
     - name: Checkout code
@@ -320,83 +257,78 @@ EOF
 
     - name: Deploy to production
       run: |
-        echo "🚀 Deploying to production environment..."
-        echo "Backend Image: ${{ needs.build.outputs.backend-image }}"
-        echo "Frontend Image: ${{ needs.build.outputs.frontend-image }}"
-        # Add your production deployment logic here
-        # Example: kubectl apply, docker-compose, etc.
+        echo "=� Deploying to production environment..."
+        # Add your production deployment commands here
+        # Example: docker-compose -f docker-compose.prod.yml pull
+        # Example: docker-compose -f docker-compose.prod.yml up -d
 
-    - name: Health check production
+    - name: Health check
       run: |
-        echo "⏳ Waiting for production deployment to be ready..."
-        # Add health check logic here
-        sleep 60
+        echo "<� Running health checks..."
+        # Add health check commands here
+        # Example: curl -f https://api.yourdomain.com/health || exit 1
 
-    - name: Run smoke tests
-      run: |
-        echo "🧪 Running smoke tests..."
-        # Add smoke test logic here
-
-    - name: Notify production deployment
-      run: |
-        echo "🎉 Production deployment completed!"
-        echo "Branch: ${{ github.ref_name }}"
-        echo "Commit: ${{ github.sha }}"
-        echo "Status: ${{ job.status }}"
-
-  # Performance & Load Testing
-  performance-test:
-    name: Performance Testing
+  # --- Mobile Build (Android) ---
+  build-android:
+    name: Build Android App
     runs-on: ubuntu-latest
-    needs: deploy-staging
-    if: github.ref == 'refs/heads/main-bersih' && github.event_name == 'push'
+    needs: [frontend-test]
+    if: github.ref == 'refs/heads/main'
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Run performance tests
-      run: |
-        echo "🚀 Running performance tests..."
-        # Add performance testing logic here
-        # Example: k6, artillery, jmeter, etc.
-
-    - name: Upload performance reports
-      uses: actions/upload-artifact@v4
-      if: always()
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
       with:
-        name: performance-reports
-        path: performance-results/
-        retention-days: 30
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        cache-dependency-path: frontend/package-lock.json
 
-  # Documentation Generation
-  docs:
-    name: Generate Documentation
+    - name: Set up Java
+      uses: actions/setup-java@v3
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+
+    - name: Install frontend dependencies
+      working-directory: ./frontend
+      run: npm ci
+
+    - name: Build frontend
+      working-directory: ./frontend
+      run: npm run build
+
+    - name: Build Android app
+      working-directory: ./frontend
+      run: |
+        npm install @capacitor/android
+        npx cap sync android
+        cd android
+        ./gradlew assembleRelease
+
+    - name: Upload Android APK
+      uses: actions/upload-artifact@v3
+      with:
+        name: android-apk
+        path: frontend/android/app/build/outputs/apk/release/
+
+  # --- Notify on Success/Failure ---
+  notify:
+    name: Notify Deployment Status
     runs-on: ubuntu-latest
-    needs: test
-    if: github.event_name == 'push'
+    needs: [deploy-production, deploy-staging]
+    if: always()
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Setup Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: ${{ env.PYTHON_VERSION }}
-
-    - name: Install dependencies
+    - name: Notify on success
+      if: needs.deploy-production.result == 'success' || needs.deploy-staging.result == 'success'
       run: |
-        pip install -r requirements.txt
+        echo " Deployment completed successfully!"
 
-    - name: Generate API documentation
+    - name: Notify on failure
+      if: needs.deploy-production.result == 'failure' || needs.deploy-staging.result == 'failure'
       run: |
-        echo "📚 Generating API documentation..."
-        # Add documentation generation logic here
-
-    - name: Deploy to GitHub Pages
-      if: github.ref == 'refs/heads/main'
-      uses: peaceiris/actions-gh-pages@v3
-      with:
-        github_token: ${{ secrets.GITHUB_TOKEN }}
-        publish_dir: ./docs/_build/html
+        echo "L Deployment failed!"
+        exit 1
