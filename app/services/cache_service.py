@@ -6,6 +6,7 @@ Mengimplementasi Redis-like in-memory cache untuk data yang tidak sering berubah
 import json
 import time
 import hashlib
+import logging
 from typing import Any, Optional, Dict, List
 from datetime import datetime, timedelta
 from functools import wraps
@@ -21,11 +22,11 @@ _cache_stats: Dict[str, int] = {"hits": 0, "misses": 0, "sets": 0, "evictions": 
 # Cache configuration
 CACHE_CONFIG = {
     "harga_layanan_ttl": 3600,  # 1 jam
-    "paket_layanan_ttl": 3600, # 1 jam
-    "brand_data_ttl": 1800, # 30 menit
-    "mikrotik_servers_ttl": 300, # 5 menit
-    "user_permissions_ttl": 600, # 10 menit
-    "dashboard_cache_ttl": 300, # 5 menit
+    "paket_layanan_ttl": 3600,  # 1 jam
+    "brand_data_ttl": 1800,  # 30 menit
+    "mikrotik_servers_ttl": 300,  # 5 menit
+    "user_permissions_ttl": 600,  # 10 menit
+    "dashboard_cache_ttl": 300,  # 5 menit
     "max_cache_size": 1000,  # Maximum items in cache
 }
 
@@ -65,7 +66,7 @@ def _evict_expired_items():
         _cache_stats["evictions"] += 1
 
     if expired_keys:
-        logger.debug(f"Evicted {len(expired_keys)} expired cache items"
+        logger.debug(f"Evicted {len(expired_keys)} expired cache items")
 
 
 def _evict_lru_items(count: int = 1):
@@ -77,7 +78,7 @@ def _evict_lru_items(count: int = 1):
     sorted_items = sorted(_cache_store.items(), key=lambda x: x[1].get("last_accessed", 0))
 
     # Remove oldest items
-    for i in range(min(count, len(sorted_items)):
+    for i in range(min(count, len(sorted_items))):
         key = sorted_items[i][0]
         del _cache_store[key]
         _cache_stats["evictions"] += 1
@@ -122,7 +123,6 @@ def get_from_cache(key: str) -> Optional[Any]:
 
 def set_to_cache(key: str, value: Any, ttl: int) -> None:
     """Simpan data ke cache."""
-    _cache_stats = _cache_stats
 
     # Enforce cache size limit
     if len(_cache_store) >= CACHE_CONFIG["max_cache_size"]:
@@ -138,7 +138,8 @@ def set_to_cache(key: str, value: Any, ttl: int) -> None:
     _cache_stats["sets"] += 1
     logger.debug(f"Cache set: {key} (TTL: {ttl}s)")
 
-def get_cache_stats() -> Dict[str, int]:
+
+def get_cache_stats() -> Dict[str, Any]:
     """Get cache statistics for monitoring."""
     total_requests = _cache_stats["hits"] + _cache_stats["misses"]
     hit_rate = (_cache_stats["hits"] / total_requests * 100) if total_requests > 0 else 0
@@ -215,21 +216,7 @@ def invalidate_cache_pattern(pattern: str):
         logger.info(f"Invalidated {len(keys_to_remove)} cache items matching '{pattern}'")
 
 
-def get_cache_stats() -> Dict[str, Any]:
-    """Get cache statistics untuk monitoring."""
-    total_requests = _cache_stats["hits"] + _cache_stats["misses"]
-    hit_rate = (_cache_stats["hits"] / total_requests * 100) if total_requests > 0 else 0
-
-    return {
-        "stats": _cache_stats.copy(),
-        "hit_rate_percent": round(hit_rate, 2),
-        "cache_size": len(_cache_store),
-        "max_cache_size": CACHE_CONFIG["max_cache_size"],
-        "utilization_percent": round(len(_cache_store) / CACHE_CONFIG["max_cache_size"] * 100, 2),
-    }
-
-
-def get_cached_harga_layanan(db: AsyncSession) -> List[Dict]:
+async def get_cached_harga_layanan(db: AsyncSession) -> List[Dict[str, Any]]:
     """Get harga layanan data dengan cache."""
     from ..models.harga_layanan import HargaLayanan
 
@@ -291,7 +278,7 @@ async def get_cached_paket_layanan(db: AsyncSession) -> List[Dict]:
     return data
 
 
-async def get_cached_brand_data(db: AsyncSession) -> List[Dict]:
+async def get_cached_brand_data(db: AsyncSession) -> List[Dict[str, Any]]:
     """Get brand data dengan cache."""
     from ..models.harga_layanan import HargaLayanan
 
