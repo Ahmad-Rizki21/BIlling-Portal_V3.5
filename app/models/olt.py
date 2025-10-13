@@ -1,18 +1,16 @@
 # app/models/olt.py
 
 from __future__ import annotations
-
-from typing import TYPE_CHECKING, List
+from typing import List, TYPE_CHECKING
 
 # 1. Tambahkan ForeignKey dan mapped_column
-from sqlalchemy import ForeignKey, Integer, String
-from sqlalchemy.orm import Mapped, mapped_column, relationship
-
+from sqlalchemy import String, Integer, ForeignKey
+from sqlalchemy.orm import relationship, Mapped, mapped_column
 from ..database import Base
 
 if TYPE_CHECKING:
-    from .mikrotik_server import MikrotikServer  # <-- Import MikrotikServer
     from .odp import ODP
+    from .mikrotik_server import MikrotikServer  # <-- Import MikrotikServer
 
 
 class OLT(Base):

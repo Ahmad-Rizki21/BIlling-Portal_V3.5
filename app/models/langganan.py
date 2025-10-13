@@ -1,18 +1,15 @@
 # app/models/langganan.py
 
 from __future__ import annotations
-
-from datetime import date, datetime
 from typing import TYPE_CHECKING
-
-from sqlalchemy import BigInteger, Column, Date, ForeignKey, Index, Numeric, String, func
-from sqlalchemy.orm import Mapped, mapped_column, relationship
-
+from datetime import date, datetime
+from sqlalchemy import BigInteger, ForeignKey, Date, String, func, Numeric, Column, Index
+from sqlalchemy.orm import relationship, Mapped, mapped_column
 from ..database import Base
 
 if TYPE_CHECKING:
-    from .paket_layanan import PaketLayanan
     from .pelanggan import Pelanggan
+    from .paket_layanan import PaketLayanan
 
 
 class Langganan(Base):

@@ -1,16 +1,15 @@
-from datetime import datetime
-from typing import List, Optional
-
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, ConfigDict
-from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+from sqlalchemy import func
 from sqlalchemy.orm import selectinload
+from typing import List, Optional
 
 from ..database import get_db
 from ..models.activity_log import ActivityLog as ActivityLogModel
 from ..models.user import User as UserModel
+from pydantic import BaseModel, ConfigDict
+from datetime import datetime
 
 router = APIRouter(
     prefix="/activity-logs",

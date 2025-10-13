@@ -2,18 +2,17 @@
 Centralized notification service untuk menghilangkan duplikasi notification logic
 """
 
-import logging
+from typing import List, Dict, Any, Optional
 from datetime import datetime
-from typing import Any, Collection, Dict, List, Optional
-
-from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+from sqlalchemy import func
+import logging
 
-from ..models.role import Role as RoleModel
 from ..models.user import User as UserModel
-from ..utils.error_handler import ErrorHandler, SuccessHandler  # type: ignore
+from ..models.role import Role as RoleModel
 from ..websocket_manager import manager
+from ..utils.error_handler import ErrorHandler, SuccessHandler  # type: ignore
 
 logger = logging.getLogger(__name__)
 

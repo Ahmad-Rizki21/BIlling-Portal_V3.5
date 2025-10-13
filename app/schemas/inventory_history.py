@@ -1,9 +1,7 @@
 # app/schemas/inventory_history.py
 
-from datetime import datetime
-
 from pydantic import BaseModel
-
+from datetime import datetime
 from .user import UserSimple  # Asumsi Anda punya skema UserSimple (id, nama)
 
 

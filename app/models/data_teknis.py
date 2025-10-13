@@ -1,18 +1,15 @@
 # File: app/models/data_teknis.py
 
 from __future__ import annotations
-
 from typing import TYPE_CHECKING
-
-from sqlalchemy import BigInteger, Boolean, Column, ForeignKey, Index, Integer, String
-from sqlalchemy.orm import Mapped, mapped_column, relationship
-
+from sqlalchemy import ForeignKey, Column, String, Integer, BigInteger, Boolean, Index
+from sqlalchemy.orm import relationship, Mapped, mapped_column
 from ..database import Base
 
 if TYPE_CHECKING:
+    from .pelanggan import Pelanggan
     from .mikrotik_server import MikrotikServer
     from .odp import ODP
-    from .pelanggan import Pelanggan
 
 
 class DataTeknis(Base):

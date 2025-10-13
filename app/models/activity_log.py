@@ -1,17 +1,14 @@
 # --- 1. Tambahkan import yang diperlukan ---
 from __future__ import annotations
-
-from datetime import datetime
 from typing import TYPE_CHECKING
-
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func
-from sqlalchemy.orm import (  # <-- Tambahkan relationship
+from sqlalchemy import Integer, String, Text, DateTime, func, ForeignKey
+from sqlalchemy.orm import (
     Mapped,
     mapped_column,
     relationship,
-)
-
+)  # <-- Tambahkan relationship
 from ..database import Base
+from datetime import datetime
 
 # --- 2. Tambahkan blok TYPE_CHECKING untuk type hint ---
 if TYPE_CHECKING:

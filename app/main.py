@@ -96,7 +96,7 @@ origins = [
     "tauri://localhost",
     "http://localhost:8000",  # Backend origin
     "http://127.0.0.1:8000",  # Backend origin
-    "*"  # Allow all origins for development
+    "*",  # Allow all origins for development
 ]
 
 app.add_middleware(

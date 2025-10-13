@@ -1,8 +1,8 @@
-import re
-from datetime import date, datetime
-from typing import Any, Optional
-
 from pydantic import BaseModel, EmailStr, Field, validator
+from typing import Optional
+from datetime import date, datetime
+import re
+
 
 # ===================================================================
 # Skema Input (Request Body)
@@ -18,7 +18,7 @@ class InvoiceGenerate(BaseModel):
     langganan_id: int = Field(..., gt=0, description="ID langganan yang akan dibuatkan invoice")
 
     @validator("langganan_id", pre=True)
-    def validate_langganan_id(cls, v: Any) -> int:
+    def validate_langganan_id(cls, v):
         if v is None:
             raise ValueError("ID langganan tidak boleh kosong")
 
@@ -55,7 +55,7 @@ class InvoiceUpdate(BaseModel):
     pelanggan_id: Optional[int] = Field(None, gt=0, description="ID pelanggan (harus > 0)")
 
     @validator("status_invoice", pre=True)
-    def validate_status_invoice(cls, v: Any) -> Optional[str]:
+    def validate_status_invoice(cls, v):
         if v is None or v == "":
             return None
 
@@ -74,7 +74,7 @@ class InvoiceUpdate(BaseModel):
         return v_str
 
     @validator("payment_link", pre=True)
-    def validate_payment_link(cls, v: Any) -> Optional[str]:
+    def validate_payment_link(cls, v):
         if v is None or v == "":
             return None
 
@@ -92,7 +92,7 @@ class InvoiceUpdate(BaseModel):
         return v_str
 
     @validator("xendit_id", pre=True)
-    def validate_xendit_id(cls, v: Any) -> Optional[str]:
+    def validate_xendit_id(cls, v):
         if v is None or v == "":
             return None
 
@@ -106,7 +106,7 @@ class InvoiceUpdate(BaseModel):
         return v_str
 
     @validator("xendit_external_id", pre=True)
-    def validate_xendit_external_id(cls, v: Any) -> Optional[str]:
+    def validate_xendit_external_id(cls, v):
         if v is None or v == "":
             return None
 
@@ -120,7 +120,7 @@ class InvoiceUpdate(BaseModel):
         return v_str
 
     @validator("paid_amount", pre=True)
-    def validate_paid_amount(cls, v: Any) -> Optional[float]:
+    def validate_paid_amount(cls, v):
         if v is None:
             return None
 
@@ -135,7 +135,7 @@ class InvoiceUpdate(BaseModel):
         return round(v_float, 2)
 
     @validator("pelanggan_id", pre=True)
-    def validate_pelanggan_id_update(cls, v: Any) -> Optional[int]:
+    def validate_pelanggan_id_update(cls, v):
         # Tambahkan validasi untuk mencegah pelanggan_id menjadi None/null
         # Jika ingin menghapus relasi, seharusnya tidak mengupdate pelanggan_id ke None
         # Tapi jika memang diperlukan, pastikan logikanya benar
@@ -167,7 +167,7 @@ class MarkAsPaidRequest(BaseModel):
     metode_pembayaran: str = Field("Cash", max_length=50, description="Metode pembayaran")
 
     @validator("metode_pembayaran", pre=True)
-    def validate_metode_pembayaran(cls, v: Any) -> str:
+    def validate_metode_pembayaran(cls, v):
         if v is None:
             v = "Cash"
 
@@ -211,7 +211,7 @@ class InvoiceBase(BaseModel):
     metode_pembayaran: Optional[str] = Field(None, max_length=50, description="Metode pembayaran")
 
     @validator("invoice_number", pre=True)
-    def validate_invoice_number(cls, v: Any) -> str:
+    def validate_invoice_number(cls, v):
         if v is None:
             raise ValueError("Nomor invoice tidak boleh kosong")
 
@@ -225,7 +225,7 @@ class InvoiceBase(BaseModel):
         return v_str
 
     @validator("pelanggan_id", pre=True)
-    def validate_pelanggan_id(cls, v: Any) -> int:
+    def validate_pelanggan_id(cls, v):
         if v is None:
             raise ValueError("ID pelanggan tidak boleh kosong")
 
@@ -240,7 +240,7 @@ class InvoiceBase(BaseModel):
         return v_int
 
     @validator("total_harga", pre=True)
-    def validate_total_harga(cls, v: Any) -> float:
+    def validate_total_harga(cls, v):
         if v is None:
             raise ValueError("Total harga tidak boleh kosong")
 
@@ -255,7 +255,7 @@ class InvoiceBase(BaseModel):
         return round(v_float, 2)
 
     @validator("status_invoice", pre=True)
-    def validate_status_invoice_base(cls, v: Any) -> str:
+    def validate_status_invoice_base(cls, v):
         if v is None:
             raise ValueError("Status invoice tidak boleh kosong")
 
@@ -269,7 +269,7 @@ class InvoiceBase(BaseModel):
         return v_str
 
     @validator("metode_pembayaran", pre=True)
-    def validate_metode_pembayaran_base(cls, v: Any) -> Optional[str]:
+    def validate_metode_pembayaran_base(cls, v):
         if v is None or v == "":
             return None
 
@@ -321,7 +321,7 @@ class Invoice(InvoiceBase):
         validate_assignment = True
 
     @validator("id_pelanggan", pre=True)
-    def validate_id_pelanggan(cls, v: Any) -> str:
+    def validate_id_pelanggan(cls, v):
         if v is None:
             raise ValueError("ID pelanggan teknis tidak boleh kosong")
 
@@ -335,7 +335,7 @@ class Invoice(InvoiceBase):
         return v_str
 
     @validator("brand", pre=True)
-    def validate_brand(cls, v: Any) -> str:
+    def validate_brand(cls, v):
         if v is None:
             raise ValueError("Brand tidak boleh kosong")
 
@@ -349,7 +349,7 @@ class Invoice(InvoiceBase):
         return v_str
 
     @validator("no_telp", pre=True)
-    def validate_no_telp(cls, v: Any) -> str:
+    def validate_no_telp(cls, v):
         if v is None:
             raise ValueError("Nomor telepon tidak boleh kosong")
 

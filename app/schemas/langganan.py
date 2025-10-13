@@ -1,9 +1,7 @@
-import re
+from pydantic import BaseModel, computed_field, Field, validator
+from typing import Optional
 from datetime import date
-from typing import Any, Optional
-
-from pydantic import BaseModel, Field, computed_field, validator
-
+import re
 from .paket_layanan import PaketLayanan
 
 
@@ -14,7 +12,7 @@ class PaketLayananInLangganan(BaseModel):
         from_attributes = True
 
     @validator("harga", pre=True)
-    def validate_harga(cls, v: Any) -> float:
+    def validate_harga(cls, v):
         if v is None:
             raise ValueError("Harga tidak boleh kosong")
 
@@ -36,7 +34,7 @@ class HargaLayananInPelanggan(BaseModel):
         from_attributes = True
 
     @validator("pajak", pre=True)
-    def validate_pajak(cls, v: Any) -> float:
+    def validate_pajak(cls, v):
         if v is None:
             raise ValueError("Pajak tidak boleh kosong")
 
@@ -64,7 +62,7 @@ class PelangganInLangganan(BaseModel):
         from_attributes = True
 
     @validator("id", pre=True)
-    def validate_id(cls, v: Any) -> int:
+    def validate_id(cls, v):
         if v is None:
             raise ValueError("ID pelanggan tidak boleh kosong")
 
@@ -79,7 +77,7 @@ class PelangganInLangganan(BaseModel):
         return v_int
 
     @validator("nama", pre=True)
-    def validate_nama(cls, v: Any) -> str:
+    def validate_nama(cls, v):
         if v is None:
             raise ValueError("Nama pelanggan tidak boleh kosong")
 
@@ -93,7 +91,7 @@ class PelangganInLangganan(BaseModel):
         return v_str
 
     @validator("alamat", pre=True)
-    def validate_alamat(cls, v: Any) -> str:
+    def validate_alamat(cls, v):
         if v is None:
             raise ValueError("Alamat pelanggan tidak boleh kosong")
 
@@ -120,7 +118,7 @@ class LanggananBase(BaseModel):
     tgl_mulai_langganan: Optional[date] = Field(None, description="Tanggal mulai langganan")
 
     @validator("pelanggan_id", pre=True)
-    def validate_pelanggan_id(cls, v: Any) -> int:
+    def validate_pelanggan_id(cls, v):
         if v is None:
             raise ValueError("ID pelanggan tidak boleh kosong")
 
@@ -135,7 +133,7 @@ class LanggananBase(BaseModel):
         return v_int
 
     @validator("paket_layanan_id", pre=True)
-    def validate_paket_layanan_id(cls, v: Any) -> int:
+    def validate_paket_layanan_id(cls, v):
         if v is None:
             raise ValueError("ID paket layanan tidak boleh kosong")
 
@@ -150,7 +148,7 @@ class LanggananBase(BaseModel):
         return v_int
 
     @validator("metode_pembayaran", pre=True)
-    def validate_metode_pembayaran(cls, v: Any) -> str:
+    def validate_metode_pembayaran(cls, v):
         if v is None:
             raise ValueError("Metode pembayaran tidak boleh kosong")
 
@@ -169,7 +167,7 @@ class LanggananBase(BaseModel):
         return v_str
 
     @validator("harga_awal", pre=True)
-    def validate_harga_awal(cls, v: Any) -> Optional[float]:
+    def validate_harga_awal(cls, v):
         if v is None or v == "":
             return None
 
@@ -184,7 +182,7 @@ class LanggananBase(BaseModel):
         return round(v_float, 2)
 
     @validator("status", pre=True)
-    def validate_status(cls, v: Any) -> str:
+    def validate_status(cls, v):
         if v is None:
             raise ValueError("Status tidak boleh kosong")
 
@@ -213,7 +211,7 @@ class LanggananCreate(BaseModel):
     sertakan_bulan_depan: bool = Field(False, description="Sertakan bulan depan dalam tagihan")
 
     @validator("pelanggan_id", pre=True)
-    def validate_pelanggan_id_create(cls, v: Any) -> int:
+    def validate_pelanggan_id_create(cls, v):
         if v is None:
             raise ValueError("ID pelanggan tidak boleh kosong")
 
@@ -228,7 +226,7 @@ class LanggananCreate(BaseModel):
         return v_int
 
     @validator("paket_layanan_id", pre=True)
-    def validate_paket_layanan_id_create(cls, v: Any) -> int:
+    def validate_paket_layanan_id_create(cls, v):
         if v is None:
             raise ValueError("ID paket layanan tidak boleh kosong")
 
@@ -243,7 +241,7 @@ class LanggananCreate(BaseModel):
         return v_int
 
     @validator("status", pre=True)
-    def validate_status_create(cls, v: Any) -> str:
+    def validate_status_create(cls, v):
         if v is None:
             raise ValueError("Status tidak boleh kosong")
 
@@ -262,7 +260,7 @@ class LanggananCreate(BaseModel):
         return v_str
 
     @validator("metode_pembayaran", pre=True)
-    def validate_metode_pembayaran_create(cls, v: Any) -> str:
+    def validate_metode_pembayaran_create(cls, v):
         if v is None:
             raise ValueError("Metode pembayaran tidak boleh kosong")
 
@@ -290,7 +288,7 @@ class LanggananUpdate(BaseModel):
     harga_awal: Optional[float] = Field(None, ge=0, description="Harga awal langganan")
 
     @validator("paket_layanan_id", pre=True)
-    def validate_paket_layanan_id_update(cls, v: Any) -> Optional[int]:
+    def validate_paket_layanan_id_update(cls, v):
         if v is None or v == "":
             return None
 
@@ -305,7 +303,7 @@ class LanggananUpdate(BaseModel):
         return v_int
 
     @validator("status", pre=True)
-    def validate_status_update(cls, v: Any) -> Optional[str]:
+    def validate_status_update(cls, v):
         if v is None or v == "":
             return None
 
@@ -324,7 +322,7 @@ class LanggananUpdate(BaseModel):
         return v_str
 
     @validator("metode_pembayaran", pre=True)
-    def validate_metode_pembayaran_update(cls, v: Any) -> Optional[str]:
+    def validate_metode_pembayaran_update(cls, v):
         if v is None or v == "":
             return None
 
@@ -343,7 +341,7 @@ class LanggananUpdate(BaseModel):
         return v_str
 
     @validator("harga_awal", pre=True)
-    def validate_harga_awal_update(cls, v: Any) -> Optional[float]:
+    def validate_harga_awal_update(cls, v):
         if v is None or v == "":
             return None
 
@@ -368,7 +366,7 @@ class LanggananImport(BaseModel):
     tgl_jatuh_tempo: Optional[date] = Field(None, description="Tanggal jatuh tempo")
 
     @validator("email_pelanggan", pre=True)
-    def validate_email_pelanggan(cls, v: Any) -> str:
+    def validate_email_pelanggan(cls, v):
         if v is None:
             raise ValueError("Email pelanggan tidak boleh kosong")
 
@@ -383,7 +381,7 @@ class LanggananImport(BaseModel):
         return v_str
 
     @validator("id_brand", pre=True)
-    def validate_id_brand(cls, v: Any) -> str:
+    def validate_id_brand(cls, v):
         if v is None:
             raise ValueError("ID brand tidak boleh kosong")
 
@@ -397,7 +395,7 @@ class LanggananImport(BaseModel):
         return v_str
 
     @validator("nama_paket_layanan", pre=True)
-    def validate_nama_paket_layanan(cls, v: Any) -> str:
+    def validate_nama_paket_layanan(cls, v):
         if v is None:
             raise ValueError("Nama paket layanan tidak boleh kosong")
 
@@ -411,7 +409,7 @@ class LanggananImport(BaseModel):
         return v_str
 
     @validator("status", pre=True)
-    def validate_status_import(cls, v: Any) -> str:
+    def validate_status_import(cls, v):
         if v is None:
             v = "Aktif"
 
@@ -430,7 +428,7 @@ class LanggananImport(BaseModel):
         return v_str
 
     @validator("metode_pembayaran", pre=True)
-    def validate_metode_pembayaran_import(cls, v: Any) -> str:
+    def validate_metode_pembayaran_import(cls, v):
         if v is None:
             v = "Otomatis"
 
@@ -477,7 +475,7 @@ class Langganan(LanggananBase):
         from_attributes = True
 
     @validator("id", pre=True)
-    def validate_id_response(cls, v: Any) -> int:
+    def validate_id_response(cls, v):
         if v is None:
             raise ValueError("ID langganan tidak boleh kosong")
 

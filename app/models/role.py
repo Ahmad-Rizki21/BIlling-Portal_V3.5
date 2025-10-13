@@ -1,18 +1,15 @@
 from __future__ import annotations
-
-from typing import TYPE_CHECKING, List
-
-from sqlalchemy import BigInteger, String
-from sqlalchemy.orm import Mapped, mapped_column, relationship
-
+from typing import List, TYPE_CHECKING
+from sqlalchemy import String, BigInteger
+from sqlalchemy.orm import relationship, Mapped, mapped_column
 from ..database import Base
 
 # Impor tabel perantara
 from .role_has_permissions import role_has_permissions
 
 if TYPE_CHECKING:
-    from .permission import Permission
     from .user import User
+    from .permission import Permission
 
 
 class Role(Base):

@@ -2,15 +2,14 @@
 Base Service Layer untuk menghilangkan duplikasi kode CRUD operations
 """
 
-import logging
-from typing import Any, Collection, Dict, Generic, List, Optional, Sequence, Type, TypeVar
-
-from fastapi import HTTPException, status
-from pydantic import BaseModel
-from sqlalchemy import func, or_
+from typing import TypeVar, Type, Generic, List, Optional, Dict, Any, Sequence
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+from sqlalchemy import func, or_
 from sqlalchemy.orm import joinedload
+from fastapi import HTTPException, status
+from pydantic import BaseModel
+import logging
 
 # Type variables untuk generics
 ModelType = TypeVar("ModelType")
@@ -38,7 +37,7 @@ class BaseService(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"{self.model.__name__} tidak ditemukan")
         return result
 
-    async def get_by_id_with_relations(self, id: int, relations: Optional[Collection[str]] = None) -> ModelType:
+    async def get_by_id_with_relations(self, id: int, relations: Optional[List[str]] = None) -> ModelType:
         """Mengambil record by ID dengan eager loading untuk relasi tertentu"""
         query = select(self.model).where(self.model.id == id)  # type: ignore
 

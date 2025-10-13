@@ -1,32 +1,31 @@
 # app/routers/auth.py
 
-import logging
-import uuid
-from datetime import datetime, timedelta
-from typing import Optional
-
-from fastapi import APIRouter, Depends, HTTPException, Request, status
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from jose import jwt
-from jose.exceptions import ExpiredSignatureError, JWTError
-from sqlalchemy import func
+from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+from sqlalchemy import func
+from datetime import datetime, timedelta
+from typing import Optional
+import logging
+import uuid
+from jose import jwt
+from jose.exceptions import ExpiredSignatureError, JWTError
 
+from ..database import get_db
+from ..models.user import User as UserModel
+from ..schemas.user import User as UserSchema
+from ..schemas.token_blacklist import TokenRefreshRequest, TokenRefreshResponse
 from ..auth import (
-    Token,
     authenticate_user,
     create_access_token,
     create_refresh_token,
-    get_current_active_user,
     get_password_hash,
+    get_current_active_user,
+    Token,
 )
 from ..config import settings
-from ..database import get_db
-from ..models.user import User as UserModel
-from ..schemas.token_blacklist import TokenRefreshRequest, TokenRefreshResponse
-from ..schemas.user import User as UserSchema
-from ..services.token_service import TokenService, get_token_service
+from ..services.token_service import get_token_service, TokenService
 
 logger = logging.getLogger(__name__)
 

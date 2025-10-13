@@ -1,12 +1,10 @@
 from __future__ import annotations
-
-from datetime import datetime
-from typing import TYPE_CHECKING, Optional
-
-from sqlalchemy import BigInteger, Column, DateTime, ForeignKey, Index, Integer, String, Text, func
+from sqlalchemy import BigInteger, String, DateTime, ForeignKey, Column, Integer, Text, Index
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-
+from typing import TYPE_CHECKING, Optional
+from datetime import datetime
 from ..database import Base
+from sqlalchemy import func
 
 if TYPE_CHECKING:
     from .user import User
@@ -45,10 +43,10 @@ class TokenBlacklist(Base):
     # Relationship
     user = relationship("User", back_populates="blacklisted_tokens")
 
-    def __repr__(self) -> str:
+    def __repr__(self):
         return f"<TokenBlacklist(id={self.id}, jti='{self.jti}', user_id={self.user_id}, token_type='{self.token_type}', expires_at='{self.expires_at}')>"
 
-    def to_dict(self) -> dict:
+    def to_dict(self):
         return {
             "id": self.id,
             "jti": self.jti,
@@ -65,12 +63,10 @@ class TokenBlacklist(Base):
     def is_jti_blacklisted(cls, db, jti: str) -> bool:
         """Check if a JWT ID is blacklisted"""
         # Ini akan diimplementasikan di service layer
-        return False
+        pass
 
     @classmethod
-    def blacklist_token(
-        cls, db, jti: str, user_id: int, token_type: str, expires_at: datetime, reason: str | None = None
-    ) -> None:
+    def blacklist_token(cls, db, jti: str, user_id: int, token_type: str, expires_at: datetime, reason: str = None) -> None:
         """Add a token to the blacklist"""
         # Ini akan diimplementasikan di service layer
         pass

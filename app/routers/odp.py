@@ -1,16 +1,14 @@
-from typing import List
-
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
+from sqlalchemy import func
+from typing import List
 
-from ..database import get_db
-from ..models.data_teknis import DataTeknis as DataTeknisModel
 from ..models.odp import ODP as ODPModel
-from ..schemas.odp import ODP as ODPSchema
-from ..schemas.odp import ODPCreate, ODPUpdate
+from ..models.data_teknis import DataTeknis as DataTeknisModel
+from ..schemas.odp import ODP as ODPSchema, ODPCreate, ODPUpdate
+from ..database import get_db
 
 router = APIRouter(prefix="/odp", tags=["ODP"])
 

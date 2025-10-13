@@ -1,9 +1,8 @@
 from __future__ import annotations
-
-from datetime import datetime
 from typing import TYPE_CHECKING
+from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, Index, String, func
+from sqlalchemy import String, BigInteger, func, DateTime, Index
 from sqlalchemy.orm import Mapped, mapped_column
 
 from ..database import Base
@@ -29,5 +28,5 @@ class PaymentCallbackLog(Base):
         Index("idx_callback_log_status", "status"),
     )
 
-    def __repr__(self) -> str:
+    def __repr__(self):
         return f"<PaymentCallbackLog(id={self.id}, xendit_id='{self.xendit_id}', external_id='{self.external_id}', status='{self.status}')>"

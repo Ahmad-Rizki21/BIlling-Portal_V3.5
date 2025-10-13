@@ -1,15 +1,14 @@
-from typing import List
-
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+from typing import List
 
 from ..database import get_db
-from ..models.data_teknis import DataTeknis as DataTeknisModel
-from ..models.odp import ODP as ODPModel
-from ..models.olt import OLT as OLTModel
-from ..models.pelanggan import Pelanggan as PelangganModel
 from ..schemas.topology import TopologyNode
+from ..models.olt import OLT as OLTModel
+from ..models.odp import ODP as ODPModel
+from ..models.data_teknis import DataTeknis as DataTeknisModel
+from ..models.pelanggan import Pelanggan as PelangganModel
 
 router = APIRouter(
     prefix="/topology",

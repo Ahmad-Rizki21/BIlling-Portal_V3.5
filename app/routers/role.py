@@ -1,17 +1,14 @@
-from typing import List
-
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload  # Penting untuk eager loading
-
-from ..database import get_db
-from ..models.permission import Permission as PermissionModel
+from typing import List
 
 # Impor model dan skema yang relevan
 from ..models.role import Role as RoleModel
-from ..schemas.role import Role as RoleSchema
-from ..schemas.role import RoleCreate, RoleUpdate
+from ..models.permission import Permission as PermissionModel
+from ..schemas.role import Role as RoleSchema, RoleCreate, RoleUpdate
+from ..database import get_db
 
 router = APIRouter(
     prefix="/roles",

@@ -1,6 +1,6 @@
-from typing import List, Optional
-
 from pydantic import BaseModel
+from typing import List, Optional
+from .permission import Permission
 
 # Impor skema Permission yang sudah Anda buat
 from .permission import Permission

@@ -53,12 +53,9 @@ def create_refresh_token(data: dict, expires_delta: Union[timedelta, None] = Non
     else:
         expire = datetime.utcnow() + timedelta(days=7)
 
-    to_encode.update({
-        "exp": expire,
-        "iat": datetime.utcnow(),
-        "type": "refresh",
-        "jti": str(uuid.uuid4())  # JWT ID for blacklisting
-    })
+    to_encode.update(
+        {"exp": expire, "iat": datetime.utcnow(), "type": "refresh", "jti": str(uuid.uuid4())}  # JWT ID for blacklisting
+    )
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 

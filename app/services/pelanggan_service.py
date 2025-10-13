@@ -2,26 +2,25 @@
 Pelanggan Service Layer - Menghilangkan duplikasi business logic dari routers
 """
 
+from typing import List, Optional, Dict, Any
 import logging
-from typing import Any, Callable, Collection, Dict, List, Optional, cast
-
-from sqlalchemy import func, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+from sqlalchemy import func, or_
 from sqlalchemy.orm import joinedload
 
-from ..constants import HTTPMessages, Pagination, Status, Validation  # type: ignore
-from ..models.data_teknis import DataTeknis as DataTeknisModel
-from ..models.harga_layanan import HargaLayanan as HargaLayananModel
 from ..models.pelanggan import Pelanggan as PelangganModel
 from ..models.role import Role as RoleModel
 from ..models.user import User as UserModel
+from ..models.harga_layanan import HargaLayanan as HargaLayananModel
+from ..models.data_teknis import DataTeknis as DataTeknisModel
 from ..schemas.pelanggan import PelangganCreate, PelangganUpdate
 from ..services.base_service import BaseService, PaginatedResponse
-from ..services.notification_service import NotificationService
-from ..utils.csv_export import CSVExporter, ExportConfigurations  # type: ignore
-from ..utils.error_handler import ErrorHandler, SuccessHandler, handle_errors  # type: ignore
 from ..utils.validators import DatabaseValidator, FieldValidator  # type: ignore
+from ..utils.error_handler import ErrorHandler, SuccessHandler, handle_errors  # type: ignore
+from ..utils.csv_export import CSVExporter, ExportConfigurations  # type: ignore
+from ..services.notification_service import NotificationService
+from ..constants import Status, Pagination, Validation, HTTPMessages  # type: ignore
 
 logger = logging.getLogger(__name__)
 
@@ -208,13 +207,13 @@ class PelangganService(BaseService[PelangganModel, PelangganCreate, PelangganUpd
             config = ExportConfigurations.PELANGGAN_EXPORT
             processed_data = CSVExporter.prepare_export_data(
                 search_result["data"],
-                field_mapping=dict(cast(Dict[str, str], config["field_mapping"])),
-                exclude_fields=list(cast(List[str], config["exclude_fields"])),
-                transform_functions=dict(cast(Dict[str, Callable[..., Any]], config["transform_functions"])),
+                field_mapping=config["field_mapping"],
+                exclude_fields=config["exclude_fields"],
+                transform_functions=config["transform_functions"],
             )
 
             # Create CSV response
-            return CSVExporter.create_csv_response(processed_data, "pelanggan", list(cast(List[str], config["headers"])))
+            return CSVExporter.create_csv_response(processed_data, "pelanggan", config["headers"])
 
         except Exception as e:
             ErrorHandler.handle_internal_server_error(
@@ -338,14 +337,14 @@ class PelangganService(BaseService[PelangganModel, PelangganCreate, PelangganUpd
 
     def _select_fields(self, pelanggan: PelangganModel, fields: List[str]) -> Dict[str, Any]:
         """Select specific fields dari pelanggan object"""
-        result = {"id": pelanggan.id}  # Always include ID
+        result = {"id": pelanggan.id}  # Always include ID  # type: ignore
 
         for field in fields:
             if hasattr(pelanggan, field):
                 value = getattr(pelanggan, field)
                 if hasattr(value, "__dict__"):  # Handle related objects
                     value = str(value)
-                result[field] = value
+                result[field] = value  # type: ignore
 
         return result
 

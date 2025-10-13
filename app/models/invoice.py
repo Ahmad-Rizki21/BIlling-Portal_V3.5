@@ -1,26 +1,23 @@
 # app/models/invoice.py - OPTIMIZED VERSION
 
 from __future__ import annotations
-
-from datetime import date, datetime, timedelta
 from typing import TYPE_CHECKING
-
+from datetime import date, datetime, timedelta
 from sqlalchemy import (
-    TIMESTAMP,
     BigInteger,
-    Boolean,
-    CheckConstraint,
+    String,
     Date,
     DateTime,
-    ForeignKey,
-    Index,
-    Numeric,
-    String,
     Text,
+    ForeignKey,
+    Numeric,
+    Boolean,
     func,
+    TIMESTAMP,
+    CheckConstraint,
+    Index,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-
 from ..database import Base
 
 if TYPE_CHECKING:
@@ -77,10 +74,10 @@ class Invoice(Base):
     # Relationship - TIDAK DIUBAH SAMA SEKALI!
     pelanggan = relationship("Pelanggan", back_populates="invoices")
 
-    def to_dict(self) -> dict:
+    def to_dict(self):
         return {c.name: getattr(self, c.name) for c in self.__table__.columns}
 
-    def get_payment_link_status(self) -> str:
+    def get_payment_link_status(self):
         """
         Mengembalikan status link pembayaran berdasarkan logika:
         - Jika invoice sudah lunas: "Lunas"
@@ -132,7 +129,7 @@ class Invoice(Base):
         return self.status_invoice
 
     @property
-    def is_payment_link_active(self) -> bool:
+    def is_payment_link_active(self):
         """
         Mengembalikan True jika link pembayaran masih aktif.
         Link aktif jika:
@@ -142,7 +139,7 @@ class Invoice(Base):
         return self.get_payment_link_status() == "Belum Dibayar"
 
     @property
-    def payment_link_status(self) -> str:
+    def payment_link_status(self):
         """
         Property untuk status link pembayaran.
         """

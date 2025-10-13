@@ -1,14 +1,12 @@
 # app/routers/sk.py
-from typing import List
-
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+from typing import List
 
-from ..database import get_db
 from ..models.sk import SK as SKModel
-from ..schemas.sk import SK as SKSchema
-from ..schemas.sk import SKCreate, SKUpdate
+from ..schemas.sk import SK as SKSchema, SKCreate, SKUpdate
+from ..database import get_db
 
 router = APIRouter(prefix="/sk", tags=["S&K"])
 

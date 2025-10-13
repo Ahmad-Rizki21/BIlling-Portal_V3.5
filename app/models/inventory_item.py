@@ -2,12 +2,9 @@
 
 # --- 1. Pastikan import ini ada ---
 from __future__ import annotations
-
 from typing import TYPE_CHECKING
-
-from sqlalchemy import Date, ForeignKey, String, Text
+from sqlalchemy import ForeignKey, String, Date, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-
 from ..database import Base
 
 # --- 2. Tambahkan blok TYPE_CHECKING untuk menghindari circular import ---

@@ -1,11 +1,9 @@
 # app/models/permission.py
 
 from __future__ import annotations
-
-from typing import TYPE_CHECKING, List
-
+from typing import List, TYPE_CHECKING
 from sqlalchemy import BigInteger, String
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import relationship, Mapped, mapped_column
 
 from ..database import Base
 

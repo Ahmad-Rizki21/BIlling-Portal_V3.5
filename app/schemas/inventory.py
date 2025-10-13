@@ -1,8 +1,7 @@
-import re
-from datetime import date, datetime
-from typing import Any, Optional
-
 from pydantic import BaseModel, Field, validator
+from typing import Optional
+from datetime import date, datetime
+import re
 
 
 class InventoryItemBase(BaseModel):
@@ -19,7 +18,7 @@ class InventoryItemBase(BaseModel):
     status_id: int = Field(..., gt=0, description="ID status perangkat")
 
     @validator("serial_number", pre=True)
-    def validate_serial_number(cls, v: Any) -> str:
+    def validate_serial_number(cls, v):
         if v is None:
             raise ValueError("Nomor serial tidak boleh kosong")
 
@@ -38,7 +37,7 @@ class InventoryItemBase(BaseModel):
         return v_clean
 
     @validator("mac_address", pre=True)
-    def validate_mac_address(cls, v: Any) -> Optional[str]:
+    def validate_mac_address(cls, v):
         if v is None or v == "":
             return None
 
@@ -69,7 +68,7 @@ class InventoryItemBase(BaseModel):
         return formatted_mac
 
     @validator("location", pre=True)
-    def validate_location(cls, v: Any) -> Optional[str]:
+    def validate_location(cls, v):
         if v is None or v == "":
             return None
 
@@ -83,7 +82,7 @@ class InventoryItemBase(BaseModel):
         return v_str
 
     @validator("notes", pre=True)
-    def validate_notes(cls, v: Any) -> Optional[str]:
+    def validate_notes(cls, v):
         if v is None or v == "":
             return None
 
@@ -97,7 +96,7 @@ class InventoryItemBase(BaseModel):
         return v_str
 
     @validator("item_type_id", pre=True)
-    def validate_item_type_id(cls, v: Any) -> int:
+    def validate_item_type_id(cls, v):
         if v is None:
             raise ValueError("ID tipe perangkat tidak boleh kosong")
 
@@ -112,7 +111,7 @@ class InventoryItemBase(BaseModel):
         return v_int
 
     @validator("status_id", pre=True)
-    def validate_status_id(cls, v: Any) -> int:
+    def validate_status_id(cls, v):
         if v is None:
             raise ValueError("ID status tidak boleh kosong")
 
@@ -157,7 +156,7 @@ class InventoryItemUpdate(BaseModel):
     status_id: Optional[int] = Field(None, gt=0, description="ID status perangkat")
 
     @validator("serial_number", pre=True)
-    def validate_serial_number_update(cls, v: Any) -> Optional[str]:
+    def validate_serial_number_update(cls, v):
         if v is None or v == "":
             return None
 
@@ -176,7 +175,7 @@ class InventoryItemUpdate(BaseModel):
         return v_clean
 
     @validator("mac_address", pre=True)
-    def validate_mac_address_update(cls, v: Any) -> Optional[str]:
+    def validate_mac_address_update(cls, v):
         if v is None or v == "":
             return None
 
@@ -200,7 +199,7 @@ class InventoryItemUpdate(BaseModel):
         return formatted_mac
 
     @validator("location", pre=True)
-    def validate_location_update(cls, v: Any) -> Optional[str]:
+    def validate_location_update(cls, v):
         if v is None or v == "":
             return None
 
@@ -214,7 +213,7 @@ class InventoryItemUpdate(BaseModel):
         return v_str
 
     @validator("notes", pre=True)
-    def validate_notes_update(cls, v: Any) -> Optional[str]:
+    def validate_notes_update(cls, v):
         if v is None or v == "":
             return None
 
@@ -228,7 +227,7 @@ class InventoryItemUpdate(BaseModel):
         return v_str
 
     @validator("item_type_id", pre=True)
-    def validate_item_type_id_update(cls, v: Any) -> Optional[int]:
+    def validate_item_type_id_update(cls, v):
         if v is None:
             return None
 
@@ -243,7 +242,7 @@ class InventoryItemUpdate(BaseModel):
         return v_int
 
     @validator("status_id", pre=True)
-    def validate_status_id_update(cls, v: Any) -> Optional[int]:
+    def validate_status_id_update(cls, v):
         if v is None:
             return None
 
@@ -276,7 +275,7 @@ class InventoryItemType(BaseModel):
         validate_assignment = True
 
     @validator("name", pre=True)
-    def validate_name(cls, v: Any) -> str:
+    def validate_name(cls, v):
         if v is None:
             raise ValueError("Nama tipe tidak boleh kosong")
 
@@ -302,7 +301,7 @@ class InventoryStatus(BaseModel):
         validate_assignment = True
 
     @validator("name", pre=True)
-    def validate_name(cls, v: Any) -> str:
+    def validate_name(cls, v):
         if v is None:
             raise ValueError("Nama status tidak boleh kosong")
 

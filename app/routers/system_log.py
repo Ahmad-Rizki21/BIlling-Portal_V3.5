@@ -1,12 +1,11 @@
-from typing import List
-
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+from typing import List
 
-from ..database import get_db
 from ..models.system_log import SystemLog as SystemLogModel
 from ..schemas.log import SystemLog as SystemLogSchema
+from ..database import get_db
 
 router = APIRouter(prefix="/logs/system", tags=["System Logs"])
 

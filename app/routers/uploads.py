@@ -1,10 +1,9 @@
 # app/routers/uploads.py
 
+import aiofiles
 import secrets
 from pathlib import Path
-
-import aiofiles
-from fastapi import APIRouter, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, UploadFile, File, HTTPException, status
 
 router = APIRouter(prefix="/uploads", tags=["Uploads"])
 

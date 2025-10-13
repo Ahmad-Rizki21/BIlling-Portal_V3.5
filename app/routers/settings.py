@@ -1,11 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+from pydantic import BaseModel
 
-from ..auth import get_current_active_user
 from ..database import get_db
 from ..models.system_setting import SystemSetting as SettingModel
+from ..auth import get_current_active_user
 from ..models.user import User as UserModel
 
 router = APIRouter(prefix="/settings", tags=["System Settings"])

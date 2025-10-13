@@ -2,9 +2,9 @@
 Environment validation utilities untuk memastikan semua required variables terconfigure.
 """
 
-import logging
 import os
-from typing import Any, Dict, List
+import logging
+from typing import List, Dict, Any
 
 logger = logging.getLogger(__name__)
 

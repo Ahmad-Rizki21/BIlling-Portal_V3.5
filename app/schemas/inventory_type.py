@@ -1,8 +1,7 @@
 # app/schemas/inventory_type.py
 
-from typing import Optional
-
 from pydantic import BaseModel
+from typing import Optional
 
 
 class InventoryItemTypeBase(BaseModel):

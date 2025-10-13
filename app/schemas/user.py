@@ -1,9 +1,7 @@
-import re
+from pydantic import BaseModel, EmailStr, validator, Field
+from typing import Optional
 from datetime import datetime
-from typing import Any, Optional
-
-from pydantic import BaseModel, EmailStr, Field, validator
-
+import re
 from .role import Role
 
 
@@ -17,7 +15,7 @@ class UserBase(BaseModel):
     email: EmailStr = Field(..., description="Alamat email pengguna")
 
     @validator("name", pre=True)
-    def validate_name(cls, v: Any) -> str:
+    def validate_name(cls, v):
         if v is None:
             raise ValueError("Nama tidak boleh kosong")
 
@@ -38,7 +36,7 @@ class UserBase(BaseModel):
         return v_str.title()  # Capitalize first letter of each word
 
     @validator("email", pre=True)
-    def validate_email_format(cls, v: Any) -> str:
+    def validate_email_format(cls, v):
         if v is None:
             raise ValueError("Email tidak boleh kosong")
 
@@ -63,7 +61,7 @@ class UserCreate(UserBase):
     role_id: Optional[int] = Field(None, description="ID peran pengguna (opsional)")
 
     @validator("password", pre=True)
-    def validate_password(cls, v: Any) -> str:
+    def validate_password(cls, v):
         if v is None:
             raise ValueError("Kata sandi tidak boleh kosong")
 
@@ -111,7 +109,7 @@ class UserUpdate(BaseModel):
     role_id: Optional[int] = Field(None, description="ID peran pengguna (opsional)")
 
     @validator("name", pre=True)
-    def validate_name_update(cls, v: Any) -> Optional[str]:
+    def validate_name_update(cls, v):
         if v is None:
             return v
         # Reuse the same validation logic as UserBase
@@ -134,7 +132,7 @@ class UserUpdate(BaseModel):
         return v_str.title()
 
     @validator("email", pre=True)
-    def validate_email_format_update(cls, v: Any) -> Optional[str]:
+    def validate_email_format_update(cls, v):
         if v is None:
             return v
 
@@ -149,7 +147,7 @@ class UserUpdate(BaseModel):
         return v_str
 
     @validator("password", pre=True)
-    def validate_password_update(cls, v: Any) -> Optional[str]:
+    def validate_password_update(cls, v):
         if v is None:
             return v
 

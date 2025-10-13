@@ -1,23 +1,22 @@
-import asyncio
-import logging
-from typing import List
-
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
+from typing import List
 from fastapi.responses import JSONResponse
 from netmiko import (
     ConnectHandler,
     NetmikoAuthenticationException,
     NetmikoTimeoutException,
 )
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
-
-from ..auth import get_current_active_user
-from ..database import get_db
-from ..models.olt import OLT as OLTModel
+import asyncio
 from ..models.user import User as UserModel
-from ..schemas.olt import OLT as OLTSchema
-from ..schemas.olt import OLTCreate, OLTUpdate
+from ..auth import get_current_active_user
+import logging
+
+
+from ..models.olt import OLT as OLTModel
+from ..schemas.olt import OLT as OLTSchema, OLTCreate, OLTUpdate
+from ..database import get_db
 
 router = APIRouter(prefix="/olt", tags=["OLT"])
 

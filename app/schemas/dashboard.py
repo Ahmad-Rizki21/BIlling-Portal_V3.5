@@ -1,6 +1,5 @@
-from typing import List, Optional
-
 from pydantic import BaseModel
+from typing import List, Optional
 
 
 # Skema BARU untuk setiap item pendapatan brand

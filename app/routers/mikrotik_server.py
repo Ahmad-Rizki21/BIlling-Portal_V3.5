@@ -1,19 +1,18 @@
+from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi.encoders import jsonable_encoder
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
+from sqlalchemy import or_
+from typing import List, Optional
 import asyncio
 import logging
 from datetime import datetime, timezone
-from typing import List, Optional
-
-from fastapi import APIRouter, Depends, HTTPException, Request, status
-from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
-from sqlalchemy import or_
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
 
 from ..database import get_db
 from ..models.mikrotik_server import MikrotikServer as MikrotikServerModel
-from ..schemas.mikrotik_server import MikrotikServer as MikrotikServerSchema
 from ..schemas.mikrotik_server import (
+    MikrotikServer as MikrotikServerSchema,
     MikrotikServerCreate,
     MikrotikServerUpdate,
 )
