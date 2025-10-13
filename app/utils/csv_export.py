@@ -284,12 +284,12 @@ def create_pelanggan_export_response(data: List[Any]) -> StreamingResponse:
 
     processed_data = CSVExporter.prepare_export_data(
         data,
-        field_mapping=config["field_mapping"],
-        exclude_fields=config["exclude_fields"],
-        transform_functions=config["transform_functions"],
+        field_mapping=config["field_mapping"],  # type: ignore
+        exclude_fields=config["exclude_fields"],  # type: ignore
+        transform_functions=config["transform_functions"],  # type: ignore
     )
 
-    return CSVExporter.create_csv_response(processed_data, "pelanggan", config["headers"])
+    return CSVExporter.create_csv_response(processed_data, "pelanggan", config["headers"])  # type: ignore
 
 
 def create_data_teknis_export_response(data: List[Any]) -> StreamingResponse:
@@ -297,10 +297,10 @@ def create_data_teknis_export_response(data: List[Any]) -> StreamingResponse:
     config = ExportConfigurations.DATA_TEKNIS_EXPORT
 
     processed_data = CSVExporter.prepare_export_data(
-        data, field_mapping=config["field_mapping"], exclude_fields=config["exclude_fields"]
+        data, field_mapping=config["field_mapping"], exclude_fields=config["exclude_fields"]  # type: ignore
     )
 
-    return CSVExporter.create_csv_response(processed_data, "data_teknis", config["headers"])
+    return CSVExporter.create_csv_response(processed_data, "data_teknis", config["headers"])  # type: ignore
 
 
 def create_invoice_export_response(data: List[Any]) -> StreamingResponse:
@@ -308,7 +308,7 @@ def create_invoice_export_response(data: List[Any]) -> StreamingResponse:
     config = ExportConfigurations.INVOICE_EXPORT
 
     processed_data = CSVExporter.prepare_export_data(
-        data, field_mapping=config["field_mapping"], transform_functions=config["transform_functions"]
+        data, field_mapping=config["field_mapping"], transform_functions=config["transform_functions"]  # type: ignore
     )
 
-    return CSVExporter.create_csv_response(processed_data, "invoice", config["headers"])
+    return CSVExporter.create_csv_response(processed_data, "invoice", config["headers"])  # type: ignore

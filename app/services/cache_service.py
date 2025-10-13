@@ -224,7 +224,7 @@ async def get_cached_harga_layanan(db: AsyncSession) -> List[Dict[str, Any]]:
     cached_data = get_from_cache(cache_key)
 
     if cached_data is not None:
-        return cached_data
+        return cached_data  # type: ignore
 
     # Query database
     stmt = select(HargaLayanan).order_by(HargaLayanan.brand)
@@ -248,7 +248,7 @@ async def get_cached_harga_layanan(db: AsyncSession) -> List[Dict[str, Any]]:
     return data
 
 
-async def get_cached_paket_layanan(db: AsyncSession) -> List[Dict]:
+async def get_cached_paket_layanan(db: AsyncSession) -> List[Dict[str, Any]]:
     """Get paket layanan data dengan cache."""
     from ..models.paket_layanan import PaketLayanan
 
@@ -256,7 +256,7 @@ async def get_cached_paket_layanan(db: AsyncSession) -> List[Dict]:
     cached_data = get_from_cache(cache_key)
 
     if cached_data is not None:
-        return cached_data
+        return cached_data  # type: ignore
 
     # Query database
     stmt = select(PaketLayanan).order_by(PaketLayanan.kecepatan)
@@ -286,7 +286,7 @@ async def get_cached_brand_data(db: AsyncSession) -> List[Dict[str, Any]]:
     cached_data = get_from_cache(cache_key)
 
     if cached_data is not None:
-        return cached_data
+        return cached_data  # type: ignore
 
     # Query distinct brands
     stmt = select(HargaLayanan.id_brand, HargaLayanan.brand).distinct().order_by(HargaLayanan.brand)

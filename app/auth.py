@@ -32,7 +32,7 @@ def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)
 
 
-def create_access_token(data: dict, expires_delta: Union[timedelta, None] = None):
+def create_access_token(data: dict, expires_delta: Union[timedelta, None] = None) -> str:
     """Membuat JWT access token."""
     to_encode = data.copy()
     if expires_delta:
@@ -45,7 +45,7 @@ def create_access_token(data: dict, expires_delta: Union[timedelta, None] = None
     return encoded_jwt
 
 
-def create_refresh_token(data: dict, expires_delta: Union[timedelta, None] = None):
+def create_refresh_token(data: dict, expires_delta: Union[timedelta, None] = None) -> str:
     """Membuat JWT refresh token."""
     to_encode = data.copy()
     if expires_delta:
@@ -60,7 +60,7 @@ def create_refresh_token(data: dict, expires_delta: Union[timedelta, None] = Non
     return encoded_jwt
 
 
-async def authenticate_user(email: str, password: str, db: AsyncSession):
+async def authenticate_user(email: str, password: str, db: AsyncSession) -> Union[User, None]:
     """Autentikasi user berdasarkan email dan password."""
     query = select(User).where(User.email == email)
     result = await db.execute(query)
@@ -111,9 +111,11 @@ def validate_password_strength(password: str):
     return len(errors) == 0, errors
 
 
+from typing import Optional
+
 # Token data class untuk Pydantic models
 class Token:
-    def __init__(self, access_token: str, token_type: str, expires_in: int, refresh_token: str = None):
+    def __init__(self, access_token: str, token_type: str, expires_in: int, refresh_token: Optional[str] = None):
         self.access_token = access_token
         self.token_type = token_type
         self.expires_in = expires_in
