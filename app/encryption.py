@@ -19,8 +19,6 @@ class EncryptionService:
 
     def is_encrypted(self, value: str) -> bool:
         """Cek apakah sebuah nilai sepertinya sudah terenkripsi."""
-        if not isinstance(value, str):
-            return False
         # Fernet tokens are URL-safe base64 encoded and start with 'gAAAAA'
         return value.startswith("gAAAAA")
 

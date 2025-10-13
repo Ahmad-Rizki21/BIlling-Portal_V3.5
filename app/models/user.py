@@ -6,7 +6,10 @@ from sqlalchemy import String, BigInteger, func, DateTime, TIMESTAMP, ForeignKey
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 
 # Import Base secara eksplisit untuk menghindari error mypy
-from ..database import Base
+from ..database import Base as BaseClass
+
+# Alias Base untuk menghindari error mypy
+Base = BaseClass
 
 if TYPE_CHECKING:
     from .role import Role

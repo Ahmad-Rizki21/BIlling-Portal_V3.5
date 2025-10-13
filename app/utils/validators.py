@@ -26,7 +26,7 @@ class FileValidator:
         if not file.filename or not file.filename.lower().endswith(".csv"):
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="File harus berformat .csv")
 
-        contents = await file.read()
+        contents: bytes = await file.read()
         if not contents:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="File kosong.")
 
