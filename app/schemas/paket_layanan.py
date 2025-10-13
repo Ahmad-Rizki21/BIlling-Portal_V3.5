@@ -1,5 +1,5 @@
 import re
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic import BaseModel, Field, validator
 
@@ -11,7 +11,8 @@ class PaketLayananBase(BaseModel):
     harga: float = Field(..., gt=0, description="Harga paket per bulan")
 
     @validator("id_brand", pre=True)
-    def validate_id_brand(cls, v):
+    @classmethod
+    def validate_id_brand(cls, v: Any) -> str:
         if v is None:
             raise ValueError("ID brand tidak boleh kosong")
 
@@ -25,7 +26,7 @@ class PaketLayananBase(BaseModel):
         return v_str
 
     @validator("nama_paket", pre=True)
-    def validate_nama_paket(cls, v):
+    def validate_nama_paket(cls, v: Any) -> str:
         if v is None:
             raise ValueError("Nama paket tidak boleh kosong")
 
@@ -46,7 +47,7 @@ class PaketLayananBase(BaseModel):
         return v_str
 
     @validator("kecepatan", pre=True)
-    def validate_kecepatan(cls, v):
+    def validate_kecepatan(cls, v: Any) -> int:
         if v is None:
             raise ValueError("Kecepatan tidak boleh kosong")
 
@@ -64,7 +65,7 @@ class PaketLayananBase(BaseModel):
         return v_int
 
     @validator("harga", pre=True)
-    def validate_harga(cls, v):
+    def validate_harga(cls, v: Any) -> float:
         if v is None:
             raise ValueError("Harga tidak boleh kosong")
 
@@ -90,7 +91,7 @@ class PaketLayananUpdate(BaseModel):
     harga: Optional[float] = Field(None, gt=0, description="Harga paket per bulan")
 
     @validator("nama_paket", pre=True)
-    def validate_nama_paket_update(cls, v):
+    def validate_nama_paket_update(cls, v: Any) -> Optional[str]:
         if v is None:
             return v
 
@@ -111,7 +112,7 @@ class PaketLayananUpdate(BaseModel):
         return v_str
 
     @validator("kecepatan", pre=True)
-    def validate_kecepatan_update(cls, v):
+    def validate_kecepatan_update(cls, v: Any) -> Optional[int]:
         if v is None:
             return v
 
@@ -129,7 +130,7 @@ class PaketLayananUpdate(BaseModel):
         return v_int
 
     @validator("harga", pre=True)
-    def validate_harga_update(cls, v):
+    def validate_harga_update(cls, v: Any) -> Optional[float]:
         if v is None:
             return v
 

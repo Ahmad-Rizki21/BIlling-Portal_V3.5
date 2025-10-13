@@ -46,5 +46,5 @@ class Pelanggan(Base):
     invoices: Mapped[list["Invoice"]] = relationship(back_populates="pelanggan")
     harga_layanan: Mapped["HargaLayanan"] = relationship(foreign_keys=[id_brand])
 
-    def to_dict(self):
+    def to_dict(self) -> dict:
         return {c.name: getattr(self, c.name) for c in self.__table__.columns}

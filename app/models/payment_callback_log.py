@@ -29,5 +29,5 @@ class PaymentCallbackLog(Base):
         Index("idx_callback_log_status", "status"),
     )
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<PaymentCallbackLog(id={self.id}, xendit_id='{self.xendit_id}', external_id='{self.external_id}', status='{self.status}')>"

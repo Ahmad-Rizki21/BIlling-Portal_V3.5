@@ -5,7 +5,7 @@ Utility functions for secure logging that filter out sensitive data
 import json
 import logging
 import re
-from typing import Any, Dict, Union
+from typing import Any, Dict, Union, cast
 
 
 class SensitiveDataFilter(logging.Filter):
@@ -87,19 +87,19 @@ class SensitiveDataFilter(logging.Filter):
         if hasattr(record, "args") and record.args:
             if isinstance(record.args, dict):
                 # Handle named arguments
-                filtered_args = {}
+                filtered_args: Dict[str, Any] = {}
                 for key, value in record.args.items():
                     if self._is_sensitive_field(key):
                         filtered_args[key] = "***REDACTED***"
                     else:
                         filtered_args[key] = self._filter_sensitive_data(value)
-                record.args = filtered_args
+                record.args = filtered_args  # type: ignore
             elif isinstance(record.args, (list, tuple)):
                 # Handle positional arguments
                 filtered_args = []
                 for value in record.args:
                     filtered_args.append(self._filter_sensitive_data(value))
-                record.args = type(record.args)(filtered_args)
+                record.args = tuple(filtered_args)  # type: ignore
 
         return True
 
@@ -170,9 +170,6 @@ class SensitiveDataFilter(logging.Filter):
         """
         Check if a string is a valid JSON
         """
-        if not isinstance(data, str):
-            return False
-
         data = data.strip()
         return (data.startswith("{") and data.endswith("}")) or (data.startswith("[") and data.endswith("]"))
 
@@ -180,9 +177,6 @@ class SensitiveDataFilter(logging.Filter):
         """
         Check if a string contains sensitive data patterns
         """
-        if not isinstance(data, str):
-            return False
-
         data_lower = data.lower()
 
         # Check for common sensitive data patterns
@@ -234,7 +228,7 @@ def log_request_safe(logger: logging.Logger, level: int, message: str, request_d
         logger.log(level, message)
 
 
-def setup_secure_logging():
+def setup_secure_logging() -> None:
     """
     Setup logging with sensitive data filtering
     """

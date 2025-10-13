@@ -3,7 +3,7 @@ Base Service Layer untuk menghilangkan duplikasi kode CRUD operations
 """
 
 import logging
-from typing import Any, Dict, Generic, List, Optional, Sequence, Type, TypeVar
+from typing import Any, Dict, Generic, List, Optional, Sequence, Type, TypeVar, Collection
 
 from fastapi import HTTPException, status
 from pydantic import BaseModel
@@ -38,7 +38,7 @@ class BaseService(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"{self.model.__name__} tidak ditemukan")
         return result
 
-    async def get_by_id_with_relations(self, id: int, relations: Optional[List[str]] = None) -> ModelType:
+    async def get_by_id_with_relations(self, id: int, relations: Optional[Collection[str]] = None) -> ModelType:
         """Mengambil record by ID dengan eager loading untuk relasi tertentu"""
         query = select(self.model).where(self.model.id == id)  # type: ignore
 
@@ -58,7 +58,7 @@ class BaseService(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         skip: int = 0,
         limit: Optional[int] = None,
         search: Optional[str] = None,
-        search_fields: Optional[List[str]] = None,
+        search_fields: Optional[Collection[str]] = None,
         order_by_field: str = "id",
         order_desc: bool = True,
     ) -> Sequence[ModelType]:
@@ -91,7 +91,7 @@ class BaseService(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
 
         return (await self.db.execute(query)).scalars().all()
 
-    async def get_total_count(self, search: Optional[str] = None, search_fields: Optional[List[str]] = None) -> int:
+    async def get_total_count(self, search: Optional[str] = None, search_fields: Optional[Collection[str]] = None) -> int:
         """Menghitung total records dengan filter yang sama seperti get_all"""
         query = select(func.count(self.model.id))  # type: ignore
 
@@ -108,7 +108,7 @@ class BaseService(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
 
         return (await self.db.execute(query)).scalar() or 0
 
-    async def create(self, obj_in: CreateSchemaType, exclude_fields: Optional[List[str]] = None) -> ModelType:
+    async def create(self, obj_in: CreateSchemaType, exclude_fields: Optional[Collection[str]] = None) -> ModelType:
         """
         Membuat record baru dengan error handling standar
         exclude_fields: list of fields to exclude from creation (e.g., password confirmation)
@@ -186,7 +186,7 @@ class BaseService(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         return existing is None
 
     async def validate_unique_fields(
-        self, obj_data: Dict[str, Any], unique_fields: Optional[List[str]] = None, exclude_id: Optional[int] = None
+        self, obj_data: Dict[str, Any], unique_fields: Optional[Collection[str]] = None, exclude_id: Optional[int] = None
     ) -> None:
         """
         Validate multiple unique fields dan raise HTTPException jika conflict
@@ -218,7 +218,7 @@ class PaginatedResponse(BaseModel, Generic[ModelType]):
         skip: int = 0,
         limit: Optional[int] = None,
         search: Optional[str] = None,
-        search_fields: Optional[List[str]] = None,
+        search_fields: Optional[Collection[str]] = None,
         order_by_field: str = "id",
         order_desc: bool = True,
     ) -> "PaginatedResponse[ModelType]":

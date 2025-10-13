@@ -77,10 +77,10 @@ class Invoice(Base):
     # Relationship - TIDAK DIUBAH SAMA SEKALI!
     pelanggan = relationship("Pelanggan", back_populates="invoices")
 
-    def to_dict(self):
+    def to_dict(self) -> dict:
         return {c.name: getattr(self, c.name) for c in self.__table__.columns}
 
-    def get_payment_link_status(self):
+    def get_payment_link_status(self) -> str:
         """
         Mengembalikan status link pembayaran berdasarkan logika:
         - Jika invoice sudah lunas: "Lunas"
@@ -132,7 +132,7 @@ class Invoice(Base):
         return self.status_invoice
 
     @property
-    def is_payment_link_active(self):
+    def is_payment_link_active(self) -> bool:
         """
         Mengembalikan True jika link pembayaran masih aktif.
         Link aktif jika:
@@ -142,7 +142,7 @@ class Invoice(Base):
         return self.get_payment_link_status() == "Belum Dibayar"
 
     @property
-    def payment_link_status(self):
+    def payment_link_status(self) -> str:
         """
         Property untuk status link pembayaran.
         """

@@ -59,7 +59,7 @@ class LogLevel(Enum):
 
 
 # --- Detect Terminal Capabilities ---
-def can_use_unicode():
+def can_use_unicode() -> bool:
     """Check if terminal supports Unicode characters"""
     try:
         # Check if we're in Windows cmd
@@ -179,11 +179,11 @@ class EnhancedColoredFormatter(logging.Formatter):
         logging.CRITICAL: Colors.BRIGHT_MAGENTA,
     }
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.use_colors = USE_UNICODE
 
-    def format(self, record):
+    def format(self, record: logging.LogRecord) -> str:
         # Add color to level name
         level_color = self.LEVEL_COLORS.get(record.levelno, Colors.WHITE)
         level_name = f"{level_color}{record.levelname:<8}{Colors.RESET}"
@@ -211,7 +211,7 @@ class EnhancedColoredFormatter(logging.Formatter):
 class JSONFormatter(logging.Formatter):
     """JSON formatter for structured logging"""
 
-    def format(self, record):
+    def format(self, record: logging.LogRecord) -> str:
         log_entry = {
             "timestamp": datetime.fromtimestamp(record.created).isoformat(),
             "level": record.levelname,
@@ -236,7 +236,7 @@ class JSONFormatter(logging.Formatter):
 class FileFormatter(logging.Formatter):
     """Clean formatter for file output without colors"""
 
-    def format(self, record):
+    def format(self, record: logging.LogRecord) -> str:
         record.name = record.name.replace("app.", "").upper()
         return super().format(record)
 
@@ -245,13 +245,13 @@ class FileFormatter(logging.Formatter):
 class StructuredLogger:
     """Enhanced logger with structured output"""
 
-    def __init__(self, name: str):
+    def __init__(self, name: str) -> None:
         self.logger = logging.getLogger(name)
         self.name = name
 
     def _log_with_structure(
         self, level: int, message: str, icon: str = "", extra: Optional[Dict[str, Any]] = None, color: str = ""
-    ):
+    ) -> None:
         """Internal method for structured logging"""
         if extra:
             extra_data = extra.copy()
@@ -268,32 +268,32 @@ class StructuredLogger:
             else:
                 self.logger.log(level, message)
 
-    def debug(self, message: str, **kwargs):
+    def debug(self, message: str, **kwargs) -> None:
         icon = ICONS_SET.get("debug", "")
         self._log_with_structure(logging.DEBUG, message, icon, extra=kwargs, color=Colors.CYAN)
 
-    def info(self, message: str, **kwargs):
+    def info(self, message: str, **kwargs) -> None:
         icon = ICONS_SET.get("info", "")
         self._log_with_structure(logging.INFO, message, icon, extra=kwargs, color=Colors.GREEN)
 
-    def warning(self, message: str, **kwargs):
+    def warning(self, message: str, **kwargs) -> None:
         icon = ICONS_SET.get("warning", "")
         self._log_with_structure(logging.WARNING, message, icon, extra=kwargs, color=Colors.YELLOW)
 
-    def error(self, message: str, exc_info: bool = False, **kwargs):
+    def error(self, message: str, exc_info: bool = False, **kwargs) -> None:
         icon = ICONS_SET.get("error", "")
         if exc_info:
             self.logger.error(message, exc_info=True)
         else:
             self._log_with_structure(logging.ERROR, message, icon, extra=kwargs, color=Colors.RED)
 
-    def critical(self, message: str, **kwargs):
+    def critical(self, message: str, **kwargs) -> None:
         icon = ICONS_SET.get("error", "")
         self._log_with_structure(logging.CRITICAL, message, icon, extra=kwargs, color=Colors.BRIGHT_RED)
 
 
 # --- Helper Functions for Specific Log Types ---
-def log_system_event(logger, event_type: str, message: str, status: str = "info", details: str = ""):
+def log_system_event(logger: logging.Logger, event_type: str, message: str, status: str = "info", details: str = "") -> None:
     """Log system events with appropriate icons"""
     icons = {
         "startup": ICONS_SET.get("startup", ""),
@@ -327,7 +327,7 @@ def log_system_event(logger, event_type: str, message: str, status: str = "info"
         logger.info(colored_message)
 
 
-def log_scheduler_event(logger, job_name: str, status: str, details: str = ""):
+def log_scheduler_event(logger: logging.Logger, job_name: str, status: str, details: str = "") -> None:
     """Enhanced scheduler logging"""
     status_icons = {
         "started": ICONS_SET.get("scheduler", ""),
@@ -350,7 +350,7 @@ def log_scheduler_event(logger, job_name: str, status: str, details: str = ""):
         logger.info(message)
 
 
-def log_mikrotik_operation(logger, operation: str, customer_id: str, status: str, details: str = ""):
+def log_mikrotik_operation(logger: logging.Logger, operation: str, customer_id: str, status: str, details: str = "") -> None:
     """Enhanced MikroTik operation logging"""
     status_icons = {
         "success": ICONS_SET.get("success", ""),
@@ -374,7 +374,7 @@ def log_mikrotik_operation(logger, operation: str, customer_id: str, status: str
         logger.info(message)
 
 
-def log_payment_event(logger, event: str, invoice_id: str, amount: str = "", details: str = ""):
+def log_payment_event(logger: logging.Logger, event: str, invoice_id: str, amount: str = "", details: str = "") -> None:
     """Enhanced payment event logging"""
     event_icons = {
         "created": ICONS_SET.get("info", ""),
@@ -399,7 +399,7 @@ def log_payment_event(logger, event: str, invoice_id: str, amount: str = "", det
         logger.info(message)
 
 
-def log_database_event(logger, operation: str, table: str, status: str, details: str = ""):
+def log_database_event(logger: logging.Logger, operation: str, table: str, status: str, details: str = "") -> None:
     """Database operation logging"""
     status_icons = {
         "success": ICONS_SET.get("success", ""),
@@ -421,8 +421,8 @@ def log_database_event(logger, operation: str, table: str, status: str, details:
 
 
 def log_api_request(
-    logger, method: str, endpoint: str, status_code: int, duration: float | None = None, user_info: str = "Anonymous"
-):
+    logger: logging.Logger, method: str, endpoint: str, status_code: int, duration: float | None = None, user_info: str = "Anonymous"
+) -> None:
     """API request logging with performance metrics"""
     if USE_UNICODE:
         status_icon = "✅" if 200 <= status_code < 300 else "⚠️" if 300 <= status_code < 400 else "❌"
@@ -443,7 +443,7 @@ def log_api_request(
         logger.info(message)
 
 
-def log_websocket_event(logger, event: str, user_id: str, details: str = ""):
+def log_websocket_event(logger: logging.Logger, event: str, user_id: str, details: str = "") -> None:
     """WebSocket event logging"""
     event_icons = {
         "connect": ICONS_SET.get("websocket", ""),
@@ -464,7 +464,7 @@ def log_websocket_event(logger, event: str, user_id: str, details: str = ""):
         logger.info(message)
 
 
-def log_auth_event(logger, event: str, user_id: str = "", details: str = ""):
+def log_auth_event(logger: logging.Logger, event: str, user_id: str = "", details: str = "") -> None:
     """Authentication event logging"""
     event_icons = {
         "login": ICONS_SET.get("success", ""),
@@ -490,7 +490,7 @@ def log_auth_event(logger, event: str, user_id: str = "", details: str = ""):
 
 
 # --- Core Logging Setup ---
-def setup_logging():
+def setup_logging() -> logging.Logger:
     """Enhanced logging setup with beautiful formatting"""
 
     # Create log directory
@@ -662,7 +662,7 @@ def get_logger(name: str) -> StructuredLogger:
     return StructuredLogger(name)
 
 
-def log_exception(logger, exception: Exception, context: str = ""):
+def log_exception(logger: logging.Logger, exception: Exception, context: str = "") -> None:
     """Log exception with full traceback"""
     error_msg = f"Exception in {context}: {str(exception)}"
     tb = traceback.format_exc()
@@ -671,10 +671,10 @@ def log_exception(logger, exception: Exception, context: str = ""):
 
 
 # --- Shutdown Handler ---
-def setup_shutdown_handler(start_time: datetime):
+def setup_shutdown_handler(start_time: datetime) -> callable:
     """Setup graceful shutdown logging"""
 
-    def shutdown_handler():
+    def shutdown_handler() -> None:
         # Calculate uptime
         uptime = datetime.now() - start_time
         uptime_str = str(uptime).split(".")[0]  # Remove microseconds

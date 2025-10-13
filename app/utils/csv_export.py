@@ -21,7 +21,7 @@ class CSVExporter:
 
     @staticmethod
     def create_csv_response(
-        data: List[Dict[str, Any]], filename_prefix: str, headers: Optional[List[str]] = None, include_bom: bool = True
+        data: List[Dict[str, Any]], filename_prefix: str, headers: Optional[Collection[str]] = None, include_bom: bool = True
     ) -> StreamingResponse:
         """
         Create CSV response dengan format yang konsisten
@@ -71,7 +71,7 @@ class CSVExporter:
             raise
 
     @staticmethod
-    def create_csv_template(headers: List[str], sample_data: List[Dict[str, Any]], filename_prefix: str) -> StreamingResponse:
+    def create_csv_template(headers: Collection[str], sample_data: List[Dict[str, Any]], filename_prefix: str) -> StreamingResponse:
         """
         Create CSV template untuk import dengan sample data
         Menghilangkan duplikasi template creation logic
@@ -108,8 +108,8 @@ class CSVExporter:
     def prepare_export_data(
         raw_data: List[Any],
         field_mapping: Optional[Dict[str, str]] = None,
-        exclude_fields: Optional[List[str]] = None,
-        transform_functions: Optional[Dict[str, Callable]] = None,
+        exclude_fields: Optional[Collection[str]] = None,
+        transform_functions: Optional[Dict[str, Callable[..., Any]]] = None,
     ) -> List[Dict[str, Any]]:
         """
         Prepare data untuk export dengan field mapping dan transformations
@@ -167,7 +167,7 @@ class CSVImportHelper:
 
     @staticmethod
     def validate_csv_headers(
-        expected_headers: List[str], actual_headers: List[str], case_sensitive: bool = False
+        expected_headers: Collection[str], actual_headers: Collection[str], case_sensitive: bool = False
     ) -> tuple[bool, List[str]]:
         """
         Validate CSV headers terhadap expected headers
@@ -195,7 +195,7 @@ class CSVImportHelper:
         return normalized
 
     @staticmethod
-    def clean_csv_value(value: str) -> str:
+    def clean_csv_value(value: Optional[Union[str, Any]]) -> str:
         """
         Clean CSV value dari extra whitespace dan unwanted characters
         """
@@ -298,7 +298,9 @@ def create_data_teknis_export_response(data: List[Any]) -> StreamingResponse:
     config = ExportConfigurations.DATA_TEKNIS_EXPORT
 
     processed_data = CSVExporter.prepare_export_data(
-        data, field_mapping=config["field_mapping"], exclude_fields=config["exclude_fields"]
+        data,
+        field_mapping=config["field_mapping"],
+        exclude_fields=config["exclude_fields"]
     )
 
     return CSVExporter.create_csv_response(processed_data, "data_teknis", config["headers"])
@@ -309,7 +311,9 @@ def create_invoice_export_response(data: List[Any]) -> StreamingResponse:
     config = ExportConfigurations.INVOICE_EXPORT
 
     processed_data = CSVExporter.prepare_export_data(
-        data, field_mapping=config["field_mapping"], transform_functions=config["transform_functions"]
+        data,
+        field_mapping=config["field_mapping"],
+        transform_functions=config["transform_functions"]
     )
 
     return CSVExporter.create_csv_response(processed_data, "invoice", config["headers"])

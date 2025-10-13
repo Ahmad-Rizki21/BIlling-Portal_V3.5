@@ -13,9 +13,10 @@ try:
     from .logging_utils import SensitiveDataFilter  # type: ignore
 except ImportError:
     # Fallback if logging_utils.py doesn't exist
-    class SensitiveDataFilter(logging.Filter):
-        def filter(self, record):
+    class FallbackSensitiveDataFilter(logging.Filter):
+        def filter(self, record: logging.LogRecord) -> bool:
             return True
+    SensitiveDataFilter = FallbackSensitiveDataFilter
 
 
 # --- ASCII Art Banner (Windows Compatible) ---
@@ -46,7 +47,7 @@ STARTUP_BANNER = """
 
 
 # Detect if we can use Unicode characters
-def can_use_unicode():
+def can_use_unicode() -> bool:
     """Check if terminal supports Unicode characters"""
     try:
         # Check if we're in Windows cmd
@@ -65,7 +66,7 @@ USE_UNICODE = can_use_unicode()
 # --- Enhanced Helper Functions for Structured Logging ---
 
 
-def log_scheduler_event(logger, job_name: str, status: str, details: str = ""):
+def log_scheduler_event(logger: logging.Logger, job_name: str, status: str, details: str = "") -> None:
     """Enhanced scheduler logging with better formatting"""
     if USE_UNICODE:
         status_icons = {
@@ -95,7 +96,7 @@ def log_scheduler_event(logger, job_name: str, status: str, details: str = ""):
         logger.info(message)
 
 
-def log_mikrotik_operation(logger, operation: str, customer_id: str, status: str, details: str = ""):
+def log_mikrotik_operation(logger: logging.Logger, operation: str, customer_id: str, status: str, details: str = "") -> None:
     """Enhanced MikroTik operation logging"""
     if USE_UNICODE:
         status_icons = {
@@ -127,7 +128,7 @@ def log_mikrotik_operation(logger, operation: str, customer_id: str, status: str
         logger.info(message)
 
 
-def log_payment_event(logger, event: str, invoice_id: str, amount: str = "", details: str = ""):
+def log_payment_event(logger: logging.Logger, event: str, invoice_id: str, amount: str = "", details: str = "") -> None:
     """Enhanced payment event logging"""
     if USE_UNICODE:
         event_icons = {
@@ -161,7 +162,7 @@ def log_payment_event(logger, event: str, invoice_id: str, amount: str = "", det
         logger.info(message)
 
 
-def log_database_event(logger, operation: str, table: str, status: str, details: str = ""):
+def log_database_event(logger: logging.Logger, operation: str, table: str, status: str, details: str = "") -> None:
     """Database operation logging"""
     if USE_UNICODE:
         status_icons = {
@@ -189,7 +190,7 @@ def log_database_event(logger, operation: str, table: str, status: str, details:
         logger.info(message)
 
 
-def log_api_request(logger, method: str, endpoint: str, status_code: int, duration: float | None = None):
+def log_api_request(logger: logging.Logger, method: str, endpoint: str, status_code: int, duration: float | None = None) -> None:
     """API request logging"""
     if USE_UNICODE:
         status_icon = "✅" if 200 <= status_code < 300 else "⚠️" if 300 <= status_code < 400 else "❌"
@@ -221,7 +222,7 @@ class EnhancedColoredFormatter(logging.Formatter):
         "RESET": "\033[0m",
     }
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         # Disable colors on Windows cmd if not supported
         if platform.system() == "Windows" and not USE_UNICODE:
@@ -229,7 +230,7 @@ class EnhancedColoredFormatter(logging.Formatter):
         else:
             self.use_colors = True
 
-    def format(self, record):
+    def format(self, record: logging.LogRecord) -> str:
         if self.use_colors:
             color = self.COLORS.get(record.levelname, self.COLORS["RESET"])
             reset = self.COLORS["RESET"]
@@ -249,7 +250,7 @@ class EnhancedColoredFormatter(logging.Formatter):
 class FileFormatter(logging.Formatter):
     """Clean formatter for file output without colors"""
 
-    def format(self, record):
+    def format(self, record: logging.LogRecord) -> str:
         record.name = record.name.replace("app.", "").upper()
         return super().format(record)
 
@@ -257,7 +258,7 @@ class FileFormatter(logging.Formatter):
 # --- Core Logging Setup ---
 
 
-def setup_logging():
+def setup_logging() -> logging.Logger:
     """Enhanced logging setup with beautiful banner"""
 
     # Create log directory
@@ -393,7 +394,7 @@ def setup_logging():
 # --- Example Usage Functions ---
 
 
-def log_system_health(logger):
+def log_system_health(logger: logging.Logger) -> None:
     """Log system health check"""
     if USE_UNICODE:
         logger.info("💊 System Health Check - All services running normally")
@@ -401,7 +402,7 @@ def log_system_health(logger):
         logger.info("[HEALTH] System Health Check - All services running normally")
 
 
-def log_startup_complete(logger):
+def log_startup_complete(logger: logging.Logger) -> None:
     """Log application startup completion"""
     if USE_UNICODE:
         logger.info("🚀 APPLICATION STARTUP COMPLETE - Ready to serve requests!")
@@ -409,7 +410,7 @@ def log_startup_complete(logger):
         logger.info(">> APPLICATION STARTUP COMPLETE - Ready to serve requests!")
 
 
-def log_shutdown(logger):
+def log_shutdown(logger: logging.Logger) -> None:
     """Log application shutdown"""
     logger.info(">> Application shutting down gracefully...")
     logger.info(">> ARTACOM API SYSTEM - Goodbye!")

@@ -85,7 +85,7 @@ else:
     CONNECTION_POOL_CRITICAL_THRESHOLD = 95
 
 
-async def monitor_connection_pool():
+async def monitor_connection_pool() -> dict | None:
     """Enhanced monitor connection pool with auto-cleanup suggestions."""
     try:
         status = await get_connection_pool_status()
@@ -105,7 +105,7 @@ async def monitor_connection_pool():
 
 
 # Auto-cleanup function for idle connections
-async def cleanup_idle_connections():
+async def cleanup_idle_connections() -> dict:
     """Cleanup idle connections to free up memory."""
     try:
         # SQLAlchemy pool doesn't have invalid() method, so we return a mock value
@@ -119,7 +119,7 @@ async def cleanup_idle_connections():
 
 # Initialize encryption after all models are loaded
 # This will be called from the main application after importing all models
-def init_encryption():
+def init_encryption() -> None:
     encrypt_sensitive_data()
     decrypt_sensitive_data()
 
@@ -131,7 +131,7 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 
 
 # Health check function untuk monitoring connection pool
-async def get_connection_pool_status():
+async def get_connection_pool_status() -> dict:
     """Get current connection pool status for monitoring."""
     import threading
 

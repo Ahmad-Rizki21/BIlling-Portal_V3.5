@@ -1,6 +1,6 @@
 import re
 from datetime import date
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic import BaseModel, EmailStr, Field, validator
 
@@ -22,7 +22,7 @@ class PelangganCreate(BaseModel):
     layanan: Optional[str] = Field(None, description="Layanan (opsional)")
 
     @validator("no_ktp", pre=True)
-    def validate_no_ktp(cls, v):
+    def validate_no_ktp(cls, v: Any) -> str:
         if v is None:
             raise ValueError("No KTP tidak boleh kosong")
 
@@ -39,7 +39,7 @@ class PelangganCreate(BaseModel):
         return v_str
 
     @validator("nama", pre=True)
-    def validate_nama(cls, v):
+    def validate_nama(cls, v: Any) -> str:
         if v is None:
             raise ValueError("Nama tidak boleh kosong")
 
@@ -53,7 +53,7 @@ class PelangganCreate(BaseModel):
         return v_str
 
     @validator("alamat", pre=True)
-    def validate_alamat(cls, v):
+    def validate_alamat(cls, v: Any) -> str:
         if v is None:
             raise ValueError("Alamat tidak boleh kosong")
 
@@ -67,7 +67,7 @@ class PelangganCreate(BaseModel):
         return v_str
 
     @validator("blok", pre=True)
-    def validate_blok(cls, v):
+    def validate_blok(cls, v: Any) -> str:
         if v is None:
             raise ValueError("Blok tidak boleh kosong")
 
@@ -78,7 +78,7 @@ class PelangganCreate(BaseModel):
         return v_str
 
     @validator("unit", pre=True)
-    def validate_unit(cls, v):
+    def validate_unit(cls, v: Any) -> str:
         if v is None:
             raise ValueError("Unit tidak boleh kosong")
 
@@ -89,7 +89,7 @@ class PelangganCreate(BaseModel):
         return v_str
 
     @validator("no_telp", pre=True)
-    def validate_no_telp(cls, v):
+    def validate_no_telp(cls, v: Any) -> str:
         if v is None:
             raise ValueError("No Telepon tidak boleh kosong")
 
@@ -110,7 +110,7 @@ class PelangganCreate(BaseModel):
         return clean_phone
 
     @validator("email", pre=True)
-    def validate_email_format(cls, v):
+    def validate_email_format(cls, v: Any) -> str:
         if v is None:
             raise ValueError("Email tidak boleh kosong")
 
@@ -125,7 +125,7 @@ class PelangganCreate(BaseModel):
         return v_str
 
     @validator("alamat_2", pre=True, always=True)
-    def validate_alamat_2(cls, v):
+    def validate_alamat_2(cls, v: Any) -> Optional[str]:
         if v is None or v == "":
             return None
 
@@ -136,7 +136,7 @@ class PelangganCreate(BaseModel):
         return v_str
 
     @validator("id_brand", pre=True, always=True)
-    def validate_id_brand(cls, v):
+    def validate_id_brand(cls, v: Any) -> Optional[str]:
         if v is None or v == "":
             return None
 
@@ -147,7 +147,7 @@ class PelangganCreate(BaseModel):
         return v_str
 
     @validator("layanan", pre=True, always=True)
-    def validate_layanan(cls, v):
+    def validate_layanan(cls, v: Any) -> Optional[str]:
         if v is None or v == "":
             return None
 
@@ -158,7 +158,7 @@ class PelangganCreate(BaseModel):
         return v_str
 
     @validator("tgl_instalasi", pre=True, always=True)
-    def validate_tgl_instalasi(cls, v):
+    def validate_tgl_instalasi(cls, v: Any) -> Optional[date]:
         if v is None or v == "":
             return None
 
@@ -222,13 +222,13 @@ class PelangganUpdate(BaseModel):
 
     # Apply same validators for update, but only when values are provided
     @validator("no_ktp", pre=True)
-    def validate_no_ktp_update(cls, v):
+    def validate_no_ktp_update(cls, v: Any) -> Optional[str]:
         if v is None:
             return v
         return PelangganCreate.validate_no_ktp(v)
 
     @validator("nama", pre=True)
-    def validate_nama_update(cls, v):
+    def validate_nama_update(cls, v: Any) -> Optional[str]:
         if v is None:
             return v
         return PelangganCreate.validate_nama(v)

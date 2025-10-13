@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 
 # Inisialisasi cipher suite dengan kunci rahasia dari file config Anda
-def get_cipher_suite():
+def get_cipher_suite() -> Fernet:
     """Get cipher suite with proper key handling"""
     try:
         # Pastikan key dalam format yang benar

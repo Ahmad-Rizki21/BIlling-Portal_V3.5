@@ -6,7 +6,7 @@ from collections import OrderedDict
 from contextlib import contextmanager
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, Optional, Tuple, Union
 
 import routeros_api
 
@@ -37,13 +37,13 @@ class ConnectionMetrics:
 
 
 class MikrotikConnectionPool:
-    def __init__(self, max_connections=10, timeout=30, idle_timeout=300):
+    def __init__(self, max_connections: int = 10, timeout: int = 30, idle_timeout: int = 300) -> None:
         self.max_connections = max_connections
         self.timeout = timeout  # Timeout for API calls
         self.idle_timeout = idle_timeout  # Time after which idle connections are closed
         self.connections: Dict[str, OrderedDict] = {}  # Server host -> connections pool
         self.lock = threading.Lock()
-        self.active_connections: Dict[str, Dict] = {}  # Track active connections by connection object
+        self.active_connections: Dict[str, Dict[str, Any]] = {}  # Track active connections by connection object
 
         # Circuit Breaker per server
         self.circuit_states: Dict[str, CircuitState] = {}
@@ -55,14 +55,14 @@ class MikrotikConnectionPool:
         self.metrics = ConnectionMetrics()
 
         # Connection health monitoring
-        self.connection_health: Dict[str, Dict] = {}
+        self.connection_health: Dict[str, Dict[str, Any]] = {}
         self.last_health_check: Dict[str, float] = {}
 
     def _get_pool_key(self, host_ip: str, port: int) -> str:
         """Generate a unique key for each Mikrotik server connection."""
         return f"{host_ip}:{port}"
 
-    def _initialize_circuit_breaker(self, pool_key: str):
+    def _initialize_circuit_breaker(self, pool_key: str) -> None:
         """Initialize circuit breaker for a server if not exists."""
         if pool_key not in self.circuit_states:
             self.circuit_states[pool_key] = CircuitState.CLOSED
@@ -85,7 +85,6 @@ class MikrotikConnectionPool:
 
         if state == CircuitState.CLOSED:
             return True
-
         elif state == CircuitState.OPEN:
             # Check if recovery timeout has passed
             if current_time - self.circuit_last_failure[pool_key] > self.circuit_config.recovery_timeout:
@@ -94,14 +93,11 @@ class MikrotikConnectionPool:
                 self.circuit_failures[pool_key] = 0
                 return True
             return False
-
-        elif state == CircuitState.HALF_OPEN:
+        else:  # CircuitState.HALF_OPEN
             # Allow one request to test if service recovered
             return True
 
-        return False
-
-    def _record_success(self, pool_key: str):
+    def _record_success(self, pool_key: str) -> None:
         """Record successful connection and reset circuit breaker."""
         self._initialize_circuit_breaker(pool_key)
 
@@ -118,7 +114,7 @@ class MikrotikConnectionPool:
         health["consecutive_failures"] = 0
         health["successful_requests"] += 1
 
-    def _record_failure(self, pool_key: str, error: Exception):
+    def _record_failure(self, pool_key: str, error: Exception) -> None:
         """Record failed connection and potentially trip circuit breaker."""
         self._initialize_circuit_breaker(pool_key)
 
@@ -150,7 +146,7 @@ class MikrotikConnectionPool:
                 self.circuit_states[pool_key] = CircuitState.OPEN
                 self.circuit_last_failure[pool_key] = time.time()
 
-    def _get_connection(self, host_ip: str, port: int, username: str, password: str):
+    def _get_connection(self, host_ip: str, port: int, username: str, password: str) -> Tuple[Any, Any]:
         """Create a new Mikrotik API connection."""
         try:
             connection = routeros_api.RouterOsApiPool(
@@ -177,7 +173,7 @@ class MikrotikConnectionPool:
             logger.error(f"Failed to create connection to {host_ip}:{port}: {e}")
             raise e
 
-    def get_connection(self, host_ip: str, port: int, username: str, password: str):
+    def get_connection(self, host_ip: str, port: int, username: str, password: str) -> Tuple[Any, Any]:
         """Get an available connection from the pool or create a new one."""
         pool_key = self._get_pool_key(host_ip, port)
 
@@ -298,7 +294,7 @@ class MikrotikConnectionPool:
                     self._record_failure(pool_key, e)
                     raise e
 
-    def return_connection(self, connection, host_ip: str, port: int):
+    def return_connection(self, connection: Any, host_ip: str, port: int) -> None:
         """Return a connection to the pool for reuse."""
         pool_key = self._get_pool_key(host_ip, port)
 
@@ -354,7 +350,7 @@ class MikrotikConnectionPool:
                     if conn_id in self.active_connections:
                         del self.active_connections[conn_id]
 
-    def close_all_connections(self):
+    def close_all_connections(self) -> None:
         """Close all connections in the pool with proper cleanup."""
         with self.lock:
             total_cleaned = 0
@@ -367,13 +363,13 @@ class MikrotikConnectionPool:
                         logger.info(f"Closed pooled connection {conn_key} to {pool_key}")
                         total_cleaned += 1
                         # Remove from active connections tracking
-                        conn_id = id(conn_info["connection"])
+                        conn_id = str(id(conn_info["connection"]))
                         if conn_id in self.active_connections:
                             del self.active_connections[conn_id]
                     except Exception as e:
                         logger.error(f"Error closing connection {conn_key} to {pool_key}: {e}")
                         # Force cleanup even on error
-                        conn_id = id(conn_info["connection"])
+                        conn_id = str(id(conn_info["connection"]))
                         if conn_id in self.active_connections:
                             del self.active_connections[conn_id]
 
@@ -410,11 +406,18 @@ class MikrotikConnectionPool:
                 self.return_connection(connection, host_ip, port)
 
     def execute_with_retry(
-        self, host_ip: str, port: int, username: str, password: str, operation_func, max_retries=3, retry_delay=1
-    ):
+        self,
+        host_ip: str,
+        port: int,
+        username: str,
+        password: str,
+        operation_func: Callable[[Any], Any],
+        max_retries: int = 3,
+        retry_delay: int = 1
+    ) -> Any:
         """Execute an operation with enhanced retry mechanism and circuit breaker integration."""
         pool_key = self._get_pool_key(host_ip, port)
-        last_error = None
+        last_error: Union[Exception, None] = None
 
         # Initialize circuit breaker for this server
         self._initialize_circuit_breaker(pool_key)
@@ -658,7 +661,7 @@ class MikrotikConnectionPool:
                             logger.error(f"Error disconnecting {reason} connection {conn_key}: {e}")
                         finally:
                             # Remove from active connections tracking
-                            conn_id = id(conn_info["connection"])
+                            conn_id = str(id(conn_info["connection"]))
                             if conn_id in self.active_connections:
                                 del self.active_connections[conn_id]
 

@@ -3,7 +3,7 @@ Pelanggan Service Layer - Menghilangkan duplikasi business logic dari routers
 """
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Collection, Dict, List, Optional
 
 from sqlalchemy import func, or_
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -208,13 +208,13 @@ class PelangganService(BaseService[PelangganModel, PelangganCreate, PelangganUpd
             config = ExportConfigurations.PELANGGAN_EXPORT
             processed_data = CSVExporter.prepare_export_data(
                 search_result["data"],
-                field_mapping=config["field_mapping"],
-                exclude_fields=config["exclude_fields"],
-                transform_functions=config["transform_functions"],
+                field_mapping=dict(config["field_mapping"]),
+                exclude_fields=list(config["exclude_fields"]),
+                transform_functions=dict(config["transform_functions"]),
             )
 
             # Create CSV response
-            return CSVExporter.create_csv_response(processed_data, "pelanggan", config["headers"])
+            return CSVExporter.create_csv_response(processed_data, "pelanggan", list(config["headers"]))
 
         except Exception as e:
             ErrorHandler.handle_internal_server_error(
@@ -336,16 +336,16 @@ class PelangganService(BaseService[PelangganModel, PelangganCreate, PelangganUpd
             if not FieldValidator.validate_nik(update_dict["no_ktp"]):
                 raise ErrorHandler.handle_bad_request("NIK harus 16 digit angka")
 
-    def _select_fields(self, pelanggan: PelangganModel, fields: List[str]) -> Dict[str, Any]:
+    def _select_fields(self, pelanggan: PelangganModel, fields: Collection[str]) -> Dict[str, Any]:
         """Select specific fields dari pelanggan object"""
-        result = {"id": pelanggan.id}  # Always include ID  # type: ignore
+        result = {"id": pelanggan.id}  # Always include ID
 
         for field in fields:
             if hasattr(pelanggan, field):
                 value = getattr(pelanggan, field)
                 if hasattr(value, "__dict__"):  # Handle related objects
                     value = str(value)
-                result[field] = value  # type: ignore
+                result[field] = value
 
         return result
 

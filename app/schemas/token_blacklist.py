@@ -2,7 +2,7 @@
 
 import re
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic import BaseModel, Field, validator
 
@@ -19,7 +19,7 @@ class TokenBlacklistBase(BaseModel):
     revoked_reason: Optional[str] = Field(None, max_length=255, description="Reason for revocation")
 
     @validator("jti", pre=True)
-    def validate_jti(cls, v):
+    def validate_jti(cls, v: Any) -> str:
         """Validate JWT ID format"""
         if v is None:
             raise ValueError("JWT ID tidak boleh kosong")
@@ -40,7 +40,7 @@ class TokenBlacklistBase(BaseModel):
         return v_str
 
     @validator("user_id", pre=True)
-    def validate_user_id(cls, v):
+    def validate_user_id(cls, v: Any) -> int:
         """Validate user ID"""
         if v is None:
             raise ValueError("User ID tidak boleh kosong")
@@ -56,7 +56,7 @@ class TokenBlacklistBase(BaseModel):
         return v_int
 
     @validator("token_type", pre=True)
-    def validate_token_type(cls, v):
+    def validate_token_type(cls, v: Any) -> str:
         """Validate token type"""
         if v is None:
             raise ValueError("Tipe token tidak boleh kosong")
@@ -75,7 +75,7 @@ class TokenBlacklistBase(BaseModel):
         return v_str.title()  # Capitalize first letter
 
     @validator("expires_at", pre=True)
-    def validate_expires_at(cls, v):
+    def validate_expires_at(cls, v: Any) -> datetime:
         """Validate expiration time"""
         if v is None:
             raise ValueError("Waktu kedaluwarsa tidak boleh kosong")
@@ -93,7 +93,7 @@ class TokenBlacklistBase(BaseModel):
         return v
 
     @validator("revoked_reason", pre=True)
-    def validate_revoked_reason(cls, v):
+    def validate_revoked_reason(cls, v: Any) -> Optional[str]:
         """Validate revocation reason"""
         if v is None or v == "":
             return None
@@ -124,7 +124,7 @@ class TokenBlacklistUpdate(BaseModel):
     revoked_reason: Optional[str] = Field(None, max_length=255, description="Reason for revocation")
 
     @validator("revoked_reason", pre=True)
-    def validate_revoked_reason_update(cls, v):
+    def validate_revoked_reason_update(cls, v: Any) -> Optional[str]:
         """Validate revocation reason for update"""
         if v is None or v == "":
             return None
@@ -146,7 +146,7 @@ class TokenBlacklist(TokenBlacklistBase):
     created_at: datetime = Field(..., description="Creation time")
 
     @validator("id", pre=True)
-    def validate_id(cls, v):
+    def validate_id(cls, v: Any) -> int:
         """Validate ID"""
         if v is None:
             raise ValueError("ID tidak boleh kosong")
@@ -162,7 +162,7 @@ class TokenBlacklist(TokenBlacklistBase):
         return v_int
 
     @validator("created_at", pre=True)
-    def validate_created_at(cls, v):
+    def validate_created_at(cls, v: Any) -> datetime:
         """Validate creation time"""
         if v is None:
             raise ValueError("Waktu pembuatan tidak boleh kosong")
@@ -189,7 +189,7 @@ class TokenRefreshRequest(BaseModel):
     refresh_token: str = Field(..., min_length=1, description="Refresh token")
 
     @validator("refresh_token", pre=True)
-    def validate_refresh_token(cls, v):
+    def validate_refresh_token(cls, v: Any) -> str:
         """Validate refresh token"""
         if v is None:
             raise ValueError("Refresh token tidak boleh kosong")
@@ -216,7 +216,7 @@ class TokenRefreshResponse(BaseModel):
     expires_in: int = Field(..., gt=0, description="Access token expiration time in seconds")
 
     @validator("access_token", pre=True)
-    def validate_access_token(cls, v):
+    def validate_access_token(cls, v: Any) -> str:
         """Validate access token"""
         if v is None:
             raise ValueError("Access token tidak boleh kosong")
@@ -234,7 +234,7 @@ class TokenRefreshResponse(BaseModel):
         return v_str
 
     @validator("refresh_token", pre=True)
-    def validate_refresh_token_response(cls, v):
+    def validate_refresh_token_response(cls, v: Any) -> str:
         """Validate refresh token in response"""
         if v is None:
             raise ValueError("Refresh token tidak boleh kosong")
@@ -252,7 +252,7 @@ class TokenRefreshResponse(BaseModel):
         return v_str
 
     @validator("token_type", pre=True)
-    def validate_token_type_response(cls, v):
+    def validate_token_type_response(cls, v: Any) -> str:
         """Validate token type in response"""
         if v is None:
             v = "bearer"
@@ -270,7 +270,7 @@ class TokenRefreshResponse(BaseModel):
         return v_str
 
     @validator("expires_in", pre=True)
-    def validate_expires_in(cls, v):
+    def validate_expires_in(cls, v: Any) -> int:
         """Validate expiration time in seconds"""
         if v is None:
             raise ValueError("Waktu kedaluwarsa tidak boleh kosong")

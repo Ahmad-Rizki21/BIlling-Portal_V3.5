@@ -1,5 +1,5 @@
 import re
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic import BaseModel, Field, validator
 
@@ -36,7 +36,7 @@ class DataTeknisBase(BaseModel):
         validate_assignment = True
 
     @validator("pelanggan_id", pre=True)
-    def validate_pelanggan_id(cls, v):
+    def validate_pelanggan_id(cls, v: Any) -> int:
         if v is None:
             raise ValueError("ID pelanggan tidak boleh kosong")
 
@@ -51,7 +51,7 @@ class DataTeknisBase(BaseModel):
         return v_int
 
     @validator("mikrotik_server_id", pre=True)
-    def validate_mikrotik_server_id(cls, v):
+    def validate_mikrotik_server_id(cls, v: Any) -> Optional[int]:
         if v is None or v == "":
             return None
 
@@ -66,7 +66,7 @@ class DataTeknisBase(BaseModel):
         return v_int
 
     @validator("odp_id", pre=True)
-    def validate_odp_id(cls, v):
+    def validate_odp_id(cls, v: Any) -> Optional[int]:
         if v is None or v == "":
             return None
 
@@ -81,7 +81,7 @@ class DataTeknisBase(BaseModel):
         return v_int
 
     @validator("otb", pre=True)
-    def validate_otb(cls, v):
+    def validate_otb(cls, v: Any) -> Optional[int]:
         if v is None or v == "":
             return None
 
@@ -96,7 +96,7 @@ class DataTeknisBase(BaseModel):
         return v_int
 
     @validator("odc", pre=True)
-    def validate_odc(cls, v):
+    def validate_odc(cls, v: Any) -> Optional[int]:
         if v is None or v == "":
             return None
 
@@ -111,7 +111,7 @@ class DataTeknisBase(BaseModel):
         return v_int
 
     @validator("port_odp", pre=True)
-    def validate_port_odp(cls, v):
+    def validate_port_odp(cls, v: Any) -> Optional[int]:
         if v is None or v == "":
             return None
 
@@ -126,7 +126,7 @@ class DataTeknisBase(BaseModel):
         return v_int
 
     @validator("id_vlan", pre=True)
-    def validate_id_vlan(cls, v):
+    def validate_id_vlan(cls, v: Any) -> Optional[str]:
         if v is None or v == "":
             return None
 
@@ -140,7 +140,7 @@ class DataTeknisBase(BaseModel):
         return v_str
 
     @validator("id_pelanggan", pre=True)
-    def validate_id_pelanggan(cls, v):
+    def validate_id_pelanggan(cls, v: Any) -> Optional[str]:
         if v is None or v == "":
             return None
 
@@ -158,7 +158,7 @@ class DataTeknisBase(BaseModel):
         return v_str
 
     @validator("password_pppoe", pre=True)
-    def validate_password_pppoe(cls, v):
+    def validate_password_pppoe(cls, v: Any) -> Optional[str]:
         if v is None or v == "":
             return None
 
@@ -172,7 +172,7 @@ class DataTeknisBase(BaseModel):
         return v_str
 
     @validator("ip_pelanggan", pre=True)
-    def validate_ip_pelanggan(cls, v):
+    def validate_ip_pelanggan(cls, v: Any) -> Optional[str]:
         if v is None or v == "":
             return None
 
@@ -199,7 +199,7 @@ class DataTeknisBase(BaseModel):
         return v_str
 
     @validator("profile_pppoe", pre=True)
-    def validate_profile_pppoe(cls, v):
+    def validate_profile_pppoe(cls, v: Any) -> Optional[str]:
         if v is None or v == "":
             return None
 
@@ -213,7 +213,7 @@ class DataTeknisBase(BaseModel):
         return v_str
 
     @validator("olt", pre=True)
-    def validate_olt(cls, v):
+    def validate_olt(cls, v: Any) -> Optional[str]:
         if v is None or v == "":
             return None
 
@@ -227,7 +227,7 @@ class DataTeknisBase(BaseModel):
         return v_str
 
     @validator("olt_custom", pre=True)
-    def validate_olt_custom(cls, v):
+    def validate_olt_custom(cls, v: Any) -> Optional[str]:
         if v is None or v == "":
             return None
 
@@ -241,7 +241,7 @@ class DataTeknisBase(BaseModel):
         return v_str
 
     @validator("pon", pre=True)
-    def validate_pon(cls, v):
+    def validate_pon(cls, v: Any) -> Optional[int]:
         if v is None or v == "":
             return None
 
@@ -256,7 +256,7 @@ class DataTeknisBase(BaseModel):
         return v_int
 
     @validator("onu_power", pre=True)
-    def validate_onu_power(cls, v):
+    def validate_onu_power(cls, v: Any) -> Optional[int]:
         if v is None or v == "":
             return None
 
@@ -271,7 +271,7 @@ class DataTeknisBase(BaseModel):
         return v_int
 
     @validator("sn", pre=True)
-    def validate_sn(cls, v):
+    def validate_sn(cls, v: Any) -> Optional[str]:
         if v is None or v == "":
             return None
 
@@ -285,7 +285,7 @@ class DataTeknisBase(BaseModel):
         return v_str
 
     @validator("speedtest_proof", pre=True)
-    def validate_speedtest_proof(cls, v):
+    def validate_speedtest_proof(cls, v: Any) -> Optional[str]:
         if v is None or v == "":
             return None
 
@@ -314,31 +314,31 @@ class DataTeknisCreate(DataTeknisBase):
 
     # Validasi tambahan untuk field wajib
     @validator("profile_pppoe")
-    def validate_profile_pppoe_required(cls, v):
+    def validate_profile_pppoe_required(cls, v: Any) -> str:
         if not v:
             raise ValueError("Profile PPPoE tidak boleh kosong")
         return v
 
     @validator("id_pelanggan")
-    def validate_id_pelanggan_required(cls, v):
+    def validate_id_pelanggan_required(cls, v: Any) -> str:
         if not v:
             raise ValueError("ID pelanggan tidak boleh kosong")
         return v
 
     @validator("password_pppoe")
-    def validate_password_pppoe_required(cls, v):
+    def validate_password_pppoe_required(cls, v: Any) -> str:
         if not v:
             raise ValueError("Password PPPoE tidak boleh kosong")
         return v
 
     @validator("ip_pelanggan")
-    def validate_ip_pelanggan_required(cls, v):
+    def validate_ip_pelanggan_required(cls, v: Any) -> str:
         if not v:
             raise ValueError("IP pelanggan tidak boleh kosong")
         return v
 
     @validator("mikrotik_server_id")
-    def validate_mikrotik_server_id_required(cls, v):
+    def validate_mikrotik_server_id_required(cls, v: Any) -> int:
         if not v or v <= 0:
             raise ValueError("ID server Mikrotik tidak boleh kosong dan harus lebih besar dari 0")
         return v
@@ -417,7 +417,7 @@ class DataTeknisImport(BaseModel):
         validate_assignment = True
 
     @validator("email_pelanggan", pre=True)
-    def validate_email_pelanggan(cls, v):
+    def validate_email_pelanggan(cls, v: Any) -> str:
         if v is None:
             raise ValueError("Email pelanggan tidak boleh kosong")
 
@@ -432,7 +432,7 @@ class DataTeknisImport(BaseModel):
         return v_str
 
     @validator("nama_mikrotik_server", pre=True)
-    def validate_nama_mikrotik_server(cls, v):
+    def validate_nama_mikrotik_server(cls, v: Any) -> str:
         if v is None:
             raise ValueError("Nama server Mikrotik tidak boleh kosong")
 
@@ -446,7 +446,7 @@ class DataTeknisImport(BaseModel):
         return v_str
 
     @validator("kode_odp", pre=True)
-    def validate_kode_odp(cls, v):
+    def validate_kode_odp(cls, v: Any) -> Optional[str]:
         if v is None or v == "":
             return None
 
@@ -460,7 +460,7 @@ class DataTeknisImport(BaseModel):
         return v_str
 
     @validator("port_odp", pre=True)
-    def validate_port_odp_import(cls, v):
+    def validate_port_odp_import(cls, v: Any) -> Optional[int]:
         if v is None or v == "":
             return None
 
@@ -475,7 +475,7 @@ class DataTeknisImport(BaseModel):
         return v_int
 
     @validator("id_vlan", pre=True)
-    def validate_id_vlan_import(cls, v):
+    def validate_id_vlan_import(cls, v: Any) -> str:
         if v is None:
             raise ValueError("ID VLAN tidak boleh kosong")
 
@@ -489,7 +489,7 @@ class DataTeknisImport(BaseModel):
         return v_str
 
     @validator("id_pelanggan", pre=True)
-    def validate_id_pelanggan_import(cls, v):
+    def validate_id_pelanggan_import(cls, v: Any) -> str:
         if v is None:
             raise ValueError("ID pelanggan tidak boleh kosong")
 
@@ -507,7 +507,7 @@ class DataTeknisImport(BaseModel):
         return v_str
 
     @validator("password_pppoe", pre=True)
-    def validate_password_pppoe_import(cls, v):
+    def validate_password_pppoe_import(cls, v: Any) -> str:
         if v is None:
             raise ValueError("Password PPPoE tidak boleh kosong")
 
@@ -521,7 +521,7 @@ class DataTeknisImport(BaseModel):
         return v_str
 
     @validator("ip_pelanggan", pre=True)
-    def validate_ip_pelanggan_import(cls, v):
+    def validate_ip_pelanggan_import(cls, v: Any) -> str:
         if v is None:
             raise ValueError("IP pelanggan tidak boleh kosong")
 
@@ -548,7 +548,7 @@ class DataTeknisImport(BaseModel):
         return v_str
 
     @validator("profile_pppoe", pre=True)
-    def validate_profile_pppoe_import(cls, v):
+    def validate_profile_pppoe_import(cls, v: Any) -> str:
         if v is None:
             raise ValueError("Profile PPPoE tidak boleh kosong")
 
@@ -562,7 +562,7 @@ class DataTeknisImport(BaseModel):
         return v_str
 
     @validator("olt_custom", pre=True)
-    def validate_olt_custom_import(cls, v):
+    def validate_olt_custom_import(cls, v: Any) -> Optional[str]:
         if v is None or v == "":
             return None
 
@@ -576,7 +576,7 @@ class DataTeknisImport(BaseModel):
         return v_str
 
     @validator("pon", pre=True)
-    def validate_pon_import(cls, v):
+    def validate_pon_import(cls, v: Any) -> Optional[int]:
         if v is None or v == "":
             return None
 
@@ -591,7 +591,7 @@ class DataTeknisImport(BaseModel):
         return v_int
 
     @validator("otb", pre=True)
-    def validate_otb_import(cls, v):
+    def validate_otb_import(cls, v: Any) -> Optional[int]:
         if v is None or v == "":
             return None
 
@@ -606,7 +606,7 @@ class DataTeknisImport(BaseModel):
         return v_int
 
     @validator("odc", pre=True)
-    def validate_odc_import(cls, v):
+    def validate_odc_import(cls, v: Any) -> Optional[int]:
         if v is None or v == "":
             return None
 
@@ -621,7 +621,7 @@ class DataTeknisImport(BaseModel):
         return v_int
 
     @validator("onu_power", pre=True)
-    def validate_onu_power_import(cls, v):
+    def validate_onu_power_import(cls, v: Any) -> Optional[int]:
         if v is None or v == "":
             return None
 
@@ -636,7 +636,7 @@ class DataTeknisImport(BaseModel):
         return v_int
 
     @validator("sn", pre=True)
-    def validate_sn_import(cls, v):
+    def validate_sn_import(cls, v: Any) -> Optional[str]:
         if v is None or v == "":
             return None
 
@@ -665,7 +665,7 @@ class IPCheckRequest(BaseModel):
     current_id: Optional[int] = Field(None, description="ID data teknis saat ini (untuk mode edit)")
 
     @validator("ip_address", pre=True)
-    def validate_ip_address(cls, v):
+    def validate_ip_address(cls, v: Any) -> str:
         if v is None:
             raise ValueError("Alamat IP tidak boleh kosong")
 
@@ -692,7 +692,7 @@ class IPCheckRequest(BaseModel):
         return v_str
 
     @validator("current_id", pre=True)
-    def validate_current_id(cls, v):
+    def validate_current_id(cls, v: Any) -> Optional[int]:
         if v is None or v == "":
             return None
 
@@ -719,7 +719,7 @@ class IPCheckResponse(BaseModel):
     owner_id: Optional[str] = Field(None, description="ID PPPoE pemilik IP (jika ada)")
 
     @validator("message", pre=True)
-    def validate_message(cls, v):
+    def validate_message(cls, v: Any) -> str:
         if v is None:
             return ""
 
@@ -730,7 +730,7 @@ class IPCheckResponse(BaseModel):
         return v_str
 
     @validator("owner_id", pre=True)
-    def validate_owner_id(cls, v):
+    def validate_owner_id(cls, v: Any) -> Optional[str]:
         if v is None or v == "":
             return None
 

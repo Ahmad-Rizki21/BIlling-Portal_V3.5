@@ -5,7 +5,7 @@ Menghilangkan duplikasi validasi di seluruh aplikasi
 
 import logging
 import re
-from typing import Any, List, Optional
+from typing import Any, Collection, List, Optional
 
 import chardet
 from fastapi import HTTPException, UploadFile, status
@@ -122,7 +122,7 @@ class DatabaseValidator:
 
     @staticmethod
     async def validate_multiple_unique_fields(
-        db: AsyncSession, model_class: Any, data: dict, unique_fields: List[str], exclude_id: Optional[int] = None
+        db: AsyncSession, model_class: Any, data: dict, unique_fields: Collection[str], exclude_id: Optional[int] = None
     ) -> None:
         """
         Validasi multiple unique fields dalam satu panggilan

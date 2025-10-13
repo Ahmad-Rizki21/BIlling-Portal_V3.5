@@ -45,10 +45,10 @@ class TokenBlacklist(Base):
     # Relationship
     user = relationship("User", back_populates="blacklisted_tokens")
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<TokenBlacklist(id={self.id}, jti='{self.jti}', user_id={self.user_id}, token_type='{self.token_type}', expires_at='{self.expires_at}')>"
 
-    def to_dict(self):
+    def to_dict(self) -> dict:
         return {
             "id": self.id,
             "jti": self.jti,
@@ -65,10 +65,10 @@ class TokenBlacklist(Base):
     def is_jti_blacklisted(cls, db, jti: str) -> bool:
         """Check if a JWT ID is blacklisted"""
         # Ini akan diimplementasikan di service layer
-        pass
+        return False
 
     @classmethod
-    def blacklist_token(cls, db, jti: str, user_id: int, token_type: str, expires_at: datetime, reason: str = None) -> None:
+    def blacklist_token(cls, db, jti: str, user_id: int, token_type: str, expires_at: datetime, reason: str | None = None) -> None:
         """Add a token to the blacklist"""
         # Ini akan diimplementasikan di service layer
         pass

@@ -9,7 +9,7 @@ from datetime import datetime
 from pathlib import Path
 
 
-def setup_simple_logging():
+def setup_simple_logging() -> logging.Logger:
     """Setup simple logging without changing existing behavior"""
 
     # Create logs directory
@@ -47,7 +47,7 @@ def setup_simple_logging():
     return logger
 
 
-def get_logger(name):
+def get_logger(name: str) -> logging.Logger:
     """Get a logger instance"""
     return logging.getLogger(name)
 

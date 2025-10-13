@@ -42,7 +42,7 @@ STARTUP_BANNER = """
 
 
 # Detect if we can use Unicode characters
-def can_use_unicode():
+def can_use_unicode() -> bool:
     """Check if terminal supports Unicode characters"""
     try:
         # Check if we're in Windows cmd
@@ -61,7 +61,7 @@ USE_UNICODE = can_use_unicode()
 # --- Enhanced Helper Functions for Structured Logging ---
 
 
-def log_scheduler_event(logger, job_name: str, status: str, details: str = ""):
+def log_scheduler_event(logger: logging.Logger, job_name: str, status: str, details: str = "") -> None:
     """Enhanced scheduler logging with better formatting"""
     if USE_UNICODE:
         status_icons = {
@@ -91,7 +91,7 @@ def log_scheduler_event(logger, job_name: str, status: str, details: str = ""):
         logger.info(message)
 
 
-def log_mikrotik_operation(logger, operation: str, customer_id: str, status: str, details: str = ""):
+def log_mikrotik_operation(logger: logging.Logger, operation: str, customer_id: str, status: str, details: str = "") -> None:
     """Enhanced MikroTik operation logging"""
     if USE_UNICODE:
         status_icons = {

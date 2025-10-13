@@ -12,7 +12,7 @@ except ImportError:
 import gc
 import logging
 import tracemalloc
-from typing import Any, AsyncGenerator, Callable, List, Optional, Sequence
+from typing import Any, AsyncGenerator, Callable, Collection, List, Optional, Sequence
 
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -221,7 +221,7 @@ def optimize_large_list_comprehension(
 
 
 async def create_streaming_csv_response(
-    data_generator: AsyncGenerator[List[dict], None], filename: str, headers: List[str]
+    data_generator: AsyncGenerator[List[dict], None], filename: str, headers: Collection[str]
 ) -> AsyncGenerator[str, None]:
     """
     Create streaming CSV response untuk mengurangi memory usage.

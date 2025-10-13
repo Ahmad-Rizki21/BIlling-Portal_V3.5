@@ -4,7 +4,7 @@ Centralized notification service untuk menghilangkan duplikasi notification logi
 
 import logging
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Collection, Dict, List, Optional
 
 from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -35,7 +35,7 @@ class NotificationService:
     }
 
     @staticmethod
-    async def get_users_by_roles(db: AsyncSession, role_names: List[str]) -> List[int]:
+    async def get_users_by_roles(db: AsyncSession, role_names: Collection[str]) -> List[int]:
         """
         Mengambil user IDs berdasarkan nama roles
         Menghilangkan duplikasi role-based user query logic
@@ -53,7 +53,7 @@ class NotificationService:
             return []
 
     @staticmethod
-    async def broadcast_to_roles(db: AsyncSession, role_names: List[str], notification_data: Dict[str, Any]) -> bool:
+    async def broadcast_to_roles(db: AsyncSession, role_names: Collection[str], notification_data: Dict[str, Any]) -> bool:
         """
         Broadcast notification ke users dengan roles tertentu
         Menghilangkan duplikasi broadcast logic di semua routers
@@ -227,7 +227,7 @@ class NotificationService:
         db: AsyncSession,
         message: str,
         notification_type: str = "system",
-        target_roles: Optional[List[str]] = None,
+        target_roles: Optional[Collection[str]] = None,
         data: Optional[Dict[str, Any]] = None,
     ) -> bool:
         """

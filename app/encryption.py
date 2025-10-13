@@ -9,7 +9,7 @@ from .config import settings  # Import settings
 
 
 class EncryptionService:
-    def __init__(self):
+    def __init__(self) -> None:
         key = settings.ENCRYPTION_KEY
         if not key:
             raise ValueError("ENCRYPTION_KEY tidak ditemukan di environment variables.")
