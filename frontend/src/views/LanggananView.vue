@@ -367,7 +367,17 @@
           :loading="loading"
           item-value="id"
           class="elevation-0"
-          :items-per-page="10"
+          :items-per-page="itemsPerPage"
+          :items-per-page-options="[
+            { title: '10', value: 10 },
+            { title: '15', value: 15 },
+            { title: '25', value: 25 },
+            { title: '50', value: 50 },
+            { title: '100', value: 100 }
+          ]"
+          :server-items-length="totalLanggananCount"
+          @update:page="onPageChange"
+          @update:items-per-page="onItemsPerPageChange"
           show-select
           return-object
         >
@@ -438,12 +448,14 @@
         </v-data-table>
         
         <!-- Footer with total count aligned with pagination controls -->
-        <div class="d-flex align-center pa-2 ml-4" style="position: relative; top: -55px;">
-          <v-chip variant="outlined" color="primary" size="large">
-            Total: {{ totalLanggananCount }} Langganan di server
+        <v-card class="pa-2 mt-2">
+          <div class="d-flex align-center">
+            <v-chip variant="outlined" color="primary" size="large">
+              Total: {{ totalLanggananCount }} Langganan di server
             </v-chip>
-              <v-spacer></v-spacer>
-            </div>
+            <v-spacer></v-spacer>
+          </div>
+        </v-card>
         
       </div>
     </v-card>
@@ -826,7 +838,8 @@ const fieldDensity = computed(() => mobile.value ? 'compact' : 'comfortable');
 const notificationPelangganList = ref<PelangganSelectItem[] | null>(null);
 
 const mobilePage = ref(1);
-const itemsPerPage = 15; // Jumlah item yang di-load setiap kali di mobile
+const desktopPage = ref(1);
+const itemsPerPage = ref(25); // Jumlah item yang di-load setiap kali di mobile & desktop
 const hasMoreData = ref(true);
 const loadingMore = ref(false);
 
@@ -968,6 +981,7 @@ onMounted(() => {
   fetchLangganan();
   fetchPelangganForSelect();
   fetchPaketLayananForSelect();
+  fetchAlamatOptions();
   // fetchTotalCount(); // This is now redundant
 
   window.addEventListener('new-notification', handleNewNotification);
@@ -1133,26 +1147,44 @@ watch(
 
 
 // --- API Methods ---
-async function fetchLangganan(isLoadMore = false) {
+async function fetchLangganan(isLoadMore = false, explicitPage: number | null = null) {
   if (isLoadMore) {
     loadingMore.value = true;
   } else {
     loading.value = true;
-    mobilePage.value = 1; // Reset halaman saat filter baru
+    // Reset pagination for both mobile and desktop when it's not a loadMore action
+    if (!isLoadMore && explicitPage === null) {
+      desktopPage.value = 1;
+      mobilePage.value = 1;
+    }
     hasMoreData.value = true; // Reset status "has more"
   }
 
   try {
     const params = new URLSearchParams();
     if (searchQuery.value) params.append('search', searchQuery.value);
-    if (selectedAlamat.value) params.append('alamat', selectedAlamat.value);
+    if (selectedAlamat.value && selectedAlamat.value.trim() !== '') params.append('alamat', selectedAlamat.value.trim());
     if (selectedPaket.value) params.append('paket_layanan_id', String(selectedPaket.value));
     if (selectedStatus.value) params.append('status', selectedStatus.value);
 
     // --- LOGIKA KUNCI: Tambahkan paginasi ---
-    const skip = (mobilePage.value - 1) * itemsPerPage;
+    // Determine page number based on the context
+    let currentPage: number;
+    if (explicitPage !== null) {
+      // This is when onPageChange is called directly
+      currentPage = explicitPage;
+      desktopPage.value = explicitPage; // Update desktop page
+    } else if (isLoadMore) {
+      // This is for mobile infinite scroll
+      currentPage = mobilePage.value;
+    } else {
+      // For initial load or filter changes, use desktopPage for desktop view
+      currentPage = isLoadMore ? mobilePage.value : desktopPage.value;
+    }
+
+    const skip = (currentPage - 1) * itemsPerPage.value;
     params.append('skip', String(skip));
-    params.append('limit', String(itemsPerPage));
+    params.append('limit', String(itemsPerPage.value));
     
     const response = await apiClient.get(`/langganan/?${params.toString()}`);
     const { data: newData, total_count: newTotalCount } = response.data;
@@ -1199,6 +1231,18 @@ function loadMore() {
   }
 }
 
+// Pagination event handlers untuk desktop
+function onPageChange(page: number) {
+  desktopPage.value = page;
+  fetchLangganan(false, page);
+}
+
+function onItemsPerPageChange(itemsPerPageValue: number) {
+  itemsPerPage.value = itemsPerPageValue;
+  desktopPage.value = 1; // Reset ke halaman pertama saat items per page berubah
+  fetchLangganan();
+}
+
 // Fungsi yang di-debounce untuk menerapkan filter
 const applyFilters = debounce(() => {
   fetchLangganan();
@@ -1235,13 +1279,45 @@ async function confirmBulkDelete() {
   }
 }
 
-const alamatOptions = computed(() => {
-  if (!langgananList.value || langgananList.value.length === 0) {
-    return [];
+const alamatOptions = ref<string[]>([]);
+
+// Fungsi untuk mengambil semua alamat dari database
+async function fetchAlamatOptions() {
+  // Skip endpoint yang menyebabkan error 405, langsung ambil dari data pelanggan
+  try {
+    // Ambil pelanggan dengan parameter untuk mendapatkan semua data yang mungkin dibutuhkan
+    const response = await apiClient.get('/pelanggan/?limit=10000');
+    const pelangganData = response.data.data || response.data;
+    
+    if (Array.isArray(pelangganData)) {
+      const allAlamat = pelangganData
+        .map(pelanggan => pelanggan.alamat || '')
+        .filter(alamat => typeof alamat === 'string' && alamat.trim() !== '');
+      alamatOptions.value = [...new Set(allAlamat)].sort();
+    } else {
+      // Jika tidak mendapatkan format data yang diharapkan, gunakan data dari langgananList sebagai fallback
+      if (langgananList.value && Array.isArray(langgananList.value) && langgananList.value.length > 0) {
+        const allAlamat = langgananList.value
+          .map(item => item.pelanggan?.alamat || '')
+          .filter(alamat => typeof alamat === 'string' && alamat.trim() !== '');
+        alamatOptions.value = [...new Set(allAlamat)].sort();
+      } else {
+        alamatOptions.value = [];
+      }
+    }
+  } catch (error) {
+    console.warn("Gagal mengambil alamat dari pelanggan, menggunakan data lokal:", error);
+    // Fallback ke data lokal dari langgananList
+    if (langgananList.value && Array.isArray(langgananList.value) && langgananList.value.length > 0) {
+      const allAlamat = langgananList.value
+        .map(item => item.pelanggan?.alamat || '')
+        .filter(alamat => typeof alamat === 'string' && alamat.trim() !== '');
+      alamatOptions.value = [...new Set(allAlamat)].sort();
+    } else {
+      alamatOptions.value = [];
+    }
   }
-  const allAlamat = langgananList.value.map(item => item.pelanggan?.alamat || '').filter(alamat => alamat.trim() !== '');
-  return [...new Set(allAlamat)].sort();
-});
+}
 
 const uniquePaketLayananOptions = computed(() => {
   if (!paketLayananSelectList.value || paketLayananSelectList.value.length === 0) {
@@ -1488,8 +1564,8 @@ async function exportLangganan() {
     if (searchQuery.value) {
       params.append('search', searchQuery.value);
     }
-    if (selectedAlamat.value) {
-      params.append('alamat', selectedAlamat.value);
+    if (selectedAlamat.value && selectedAlamat.value.trim() !== '') {
+      params.append('alamat', selectedAlamat.value.trim());
     }
     if (selectedPaket.value) {
       params.append('paket_layanan_id', String(selectedPaket.value));
@@ -1497,7 +1573,9 @@ async function exportLangganan() {
     if (selectedStatus.value) {
       params.append('status', selectedStatus.value);
     }
-    
+    // Tambahkan flag untuk export semua data (tanpa pagination)
+    params.append('export_all', 'true');
+
     const queryString = params.toString();
     const exportUrl = `/langganan/export/csv${queryString ? '?' + queryString : ''}`;
 

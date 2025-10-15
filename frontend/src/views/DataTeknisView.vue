@@ -248,7 +248,17 @@
           :loading="loading"
           item-value="id"
           class="elevation-0 modern-table"
-          :items-per-page="10"
+          :items-per-page="itemsPerPage"
+          :items-per-page-options="[
+            { title: '5', value: 5 },
+            { title: '10', value: 10 },
+            { title: '15', value: 15 },
+            { title: '25', value: 25 },
+            { title: '50', value: 50 }
+          ]"
+          :server-items-length="totalDataTeknisCount"
+          @update:page="onPageChange"
+          @update:items-per-page="onItemsPerPageChange"
           :loading-text="'Memuat data...'"
           show-select
           return-object
@@ -407,12 +417,14 @@
         </v-data-table>
         
         <!-- Footer with total count aligned with pagination controls -->
-        <div class="d-flex align-center pa-2 ml-4" style="position: relative; top: -55px;">
-          <v-chip variant="outlined" color="primary" size="large">
-            Total: {{ totalDataTeknisCount }} Data Teknis di server
+        <v-card class="pa-2 mt-2">
+          <div class="d-flex align-center">
+            <v-chip variant="outlined" color="primary" size="large">
+              Total: {{ totalDataTeknisCount }} Data Teknis di server
             </v-chip>
-              <v-spacer></v-spacer>
-            </div>
+            <v-spacer></v-spacer>
+          </div>
+        </v-card>
       </div>
 
       <!-- Tampilan Kartu untuk Mobile (Small ke bawah) -->
@@ -1064,9 +1076,10 @@ const snackbar = ref({ show: false, text: '', color: 'success' });
 const importErrors = ref<string[]>([]);
 const showPppoePassword = ref(false);
 
-// --- State Baru untuk Paginasi Mobile ---
+// --- State Baru untuk Paginasi Mobile dan Desktop ---
 const mobilePage = ref(1);
-const itemsPerPage = 15; // Jumlah item per halaman untuk mobile
+const desktopPage = ref(1);
+const itemsPerPage = ref(15); // Jumlah item per halaman untuk mobile dan desktop
 const hasMoreData = ref(true);
 const loadingMore = ref(false);
 const selectedOlt = ref<string | null>(null);
@@ -1245,6 +1258,7 @@ async function fetchDataTeknis(isLoadMore = false) {
   } else {
     loading.value = true;
     mobilePage.value = 1; // Reset halaman saat filter baru
+    desktopPage.value = 1; // Reset halaman desktop juga
     hasMoreData.value = true; // Reset status data
   }
 
@@ -1257,10 +1271,11 @@ async function fetchDataTeknis(isLoadMore = false) {
       params.append('olt', selectedOlt.value);
     }
 
-    // Tambahkan parameter paginasi
-    const skip = (mobilePage.value - 1) * itemsPerPage;
+    // Gunakan page yang sesuai tergantung apakah sedang load more (mobile) atau tidak (desktop)
+    const currentPage = isLoadMore ? mobilePage.value : desktopPage.value;
+    const skip = (currentPage - 1) * itemsPerPage.value;
     params.append('skip', String(skip));
-    params.append('limit', String(itemsPerPage));
+    params.append('limit', String(itemsPerPage.value));
     
     const response = await apiClient.get(`/data_teknis/?${params.toString()}`);
     const { data: newData, total_count: newTotalCount } = response.data;
@@ -1273,7 +1288,7 @@ async function fetchDataTeknis(isLoadMore = false) {
     }
 
     // Cek apakah masih ada data untuk dimuat
-    if (newData.length < itemsPerPage) {
+    if (newData.length < itemsPerPage.value) {
       hasMoreData.value = false;
     }
 
@@ -1286,6 +1301,18 @@ async function fetchDataTeknis(isLoadMore = false) {
 function loadMore() {
   mobilePage.value++;
   fetchDataTeknis(true);
+}
+
+// Pagination event handlers untuk desktop
+function onPageChange(page: number) {
+  desktopPage.value = page;
+  fetchDataTeknis();
+}
+
+function onItemsPerPageChange(newItemsPerPage: number) {
+  itemsPerPage.value = newItemsPerPage;
+  desktopPage.value = 1; // Reset ke halaman pertama saat mengubah items per page
+  fetchDataTeknis();
 }
 
 async function fetchOdpList() {
@@ -1574,7 +1601,21 @@ function getUniqueOLTCount() {
 async function exportData() {
   exporting.value = true;
   try {
-    const response = await apiClient.get('/data_teknis/export/csv', {
+    // Bangun URL dengan parameter filter agar export mengikuti filter yang sedang aktif
+    const params = new URLSearchParams();
+    if (searchQuery.value) {
+      params.append('search', searchQuery.value);
+    }
+    if (selectedOlt.value) {
+      params.append('olt', selectedOlt.value);
+    }
+    // Tambahkan parameter untuk export semua data (tanpa pagination)
+    params.append('export_all', 'true');
+
+    const queryString = params.toString();
+    const exportUrl = `/data_teknis/export/csv${queryString ? '?' + queryString : ''}`;
+    
+    const response = await apiClient.get(exportUrl, {
       responseType: 'blob',
     });
     const url = window.URL.createObjectURL(new Blob([response.data]));

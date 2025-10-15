@@ -282,8 +282,17 @@
           :loading="loading"
           item-value="id"
           class="elegant-table"
-          :items-per-page="10"
-          :items-per-page-options="[5, 10, 25, 50]"
+          :items-per-page="itemsPerPage"
+          :items-per-page-options="[
+            { title: '5', value: 5 },
+            { title: '10', value: 10 },
+            { title: '15', value: 15 },
+            { title: '25', value: 25 },
+            { title: '50', value: 50 }
+          ]"
+          :server-items-length="totalPelangganCount"
+          @update:page="onPageChange"
+          @update:items-per-page="onItemsPerPageChange"
           hover
           show-select
           return-object
@@ -361,12 +370,14 @@
             </div>
           </template>
         </v-data-table>
-        <div class="d-flex align-center pa-2 ml-4" style="position: relative; top: -55px;">
-          <v-chip variant="outlined" color="primary" size="large">
-            Total: {{ totalPelangganCount }} pelanggan di server
+        <v-card class="pa-2 mt-2">
+          <div class="d-flex align-center">
+            <v-chip variant="outlined" color="primary" size="large">
+              Total: {{ totalPelangganCount }} pelanggan di server
             </v-chip>
-              <v-spacer></v-spacer>
-            </div>
+            <v-spacer></v-spacer>
+          </div>
+        </v-card>
       </div>
     </v-card>
 
@@ -932,9 +943,10 @@ const searchQuery = ref('');
 const selectedAlamat = ref<string | null>(null);
 const selectedBrand = ref<string | null>(null);
 
-// --- State Baru untuk Paginasi Mobile ---
+// --- State Baru untuk Paginasi Mobile dan Desktop ---
 const mobilePage = ref(1);
-const itemsPerPage = 15;
+const desktopPage = ref(1);
+const itemsPerPage = ref(15);
 const hasMoreData = ref(true);
 const loadingMore = ref(false);
 
@@ -1053,7 +1065,9 @@ async function fetchPelanggan(isLoadMore = false) {
     loadingMore.value = true;
   } else {
     loading.value = true;
+    // Reset pagination untuk kedua mode (mobile dan desktop) saat bukan load more
     mobilePage.value = 1;
+    desktopPage.value = 1;
     hasMoreData.value = true;
   }
 
@@ -1069,10 +1083,11 @@ async function fetchPelanggan(isLoadMore = false) {
       params.append('id_brand', selectedBrand.value);
     }
 
-    // Tambahkan parameter paginasi
-    const skip = (mobilePage.value - 1) * itemsPerPage;
+    // Gunakan page yang sesuai tergantung apakah sedang load more (mobile) atau tidak (desktop)
+    const currentPage = isLoadMore ? mobilePage.value : desktopPage.value;
+    const skip = (currentPage - 1) * itemsPerPage.value;
     params.append('skip', String(skip));
-    params.append('limit', String(itemsPerPage));
+    params.append('limit', String(itemsPerPage.value));
 
     // Fetch data with total count (the backend already returns this in the response)
     const response = await apiClient.get(`/pelanggan/?${params.toString()}`);
@@ -1100,7 +1115,7 @@ async function fetchPelanggan(isLoadMore = false) {
       totalPelangganCount.value = totalCount;
     }
 
-    if (newData.length < itemsPerPage) {
+    if (newData.length < itemsPerPage.value) {
       hasMoreData.value = false;
     }
 
@@ -1118,8 +1133,19 @@ function loadMore() {
   fetchPelanggan(true);
 }
 
+// Pagination event handlers untuk desktop
+function onPageChange(page: number) {
+  desktopPage.value = page;
+  fetchPelanggan();
+}
+
+function onItemsPerPageChange(newItemsPerPage: number) {
+  itemsPerPage.value = newItemsPerPage;
+  desktopPage.value = 1; // Reset ke halaman pertama saat mengubah items per page
+  fetchPelanggan();
+}
+
 const applyFilters = debounce(() => {
-  totalPelangganCount.value = 0; // Reset total count when filters change
   fetchPelanggan();
 }, 500);
 
@@ -1243,7 +1269,24 @@ async function downloadCsvTemplate() {
 async function exportToCsv() {
   exporting.value = true;
   try {
-    const response = await apiClient.get('/pelanggan/export/csv', { responseType: 'blob' });
+    // Bangun URL dengan parameter filter agar export mengikuti filter yang sedang aktif
+    const params = new URLSearchParams();
+    if (searchQuery.value) {
+      params.append('search', searchQuery.value);
+    }
+    if (selectedAlamat.value) {
+      params.append('alamat', selectedAlamat.value);
+    }
+    if (selectedBrand.value) {
+      params.append('id_brand', selectedBrand.value);
+    }
+    // Tambahkan parameter untuk export semua data (tanpa pagination)
+    params.append('export_all', 'true');
+
+    const queryString = params.toString();
+    const exportUrl = `/pelanggan/export/csv${queryString ? '?' + queryString : ''}`;
+    
+    const response = await apiClient.get(exportUrl, { responseType: 'blob' });
     const date = new Date().toISOString().split('T')[0];
     downloadFile(response.data, `export_pelanggan_${date}.csv`);
   } catch (error) {
