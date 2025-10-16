@@ -38,6 +38,23 @@ export function decrypt(encryptedText: string): string {
   if (!encryptedText) return '';
 
   try {
+    // Check if this is a JWT token (starts with eyJ) - return as-is
+    if (encryptedText.startsWith('eyJ')) {
+      return encryptedText;
+    }
+
+    // Check if this might be a Fernet encrypted token (starts with gAAAAA)
+    if (encryptedText.startsWith('gAAAAA')) {
+      console.warn('Fernet encryption detected in frontend - this should be handled by backend');
+      return encryptedText; // Cannot decrypt Fernet in frontend
+    }
+
+    // Try to detect if the string is valid base64 before decoding
+    if (!isValidBase64(encryptedText)) {
+      // Not base64, might be plain text or already decrypted
+      return encryptedText;
+    }
+
     const decoded = atob(encryptedText); // base64 decode
     let decrypted = '';
     for (let i = 0; i < decoded.length; i++) {
@@ -49,6 +66,28 @@ export function decrypt(encryptedText: string): string {
   } catch (error) {
     console.error('Decryption failed:', error);
     return encryptedText; // fallback to original text (might be plain)
+  }
+}
+
+/**
+ * Validates if a string is valid base64
+ * @param str - String to validate
+ * @returns True if valid base64
+ */
+function isValidBase64(str: string): boolean {
+  try {
+    // Basic base64 validation - check if it contains only valid base64 characters
+    // and length is divisible by 4 (with proper padding)
+    const base64Regex = /^[A-Za-z0-9+/]*={0,2}$/;
+    if (!base64Regex.test(str) || str.length % 4 !== 0) {
+      return false;
+    }
+
+    // Try to decode to see if it's actually valid base64
+    atob(str);
+    return true;
+  } catch (error) {
+    return false;
   }
 }
 
@@ -83,15 +122,36 @@ export function getEncryptedToken(key: string): string | null {
     const encrypted = localStorage.getItem(key);
     if (!encrypted) return null;
 
-    // Try to decrypt first
-    const decrypted = decrypt(encrypted);
-
-    // Validate if it's a valid JWT (starts with eyJ)
-    if (decrypted.startsWith('eyJ')) {
-      return decrypted;
+    // Check if it's already a valid JWT token
+    if (encrypted.startsWith('eyJ')) {
+      return encrypted;
     }
 
-    // If not valid JWT, return as-is (might be old plain token)
+    // Check if it's a Fernet encrypted token (should not happen in frontend)
+    if (encrypted.startsWith('gAAAAA')) {
+      console.warn('Fernet encrypted token found in localStorage - this should not happen');
+      return null; // Cannot handle Fernet in frontend
+    }
+
+    // Try to decrypt if it looks like XOR encrypted data
+    if (isValidBase64(encrypted)) {
+      try {
+        const decrypted = decrypt(encrypted);
+
+        // Validate if it's a valid JWT (starts with eyJ)
+        if (decrypted.startsWith('eyJ')) {
+          return decrypted;
+        }
+
+        // If decryption didn't result in valid JWT, return original
+        return encrypted;
+      } catch (decryptError) {
+        console.warn('Failed to decrypt token, treating as plain:', decryptError);
+        return encrypted;
+      }
+    }
+
+    // If not base64 and not JWT, treat as plain token
     return encrypted;
   } catch (error) {
     console.error('Failed to retrieve and decrypt token:', error);

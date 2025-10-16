@@ -286,6 +286,56 @@ async def test_token_validation(request: Request):
         }
 
 
+# Endpoint untuk refresh token WebSocket
+@app.post("/api/ws/refresh-token")
+async def refresh_websocket_token(request: Request):
+    """Endpoint untuk refresh token WebSocket connection."""
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        return {"error": "No Bearer token provided"}
+
+    refresh_token = auth_header.replace("Bearer ", "")
+
+    async with AsyncSessionLocal() as db:
+        try:
+            from .auth import verify_access_token, create_access_token
+            from datetime import timedelta
+
+            # Verify refresh token
+            payload = verify_access_token(refresh_token)
+
+            # Check if this is a refresh token type
+            if payload.get("type") != "refresh":
+                return {"error": "Invalid refresh token"}
+
+            user_id = payload.get("sub")
+            if not user_id:
+                return {"error": "Invalid token payload"}
+
+            # Get user from database
+            user = await db.get(UserModel, int(user_id))
+            if not user:
+                return {"error": "User not found"}
+
+            # Create new access token
+            new_access_token = create_access_token(
+                data={"sub": str(user.id), "email": user.email},
+                expires_delta=timedelta(minutes=120)  # 2 hours
+            )
+
+            return {
+                "access_token": new_access_token,
+                "token_type": "bearer",
+                "expires_in": 7200,  # 2 hours in seconds
+                "message": "Token refreshed successfully"
+            }
+
+        except Exception as e:
+            logger = logging.getLogger("app.websocket")
+            logger.error(f"Token refresh failed: {e}")
+            return {"error": "Token refresh failed", "detail": str(e)}
+
+
 # Endpoint untuk monitoring active WebSocket connections
 @app.get("/api/ws/status")
 async def websocket_status():
@@ -309,8 +359,35 @@ async def websocket_status():
         "metrics": metrics,
         "active_connections": active_connections,
         "connection_details": connection_details,
-        "total_active": len(active_connections)
+        "total_active": len(active_connections),
+        "rate_limit_status": {
+            "blocked_ips": len([ip for ip, attempts in manager.connection_attempts.items() if len(attempts) >= manager.max_attempts_per_window]),
+            "total_tracked_ips": len(manager.connection_attempts)
+        }
     }
+
+
+# Admin endpoint untuk clear rate limit (emergency use only)
+@app.post("/api/ws/clear-rate-limit")
+async def clear_rate_limit(request: Request):
+    """Clear rate limit for specific IP (admin only)."""
+    data = await request.json()
+    client_ip = data.get("ip")
+
+    if not client_ip:
+        return {"error": "IP address required"}
+
+    # Simple security check - only allow from trusted IPs
+    client_real_ip = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+    trusted_ips = ["127.0.0.1", "localhost", "::1", "192.168.222.20"]  # Add your trusted IPs
+
+    if client_real_ip not in trusted_ips:
+        logger = logging.getLogger("app.websocket")
+        logger.warning(f"Unauthorized rate limit clear attempt from IP: {client_real_ip}")
+        return {"error": "Unauthorized"}
+
+    manager.clear_rate_limit(client_ip)
+    return {"message": f"Rate limit cleared for IP {client_ip}"}
 
 
 # WebSocket endpoint untuk notifications
@@ -321,7 +398,16 @@ async def websocket_notifications(websocket: WebSocket, token: str = Query(...))
     db = None
     endpoint_name = "main.py"
     logger = logging.getLogger("app.websocket")
-    logger.info(f"[{endpoint_name}] WebSocket connection attempt with token: {token[:20] if len(token) > 20 else token}...")
+
+    # Get client IP for rate limiting
+    client_ip = websocket.client.host if websocket.client else "unknown"
+    logger.info(f"[{endpoint_name}] WebSocket connection attempt from IP: {client_ip} with token: {token[:20] if len(token) > 20 else token}...")
+
+    # Check rate limiting
+    if manager.is_rate_limited(client_ip):
+        logger.warning(f"[{endpoint_name}] Rate limit exceeded for IP {client_ip}")
+        await websocket.close(code=4408, reason="Too many connection attempts. Please wait before trying again.")
+        return
 
     try:
         # Validasi token awal
@@ -343,23 +429,26 @@ async def websocket_notifications(websocket: WebSocket, token: str = Query(...))
             token_preview = token[:20] + "..." if len(token) > 20 else token
             logger.error(f"[{endpoint_name}] Invalid token provided - Token preview: {token_preview}")
 
-            # Coba decode token untuk melihat expiry
+            # Coba decode token untuk melihat expiry dan beri feedback yang lebih berguna
             try:
                 from .auth import verify_access_token
                 payload = verify_access_token(token)
                 exp = payload.get('exp', 'unknown')
-                logger.error(f"[{endpoint_name}] Token decode successful but user not found. Expiry: {exp}")
+                exp_time = datetime.fromtimestamp(exp) if isinstance(exp, (int, float)) else 'unknown'
+                logger.error(f"[{endpoint_name}] Token decode successful but user not found. Expiry: {exp_time}")
+
+                # Kirim pesan error yang lebih informatif ke client
+                await websocket.close(code=4401, reason="Token expired or invalid - Please refresh your page and login again")
             except Exception as decode_error:
                 logger.error(f"[{endpoint_name}] Token decode failed: {str(decode_error)}")
-
-            await websocket.close(code=4001, reason="Invalid token")
+                await websocket.close(code=4400, reason="Invalid token format - Please refresh your page and login again")
             return
 
         logger.info(f"[{endpoint_name}] Authentication successful: {user.name} (ID: {user.id}, Email: {user.email})")
 
         # Connect WebSocket menggunakan manager
         await manager.connect(websocket, user.id)
-        logger.info(f"[{endpoint_name}] Connection established for user {user.id}")
+        logger.info(f"[{endpoint_name}] Connection established for user {user.id} from IP {client_ip}")
 
         # Kirim pesan konfirmasi ke client
         await websocket.send_text(json.dumps({
@@ -506,6 +595,7 @@ app.include_router(inventory_type.router)
 app.include_router(dashboard_pelanggan.router)
 
 
+
 # Endpoint root untuk verifikasi
 @app.get("/")
 def read_root():
@@ -517,5 +607,5 @@ def read_root():
 async def test_webhook(request: Request):
     logger = logging.getLogger("app.test")
     body = await request.body()
-    logger.info(f"Test webhook received: {body}")
+    logger.info(f"Test webhook received: {body.decode() if body else 'Empty body'}")
     return {"status": "received", "body": body.decode() if body else None}

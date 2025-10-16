@@ -34,7 +34,7 @@ MarkupSafe==2.1.5
 mdurl==0.1.2
 numpy==1.26.4
 openpyxl==3.1.2
-pandas==2.2.1
+pandas==2.1.4
 passlib==1.7.4
 Pillow==10.2.0
 polars==0.20.16
@@ -42,7 +42,8 @@ pyarrow==15.0.2
 pyasn1==0.5.1
 pycparser==2.21
 pydantic==2.6.4
-pydantic_core==2.16.3
+pydantic-core==2.16.3
+pydantic-settings==2.1.0
 pydyf==0.8.0
 PyJWT==2.8.0
 PyMySQL==1.1.0

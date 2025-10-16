@@ -33,6 +33,11 @@ class ConnectionManager:
         self._heartbeat_task = None
         self._heartbeat_interval = 30  # 30 seconds
 
+        # Rate limiting untuk mencegah spam koneksi
+        self.connection_attempts: Dict[str, list] = {}  # IP address -> timestamps
+        self.rate_limit_window = 60  # 60 seconds
+        self.max_attempts_per_window = 30  # maksimal 30 koneksi per menit per IP (1 koneksi per 2 detik)
+
         # Performance metrics
         self.metrics = {
             "total_connections": 0,
@@ -40,6 +45,7 @@ class ConnectionManager:
             "messages_failed": 0,
             "avg_response_time": 0,
             "connection_duration": defaultdict(list),
+            "blocked_attempts": 0,
         }
 
     async def connect(self, websocket: WebSocket, user_id: int):
@@ -77,6 +83,49 @@ class ConnectionManager:
         # Start heartbeat if not already running
         if self._heartbeat_task is None:
             self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
+
+    def is_rate_limited(self, client_ip: str) -> bool:
+        """Check if client IP is rate limited with enhanced protection."""
+        current_time = time.time()
+
+        # Clean old attempts
+        if client_ip in self.connection_attempts:
+            self.connection_attempts[client_ip] = [
+                timestamp for timestamp in self.connection_attempts[client_ip]
+                if current_time - timestamp < self.rate_limit_window
+            ]
+
+            # Auto-reset if attempts are very old (avoid permanent blocks)
+            if len(self.connection_attempts[client_ip]) > 0:
+                oldest_attempt = min(self.connection_attempts[client_ip])
+                if current_time - oldest_attempt > self.rate_limit_window * 2:  # 2 minutes
+                    self.connection_attempts[client_ip] = []
+                    logger.info(f"Rate limit auto-reset for IP {client_ip} after cooling period")
+        else:
+            self.connection_attempts[client_ip] = []
+
+        # Check if rate limit exceeded
+        if len(self.connection_attempts[client_ip]) >= self.max_attempts_per_window:
+            self.metrics["blocked_attempts"] += 1
+            logger.warning(f"Rate limit exceeded for IP {client_ip}: {len(self.connection_attempts[client_ip])} attempts")
+
+            # Emergency reset - if too many attempts, force longer cooldown
+            if len(self.connection_attempts[client_ip]) > self.max_attempts_per_window * 1.5:
+                logger.warning(f"Emergency rate limit for IP {client_ip} - forcing 5 minute cooldown")
+                self.connection_attempts[client_ip] = [current_time - 300]  # 5 minutes ago
+                return True
+
+            return True
+
+        # Record this attempt
+        self.connection_attempts[client_ip].append(current_time)
+        return False
+
+    def clear_rate_limit(self, client_ip: str):
+        """Manually clear rate limit for specific IP (for admin use)."""
+        if client_ip in self.connection_attempts:
+            del self.connection_attempts[client_ip]
+            logger.info(f"Rate limit manually cleared for IP {client_ip}")
 
     async def disconnect(self, user_id: int):
         """Menghapus koneksi saat pengguna terputus dengan cleanup."""

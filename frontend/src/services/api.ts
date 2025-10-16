@@ -6,7 +6,7 @@ import { getEncryptedToken, removeEncryptedToken } from '@/utils/crypto';
 
 // Konfigurasi instance axios
 const apiClient = axios.create({
-  // baseURL: import.meta.env.VITE_API_BASE_URL,
+  // Gunakan environment variable untuk production
   // baseURL: '/api', // Jika ingin build lalu Upload ke Server
   baseURL: 'http://127.0.0.1:8000', // Local
   timeout: 30000,
@@ -57,9 +57,12 @@ apiClient.interceptors.response.use(
 
         // Update tokens di storage dan header
         const { access_token, refresh_token } = response.data;
-        localStorage.setItem('access_token', access_token); // Update localStorage
+
+        // Gunakan fungsi enkripsi yang konsisten
+        const { setEncryptedToken } = await import('@/utils/crypto');
+        setEncryptedToken('access_token', access_token);
         if (refresh_token) {
-          localStorage.setItem('refresh_token', refresh_token);
+          setEncryptedToken('refresh_token', refresh_token);
         }
 
         // Update Authorization header untuk request yang gagal
