@@ -77,7 +77,43 @@
           class="flex-grow-1"
           style="min-width: 200px;"
         ></v-select>
-        
+
+        <v-select
+          v-model="selectedProfile"
+          :items="profileOptions"
+          label="Filter Profile PPPoE"
+          variant="outlined"
+          density="comfortable"
+          hide-details
+          clearable
+          class="flex-grow-1"
+          style="min-width: 200px;"
+        ></v-select>
+
+        <v-select
+          v-model="selectedVlan"
+          :items="vlanOptions"
+          label="Filter VLAN"
+          variant="outlined"
+          density="comfortable"
+          hide-details
+          clearable
+          class="flex-grow-1"
+          style="min-width: 200px;"
+        ></v-select>
+
+        <v-select
+          v-model="selectedOnuPowerRange"
+          :items="onuPowerRangeOptions"
+          label="Filter ONU Power"
+          variant="outlined"
+          density="comfortable"
+          hide-details
+          clearable
+          class="flex-grow-1"
+          style="min-width: 200px;"
+        ></v-select>
+
         <v-btn
             variant="text"
             @click="resetFilters"
@@ -1083,6 +1119,12 @@ const itemsPerPage = ref(15); // Jumlah item per halaman untuk mobile dan deskto
 const hasMoreData = ref(true);
 const loadingMore = ref(false);
 const selectedOlt = ref<string | null>(null);
+const selectedProfile = ref<string | null>(null);
+const selectedVlan = ref<string | null>(null);
+const selectedOnuPowerRange = ref<string | null>(null);
+const profileOptions = ref<string[]>([]);
+const vlanOptions = ref<string[]>([]);
+const onuPowerRangeOptions = ref<any[]>([]);
 
 // --- State for Total Count ---
 const totalDataTeknisCount = ref(0);
@@ -1159,10 +1201,7 @@ const pelangganForSelect = computed(() => {
   return pelangganList.value.filter(p => !existingIds.has(p.id));
 });
 
-const oltOptions = computed(() => {
-  const olts = dataTeknisList.value.map(item => item.olt);
-  return [...new Set(olts)]; // Mengambil daftar OLT yang unik
-});
+const oltOptions = ref<string[]>([]);
 
 const paginatedDataTeknis = computed(() => {
   if (dataTeknisList.value.length === 0) return [];
@@ -1250,6 +1289,7 @@ onMounted(() => {
   fetchMikrotikServers();
   fetchPaketLayananForSelect();
   fetchOdpList();
+  fetchFilterOptions();
 });
 
 async function fetchDataTeknis(isLoadMore = false) {
@@ -1269,6 +1309,19 @@ async function fetchDataTeknis(isLoadMore = false) {
     }
     if (selectedOlt.value) {
       params.append('olt', selectedOlt.value);
+    }
+    if (selectedProfile.value) {
+      params.append('profile', selectedProfile.value);
+    }
+    if (selectedVlan.value) {
+      params.append('vlan', selectedVlan.value);
+    }
+    if (selectedOnuPowerRange.value) {
+      const selectedRange = onuPowerRangeOptions.value.find(r => r.label === selectedOnuPowerRange.value);
+      if (selectedRange) {
+        params.append('onu_power_min', selectedRange.min.toString());
+        params.append('onu_power_max', selectedRange.max.toString());
+      }
     }
 
     // Gunakan page yang sesuai tergantung apakah sedang load more (mobile) atau tidak (desktop)
@@ -1333,13 +1386,16 @@ const applyFilters = debounce(() => {
   fetchDataTeknis(false); // Panggil dengan `isLoadMore = false` untuk mereset
 }, 500);
 
-watch([searchQuery, selectedOlt], () => {
+watch([searchQuery, selectedOlt, selectedProfile, selectedVlan, selectedOnuPowerRange], () => {
   applyFilters();
 });
 
 function resetFilters() {
   searchQuery.value = '';
   selectedOlt.value = null;
+  selectedProfile.value = null;
+  selectedVlan.value = null;
+  selectedOnuPowerRange.value = null;
   // fetchDataTeknis() akan ter-trigger oleh watch
 }
 
@@ -1349,6 +1405,33 @@ async function fetchMikrotikServers() {
     mikrotikServers.value = response.data;
   } catch (error) {
     console.error("Gagal mengambil daftar server Mikrotik:", error);
+  }
+}
+
+async function fetchFilterOptions() {
+  try {
+    // Ambil data OLT
+    const oltResponse = await apiClient.get('/data_teknis/available-olt');
+    oltOptions.value = oltResponse.data;
+
+    // Ambil data Profile PPPoE
+    const profileResponse = await apiClient.get('/data_teknis/available-profiles');
+    profileOptions.value = profileResponse.data;
+
+    // Ambil data VLAN
+    const vlanResponse = await apiClient.get('/data_teknis/available-vlans');
+    vlanOptions.value = vlanResponse.data;
+
+    // Ambil data ONU Power ranges
+    const onuPowerResponse = await apiClient.get('/data_teknis/onu-power-ranges');
+    const ranges = onuPowerResponse.data.ranges || [];
+    onuPowerRangeOptions.value = ranges.map((range: any) => ({
+      title: range.label,
+      value: range.label,
+      ...range
+    }));
+  } catch (error) {
+    console.error("Gagal mengambil data filter:", error);
   }
 }
 
@@ -1608,6 +1691,19 @@ async function exportData() {
     }
     if (selectedOlt.value) {
       params.append('olt', selectedOlt.value);
+    }
+    if (selectedProfile.value) {
+      params.append('profile', selectedProfile.value);
+    }
+    if (selectedVlan.value) {
+      params.append('vlan', selectedVlan.value);
+    }
+    if (selectedOnuPowerRange.value) {
+      const selectedRange = onuPowerRangeOptions.value.find(r => r.label === selectedOnuPowerRange.value);
+      if (selectedRange) {
+        params.append('onu_power_min', selectedRange.min.toString());
+        params.append('onu_power_max', selectedRange.max.toString());
+      }
     }
     // Tambahkan parameter untuk export semua data (tanpa pagination)
     params.append('export_all', 'true');
@@ -2125,8 +2221,9 @@ async function fetchAvailableProfiles(paketLayananId: number, pelangganId: numbe
 }
 
 .filter-card .d-flex {
-  padding: 28px 32px !important;
-  gap: 20px !important;
+  padding: 24px 28px !important;
+  gap: 16px !important;
+  flex-wrap: wrap;
 }
 
 .filter-card .v-text-field, .filter-card .v-select {

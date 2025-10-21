@@ -1038,7 +1038,6 @@ const handleNewNotification = (event: Event) => {
 
 async function fetchPelangganForSelect() {
   try {
-    console.log('🔄 Loading pelanggan data...');
     // FIX: Gunakan parameter for_invoice_selection=true untuk menghilangkan limit
     const response = await apiClient.get<any>('/pelanggan/?for_invoice_selection=true');
 
@@ -1046,10 +1045,8 @@ async function fetchPelangganForSelect() {
     let data: any[] = [];
     if (response.data && Array.isArray(response.data.data)) {
       data = response.data.data;
-      console.log(`✅ Loaded ${data.length} pelanggan records from PelangganListResponse`);
     } else if (Array.isArray(response.data)) {
       data = response.data;
-      console.log(`✅ Loaded ${data.length} pelanggan records (direct array)`);
     } else {
       console.error("❌ Unexpected response format:", response.data);
       pelangganList.value = [];
@@ -1067,7 +1064,6 @@ async function fetchPelangganForSelect() {
 
 async function fetchLanggananForSelect() {
   try {
-    console.log('🔄 Loading langganan data for invoice selection...');
     // QUICK FIX: Tambahkan limit besar untuk memastikan semua data ter-load
     const response = await apiClient.get<any>(
       '/langganan/?for_invoice_selection=true&limit=1000'
@@ -1075,47 +1071,7 @@ async function fetchLanggananForSelect() {
     const data = Array.isArray(response.data) ? response.data : response.data.data;
 
     if (Array.isArray(data)) {
-      console.log(`✅ Loaded ${data.length} langganan records`);
       langgananList.value = data;
-
-      // DEBUG: Cek apakah langganan ID 244 ada
-      const langganan244 = data.find(l => l.id === 244);
-      if (langganan244) {
-        console.log('✅ Found langganan ID 244:', {
-          id: langganan244.id,
-          pelanggan_id: langganan244.pelanggan_id,
-          status: langganan244.status,
-          hasPelangganData: !!langganan244.pelanggan,
-          pelangganNama: langganan244.pelanggan?.nama || 'NO DATA',
-          hasPaketData: !!langganan244.paket_layanan,
-          paketNama: langganan244.paket_layanan?.nama || 'NO PAKET',
-          paketId: langganan244.paket_layanan_id || 'NO PAKET_ID'
-        });
-      } else {
-        console.warn('❌ Langganan ID 244 tidak ditemukan dalam API response!');
-
-        // Cek ID range untuk debugging
-        if (data.length > 0) {
-          const ids = data.map(l => l.id);
-          const minId = Math.min(...ids);
-          const maxId = Math.max(...ids);
-          console.warn(`📊 Range ID langganan: ${minId} - ${maxId}`);
-
-          // Cari langganan dengan pelanggan_id 258
-          const pelanggan258Langganan = data.filter(l => l.pelanggan_id === 258);
-          if (pelanggan258Langganan.length > 0) {
-            console.warn(`ℹ️ Ditemukan ${pelanggan258Langganan.length} langganan dengan pelanggan_id 258:`,
-              pelanggan258Langganan.map(l => ({
-                id: l.id,
-                status: l.status,
-                hasPaket: !!l.paket_layanan,
-                paketNama: l.paket_layanan?.nama || 'NO PAKET'
-              }))
-            );
-          }
-        }
-      }
-
           } else {
       console.error("❌ Fetched langgananList is not an array:", response.data);
       langgananList.value = []; // Fallback to empty array

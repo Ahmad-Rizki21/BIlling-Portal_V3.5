@@ -271,7 +271,14 @@ def setup_logging() -> logging.Logger:
     log_dir.mkdir(exist_ok=True)
 
     # Print ASCII Art Banner (safe for all terminals)
-    print(ARTACOM_ASCII)
+    try:
+        print(ARTACOM_ASCII)
+    except UnicodeEncodeError:
+        # Fallback for Windows cmd without UTF-8 support
+        print("=" * 65)
+        print("  ARTACOM FTTH BILLING API SYSTEM")
+        print("  FTTH Billing Management Platform")
+        print("=" * 65)
 
     # Determine separator character
     separator = "|" if not USE_UNICODE else "│"

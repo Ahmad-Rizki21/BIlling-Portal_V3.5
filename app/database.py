@@ -4,7 +4,7 @@ import os
 from typing import AsyncGenerator
 
 from dotenv import load_dotenv
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 # Setup logger
@@ -60,7 +60,7 @@ logger.info(f"📊 Pool Settings: size={POOL_SIZE}, overflow={MAX_OVERFLOW}, tot
 # ------------------------------------------
 
 # Membuat session factory dengan konfigurasi OPTIMIZED untuk dashboard
-AsyncSessionLocal: async_sessionmaker[AsyncSession] = async_sessionmaker(
+AsyncSessionLocal = sessionmaker(
     bind=engine,
     class_=AsyncSession,
     expire_on_commit=False,

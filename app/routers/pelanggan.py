@@ -606,6 +606,7 @@ async def import_from_csv(
     errors = []
     processed_emails_in_file = set()
     processed_no_ktp_in_file = set()
+    skipped_rows = 0
 
     existing_emails_q = await db.execute(select(func.lower(PelangganModel.email)))
     existing_emails_in_db = set(existing_emails_q.scalars().all())
@@ -616,7 +617,10 @@ async def import_from_csv(
         data: Dict[str, Any] = {
             model_field: row.get(csv_header, "").strip() for csv_header, model_field in column_mapping.items()
         }
-        if not data:
+
+        # Skip baris jika benar-benar kosong (tidak ada data sama sekali)
+        if not any(data.values()):
+            skipped_rows += 1
             continue
 
         try:
@@ -674,7 +678,10 @@ async def import_from_csv(
         except ValidationError as e:
             error_details = "; ".join([f"{err['loc'][0]}: {err['msg']}" for err in e.errors()])
             errors.append(f"Baris {row_num}: {error_details}")
+        except ValueError as e:
+            errors.append(f"Baris {row_num}: {str(e)}")
         except Exception as e:
+            logger.error(f"Error processing baris {row_num}: {repr(e)}")
             errors.append(f"Baris {row_num}: Error tak terduga - {repr(e)}")
 
     if errors:
@@ -684,17 +691,31 @@ async def import_from_csv(
         )
 
     if not new_customers:
-        raise HTTPException(status_code=400, detail="Tidak ada data valid untuk diimpor.")
+        logger.info(f"Import selesai. {skipped_rows} baris di-skip, tidak ada data valid untuk diimpor.")
+        if skipped_rows > 0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Tidak ada data valid untuk diimpor. {skipped_rows} baris kosong atau tidak lengkap dilewati."
+            )
+        else:
+            raise HTTPException(status_code=400, detail="Tidak ada data valid untuk diimpor.")
 
     try:
         db.add_all(new_customers)
         await db.commit()
+        logger.info(f"Import berhasil: {len(new_customers)} pelanggan baru, {skipped_rows} baris di-skip")
     except Exception as e:
         await db.rollback()
         logger.error(f"Database error during import: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Gagal menyimpan ke database: {repr(e)}")
 
-    return {"message": f"Sukses! Berhasil mengimpor {len(new_customers)} pelanggan baru."}
+    success_message = f"Sukses! Berhasil mengimpor {len(new_customers)} pelanggan baru."
+    if skipped_rows > 0:
+        success_message += f" {skipped_rows} baris kosong dilewati."
+
+    logger.info(f"Import CSV selesai: {len(new_customers)} berhasil, {len(errors)} error, {skipped_rows} baris kosong dilewati")
+
+    return {"message": success_message}
 
 
 @router.get("/lokasi/unik", response_model=List[str])

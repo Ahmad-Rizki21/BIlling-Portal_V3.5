@@ -482,12 +482,13 @@
                           Nomor Telepon
                           <span class="required-flag text-error">*</span>
                         </label>
-                        <v-text-field 
-                          v-model="editedItem.no_telp" 
-                          :rules="[rules.required, rules.phone]" 
+                        <v-text-field
+                          v-model="editedItem.no_telp"
+                          :rules="[rules.required, rules.phone]"
                           variant="outlined"
                           class="elegant-input"
                           density="comfortable"
+                          @input="formatPhoneNumber"
                         ></v-text-field>
                       </div>
                     </v-col>
@@ -992,7 +993,7 @@ const layananOptions = ref([
 const rules = {
   required: (value: any) => !!value || 'Field ini wajib diisi',
   email: (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value) || 'Format email tidak valid',
-  phone: (value: string) => /^[\+]?[0-9\s\-\(\)]{10,}$/.test(value) || 'Format nomor telepon tidak valid',
+  phone: (value: string) => /^[\+]?[0-9\s\(\)]{10,}$/.test(value) || 'Format nomor telepon tidak valid. Nomor telepon tidak boleh mengandung karakter "-"',
   ktp: (value: string) => (value && value.length === 16 && /^[0-9]+$/.test(value)) || 'Nomor KTP harus 16 digit angka',
 };
 
@@ -1370,6 +1371,12 @@ function formatDate(date: string | Date | null): string {
     month: 'short',
     day: 'numeric'
   });
+}
+
+function formatPhoneNumber() {
+  if (editedItem.value.no_telp) {
+    editedItem.value.no_telp = editedItem.value.no_telp.replace(/-/g, '');
+  }
 }
 
 function showSnackbar(text: string, color: 'success' | 'error' | 'warning') {

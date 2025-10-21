@@ -41,9 +41,8 @@ async def generate_permissions(db: AsyncSession = Depends(get_db)):
                 await db.flush()
                 permissions_created.append(new_permission)
 
-    # --- BAGIAN 2: TAMBAHKAN INI - Generate permissions untuk WIDGET ---
+    # --- BAGIAN 2: Generate permissions untuk WIDGET ---
     widget_action = "view_widget"
-    # Mengambil daftar dari config.py
     for widget in settings.DASHBOARD_WIDGETS:
         permission_name = f"{widget_action}_{widget}"
 
@@ -55,6 +54,21 @@ async def generate_permissions(db: AsyncSession = Depends(get_db)):
             db.add(new_permission)
             await db.flush()
             permissions_created.append(new_permission)
+
+    # --- BAGIAN 3: Generate permissions untuk SYSTEM FEATURES ---
+    feature_actions = ["create", "view", "edit", "delete"]
+    for feature in settings.SYSTEM_FEATURES:
+        for action in feature_actions:
+            permission_name = f"{action}_{feature}"
+
+            result = await db.execute(select(PermissionModel).where(PermissionModel.name == permission_name))
+            existing_permission = result.scalars().first()
+
+            if not existing_permission:
+                new_permission = PermissionModel(name=permission_name)
+                db.add(new_permission)
+                await db.flush()
+                permissions_created.append(new_permission)
 
     # --- Sisa fungsi (Kode Asli Anda) ---
     await db.commit()

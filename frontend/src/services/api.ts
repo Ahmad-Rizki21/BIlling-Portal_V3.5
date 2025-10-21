@@ -95,4 +95,37 @@ apiClient.interceptors.response.use(
 // ==========================================================
 
 
+// ==========================================================
+// --- TROUBLE TICKET API METHODS ---
+// ==========================================================
+
+export const troubleTicketAPI = {
+  // Get all tickets with pagination and filters
+  getTickets: (params?: any) => apiClient.get('/trouble-tickets', { params }),
+
+  // Get ticket by ID
+  getTicket: (id: number) => apiClient.get(`/trouble-tickets/${id}`),
+
+  // Create new ticket
+  createTicket: (data: any) => apiClient.post('/trouble-tickets', data),
+
+  // Update ticket
+  updateTicket: (id: number, data: any) => apiClient.patch(`/trouble-tickets/${id}`, data),
+
+  // Update ticket status
+  updateStatus: (id: number, data: any) => apiClient.post(`/trouble-tickets/${id}/status`, data),
+
+  // Update downtime
+  updateDowntime: (id: number, data: any) => apiClient.post(`/trouble-tickets/${id}/downtime`, data),
+
+  // Assign ticket
+  assignTicket: (id: number, data: any) => apiClient.post(`/trouble-tickets/${id}/assign`, data),
+
+  // Get ticket history
+  getHistory: (id: number) => apiClient.get(`/trouble-tickets/${id}/history`),
+
+  // Get statistics
+  getStatistics: () => apiClient.get('/trouble-tickets/statistics/dashboard')
+};
+
 export default apiClient;

@@ -1,5 +1,4 @@
 # app/main.py
-# --- TAMBAHAN IMPORT UNTUK ACTIVITY LOG ---
 import json
 import logging
 import os
@@ -52,6 +51,7 @@ from .routers import (
     permission,
     report,
     role,
+    trouble_ticket,
 )
 from .routers import settings as settings_router
 from .routers import (
@@ -79,7 +79,16 @@ app = FastAPI(
     version="1.0.0",
 )
 
+# Mount static files
 app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# Mount evidence files directory
+evidence_dir = os.path.join(os.getcwd(), "static", "uploads", "evidence")
+os.makedirs(evidence_dir, exist_ok=True)
+app.mount("/static/uploads/evidence", StaticFiles(directory=evidence_dir), name="evidence")
+
+# Mount evidence files at /api path for frontend compatibility
+#app.mount("/api/static/uploads/evidence", StaticFiles(directory=evidence_dir), name="evidence_api")
 
 # ==========================================================
 # --- Middleware Backend to FrontEnd ---
@@ -106,6 +115,8 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
+    max_age=600,  # Cache preflight requests for 10 minutes
 )
 
 
@@ -121,6 +132,8 @@ async def maintenance_mode_middleware(request: Request, call_next):
         "/auth/logout",  # Izinkan logout
         "/users/token",  # Izinkan login (backup path)
         "/pelanggan",  # Izinkan akses pelanggan
+        "/paket_layanan",  # Izinkan akses paket layanan
+        "/harga_layanan",  # Izinkan akses harga layanan
         "/settings/maintenance",  # Izinkan admin mengubah status maintenance
         "/docs",  # Izinkan akses dokumentasi API
         "/openapi.json",
@@ -593,6 +606,7 @@ app.include_router(inventory.router)
 app.include_router(inventory_status.router)
 app.include_router(inventory_type.router)
 app.include_router(dashboard_pelanggan.router)
+app.include_router(trouble_ticket.router)
 
 
 

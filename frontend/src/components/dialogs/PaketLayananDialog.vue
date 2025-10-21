@@ -196,6 +196,13 @@ watch(() => props.editedItem, (newVal) => {
   localItem.value = { ...newVal };
 }, { immediate: true, deep: true });
 
+// Set id_brand from brandId prop when creating new package
+watch(() => props.brandId, (newBrandId) => {
+  if (newBrandId && !localItem.value.id_brand) {
+    localItem.value.id_brand = newBrandId;
+  }
+}, { immediate: true });
+
 function submit() {
   emit('save', localItem.value);
   emit('update:modelValue', false);

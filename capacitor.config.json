@@ -1,0 +1,14 @@
+{
+  "appId": "com.artacom.billing",
+  "appName": "Artacom Billing",
+  "webDir": "frontend/dist",
+  "bundledWebRuntime": false,
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "CapacitorHttp": {
+      "enabled": true
+    }
+  }
+}

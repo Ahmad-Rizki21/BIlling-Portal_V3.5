@@ -140,6 +140,42 @@ const router = createRouter({
             permissions: ['view_activity_log']
           },
         },
+        {
+          path: '/trouble-tickets',
+          name: 'TroubleTickets',
+          component: () => import('@/views/TroubleTicketView.vue'),
+          meta: {
+            requiresAuth: true,
+            permissions: ['view_trouble_tickets']
+          },
+        },
+        {
+          path: '/trouble-tickets/:id',
+          name: 'TroubleTicketDetail',
+          component: () => import('@/views/TroubleTicketDetailView.vue'),
+          meta: {
+            requiresAuth: true,
+            permissions: ['view_trouble_tickets']
+          },
+        },
+        {
+          path: '/trouble-tickets/:id/action',
+          name: 'TicketAction',
+          component: () => import('@/views/TicketActionView.vue'),
+          meta: {
+            requiresAuth: true,
+            permissions: ['view_trouble_tickets']
+          },
+        },
+        {
+          path: '/trouble-tickets/reports',
+          name: 'TroubleTicketReports',
+          component: () => import('@/views/TroubleTicketReportView.vue'),
+          meta: {
+            requiresAuth: true,
+            permissions: ['view_trouble_tickets']
+          },
+        },
       ],
     },
     

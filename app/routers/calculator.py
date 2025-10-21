@@ -43,9 +43,26 @@ async def calculate_prorate_price(request: ProrateCalculationRequest, db: AsyncS
 
     total_harga_prorate = round(harga_dasar_prorate + pajak, 0)
 
+    # Logika untuk harga bulan depan dengan PPN
+    harga_bulan_depan = None
+    ppn_bulan_depan = None
+    total_bulan_depan_dengan_ppn = None
+    total_keseluruhan = None
+
+    if request.include_ppn_next_month:
+        harga_bulan_depan = harga_paket
+        ppn_mentah_bulan_depan = harga_bulan_depan * (pajak_persen / 100)
+        ppn_bulan_depan = math.floor(ppn_mentah_bulan_depan + 0.5)  # Pembulatan standar
+        total_bulan_depan_dengan_ppn = round(harga_bulan_depan + ppn_bulan_depan, 0)
+        total_keseluruhan = round(total_harga_prorate + total_bulan_depan_dengan_ppn, 0)
+
     return ProrateCalculationResponse(
         harga_dasar_prorate=round(harga_dasar_prorate, 0),
         pajak=pajak,
         total_harga_prorate=total_harga_prorate,
         periode_hari=remaining_days,
+        harga_bulan_depan=harga_bulan_depan,
+        ppn_bulan_depan=ppn_bulan_depan,
+        total_bulan_depan_dengan_ppn=total_bulan_depan_dengan_ppn,
+        total_keseluruhan=total_keseluruhan,
     )

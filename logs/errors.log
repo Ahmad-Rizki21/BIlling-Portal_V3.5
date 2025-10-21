@@ -7567,3 +7567,481 @@ sqlalchemy.exc.InvalidRequestError: This session is provisioning a new connectio
 2025-10-08 14:21:44 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | WebSocket connection error: 401: Token expired
 2025-10-08 14:21:49 | AUTH            | [91mERROR   [0m | get_user_from_token  | Auth validation: Expired signature.
 2025-10-08 14:21:49 | MAIN            | [91mERROR   [0m | http_exception_handler | HTTP 401 - Token expired - Path: /dashboard/
+2025-10-13 17:40:13 | SERVICES....    | [91mERROR   [0m | _get_connection      | Failed to create connection to 17.17.17.2:9729: timed out
+2025-10-13 17:40:13 | SERVICES....    | [91mERROR   [0m | get_api_connection   | Gagal mendapatkan koneksi dari pool ke Mikrotik Tambun (17.17.17.2:9729): timed out
+2025-10-13 17:40:28 | SERVICES....    | [91mERROR   [0m | _get_connection      | Failed to create connection to 12.12.12.6:9729: timed out
+2025-10-13 17:40:28 | SERVICES....    | [91mERROR   [0m | get_api_connection   | Gagal mendapatkan koneksi dari pool ke Mikrotik Tipar (12.12.12.6:9729): timed out
+2025-10-13 17:59:42 | UTILS.ENC...    | [91mERROR   [0m | <module>             | Gagal menginisialisasi Fernet cipher: Fernet key must be 32 url-safe base64-encoded bytes.
+2025-10-13 18:00:01 | SERVICES....    | [91mERROR   [0m | _get_connection      | Failed to create connection to 17.17.17.2:9729: timed out
+2025-10-13 18:00:01 | SERVICES....    | [91mERROR   [0m | get_api_connection   | Gagal mendapatkan koneksi dari pool ke Mikrotik Tambun (17.17.17.2:9729): timed out
+2025-10-13 18:00:16 | SERVICES....    | [91mERROR   [0m | _get_connection      | Failed to create connection to 12.12.12.6:9729: timed out
+2025-10-13 18:00:16 | SERVICES....    | [91mERROR   [0m | get_api_connection   | Gagal mendapatkan koneksi dari pool ke Mikrotik Tipar (12.12.12.6:9729): timed out
+2025-10-13 18:00:31 | SERVICES....    | [91mERROR   [0m | _get_connection      | Failed to create connection to 17.17.17.2:9729: timed out
+2025-10-13 18:00:31 | SERVICES....    | [91mERROR   [0m | get_api_connection   | Gagal mendapatkan koneksi dari pool ke Mikrotik Tambun (17.17.17.2:9729): timed out
+2025-10-13 18:00:46 | SERVICES....    | [91mERROR   [0m | _get_connection      | Failed to create connection to 12.12.12.6:9729: timed out
+2025-10-13 18:00:46 | SERVICES....    | [91mERROR   [0m | get_api_connection   | Gagal mendapatkan koneksi dari pool ke Mikrotik Tipar (12.12.12.6:9729): timed out
+2025-10-13 18:01:57 | UTILS.ENC...    | [91mERROR   [0m | <module>             | Gagal menginisialisasi Fernet cipher: Fernet key must be 32 url-safe base64-encoded bytes.
+2025-10-14 10:29:23 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-14 10:29:23 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token
+2025-10-14 10:29:30 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-14 10:29:30 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token
+2025-10-14 10:29:36 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-14 10:29:36 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token
+2025-10-14 10:29:42 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-14 10:29:42 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token
+2025-10-14 10:29:48 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-14 10:29:48 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token
+2025-10-14 10:29:54 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-14 10:29:54 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token
+2025-10-14 10:30:00 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-14 10:30:00 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token
+2025-10-14 10:30:06 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-14 10:30:06 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token
+2025-10-14 10:30:12 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-14 10:30:12 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token
+2025-10-14 10:30:18 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-14 10:30:18 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token
+2025-10-14 10:30:24 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-14 10:30:24 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token
+2025-10-14 10:30:30 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-14 10:30:30 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token
+2025-10-14 10:30:36 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-14 10:30:36 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token
+2025-10-14 10:30:42 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-14 10:30:42 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token
+2025-10-14 10:30:48 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-14 10:30:48 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token
+2025-10-14 10:30:54 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-14 10:30:54 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token
+2025-10-14 10:31:00 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-14 10:31:00 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token
+2025-10-14 10:31:06 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-14 10:31:06 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token
+2025-10-14 10:31:12 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-14 10:31:12 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token
+2025-10-14 10:31:18 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-14 10:31:18 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token
+2025-10-14 10:31:24 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-14 10:31:24 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token
+2025-10-14 10:31:30 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-14 10:31:30 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token
+2025-10-14 10:31:36 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-14 10:31:36 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token
+2025-10-14 10:31:42 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-14 10:31:42 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token
+2025-10-14 10:31:48 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-14 10:31:48 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token
+2025-10-14 10:31:54 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-14 10:31:54 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token
+2025-10-14 10:32:00 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-14 10:32:00 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token
+2025-10-14 10:32:06 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-14 10:32:06 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token
+2025-10-14 10:32:13 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-14 10:32:13 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token
+2025-10-14 10:32:19 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-14 10:32:19 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token
+2025-10-14 10:32:26 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-14 10:32:26 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token
+2025-10-14 10:32:34 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-14 10:32:34 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token
+2025-10-14 10:32:41 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-14 10:32:41 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token
+2025-10-14 10:32:51 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-14 10:32:51 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token
+2025-10-14 10:32:59 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-14 10:32:59 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token
+2025-10-14 10:33:08 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-14 10:33:08 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token
+2025-10-14 10:33:15 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-14 10:33:15 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token
+2025-10-14 10:33:23 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-14 10:33:23 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token
+2025-10-14 10:33:33 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-14 10:33:33 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token
+2025-10-14 10:33:40 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-14 10:33:40 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token
+2025-10-14 10:33:49 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-14 10:33:49 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token
+2025-10-14 10:33:56 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-14 10:33:56 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token
+2025-10-14 10:34:04 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-14 10:34:04 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token
+2025-10-14 10:34:14 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-14 10:34:14 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token
+2025-10-14 10:34:21 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-14 10:34:21 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token
+2025-10-14 10:34:31 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-14 10:34:31 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token
+2025-10-14 10:34:40 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-14 10:34:40 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token
+2025-10-14 10:34:50 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-14 10:34:50 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token
+2025-10-14 10:35:00 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-14 10:35:00 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token
+2025-10-14 10:35:10 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-14 10:35:10 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token
+2025-10-14 10:35:17 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-14 10:35:17 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token
+2025-10-14 10:41:38 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-14 10:41:38 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token
+2025-10-16 21:50:22 | SERVICES....    | [91mERROR   [0m | _get_connection      | Failed to create connection to 17.17.17.2:9729: timed out
+2025-10-16 21:50:22 | SERVICES....    | [91mERROR   [0m | get_api_connection   | Gagal mendapatkan koneksi dari pool ke Mikrotik Tambun (17.17.17.2:9729): timed out
+2025-10-16 21:50:37 | SERVICES....    | [91mERROR   [0m | _get_connection      | Failed to create connection to 12.12.12.6:9729: timed out
+2025-10-16 21:50:37 | SERVICES....    | [91mERROR   [0m | get_api_connection   | Gagal mendapatkan koneksi dari pool ke Mikrotik Tipar (12.12.12.6:9729): timed out
+2025-10-16 23:21:26 | ROUTERS.T...    | [91mERROR   [0m | get_ticket_statistics | ❌ Failed to get ticket statistics: (pymysql.err.ProgrammingError) (1064, "You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'epoch FROM trouble_ticket.resolved_at - trouble_ticket.created_at) / 3600) AS av' at line 1")
+[SQL: SELECT avg(EXTRACT(epoch FROM trouble_ticket.resolved_at - trouble_ticket.created_at) / %s) AS avg_1 
+FROM trouble_ticket 
+WHERE trouble_ticket.resolved_at IS NOT NULL AND trouble_ticket.created_at IS NOT NULL]
+[parameters: (3600,)]
+(Background on this error at: https://sqlalche.me/e/20/f405)
+2025-10-16 23:22:16 | ROUTERS.T...    | [91mERROR   [0m | get_ticket_statistics | ❌ Failed to get ticket statistics: (pymysql.err.ProgrammingError) (1064, "You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'epoch FROM trouble_ticket.resolved_at - trouble_ticket.created_at) / 3600) AS av' at line 1")
+[SQL: SELECT avg(EXTRACT(epoch FROM trouble_ticket.resolved_at - trouble_ticket.created_at) / %s) AS avg_1 
+FROM trouble_ticket 
+WHERE trouble_ticket.resolved_at IS NOT NULL AND trouble_ticket.created_at IS NOT NULL]
+[parameters: (3600,)]
+(Background on this error at: https://sqlalche.me/e/20/f405)
+2025-10-16 23:24:13 | ROUTERS.T...    | [91mERROR   [0m | get_ticket_statistics | ❌ Failed to get ticket statistics: (pymysql.err.ProgrammingError) (1064, "You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'epoch FROM trouble_ticket.resolved_at - trouble_ticket.created_at) / 3600) AS av' at line 1")
+[SQL: SELECT avg(EXTRACT(epoch FROM trouble_ticket.resolved_at - trouble_ticket.created_at) / %s) AS avg_1 
+FROM trouble_ticket 
+WHERE trouble_ticket.resolved_at IS NOT NULL AND trouble_ticket.created_at IS NOT NULL]
+[parameters: (3600,)]
+(Background on this error at: https://sqlalche.me/e/20/f405)
+2025-10-16 23:31:56 | ROUTERS.T...    | [91mERROR   [0m | get_ticket_statistics | ❌ Failed to get ticket statistics: (pymysql.err.ProgrammingError) (1064, "You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'epoch FROM trouble_ticket.resolved_at - trouble_ticket.created_at) / 3600) AS av' at line 1")
+[SQL: SELECT avg(EXTRACT(epoch FROM trouble_ticket.resolved_at - trouble_ticket.created_at) / %s) AS avg_1 
+FROM trouble_ticket 
+WHERE trouble_ticket.resolved_at IS NOT NULL AND trouble_ticket.created_at IS NOT NULL]
+[parameters: (3600,)]
+(Background on this error at: https://sqlalche.me/e/20/f405)
+2025-10-16 23:32:04 | SERVICES....    | [91mERROR   [0m | _get_connection      | Failed to create connection to 17.17.17.2:9729: timed out
+2025-10-16 23:32:04 | SERVICES....    | [91mERROR   [0m | get_api_connection   | Gagal mendapatkan koneksi dari pool ke Mikrotik Tambun (17.17.17.2:9729): timed out
+2025-10-16 23:32:19 | SERVICES....    | [91mERROR   [0m | _get_connection      | Failed to create connection to 12.12.12.6:9729: timed out
+2025-10-16 23:32:19 | SERVICES....    | [91mERROR   [0m | get_api_connection   | Gagal mendapatkan koneksi dari pool ke Mikrotik Tipar (12.12.12.6:9729): timed out
+2025-10-16 23:34:24 | ROUTERS.T...    | [91mERROR   [0m | get_ticket_statistics | ❌ Failed to get ticket statistics: name 'HOUR' is not defined
+2025-10-16 23:35:59 | SERVICES....    | [91mERROR   [0m | _get_connection      | Failed to create connection to 17.17.17.2:9729: timed out
+2025-10-16 23:35:59 | SERVICES....    | [91mERROR   [0m | get_api_connection   | Gagal mendapatkan koneksi dari pool ke Mikrotik Tambun (17.17.17.2:9729): timed out
+2025-10-16 23:36:14 | SERVICES....    | [91mERROR   [0m | _get_connection      | Failed to create connection to 12.12.12.6:9729: timed out
+2025-10-16 23:36:14 | SERVICES....    | [91mERROR   [0m | get_api_connection   | Gagal mendapatkan koneksi dari pool ke Mikrotik Tipar (12.12.12.6:9729): timed out
+2025-10-16 23:48:27 | ROUTERS.T...    | [91mERROR   [0m | create_trouble_ticket | ❌ Failed to create trouble ticket: 'TroubleTicketCreate' object has no attribute 'status'
+2025-10-16 23:48:45 | ROUTERS.T...    | [91mERROR   [0m | create_trouble_ticket | ❌ Failed to create trouble ticket: 'TroubleTicketCreate' object has no attribute 'status'
+2025-10-17 00:14:22 | ROUTERS.T...    | [91mERROR   [0m | get_trouble_tickets  | ❌ Failed to get trouble tickets: (pymysql.err.OperationalError) (1054, "Unknown column 'trouble_ticket.evidence' in 'field list'")
+[SQL: SELECT trouble_ticket.id, trouble_ticket.pelanggan_id, trouble_ticket.data_teknis_id, trouble_ticket.ticket_number, trouble_ticket.title, trouble_ticket.description, trouble_ticket.category, trouble_ticket.priority, trouble_ticket.status, trouble_ticket.downtime_start, trouble_ticket.downtime_end, trouble_ticket.total_downtime_minutes, trouble_ticket.assigned_to, trouble_ticket.resolved_at, trouble_ticket.resolution_notes, trouble_ticket.customer_notified, trouble_ticket.last_customer_contact, trouble_ticket.evidence, trouble_ticket.created_at, trouble_ticket.updated_at, harga_layanan_1.id_brand, harga_layanan_1.brand, harga_layanan_1.pajak, harga_layanan_1.xendit_key_name, pelanggan_1.id AS id_1, pelanggan_1.no_ktp, pelanggan_1.nama, pelanggan_1.alamat, pelanggan_1.alamat_custom, pelanggan_1.alamat_2, pelanggan_1.tgl_instalasi, pelanggan_1.blok, pelanggan_1.unit, pelanggan_1.no_telp, pelanggan_1.email, pelanggan_1.id_brand AS id_brand_1, pelanggan_1.layanan, pelanggan_1.brand_default, pelanggan_1.created_at AS created_at_1, pelanggan_1.updated_at AS updated_at_1, pelanggan_1.mikrotik_server_id, data_teknis_1.id AS id_2, data_teknis_1.pelanggan_id AS pelanggan_id_1, data_teknis_1.id_vlan, data_teknis_1.id_pelanggan, data_teknis_1.password_pppoe, data_teknis_1.ip_pelanggan, data_teknis_1.profile_pppoe, data_teknis_1.olt, data_teknis_1.olt_custom, data_teknis_1.pon, data_teknis_1.otb, data_teknis_1.odc, data_teknis_1.onu_power, data_teknis_1.sn, data_teknis_1.speedtest_proof, data_teknis_1.mikrotik_sync_pending, data_teknis_1.mikrotik_server_id AS mikrotik_server_id_1, data_teknis_1.odp_id, data_teknis_1.port_odp, users_1.id AS id_3, users_1.name, users_1.email AS email_1, users_1.email_verified_at, users_1.password, users_1.remember_token, users_1.created_at AS created_at_2, users_1.updated_at AS updated_at_2, users_1.revoked_before, users_1.password_changed_at, users_1.is_active, users_1.role_id 
+FROM trouble_ticket LEFT OUTER JOIN pelanggan AS pelanggan_1 ON pelanggan_1.id = trouble_ticket.pelanggan_id LEFT OUTER JOIN harga_layanan AS harga_layanan_1 ON harga_layanan_1.id_brand = pelanggan_1.id_brand LEFT OUTER JOIN data_teknis AS data_teknis_1 ON data_teknis_1.id = trouble_ticket.data_teknis_id LEFT OUTER JOIN users AS users_1 ON users_1.id = trouble_ticket.assigned_to ORDER BY trouble_ticket.created_at DESC 
+ LIMIT %s, %s]
+[parameters: (0, 15)]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+2025-10-17 00:14:26 | ROUTERS.T...    | [91mERROR   [0m | get_trouble_tickets  | ❌ Failed to get trouble tickets: (pymysql.err.OperationalError) (1054, "Unknown column 'trouble_ticket.evidence' in 'field list'")
+[SQL: SELECT trouble_ticket.id, trouble_ticket.pelanggan_id, trouble_ticket.data_teknis_id, trouble_ticket.ticket_number, trouble_ticket.title, trouble_ticket.description, trouble_ticket.category, trouble_ticket.priority, trouble_ticket.status, trouble_ticket.downtime_start, trouble_ticket.downtime_end, trouble_ticket.total_downtime_minutes, trouble_ticket.assigned_to, trouble_ticket.resolved_at, trouble_ticket.resolution_notes, trouble_ticket.customer_notified, trouble_ticket.last_customer_contact, trouble_ticket.evidence, trouble_ticket.created_at, trouble_ticket.updated_at, harga_layanan_1.id_brand, harga_layanan_1.brand, harga_layanan_1.pajak, harga_layanan_1.xendit_key_name, pelanggan_1.id AS id_1, pelanggan_1.no_ktp, pelanggan_1.nama, pelanggan_1.alamat, pelanggan_1.alamat_custom, pelanggan_1.alamat_2, pelanggan_1.tgl_instalasi, pelanggan_1.blok, pelanggan_1.unit, pelanggan_1.no_telp, pelanggan_1.email, pelanggan_1.id_brand AS id_brand_1, pelanggan_1.layanan, pelanggan_1.brand_default, pelanggan_1.created_at AS created_at_1, pelanggan_1.updated_at AS updated_at_1, pelanggan_1.mikrotik_server_id, data_teknis_1.id AS id_2, data_teknis_1.pelanggan_id AS pelanggan_id_1, data_teknis_1.id_vlan, data_teknis_1.id_pelanggan, data_teknis_1.password_pppoe, data_teknis_1.ip_pelanggan, data_teknis_1.profile_pppoe, data_teknis_1.olt, data_teknis_1.olt_custom, data_teknis_1.pon, data_teknis_1.otb, data_teknis_1.odc, data_teknis_1.onu_power, data_teknis_1.sn, data_teknis_1.speedtest_proof, data_teknis_1.mikrotik_sync_pending, data_teknis_1.mikrotik_server_id AS mikrotik_server_id_1, data_teknis_1.odp_id, data_teknis_1.port_odp, users_1.id AS id_3, users_1.name, users_1.email AS email_1, users_1.email_verified_at, users_1.password, users_1.remember_token, users_1.created_at AS created_at_2, users_1.updated_at AS updated_at_2, users_1.revoked_before, users_1.password_changed_at, users_1.is_active, users_1.role_id 
+FROM trouble_ticket LEFT OUTER JOIN pelanggan AS pelanggan_1 ON pelanggan_1.id = trouble_ticket.pelanggan_id LEFT OUTER JOIN harga_layanan AS harga_layanan_1 ON harga_layanan_1.id_brand = pelanggan_1.id_brand LEFT OUTER JOIN data_teknis AS data_teknis_1 ON data_teknis_1.id = trouble_ticket.data_teknis_id LEFT OUTER JOIN users AS users_1 ON users_1.id = trouble_ticket.assigned_to ORDER BY trouble_ticket.created_at DESC 
+ LIMIT %s, %s]
+[parameters: (0, 15)]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+2025-10-17 00:14:55 | ROUTERS.T...    | [91mERROR   [0m | get_trouble_tickets  | ❌ Failed to get trouble tickets: (pymysql.err.OperationalError) (1054, "Unknown column 'trouble_ticket.evidence' in 'field list'")
+[SQL: SELECT trouble_ticket.id, trouble_ticket.pelanggan_id, trouble_ticket.data_teknis_id, trouble_ticket.ticket_number, trouble_ticket.title, trouble_ticket.description, trouble_ticket.category, trouble_ticket.priority, trouble_ticket.status, trouble_ticket.downtime_start, trouble_ticket.downtime_end, trouble_ticket.total_downtime_minutes, trouble_ticket.assigned_to, trouble_ticket.resolved_at, trouble_ticket.resolution_notes, trouble_ticket.customer_notified, trouble_ticket.last_customer_contact, trouble_ticket.evidence, trouble_ticket.created_at, trouble_ticket.updated_at, harga_layanan_1.id_brand, harga_layanan_1.brand, harga_layanan_1.pajak, harga_layanan_1.xendit_key_name, pelanggan_1.id AS id_1, pelanggan_1.no_ktp, pelanggan_1.nama, pelanggan_1.alamat, pelanggan_1.alamat_custom, pelanggan_1.alamat_2, pelanggan_1.tgl_instalasi, pelanggan_1.blok, pelanggan_1.unit, pelanggan_1.no_telp, pelanggan_1.email, pelanggan_1.id_brand AS id_brand_1, pelanggan_1.layanan, pelanggan_1.brand_default, pelanggan_1.created_at AS created_at_1, pelanggan_1.updated_at AS updated_at_1, pelanggan_1.mikrotik_server_id, data_teknis_1.id AS id_2, data_teknis_1.pelanggan_id AS pelanggan_id_1, data_teknis_1.id_vlan, data_teknis_1.id_pelanggan, data_teknis_1.password_pppoe, data_teknis_1.ip_pelanggan, data_teknis_1.profile_pppoe, data_teknis_1.olt, data_teknis_1.olt_custom, data_teknis_1.pon, data_teknis_1.otb, data_teknis_1.odc, data_teknis_1.onu_power, data_teknis_1.sn, data_teknis_1.speedtest_proof, data_teknis_1.mikrotik_sync_pending, data_teknis_1.mikrotik_server_id AS mikrotik_server_id_1, data_teknis_1.odp_id, data_teknis_1.port_odp, users_1.id AS id_3, users_1.name, users_1.email AS email_1, users_1.email_verified_at, users_1.password, users_1.remember_token, users_1.created_at AS created_at_2, users_1.updated_at AS updated_at_2, users_1.revoked_before, users_1.password_changed_at, users_1.is_active, users_1.role_id 
+FROM trouble_ticket LEFT OUTER JOIN pelanggan AS pelanggan_1 ON pelanggan_1.id = trouble_ticket.pelanggan_id LEFT OUTER JOIN harga_layanan AS harga_layanan_1 ON harga_layanan_1.id_brand = pelanggan_1.id_brand LEFT OUTER JOIN data_teknis AS data_teknis_1 ON data_teknis_1.id = trouble_ticket.data_teknis_id LEFT OUTER JOIN users AS users_1 ON users_1.id = trouble_ticket.assigned_to ORDER BY trouble_ticket.created_at DESC 
+ LIMIT %s, %s]
+[parameters: (0, 15)]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+2025-10-17 00:16:42 | ROUTERS.T...    | [91mERROR   [0m | get_trouble_tickets  | ❌ Failed to get trouble tickets: (pymysql.err.OperationalError) (1054, "Unknown column 'trouble_ticket.evidence' in 'field list'")
+[SQL: SELECT trouble_ticket.id, trouble_ticket.pelanggan_id, trouble_ticket.data_teknis_id, trouble_ticket.ticket_number, trouble_ticket.title, trouble_ticket.description, trouble_ticket.category, trouble_ticket.priority, trouble_ticket.status, trouble_ticket.downtime_start, trouble_ticket.downtime_end, trouble_ticket.total_downtime_minutes, trouble_ticket.assigned_to, trouble_ticket.resolved_at, trouble_ticket.resolution_notes, trouble_ticket.customer_notified, trouble_ticket.last_customer_contact, trouble_ticket.evidence, trouble_ticket.created_at, trouble_ticket.updated_at, harga_layanan_1.id_brand, harga_layanan_1.brand, harga_layanan_1.pajak, harga_layanan_1.xendit_key_name, pelanggan_1.id AS id_1, pelanggan_1.no_ktp, pelanggan_1.nama, pelanggan_1.alamat, pelanggan_1.alamat_custom, pelanggan_1.alamat_2, pelanggan_1.tgl_instalasi, pelanggan_1.blok, pelanggan_1.unit, pelanggan_1.no_telp, pelanggan_1.email, pelanggan_1.id_brand AS id_brand_1, pelanggan_1.layanan, pelanggan_1.brand_default, pelanggan_1.created_at AS created_at_1, pelanggan_1.updated_at AS updated_at_1, pelanggan_1.mikrotik_server_id, data_teknis_1.id AS id_2, data_teknis_1.pelanggan_id AS pelanggan_id_1, data_teknis_1.id_vlan, data_teknis_1.id_pelanggan, data_teknis_1.password_pppoe, data_teknis_1.ip_pelanggan, data_teknis_1.profile_pppoe, data_teknis_1.olt, data_teknis_1.olt_custom, data_teknis_1.pon, data_teknis_1.otb, data_teknis_1.odc, data_teknis_1.onu_power, data_teknis_1.sn, data_teknis_1.speedtest_proof, data_teknis_1.mikrotik_sync_pending, data_teknis_1.mikrotik_server_id AS mikrotik_server_id_1, data_teknis_1.odp_id, data_teknis_1.port_odp, users_1.id AS id_3, users_1.name, users_1.email AS email_1, users_1.email_verified_at, users_1.password, users_1.remember_token, users_1.created_at AS created_at_2, users_1.updated_at AS updated_at_2, users_1.revoked_before, users_1.password_changed_at, users_1.is_active, users_1.role_id 
+FROM trouble_ticket LEFT OUTER JOIN pelanggan AS pelanggan_1 ON pelanggan_1.id = trouble_ticket.pelanggan_id LEFT OUTER JOIN harga_layanan AS harga_layanan_1 ON harga_layanan_1.id_brand = pelanggan_1.id_brand LEFT OUTER JOIN data_teknis AS data_teknis_1 ON data_teknis_1.id = trouble_ticket.data_teknis_id LEFT OUTER JOIN users AS users_1 ON users_1.id = trouble_ticket.assigned_to ORDER BY trouble_ticket.created_at DESC 
+ LIMIT %s, %s]
+[parameters: (0, 15)]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+2025-10-17 00:17:06 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-17 00:17:06 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode successful but user not found. Expiry: 2025-10-17 01:35:43
+2025-10-17 00:17:12 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-17 00:17:12 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode successful but user not found. Expiry: 2025-10-17 01:35:43
+2025-10-17 00:17:18 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-17 00:17:18 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode successful but user not found. Expiry: 2025-10-17 01:35:43
+2025-10-17 00:17:24 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-17 00:17:24 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode successful but user not found. Expiry: 2025-10-17 01:35:43
+2025-10-17 00:17:30 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-17 00:17:30 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode successful but user not found. Expiry: 2025-10-17 01:35:43
+2025-10-17 00:17:36 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-17 00:17:36 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode successful but user not found. Expiry: 2025-10-17 01:35:43
+2025-10-17 00:17:42 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-17 00:17:42 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode successful but user not found. Expiry: 2025-10-17 01:35:43
+2025-10-17 00:22:12 | ROUTERS.T...    | [91mERROR   [0m | get_trouble_tickets  | ❌ Failed to get trouble tickets: (pymysql.err.OperationalError) (1054, "Unknown column 'trouble_ticket.evidence' in 'field list'")
+[SQL: SELECT trouble_ticket.id, trouble_ticket.pelanggan_id, trouble_ticket.data_teknis_id, trouble_ticket.ticket_number, trouble_ticket.title, trouble_ticket.description, trouble_ticket.category, trouble_ticket.priority, trouble_ticket.status, trouble_ticket.downtime_start, trouble_ticket.downtime_end, trouble_ticket.total_downtime_minutes, trouble_ticket.assigned_to, trouble_ticket.resolved_at, trouble_ticket.resolution_notes, trouble_ticket.customer_notified, trouble_ticket.last_customer_contact, trouble_ticket.evidence, trouble_ticket.created_at, trouble_ticket.updated_at, harga_layanan_1.id_brand, harga_layanan_1.brand, harga_layanan_1.pajak, harga_layanan_1.xendit_key_name, pelanggan_1.id AS id_1, pelanggan_1.no_ktp, pelanggan_1.nama, pelanggan_1.alamat, pelanggan_1.alamat_custom, pelanggan_1.alamat_2, pelanggan_1.tgl_instalasi, pelanggan_1.blok, pelanggan_1.unit, pelanggan_1.no_telp, pelanggan_1.email, pelanggan_1.id_brand AS id_brand_1, pelanggan_1.layanan, pelanggan_1.brand_default, pelanggan_1.created_at AS created_at_1, pelanggan_1.updated_at AS updated_at_1, pelanggan_1.mikrotik_server_id, data_teknis_1.id AS id_2, data_teknis_1.pelanggan_id AS pelanggan_id_1, data_teknis_1.id_vlan, data_teknis_1.id_pelanggan, data_teknis_1.password_pppoe, data_teknis_1.ip_pelanggan, data_teknis_1.profile_pppoe, data_teknis_1.olt, data_teknis_1.olt_custom, data_teknis_1.pon, data_teknis_1.otb, data_teknis_1.odc, data_teknis_1.onu_power, data_teknis_1.sn, data_teknis_1.speedtest_proof, data_teknis_1.mikrotik_sync_pending, data_teknis_1.mikrotik_server_id AS mikrotik_server_id_1, data_teknis_1.odp_id, data_teknis_1.port_odp, users_1.id AS id_3, users_1.name, users_1.email AS email_1, users_1.email_verified_at, users_1.password, users_1.remember_token, users_1.created_at AS created_at_2, users_1.updated_at AS updated_at_2, users_1.revoked_before, users_1.password_changed_at, users_1.is_active, users_1.role_id 
+FROM trouble_ticket LEFT OUTER JOIN pelanggan AS pelanggan_1 ON pelanggan_1.id = trouble_ticket.pelanggan_id LEFT OUTER JOIN harga_layanan AS harga_layanan_1 ON harga_layanan_1.id_brand = pelanggan_1.id_brand LEFT OUTER JOIN data_teknis AS data_teknis_1 ON data_teknis_1.id = trouble_ticket.data_teknis_id LEFT OUTER JOIN users AS users_1 ON users_1.id = trouble_ticket.assigned_to ORDER BY trouble_ticket.created_at DESC 
+ LIMIT %s, %s]
+[parameters: (0, 15)]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+2025-10-17 00:52:53 | ROUTERS.T...    | [91mERROR   [0m | update_ticket_status | ❌ Failed to update ticket status 1: 'action_type' is an invalid keyword argument for TicketHistory
+2025-10-17 00:53:41 | ROUTERS.T...    | [91mERROR   [0m | update_ticket_status | ❌ Failed to update ticket status 1: 'action_type' is an invalid keyword argument for TicketHistory
+2025-10-17 00:57:10 | SERVICES....    | [91mERROR   [0m | _get_connection      | Failed to create connection to 17.17.17.2:9729: timed out
+2025-10-17 00:57:10 | SERVICES....    | [91mERROR   [0m | get_api_connection   | Gagal mendapatkan koneksi dari pool ke Mikrotik Tambun (17.17.17.2:9729): timed out
+2025-10-17 12:44:43 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-17 12:44:43 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token
+2025-10-17 12:44:49 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-17 12:44:49 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token
+2025-10-17 12:44:55 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-17 12:44:55 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token
+2025-10-17 12:45:01 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-17 12:45:01 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token
+2025-10-17 12:45:06 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-17 12:45:06 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token
+2025-10-17 15:54:07 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-17 15:54:07 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token
+2025-10-17 15:54:11 | SERVICES....    | [91mERROR   [0m | blacklist_token      | Failed to blacklist token 35e6f85d-c860-4627-8f22-e578c34e6287: (pymysql.err.IntegrityError) (1062, "Duplicate entry '35e6f85d-c860-4627-8f22-e578c34e6287' for key 'token_blacklist.ix_token_blacklist_jti'")
+[SQL: INSERT INTO token_blacklist (jti, user_id, token_type, expires_at, revoked, revoked_at, revoked_reason) VALUES (%s, %s, %s, %s, %s, %s, %s)]
+[parameters: ('35e6f85d-c860-4627-8f22-e578c34e6287', 4, 'Refresh', datetime.datetime(2025, 10, 24, 15, 54, 6), 1, datetime.datetime(2025, 10, 17, 8, 54, 11, 347701), 'User logout')]
+(Background on this error at: https://sqlalche.me/e/20/gkpj)
+2025-10-18 10:45:50 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-18 10:45:50 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token
+2025-10-18 10:45:55 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-18 10:45:55 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token
+2025-10-18 10:46:04 | SERVICES....    | [91mERROR   [0m | _get_connection      | Failed to create connection to 17.17.17.2:9729: timed out
+2025-10-18 10:46:04 | SERVICES....    | [91mERROR   [0m | get_api_connection   | Gagal mendapatkan koneksi dari pool ke Mikrotik Tambun (17.17.17.2:9729): timed out
+2025-10-18 10:46:19 | SERVICES....    | [91mERROR   [0m | _get_connection      | Failed to create connection to 12.12.12.6:9729: timed out
+2025-10-18 10:46:19 | SERVICES....    | [91mERROR   [0m | get_api_connection   | Gagal mendapatkan koneksi dari pool ke Mikrotik Tipar (12.12.12.6:9729): timed out
+2025-10-18 10:46:34 | SERVICES....    | [91mERROR   [0m | _get_connection      | Failed to create connection to 17.17.17.2:9729: timed out
+2025-10-18 10:46:34 | SERVICES....    | [91mERROR   [0m | get_api_connection   | Gagal mendapatkan koneksi dari pool ke Mikrotik Tambun (17.17.17.2:9729): timed out
+2025-10-18 10:46:49 | SERVICES....    | [91mERROR   [0m | _get_connection      | Failed to create connection to 12.12.12.6:9729: timed out
+2025-10-18 10:46:49 | SERVICES....    | [91mERROR   [0m | get_api_connection   | Gagal mendapatkan koneksi dari pool ke Mikrotik Tipar (12.12.12.6:9729): timed out
+2025-10-18 11:02:27 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] WebSocket connection error: 
+2025-10-18 11:02:31 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] WebSocket connection error: Expected ASGI message 'websocket.send' or 'websocket.close', but got 'websocket.accept'.
+2025-10-18 11:03:18 | SERVICES....    | [91mERROR   [0m | _get_connection      | Failed to create connection to 12.12.12.6:9729: timed out
+2025-10-18 11:03:18 | SERVICES....    | [91mERROR   [0m | get_api_connection   | Gagal mendapatkan koneksi dari pool ke Mikrotik Tipar (12.12.12.6:9729): timed out
+2025-10-18 11:03:33 | SERVICES....    | [91mERROR   [0m | _get_connection      | Failed to create connection to 17.17.17.2:9729: timed out
+2025-10-18 11:03:33 | SERVICES....    | [91mERROR   [0m | get_api_connection   | Gagal mendapatkan koneksi dari pool ke Mikrotik Tambun (17.17.17.2:9729): timed out
+2025-10-18 11:04:59 | SERVICES....    | [91mERROR   [0m | _get_connection      | Failed to create connection to 17.17.17.2:9729: timed out
+2025-10-18 11:04:59 | SERVICES....    | [91mERROR   [0m | get_api_connection   | Gagal mendapatkan koneksi dari pool ke Mikrotik Tambun (17.17.17.2:9729): timed out
+2025-10-18 11:05:14 | SERVICES....    | [91mERROR   [0m | _get_connection      | Failed to create connection to 12.12.12.6:9729: timed out
+2025-10-18 11:05:14 | SERVICES....    | [91mERROR   [0m | get_api_connection   | Gagal mendapatkan koneksi dari pool ke Mikrotik Tipar (12.12.12.6:9729): timed out
+2025-10-18 12:08:31 | MIDDLEWARE      | [91mERROR   [0m | log_requests_and_activity | Failed to log activity: 'utf-8' codec can't decode byte 0x89 in position 143: invalid start byte
+Traceback (most recent call last):
+  File "D:\laragon\www\ArtacomFTTHBilling_V2\app\main.py", line 228, in log_requests_and_activity
+    details = json.dumps(json.loads(req_body_bytes))
+                         ~~~~~~~~~~^^^^^^^^^^^^^^^^
+  File "C:\Users\ahmad\AppData\Local\Programs\Python\Python313\Lib\json\__init__.py", line 341, in loads
+    s = s.decode(detect_encoding(s), 'surrogatepass')
+UnicodeDecodeError: 'utf-8' codec can't decode byte 0x89 in position 143: invalid start byte
+2025-10-18 12:28:11 | MIDDLEWARE      | [91mERROR   [0m | log_requests_and_activity | Failed to log activity: 'utf-8' codec can't decode byte 0x89 in position 143: invalid start byte
+Traceback (most recent call last):
+  File "D:\laragon\www\ArtacomFTTHBilling_V2\app\main.py", line 228, in log_requests_and_activity
+    details = json.dumps(json.loads(req_body_bytes))
+                         ~~~~~~~~~~^^^^^^^^^^^^^^^^
+  File "C:\Users\ahmad\AppData\Local\Programs\Python\Python313\Lib\json\__init__.py", line 341, in loads
+    s = s.decode(detect_encoding(s), 'surrogatepass')
+UnicodeDecodeError: 'utf-8' codec can't decode byte 0x89 in position 143: invalid start byte
+2025-10-18 12:32:19 | MIDDLEWARE      | [91mERROR   [0m | log_requests_and_activity | Failed to log activity: 'utf-8' codec can't decode byte 0xff in position 138: invalid start byte
+Traceback (most recent call last):
+  File "D:\laragon\www\ArtacomFTTHBilling_V2\app\main.py", line 228, in log_requests_and_activity
+    details = json.dumps(json.loads(req_body_bytes))
+                         ~~~~~~~~~~^^^^^^^^^^^^^^^^
+  File "C:\Users\ahmad\AppData\Local\Programs\Python\Python313\Lib\json\__init__.py", line 341, in loads
+    s = s.decode(detect_encoding(s), 'surrogatepass')
+UnicodeDecodeError: 'utf-8' codec can't decode byte 0xff in position 138: invalid start byte
+2025-10-18 21:02:30 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-18 21:02:30 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token
+2025-10-18 21:02:45 | SERVICES....    | [91mERROR   [0m | _get_connection      | Failed to create connection to 17.17.17.2:9729: timed out
+2025-10-18 21:02:45 | SERVICES....    | [91mERROR   [0m | get_api_connection   | Gagal mendapatkan koneksi dari pool ke Mikrotik Tambun (17.17.17.2:9729): timed out
+2025-10-18 21:03:00 | SERVICES....    | [91mERROR   [0m | _get_connection      | Failed to create connection to 12.12.12.6:9729: timed out
+2025-10-18 21:03:00 | SERVICES....    | [91mERROR   [0m | get_api_connection   | Gagal mendapatkan koneksi dari pool ke Mikrotik Tipar (12.12.12.6:9729): timed out
+2025-10-18 21:03:15 | SERVICES....    | [91mERROR   [0m | _get_connection      | Failed to create connection to 12.12.12.6:9729: timed out
+2025-10-18 21:03:15 | SERVICES....    | [91mERROR   [0m | get_api_connection   | Gagal mendapatkan koneksi dari pool ke Mikrotik Tipar (12.12.12.6:9729): timed out
+2025-10-18 21:03:30 | SERVICES....    | [91mERROR   [0m | _get_connection      | Failed to create connection to 17.17.17.2:9729: timed out
+2025-10-18 21:03:30 | SERVICES....    | [91mERROR   [0m | get_api_connection   | Gagal mendapatkan koneksi dari pool ke Mikrotik Tambun (17.17.17.2:9729): timed out
+2025-10-18 21:03:45 | SERVICES....    | [91mERROR   [0m | _get_connection      | Failed to create connection to 17.17.17.2:9729: timed out
+2025-10-18 21:03:45 | SERVICES....    | [91mERROR   [0m | get_api_connection   | Gagal mendapatkan koneksi dari pool ke Mikrotik Tambun (17.17.17.2:9729): timed out
+2025-10-18 21:04:00 | SERVICES....    | [91mERROR   [0m | _get_connection      | Failed to create connection to 12.12.12.6:9729: timed out
+2025-10-18 21:04:00 | SERVICES....    | [91mERROR   [0m | get_api_connection   | Gagal mendapatkan koneksi dari pool ke Mikrotik Tipar (12.12.12.6:9729): timed out
+2025-10-18 21:15:05 | ROUTERS.T...    | [91mERROR   [0m | get_category_performance | ❌ Failed to get category performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:15:05 | ROUTERS.T...    | [91mERROR   [0m | get_user_performance | ❌ Failed to get user performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:16:55 | ROUTERS.T...    | [91mERROR   [0m | get_category_performance | ❌ Failed to get category performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:16:55 | ROUTERS.T...    | [91mERROR   [0m | get_user_performance | ❌ Failed to get user performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:19:35 | ROUTERS.T...    | [91mERROR   [0m | get_category_performance | ❌ Failed to get category performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:19:35 | ROUTERS.T...    | [91mERROR   [0m | get_user_performance | ❌ Failed to get user performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:21:23 | ROUTERS.T...    | [91mERROR   [0m | get_category_performance | ❌ Failed to get category performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:21:23 | ROUTERS.T...    | [91mERROR   [0m | get_user_performance | ❌ Failed to get user performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:23:19 | ROUTERS.T...    | [91mERROR   [0m | get_category_performance | ❌ Failed to get category performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:23:19 | ROUTERS.T...    | [91mERROR   [0m | get_user_performance | ❌ Failed to get user performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:23:58 | ROUTERS.T...    | [91mERROR   [0m | get_category_performance | ❌ Failed to get category performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:23:58 | ROUTERS.T...    | [91mERROR   [0m | get_user_performance | ❌ Failed to get user performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:24:51 | ROUTERS.T...    | [91mERROR   [0m | get_category_performance | ❌ Failed to get category performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:24:51 | ROUTERS.T...    | [91mERROR   [0m | get_user_performance | ❌ Failed to get user performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:27:34 | ROUTERS.T...    | [91mERROR   [0m | get_user_performance | ❌ Failed to get user performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:27:34 | ROUTERS.T...    | [91mERROR   [0m | get_category_performance | ❌ Failed to get category performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:27:48 | ROUTERS.T...    | [91mERROR   [0m | get_category_performance | ❌ Failed to get category performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:27:48 | ROUTERS.T...    | [91mERROR   [0m | get_user_performance | ❌ Failed to get user performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:28:01 | ROUTERS.T...    | [91mERROR   [0m | get_user_performance | ❌ Failed to get user performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:28:01 | ROUTERS.T...    | [91mERROR   [0m | get_category_performance | ❌ Failed to get category performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:28:57 | ROUTERS.T...    | [91mERROR   [0m | get_user_performance | ❌ Failed to get user performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:28:57 | ROUTERS.T...    | [91mERROR   [0m | get_category_performance | ❌ Failed to get category performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:29:09 | ROUTERS.T...    | [91mERROR   [0m | get_user_performance | ❌ Failed to get user performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:29:09 | ROUTERS.T...    | [91mERROR   [0m | get_category_performance | ❌ Failed to get category performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:29:23 | ROUTERS.T...    | [91mERROR   [0m | get_category_performance | ❌ Failed to get category performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:29:23 | ROUTERS.T...    | [91mERROR   [0m | get_user_performance | ❌ Failed to get user performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:30:13 | ROUTERS.T...    | [91mERROR   [0m | get_category_performance | ❌ Failed to get category performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:30:13 | ROUTERS.T...    | [91mERROR   [0m | get_user_performance | ❌ Failed to get user performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:30:18 | ROUTERS.T...    | [91mERROR   [0m | get_user_performance | ❌ Failed to get user performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:30:18 | ROUTERS.T...    | [91mERROR   [0m | get_category_performance | ❌ Failed to get category performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:30:26 | ROUTERS.T...    | [91mERROR   [0m | get_category_performance | ❌ Failed to get category performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:30:26 | ROUTERS.T...    | [91mERROR   [0m | get_user_performance | ❌ Failed to get user performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:30:50 | ROUTERS.T...    | [91mERROR   [0m | get_category_performance | ❌ Failed to get category performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:30:50 | ROUTERS.T...    | [91mERROR   [0m | get_user_performance | ❌ Failed to get user performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:31:54 | ROUTERS.T...    | [91mERROR   [0m | get_user_performance | ❌ Failed to get user performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:31:54 | ROUTERS.T...    | [91mERROR   [0m | get_category_performance | ❌ Failed to get category performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:32:58 | ROUTERS.T...    | [91mERROR   [0m | get_category_performance | ❌ Failed to get category performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:32:58 | ROUTERS.T...    | [91mERROR   [0m | get_user_performance | ❌ Failed to get user performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:35:43 | ROUTERS.T...    | [91mERROR   [0m | get_category_performance | ❌ Failed to get category performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:35:43 | ROUTERS.T...    | [91mERROR   [0m | get_user_performance | ❌ Failed to get user performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:39:10 | ROUTERS.T...    | [91mERROR   [0m | get_category_performance | ❌ Failed to get category performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:39:10 | ROUTERS.T...    | [91mERROR   [0m | get_user_performance | ❌ Failed to get user performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:39:33 | ROUTERS.T...    | [91mERROR   [0m | get_user_performance | ❌ Failed to get user performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:39:33 | ROUTERS.T...    | [91mERROR   [0m | get_category_performance | ❌ Failed to get category performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:39:46 | ROUTERS.T...    | [91mERROR   [0m | get_category_performance | ❌ Failed to get category performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:39:46 | ROUTERS.T...    | [91mERROR   [0m | get_user_performance | ❌ Failed to get user performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:40:38 | ROUTERS.T...    | [91mERROR   [0m | get_user_performance | ❌ Failed to get user performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:40:38 | ROUTERS.T...    | [91mERROR   [0m | get_category_performance | ❌ Failed to get category performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:41:05 | ROUTERS.T...    | [91mERROR   [0m | get_user_performance | ❌ Failed to get user performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:41:05 | ROUTERS.T...    | [91mERROR   [0m | get_category_performance | ❌ Failed to get category performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:41:21 | ROUTERS.T...    | [91mERROR   [0m | get_user_performance | ❌ Failed to get user performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:41:21 | ROUTERS.T...    | [91mERROR   [0m | get_category_performance | ❌ Failed to get category performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:41:28 | ROUTERS.T...    | [91mERROR   [0m | get_category_performance | ❌ Failed to get category performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:41:28 | ROUTERS.T...    | [91mERROR   [0m | get_user_performance | ❌ Failed to get user performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:41:50 | ROUTERS.T...    | [91mERROR   [0m | get_category_performance | ❌ Failed to get category performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:41:50 | ROUTERS.T...    | [91mERROR   [0m | get_user_performance | ❌ Failed to get user performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:43:33 | ROUTERS.T...    | [91mERROR   [0m | get_category_performance | ❌ Failed to get category performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:43:33 | ROUTERS.T...    | [91mERROR   [0m | get_user_performance | ❌ Failed to get user performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:43:42 | ROUTERS.T...    | [91mERROR   [0m | get_category_performance | ❌ Failed to get category performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:43:42 | ROUTERS.T...    | [91mERROR   [0m | get_user_performance | ❌ Failed to get user performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:43:58 | ROUTERS.T...    | [91mERROR   [0m | get_category_performance | ❌ Failed to get category performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:43:58 | ROUTERS.T...    | [91mERROR   [0m | get_user_performance | ❌ Failed to get user performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:44:06 | ROUTERS.T...    | [91mERROR   [0m | get_user_performance | ❌ Failed to get user performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:44:06 | ROUTERS.T...    | [91mERROR   [0m | get_category_performance | ❌ Failed to get category performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:44:15 | ROUTERS.T...    | [91mERROR   [0m | get_category_performance | ❌ Failed to get category performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:44:15 | ROUTERS.T...    | [91mERROR   [0m | get_user_performance | ❌ Failed to get user performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:44:30 | ROUTERS.T...    | [91mERROR   [0m | get_user_performance | ❌ Failed to get user performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:44:30 | ROUTERS.T...    | [91mERROR   [0m | get_category_performance | ❌ Failed to get category performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:44:44 | ROUTERS.T...    | [91mERROR   [0m | get_user_performance | ❌ Failed to get user performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:44:44 | ROUTERS.T...    | [91mERROR   [0m | get_category_performance | ❌ Failed to get category performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:44:51 | ROUTERS.T...    | [91mERROR   [0m | get_user_performance | ❌ Failed to get user performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:44:51 | ROUTERS.T...    | [91mERROR   [0m | get_category_performance | ❌ Failed to get category performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:45:30 | ROUTERS.T...    | [91mERROR   [0m | get_user_performance | ❌ Failed to get user performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:45:30 | ROUTERS.T...    | [91mERROR   [0m | get_category_performance | ❌ Failed to get category performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:46:46 | ROUTERS.T...    | [91mERROR   [0m | get_user_performance | ❌ Failed to get user performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:46:46 | ROUTERS.T...    | [91mERROR   [0m | get_category_performance | ❌ Failed to get category performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:46:56 | ROUTERS.T...    | [91mERROR   [0m | get_category_performance | ❌ Failed to get category performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:46:56 | ROUTERS.T...    | [91mERROR   [0m | get_user_performance | ❌ Failed to get user performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:47:10 | ROUTERS.T...    | [91mERROR   [0m | get_category_performance | ❌ Failed to get category performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:47:10 | ROUTERS.T...    | [91mERROR   [0m | get_user_performance | ❌ Failed to get user performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:47:21 | ROUTERS.T...    | [91mERROR   [0m | get_user_performance | ❌ Failed to get user performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:47:21 | ROUTERS.T...    | [91mERROR   [0m | get_category_performance | ❌ Failed to get category performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:47:42 | ROUTERS.T...    | [91mERROR   [0m | get_user_performance | ❌ Failed to get user performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:47:42 | ROUTERS.T...    | [91mERROR   [0m | get_category_performance | ❌ Failed to get category performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:48:17 | ROUTERS.T...    | [91mERROR   [0m | get_user_performance | ❌ Failed to get user performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:48:17 | ROUTERS.T...    | [91mERROR   [0m | get_category_performance | ❌ Failed to get category performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:49:58 | ROUTERS.T...    | [91mERROR   [0m | get_category_performance | ❌ Failed to get category performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:49:58 | ROUTERS.T...    | [91mERROR   [0m | get_user_performance | ❌ Failed to get user performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:50:05 | ROUTERS.T...    | [91mERROR   [0m | get_user_performance | ❌ Failed to get user performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:50:05 | ROUTERS.T...    | [91mERROR   [0m | get_category_performance | ❌ Failed to get category performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:50:35 | ROUTERS.T...    | [91mERROR   [0m | get_category_performance | ❌ Failed to get category performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:50:35 | ROUTERS.T...    | [91mERROR   [0m | get_user_performance | ❌ Failed to get user performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:50:53 | ROUTERS.T...    | [91mERROR   [0m | get_user_performance | ❌ Failed to get user performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:50:53 | ROUTERS.T...    | [91mERROR   [0m | get_category_performance | ❌ Failed to get category performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:51:07 | ROUTERS.T...    | [91mERROR   [0m | get_category_performance | ❌ Failed to get category performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:51:07 | ROUTERS.T...    | [91mERROR   [0m | get_user_performance | ❌ Failed to get user performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:51:48 | ROUTERS.T...    | [91mERROR   [0m | get_user_performance | ❌ Failed to get user performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:51:48 | ROUTERS.T...    | [91mERROR   [0m | get_category_performance | ❌ Failed to get category performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:52:05 | ROUTERS.T...    | [91mERROR   [0m | get_category_performance | ❌ Failed to get category performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:52:05 | ROUTERS.T...    | [91mERROR   [0m | get_user_performance | ❌ Failed to get user performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:52:32 | ROUTERS.T...    | [91mERROR   [0m | get_category_performance | ❌ Failed to get category performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:52:32 | ROUTERS.T...    | [91mERROR   [0m | get_user_performance | ❌ Failed to get user performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:52:43 | ROUTERS.T...    | [91mERROR   [0m | get_user_performance | ❌ Failed to get user performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:52:43 | ROUTERS.T...    | [91mERROR   [0m | get_category_performance | ❌ Failed to get category performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:53:25 | ROUTERS.T...    | [91mERROR   [0m | get_user_performance | ❌ Failed to get user performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 21:53:25 | ROUTERS.T...    | [91mERROR   [0m | get_category_performance | ❌ Failed to get category performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 22:40:47 | ROUTERS.T...    | [91mERROR   [0m | get_category_performance | ❌ Failed to get category performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 22:40:47 | ROUTERS.T...    | [91mERROR   [0m | get_user_performance | ❌ Failed to get user performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 22:40:59 | ROUTERS.T...    | [91mERROR   [0m | get_category_performance | ❌ Failed to get category performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 22:40:59 | ROUTERS.T...    | [91mERROR   [0m | get_user_performance | ❌ Failed to get user performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 22:42:12 | ROUTERS.T...    | [91mERROR   [0m | get_category_performance | ❌ Failed to get category performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 22:42:12 | ROUTERS.T...    | [91mERROR   [0m | get_user_performance | ❌ Failed to get user performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 22:42:19 | ROUTERS.T...    | [91mERROR   [0m | get_category_performance | ❌ Failed to get category performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 22:42:19 | ROUTERS.T...    | [91mERROR   [0m | get_user_performance | ❌ Failed to get user performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 22:42:26 | ROUTERS.T...    | [91mERROR   [0m | get_category_performance | ❌ Failed to get category performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 22:42:26 | ROUTERS.T...    | [91mERROR   [0m | get_user_performance | ❌ Failed to get user performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 22:44:22 | ROUTERS.T...    | [91mERROR   [0m | get_category_performance | ❌ Failed to get category performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 22:44:22 | ROUTERS.T...    | [91mERROR   [0m | get_user_performance | ❌ Failed to get user performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 22:45:50 | ROUTERS.T...    | [91mERROR   [0m | get_category_performance | ❌ Failed to get category performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 22:45:50 | ROUTERS.T...    | [91mERROR   [0m | get_user_performance | ❌ Failed to get user performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 22:49:00 | ROUTERS.T...    | [91mERROR   [0m | get_user_performance | ❌ Failed to get user performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 22:49:00 | ROUTERS.T...    | [91mERROR   [0m | get_category_performance | ❌ Failed to get category performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 22:52:12 | ROUTERS.T...    | [91mERROR   [0m | get_user_performance | ❌ Failed to get user performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 22:52:12 | ROUTERS.T...    | [91mERROR   [0m | get_category_performance | ❌ Failed to get category performance: Function.__init__() got an unexpected keyword argument 'else_'
+2025-10-18 22:55:35 | ROUTERS.T...    | [91mERROR   [0m | get_user_performance | ❌ Failed to get user performance: (pymysql.err.OperationalError) (1305, 'FUNCTION react_billing.literal does not exist')
+[SQL: SELECT users.id, users.name, count(trouble_ticket.id) AS total_assigned, literal(%s) AS resolved_tickets, min(trouble_ticket.created_at) AS first_ticket, max(trouble_ticket.created_at) AS last_ticket 
+FROM trouble_ticket INNER JOIN users ON trouble_ticket.assigned_to = users.id 
+WHERE trouble_ticket.assigned_to IS NOT NULL GROUP BY users.id, users.name ORDER BY total_assigned DESC]
+[parameters: (0,)]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+2025-10-18 22:56:39 | SERVICES....    | [91mERROR   [0m | _get_connection      | Failed to create connection to 17.17.17.2:9729: timed out
+2025-10-18 22:56:39 | SERVICES....    | [91mERROR   [0m | get_api_connection   | Gagal mendapatkan koneksi dari pool ke Mikrotik Tambun (17.17.17.2:9729): timed out
+2025-10-18 22:56:54 | SERVICES....    | [91mERROR   [0m | _get_connection      | Failed to create connection to 12.12.12.6:9729: timed out
+2025-10-18 22:56:54 | SERVICES....    | [91mERROR   [0m | get_api_connection   | Gagal mendapatkan koneksi dari pool ke Mikrotik Tipar (12.12.12.6:9729): timed out
+2025-10-18 23:33:06 | SERVICES....    | [91mERROR   [0m | _get_connection      | Failed to create connection to 17.17.17.2:9729: timed out
+2025-10-18 23:33:06 | SERVICES....    | [91mERROR   [0m | get_api_connection   | Gagal mendapatkan koneksi dari pool ke Mikrotik Tambun (17.17.17.2:9729): timed out
+2025-10-18 23:33:21 | SERVICES....    | [91mERROR   [0m | _get_connection      | Failed to create connection to 12.12.12.6:9729: timed out
+2025-10-18 23:33:21 | SERVICES....    | [91mERROR   [0m | get_api_connection   | Gagal mendapatkan koneksi dari pool ke Mikrotik Tipar (12.12.12.6:9729): timed out
+2025-10-18 23:37:33 | SERVICES....    | [91mERROR   [0m | _get_connection      | Failed to create connection to 17.17.17.2:9729: timed out
+2025-10-18 23:37:33 | SERVICES....    | [91mERROR   [0m | get_api_connection   | Gagal mendapatkan koneksi dari pool ke Mikrotik Tambun (17.17.17.2:9729): timed out
+2025-10-18 23:37:48 | SERVICES....    | [91mERROR   [0m | _get_connection      | Failed to create connection to 12.12.12.6:9729: timed out
+2025-10-18 23:37:48 | SERVICES....    | [91mERROR   [0m | get_api_connection   | Gagal mendapatkan koneksi dari pool ke Mikrotik Tipar (12.12.12.6:9729): timed out
+2025-10-21 10:57:31 | SERVICES....    | [91mERROR   [0m | _get_connection      | Failed to create connection to 192.168.1.1:22: [Errno 111] Connection refused
+2025-10-21 10:57:31 | SERVICES....    | [91mERROR   [0m | get_api_connection   | Gagal mendapatkan koneksi dari pool ke Mikrotik Main Router (192.168.1.1:22): [Errno 111] Connection refused
+2025-10-21 11:08:27 | ROOT            | [91mERROR   [0m | create_paket_layanan | Creating paket with data: {'id_brand': 'ajn-02', 'nama_paket': 'Internet 10 Mbps', 'kecepatan': 10, 'harga': 150000.0}
+2025-10-21 11:08:27 | ROOT            | [91mERROR   [0m | create_paket_layanan | Brand ajn-02 not found in harga_layanan table!
+2025-10-21 11:09:47 | ROOT            | [91mERROR   [0m | create_paket_layanan | Creating paket with data: {'id_brand': 'ajn-02', 'nama_paket': 'Internet 10 Mbps', 'kecepatan': 10, 'harga': 150000.0}
+2025-10-21 11:09:47 | ROOT            | [91mERROR   [0m | create_paket_layanan | Found harga_layanan: <app.models.harga_layanan.HargaLayanan object at 0x748cf4cd3b60>
+2025-10-21 11:09:47 | ROOT            | [91mERROR   [0m | create_paket_layanan | Successfully created paket: <app.models.paket_layanan.PaketLayanan object at 0x748cf4cd3440>
+2025-10-21 11:10:15 | ROOT            | [91mERROR   [0m | create_paket_layanan | Creating paket with data: {'id_brand': 'ajn-03', 'nama_paket': 'Internet 10 Mbps', 'kecepatan': 10, 'harga': 135135.0}
+2025-10-21 11:10:15 | ROOT            | [91mERROR   [0m | create_paket_layanan | Found harga_layanan: <app.models.harga_layanan.HargaLayanan object at 0x748cf4f2b830>
+2025-10-21 11:10:15 | ROOT            | [91mERROR   [0m | create_paket_layanan | Successfully created paket: <app.models.paket_layanan.PaketLayanan object at 0x748cf4e3bd10>
+2025-10-21 11:10:28 | ROOT            | [91mERROR   [0m | create_paket_layanan | Creating paket with data: {'id_brand': 'ajn-03', 'nama_paket': 'Internet 20 Mbps', 'kecepatan': 20, 'harga': 199000.0}
+2025-10-21 11:10:28 | ROOT            | [91mERROR   [0m | create_paket_layanan | Found harga_layanan: <app.models.harga_layanan.HargaLayanan object at 0x748cf4d0a060>
+2025-10-21 11:10:28 | ROOT            | [91mERROR   [0m | create_paket_layanan | Successfully created paket: <app.models.paket_layanan.PaketLayanan object at 0x748cf4d0a780>
+2025-10-21 11:10:44 | ROOT            | [91mERROR   [0m | create_paket_layanan | Creating paket with data: {'id_brand': 'ajn-03', 'nama_paket': 'Internet 30 Mbps', 'kecepatan': 30, 'harga': 224000.0}
+2025-10-21 11:10:44 | ROOT            | [91mERROR   [0m | create_paket_layanan | Found harga_layanan: <app.models.harga_layanan.HargaLayanan object at 0x748cf4d0b0e0>
+2025-10-21 11:10:44 | ROOT            | [91mERROR   [0m | create_paket_layanan | Successfully created paket: <app.models.paket_layanan.PaketLayanan object at 0x748cf4d0a900>
+2025-10-21 11:11:30 | ROOT            | [91mERROR   [0m | create_paket_layanan | Creating paket with data: {'id_brand': 'ajn-03', 'nama_paket': 'Internet 50 Mbps', 'kecepatan': 50, 'harga': 254000.0}
+2025-10-21 11:11:30 | ROOT            | [91mERROR   [0m | create_paket_layanan | Found harga_layanan: <app.models.harga_layanan.HargaLayanan object at 0x748cf4d08fe0>
+2025-10-21 11:11:30 | ROOT            | [91mERROR   [0m | create_paket_layanan | Successfully created paket: <app.models.paket_layanan.PaketLayanan object at 0x748cf4d08740>
+2025-10-21 11:12:11 | ROOT            | [91mERROR   [0m | create_paket_layanan | Creating paket with data: {'id_brand': 'ajn-02', 'nama_paket': 'Internet 10 Mbps', 'kecepatan': 10, 'harga': 150000.0}
+2025-10-21 11:12:11 | ROOT            | [91mERROR   [0m | create_paket_layanan | Found harga_layanan: <app.models.harga_layanan.HargaLayanan object at 0x748cf4d08b90>
+2025-10-21 11:12:11 | ROOT            | [91mERROR   [0m | create_paket_layanan | Successfully created paket: <app.models.paket_layanan.PaketLayanan object at 0x748cf4d08bc0>
+2025-10-21 11:15:44 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] WebSocket connection error: 
+2025-10-21 11:15:52 | SERVICES....    | [91mERROR   [0m | _get_connection      | Failed to create connection to 192.168.1.1:22: [Errno 111] Connection refused
+2025-10-21 11:15:52 | SERVICES....    | [91mERROR   [0m | get_api_connection   | Gagal mendapatkan koneksi dari pool ke Mikrotik Main Router (192.168.1.1:22): [Errno 111] Connection refused
+2025-10-21 19:26:48 | SERVICES....    | [91mERROR   [0m | _get_connection      | Failed to create connection to 192.168.1.1:22: [Errno 111] Connection refused
+2025-10-21 19:26:48 | SERVICES....    | [91mERROR   [0m | get_api_connection   | Gagal mendapatkan koneksi dari pool ke Mikrotik Main Router (192.168.1.1:22): [Errno 111] Connection refused
+2025-10-21 19:26:48 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-21 19:26:48 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token
+2025-10-21 19:30:24 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] WebSocket connection error: Expected ASGI message 'websocket.send' or 'websocket.close', but got 'websocket.accept'.
+2025-10-21 19:37:49 | ROUTERS.D...    | [91mERROR   [0m | get_available_ont_status | Error mengambil status ONT: type object 'Pelanggan' has no attribute 'status_pembayaran'
+2025-10-21 19:47:56 | SERVICES....    | [91mERROR   [0m | _get_connection      | Failed to create connection to 192.168.1.1:22: [Errno 111] Connection refused
+2025-10-21 19:47:56 | SERVICES....    | [91mERROR   [0m | get_api_connection   | Gagal mendapatkan koneksi dari pool ke Mikrotik Main Router (192.168.1.1:22): [Errno 111] Connection refused
+2025-10-21 23:00:09 | SERVICES....    | [91mERROR   [0m | _get_connection      | Failed to create connection to 192.168.1.1:22: [Errno 111] Connection refused
+2025-10-21 23:00:09 | SERVICES....    | [91mERROR   [0m | get_api_connection   | Gagal mendapatkan koneksi dari pool ke Mikrotik Main Router (192.168.1.1:22): [Errno 111] Connection refused
+2025-10-21 23:00:10 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-21 23:00:10 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token
+2025-10-21 23:00:16 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-21 23:00:16 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token
+2025-10-21 23:00:22 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-21 23:00:22 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token
+2025-10-21 23:00:28 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-21 23:00:28 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token
+2025-10-21 23:00:34 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-21 23:00:34 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token
+2025-10-21 23:00:39 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-21 23:00:39 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token
+2025-10-21 23:00:44 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-21 23:00:44 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token
+2025-10-21 23:00:49 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-21 23:00:49 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token
+2025-10-21 23:00:54 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-21 23:00:54 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token
+2025-10-21 23:00:59 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-21 23:00:59 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token

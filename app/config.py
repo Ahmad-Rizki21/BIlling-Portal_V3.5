@@ -36,6 +36,7 @@ class Settings(BaseSettings):
         "Activity Log",
         "olt",
         "odp_management",
+        "Trouble Tickets",
     ]
 
     # --- TAMBAHKAN INI ---
@@ -58,6 +59,12 @@ class Settings(BaseSettings):
         "pelanggan_status_overview_chart",
         "pelanggan_metrik_cepat",
         "pelanggan_tren_pendapatan_chart",
+    ]
+
+    # Fitur-fitur tambahan yang memerlukan permissions
+    SYSTEM_FEATURES: List[str] = [
+        "settings",
+        "uploads",
     ]
     # ---------------------
 

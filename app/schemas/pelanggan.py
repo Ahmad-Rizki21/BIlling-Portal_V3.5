@@ -117,7 +117,11 @@ class PelangganCreate(BaseModel):
         if not v_str:
             raise ValueError("No Telepon tidak boleh kosong")
 
-        # Clean phone number (remove spaces, dashes, etc.)
+        # Check for forbidden characters (specifically dashes)
+        if "-" in v_str:
+            raise ValueError("No Telepon tidak boleh mengandung karakter '-' (dash). Gunakan hanya angka dan spasi.")
+
+        # Clean phone number (remove spaces, but keep digits and +)
         clean_phone = re.sub(r"[^\d+]", "", v_str)
 
         # Basic phone validation
@@ -472,7 +476,11 @@ class PelangganImport(BaseModel):
         if not v_str:
             raise ValueError("No Telepon tidak boleh kosong")
 
-        # Clean phone number (remove spaces, dashes, etc.)
+        # Check for forbidden characters (specifically dashes)
+        if "-" in v_str:
+            raise ValueError("No Telepon tidak boleh mengandung karakter '-' (dash). Gunakan hanya angka dan spasi.")
+
+        # Clean phone number (remove spaces, but keep digits and +)
         clean_phone = re.sub(r"[^\d+]", "", v_str)
 
         # Basic phone validation

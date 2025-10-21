@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from .pelanggan import Pelanggan
     from .mikrotik_server import MikrotikServer
     from .odp import ODP
+    from .trouble_ticket import TroubleTicket
 
 
 class DataTeknis(Base):
@@ -86,3 +87,5 @@ class DataTeknis(Base):
 
     # Relasi ke Pelanggan
     pelanggan: Mapped["Pelanggan"] = relationship(back_populates="data_teknis")
+    # Relasi ke Trouble Tickets
+    trouble_tickets: Mapped[list["TroubleTicket"]] = relationship("TroubleTicket", back_populates="data_teknis")

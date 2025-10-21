@@ -154,12 +154,27 @@ async def create_data_teknis(data_teknis: DataTeknisCreate, db: AsyncSession = D
     return db_data_teknis
 
 
+@router.get("/by-pelanggan/{pelanggan_id}", response_model=List[DataTeknisSchema])
+async def read_data_teknis_by_pelanggan(pelanggan_id: int, db: AsyncSession = Depends(get_db)):
+    """
+    Mengambil data teknis berdasarkan ID pelanggan.
+    """
+    query = select(DataTeknisModel).options(joinedload(DataTeknisModel.pelanggan)).where(DataTeknisModel.pelanggan_id == pelanggan_id)
+    result = await db.execute(query)
+    data_teknis_list = list(result.scalars().all())
+    return data_teknis_list
+
+
 @router.get("/", response_model=DataTeknisResponse)
 async def read_all_data_teknis(
     skip: int = 0,
     limit: Optional[int] = None,
     search: Optional[str] = None,
     olt: Optional[str] = None,
+    profile: Optional[str] = None,
+    vlan: Optional[str] = None,
+    onu_power_min: Optional[int] = None,
+    onu_power_max: Optional[int] = None,
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -192,9 +207,29 @@ async def read_all_data_teknis(
         # If no search, still join for eager loading but no where clause for the main query
         query = query.join(DataTeknisModel.pelanggan)
 
-    if olt:
+    # Filter OLT
+    if olt and olt != "Semua":
         query = query.where(DataTeknisModel.olt == olt)
         count_query = count_query.where(DataTeknisModel.olt == olt)
+
+    # Filter Profile PPPoE
+    if profile and profile != "Semua":
+        query = query.where(DataTeknisModel.profile_pppoe == profile)
+        count_query = count_query.where(DataTeknisModel.profile_pppoe == profile)
+
+    # Filter VLAN
+    if vlan and vlan != "Semua":
+        query = query.where(DataTeknisModel.id_vlan == vlan)
+        count_query = count_query.where(DataTeknisModel.id_vlan == vlan)
+
+    # Filter ONU Power Range
+    if onu_power_min is not None:
+        query = query.where(DataTeknisModel.onu_power >= onu_power_min)
+        count_query = count_query.where(DataTeknisModel.onu_power >= onu_power_min)
+
+    if onu_power_max is not None:
+        query = query.where(DataTeknisModel.onu_power <= onu_power_max)
+        count_query = count_query.where(DataTeknisModel.onu_power <= onu_power_max)
 
     # Get total count before applying pagination
     total_count_result = await db.execute(count_query)
@@ -209,6 +244,112 @@ async def read_all_data_teknis(
     data_teknis_list = list(result.unique().scalars().all())
 
     return DataTeknisResponse(data=data_teknis_list, total_count=total_count)  # type: ignore
+
+
+@router.get("/available-olt", response_model=List[str])
+async def get_available_olt(db: AsyncSession = Depends(get_db)):
+    """
+    Mengambil semua OLT/Mikrotik Server yang tersedia untuk filter dropdown.
+    """
+    try:
+        # Ambil semua Mikrotik server yang aktif
+        query = select(MikrotikServerModel.name).where(MikrotikServerModel.is_active == True).order_by(MikrotikServerModel.name)
+        result = await db.execute(query)
+        olt_list = result.scalars().all()
+
+        # Tambahkan opsi "Semua" di awal
+        all_options = ["Semua"] + [olt for olt in olt_list if olt]
+
+        return all_options
+    except Exception as e:
+        logger.error(f"Error mengambil data OLT: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Gagal mengambil data OLT: {str(e)}"
+        )
+
+
+@router.get("/available-profiles", response_model=List[str])
+async def get_available_profiles(db: AsyncSession = Depends(get_db)):
+    """
+    Mengambil semua Profile PPPoE yang tersedia untuk filter dropdown.
+    """
+    try:
+        # Ambil semua profile PPPoE yang unik dari data teknis
+        query = select(DataTeknisModel.profile_pppoe).where(
+            DataTeknisModel.profile_pppoe.isnot(None)
+        ).distinct().order_by(DataTeknisModel.profile_pppoe)
+        result = await db.execute(query)
+        profiles = result.scalars().all()
+
+        # Tambahkan opsi "Semua" di awal
+        all_options = ["Semua"] + [profile for profile in profiles if profile]
+
+        return all_options
+    except Exception as e:
+        logger.error(f"Error mengambil data profile PPPoE: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Gagal mengambil data profile PPPoE: {str(e)}"
+        )
+
+
+@router.get("/available-vlans", response_model=List[str])
+async def get_available_vlans(db: AsyncSession = Depends(get_db)):
+    """
+    Mengambil semua VLAN yang tersedia untuk filter dropdown.
+    """
+    try:
+        # Ambil semua VLAN yang unik dari data teknis
+        query = select(DataTeknisModel.id_vlan).where(
+            DataTeknisModel.id_vlan.isnot(None)
+        ).distinct().order_by(DataTeknisModel.id_vlan)
+        result = await db.execute(query)
+        vlans = result.scalars().all()
+
+        # Tambahkan opsi "Semua" di awal
+        all_options = ["Semua"] + [vlan for vlan in vlans if vlan]
+
+        return all_options
+    except Exception as e:
+        logger.error(f"Error mengambil data VLAN: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Gagal mengambil data VLAN: {str(e)}"
+        )
+
+
+@router.get("/onu-power-ranges")
+async def get_onu_power_ranges(db: AsyncSession = Depends(get_db)):
+    """
+    Mengambil range ONU Power untuk filter dropdown.
+    """
+    try:
+        # Ambil data ONU power min dan max
+        query = select(
+            func.min(DataTeknisModel.onu_power),
+            func.max(DataTeknisModel.onu_power)
+        ).where(DataTeknisModel.onu_power.isnot(None))
+        result = await db.execute(query)
+        min_power, max_power = result.one()
+
+        return {
+            "min": min_power or 0,
+            "max": max_power or 0,
+            "ranges": [
+                {"label": "Sinyal Baik (>-24 dBm)", "min": -23, "max": 0},
+                {"label": "Sinyal Sedang (-27 s/d -24 dBm)", "min": -27, "max": -24},
+                {"label": "Sinyal Lemah (<-27 dBm)", "min": -50, "max": -28}
+            ]
+        }
+    except Exception as e:
+        logger.error(f"Error mengambil range ONU Power: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Gagal mengambil range ONU Power: {str(e)}"
+        )
+
+
 
 
 @router.get("/{data_teknis_id}", response_model=DataTeknisSchema)
@@ -424,6 +565,10 @@ async def export_to_csv_teknis(
     limit: int = Query(default=5000, le=50000, description="Maximum 50,000 records per export"),  # Max 50k records
     search: Optional[str] = None,
     olt: Optional[str] = None,
+    profile: Optional[str] = None,
+    vlan: Optional[str] = None,
+    onu_power_min: Optional[int] = None,
+    onu_power_max: Optional[int] = None,
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -455,8 +600,20 @@ async def export_to_csv_teknis(
             )
         )
 
-    if olt:
+    if olt and olt != "Semua":
         query = query.where(DataTeknisModel.olt == olt)
+
+    if profile and profile != "Semua":
+        query = query.where(DataTeknisModel.profile_pppoe == profile)
+
+    if vlan and vlan != "Semua":
+        query = query.where(DataTeknisModel.id_vlan == vlan)
+
+    if onu_power_min is not None:
+        query = query.where(DataTeknisModel.onu_power >= onu_power_min)
+
+    if onu_power_max is not None:
+        query = query.where(DataTeknisModel.onu_power <= onu_power_max)
 
     query = query.order_by(DataTeknisModel.id.desc())
 

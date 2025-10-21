@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     from .harga_layanan import HargaLayanan
     from .mikrotik_server import MikrotikServer
     from .inventory_item import InventoryItem
+    from .trouble_ticket import TroubleTicket
 
 
 class Pelanggan(Base):
@@ -73,6 +74,8 @@ class Pelanggan(Base):
     harga_layanan: Mapped["HargaLayanan"] = relationship("HargaLayanan", foreign_keys=[id_brand])
     # Tambahkan relasi ke inventory items
     inventory_items: Mapped[list["InventoryItem"]] = relationship("InventoryItem", back_populates="pelanggan")
+    # Tambahkan relasi ke trouble tickets
+    trouble_tickets: Mapped[list["TroubleTicket"]] = relationship("TroubleTicket", back_populates="pelanggan")
 
     def to_dict(self):
         return {c.name: getattr(self, c.name) for c in self.__table__.columns}

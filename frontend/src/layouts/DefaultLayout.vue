@@ -9,6 +9,8 @@
       <v-icon class="me-2">mdi-alert</v-icon>
       <span>{{ settingsStore.maintenanceMode.message }}</span>
     </v-system-bar>
+
+    <!-- Navigation Drawer (Sidebar) -->
     <v-navigation-drawer
       v-model="drawer"
       :rail="rail && !isMobile"
@@ -25,7 +27,7 @@
 
           <div v-if="!rail || isMobile" class="sidebar-title-wrapper">
             <h1 class="sidebar-title">Artacom Ftth</h1>
-            <span class="sidebar-subtitle">PORTAL CUSTOMER V2.5</span>
+            <span class="sidebar-subtitle">PORTAL CUSTOMER V3</span>
           </div>
 
           <v-spacer v-if="!rail || isMobile"></v-spacer>
@@ -51,86 +53,86 @@
       <v-divider></v-divider>
 
       <div class="navigation-wrapper">
-  <v-list nav class="navigation-menu">
-    <template v-for="group in filteredMenuGroups" :key="group.title">
-      <v-list-subheader v-if="!rail || isMobile" class="menu-subheader">{{ group.title }}</v-list-subheader>
-      
-      <template v-for="item in group.items" :key="item.title">
-        <v-list-group 
-          v-if="'children' in item"
-          :value="item.value"
-        >
-          <template v-slot:activator="{ props }">
-            <v-list-item
-              v-bind="props"
-              :prepend-icon="item.icon"
-              :title="item.title"
-              class="nav-item"
-            ></v-list-item>
-          </template>
+        <v-list nav class="navigation-menu">
+          <template v-for="group in filteredMenuGroups" :key="group.title">
+            <v-list-subheader v-if="!rail || isMobile" class="menu-subheader">{{ group.title }}</v-list-subheader>
+            
+            <template v-for="item in group.items" :key="item.title">
+              <v-list-group 
+                v-if="'children' in item"
+                :value="item.value"
+              >
+                <template v-slot:activator="{ props }">
+                  <v-list-item
+                    v-bind="props"
+                    :prepend-icon="item.icon"
+                    :title="item.title"
+                    class="nav-item"
+                  ></v-list-item>
+                </template>
 
+                <v-list-item
+                  v-for="subItem in item.children"
+                  :key="subItem.title"
+                  :title="subItem.title"
+                  :to="subItem.to"
+                  :prepend-icon="subItem.icon"
+                  class="nav-sub-item"
+                ></v-list-item>
+              </v-list-group>
+              
               <v-list-item
-          v-for="subItem in item.children"
-          :key="subItem.title"
-          :title="subItem.title"
-          :to="subItem.to"
-          :prepend-icon="subItem.icon"
-          class="nav-sub-item"
-      ></v-list-item>
-        </v-list-group>
-        
-        <v-list-item
-          v-else
-          :prepend-icon="item.icon"
-          :title="item.title"
-          :value="item.value"
-          :to="item.to"
-          class="nav-item"
-        >
-          <template v-slot:append>
-            <v-tooltip location="end">
-              <template v-slot:activator="{ props }">
-                <v-badge
-                  v-if="item.value === 'langganan' && suspendedCount > 0"
-                  color="error"
-                  :content="suspendedCount"
-                  inline
-                  v-bind="props"
-                ></v-badge>
-              </template>
-              <span>{{ suspendedCount }} langganan berstatus "Suspended"</span>
-            </v-tooltip>
-            <v-tooltip location="end">
-            <template v-slot:activator="{ props }">
-              <v-badge
-                v-if="item.value === 'langganan' && stoppedCount > 0"
-                color="grey"
-                :content="stoppedCount"
-                inline
-                class="ms-2"
-                v-bind="props"
-              ></v-badge>
+                v-else
+                :prepend-icon="item.icon"
+                :title="item.title"
+                :value="item.value"
+                :to="item.to"
+                class="nav-item"
+              >
+                <template v-slot:append>
+                  <v-tooltip location="end">
+                    <template v-slot:activator="{ props }">
+                      <v-badge
+                        v-if="item.value === 'langganan' && suspendedCount > 0"
+                        color="error"
+                        :content="suspendedCount"
+                        inline
+                        v-bind="props"
+                      ></v-badge>
+                    </template>
+                    <span>{{ suspendedCount }} langganan berstatus "Suspended"</span>
+                  </v-tooltip>
+                  <v-tooltip location="end">
+                    <template v-slot:activator="{ props }">
+                      <v-badge
+                        v-if="item.value === 'langganan' && stoppedCount > 0"
+                        color="grey"
+                        :content="stoppedCount"
+                        inline
+                        class="ms-2"
+                        v-bind="props"
+                      ></v-badge>
+                    </template>
+                    <span>{{ stoppedCount }} langganan berstatus "Berhenti"</span>
+                  </v-tooltip>
+                  <v-tooltip location="end">
+                    <template v-slot:activator="{ props }">
+                      <v-badge
+                        v-if="item.value === 'invoices' && unpaidInvoiceCount > 0"
+                        color="warning"
+                        :content="unpaidInvoiceCount"
+                        inline
+                        v-bind="props"
+                      ></v-badge>
+                    </template>
+                    <span>{{ unpaidInvoiceCount }} invoice belum dibayar</span>
+                  </v-tooltip>
+                </template>
+              </v-list-item>
             </template>
-            <span>{{ stoppedCount }} langganan berstatus "Berhenti"</span>
-          </v-tooltip>
-          <v-tooltip location="end">
-            <template v-slot:activator="{ props }">
-              <v-badge
-                v-if="item.value === 'invoices' && unpaidInvoiceCount > 0"
-                color="warning"
-                :content="unpaidInvoiceCount"
-                inline
-                v-bind="props"
-              ></v-badge>
-            </template>
-            <span>{{ unpaidInvoiceCount }} invoice belum dibayar</span>
-          </v-tooltip>
           </template>
-        </v-list-item>
-      </template>
-    </template>
-  </v-list>
-</div>
+        </v-list>
+      </div>
 
       <template v-slot:append>
         <div class="logout-section pa-4">
@@ -149,6 +151,7 @@
       </template>
     </v-navigation-drawer>
 
+    <!-- App Bar (Header) -->
     <v-app-bar elevation="0" class="modern-app-bar">
       <v-btn
         icon="mdi-menu"
@@ -182,11 +185,11 @@
           </div>
           <template v-else>
             <v-list-item
-            v-for="(notif, index) in notifications"
-            :key="index"
-            class="py-2 notification-item"
-            @click="handleNotificationClick(notif)"
-              >
+              v-for="(notif, index) in notifications"
+              :key="index"
+              class="py-2 notification-item"
+              @click="handleNotificationClick(notif)"
+            >
               <template v-slot:prepend>
                 <v-avatar :color="getNotificationColor(notif.type)" size="32" class="me-3">
                     <v-icon size="18">{{ getNotificationIcon(notif.type) }}</v-icon>
@@ -226,11 +229,78 @@
       </v-menu>
     </v-app-bar>
 
-    <v-main class="modern-main">
+    <!-- Main Content -->
+    <v-main class="modern-main" :class="{ 'with-bottom-nav': isMobile }">
       <router-view></router-view>
     </v-main>
     
-    <v-footer app height="69px" class="d-flex align-center justify-center text-medium-emphasis footer-responsive" style="border-top: 1px solid rgba(0,0,0,0.08);">
+    <!-- Bottom Navigation (Mobile Only) -->
+    <v-bottom-navigation
+      v-if="isMobile"
+      v-model="activeBottomNav"
+      class="mobile-bottom-nav"
+      grow
+      elevation="8"
+      height="65"
+    >
+      <v-btn value="dashboard" @click="navigateTo('/dashboard')">
+        <v-icon>mdi-home-variant</v-icon>
+        <span>Dashboard</span>
+      </v-btn>
+
+      <v-btn value="pelanggan" @click="navigateTo('/pelanggan')">
+        <v-icon>mdi-account-group-outline</v-icon>
+        <span>Pelanggan</span>
+      </v-btn>
+
+      <v-btn value="langganan" @click="navigateTo('/langganan')">
+        <v-badge
+          v-if="suspendedCount > 0 || stoppedCount > 0"
+          :content="suspendedCount + stoppedCount"
+          color="error"
+          overlap
+        >
+          <v-icon>mdi-wifi-star</v-icon>
+        </v-badge>
+        <v-icon v-else>mdi-wifi-star</v-icon>
+        <span>Langganan</span>
+      </v-btn>
+
+      <v-btn value="trouble-tickets" @click="navigateTo('/trouble-tickets')">
+        <v-badge
+          v-if="openTicketsCount > 0"
+          :content="openTicketsCount"
+          color="warning"
+          overlap
+        >
+          <v-icon>mdi-ticket-confirmation-outline</v-icon>
+        </v-badge>
+        <v-icon v-else>mdi-ticket-confirmation-outline</v-icon>
+        <span>Tickets</span>
+      </v-btn>
+
+      <v-btn value="invoices" @click="navigateTo('/invoices')">
+        <v-badge
+          v-if="unpaidInvoiceCount > 0"
+          :content="unpaidInvoiceCount"
+          color="orange"
+          overlap
+        >
+          <v-icon>mdi-file-document-outline</v-icon>
+        </v-badge>
+        <v-icon v-else>mdi-file-document-outline</v-icon>
+        <span>Invoice</span>
+      </v-btn>
+    </v-bottom-navigation>
+
+    <!-- Footer (Desktop Only) -->
+    <v-footer 
+      v-if="!isMobile"
+      app 
+      height="69px" 
+      class="d-flex align-center justify-center text-medium-emphasis footer-responsive" 
+      style="border-top: 1px solid rgba(0,0,0,0.08);"
+    >
       <div class="footer-content">
         &copy; {{ new Date().getFullYear() }} <strong>Artacom Billing System</strong>. All Rights Design Reserved by 
         <a 
@@ -251,11 +321,11 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useTheme } from 'vuetify'
 import { useDisplay } from 'vuetify'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useSettingsStore } from '@/stores/settings'
 import apiClient from '@/services/api';
-import logo from '@/assets/Jelantik 1.svg'; // Assuming you have a logo file
+import logo from '@/assets/Jelantik 1.svg';
 
 // --- State ---
 const theme = useTheme();
@@ -263,6 +333,8 @@ const { mobile } = useDisplay();
 const drawer = ref(true);
 const rail = ref(false);
 const router = useRouter();
+const route = useRoute();
+const activeBottomNav = ref('dashboard');
 
 // PERBAIKAN: Inisialisasi notifications dengan validasi lebih baik
 const notifications = ref<any[]>([]);
@@ -277,6 +349,7 @@ watch(notifications, (newVal) => {
 const suspendedCount = ref(0);
 const unpaidInvoiceCount = ref(0);
 const stoppedCount = ref(0);
+const openTicketsCount = ref(0);
 const userCount = ref(0);
 const roleCount = ref(0);
 const userPermissions = ref<string[]>([]);
@@ -287,6 +360,29 @@ let socket: WebSocket | null = null;
 const isMobile = computed(() => mobile.value);
 const logoSrc = computed(() => theme.global.current.value.dark ? logo : logo);
 const settingsStore = useSettingsStore();
+
+// Watch route changes untuk update bottom nav
+watch(() => route.path, (newPath) => {
+  updateActiveBottomNav(newPath);
+});
+
+function updateActiveBottomNav(path: string) {
+  if (path.includes('/dashboard')) {
+    activeBottomNav.value = 'dashboard';
+  } else if (path.includes('/pelanggan')) {
+    activeBottomNav.value = 'pelanggan';
+  } else if (path.includes('/langganan')) {
+    activeBottomNav.value = 'langganan';
+  } else if (path.includes('/trouble-tickets')) {
+    activeBottomNav.value = 'trouble-tickets';
+  } else if (path.includes('/invoices')) {
+    activeBottomNav.value = 'invoices';
+  }
+}
+
+function navigateTo(path: string) {
+  router.push(path);
+}
 
 // Toggle drawer function untuk mobile/desktop
 function toggleDrawer() {
@@ -302,7 +398,8 @@ async function fetchSidebarBadges() {
     const response = await apiClient.get('/dashboard/sidebar-badges');
     suspendedCount.value = response.data.suspended_count;
     unpaidInvoiceCount.value = response.data.unpaid_invoice_count;
-    stoppedCount.value = response.data.stopped_count; // <-- Ambil data baru
+    stoppedCount.value = response.data.stopped_count;
+    openTicketsCount.value = response.data.open_tickets_count || 0;
   } catch (error) {
     console.error("Gagal mengambil data badge sidebar:", error);
   }
@@ -317,7 +414,6 @@ function playSound(type: string) {
   try {
     console.log(`[Audio] Attempting to play sound for type: ${type}`);
     
-    // PERBAIKAN: Mapping tipe notifikasi ke file audio dengan lebih baik
     let audioFile = '';
     switch (type) {
       case 'new_payment':
@@ -331,19 +427,15 @@ function playSound(type: string) {
         audioFile = '/noc_finance.mp3';
         break;
       default:
-        // Fallback untuk tipe tidak dikenal
         audioFile = '/notification.mp3';
         console.warn(`[Audio] Unknown notification type: ${type}, using fallback audio`);
     }
 
-    // PERBAIKAN: Validasi file audio dengan lebih baik
     if (audioFile) {
       console.log(`[Audio] Loading audio file: ${audioFile}`);
       
-      // PERBAIKAN: Cek apakah file audio benar-benar ada
       const audio = new Audio(audioFile);
       
-      // PERBAIKAN: Tambahkan event listener untuk semua event audio
       audio.addEventListener('loadstart', () => {
         console.log(`[Audio] Loading started for ${audioFile}`);
       });
@@ -359,7 +451,6 @@ function playSound(type: string) {
       audio.addEventListener('error', (e) => {
         console.error(`[Audio] Gagal memuat audio (${audioFile}):`, e);
         console.error(`[Audio] Error code: ${audio.error?.code}, message: ${audio.error?.message}`);
-        // PERBAIKAN: Fallback ke beep sederhana
         fallbackBeep();
       });
       
@@ -371,39 +462,32 @@ function playSound(type: string) {
         console.log(`[Audio] Finished playing audio: ${audioFile}`);
       });
       
-      // PERBAIKAN: Tambahkan timeout untuk playback
       const playPromise = audio.play();
       if (playPromise !== undefined) {
         playPromise.then(() => {
           console.log(`[Audio] Playback started successfully for ${audioFile}`);
         }).catch(error => {
           console.warn(`[Audio] Gagal memutar audio (${audioFile}):`, error);
-          // PERBAIKAN: Fallback ke beep sederhana jika playback gagal
           fallbackBeep();
         });
       } else {
         console.warn(`[Audio] Play promise undefined for ${audioFile}`);
-        // PERBAIKAN: Fallback ke beep sederhana jika playback gagal
         fallbackBeep();
       }
     } else {
       console.warn(`[Audio] Tidak ada file audio untuk type: ${type}`);
-      // PERBAIKAN: Fallback ke beep sederhana jika tidak ada file
       fallbackBeep();
     }
   } catch (error) {
     console.error('[Audio] Gagal membuat/memutar audio:', error);
-    // PERBAIKAN: Fallback ke beep sederhana jika terjadi error
     fallbackBeep();
   }
 }
 
-// PERBAIKAN: Fungsi fallback beep sederhana dengan logging yang lebih baik
 function fallbackBeep() {
   try {
     console.log('[Audio] Fallback beep activated');
     
-    // Metode 1: AudioContext (modern)
     const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
     if (AudioContext) {
       const context = new AudioContext();
@@ -429,7 +513,6 @@ function fallbackBeep() {
   }
   
   try {
-    // Metode 2: Fallback ke beep sederhana
     const context = new (window.AudioContext || (window as any).webkitAudioContext)();
     const oscillator = context.createOscillator();
     const gainNode = context.createGain();
@@ -449,15 +532,12 @@ function fallbackBeep() {
   } catch (fallbackError) {
     console.warn('[Audio] All fallback methods failed:', fallbackError);
     
-    // Metode 3: Alert sebagai fallback terakhir
     try {
-      // Flash title bar
       let originalTitle = document.title;
       let flashInterval: NodeJS.Timeout | null = setInterval(() => {
         document.title = document.title === originalTitle ? "🔔 NOTIFIKASI BARU!" : originalTitle;
       }, 500);
 
-      // Hentikan flashing setelah 3 detik
       setTimeout(() => {
         clearInterval(flashInterval);
         document.title = originalTitle;
@@ -488,12 +568,10 @@ async function refreshTokenAndReconnect() {
 }
 
 function connectWebSocket() {
-  // 1. Hentikan jika sudah ada koneksi atau tidak ada token
   if (!authStore.token || (socket && socket.readyState === WebSocket.OPEN)) {
     return;
   }
   
-  // Hentikan timer reconnect yang mungkin sedang berjalan
   if (reconnectTimeout) clearTimeout(reconnectTimeout);
   
   const token = authStore.token;
@@ -501,42 +579,32 @@ function connectWebSocket() {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   let wsUrl = '';
 
-  // 2. Tentukan URL berdasarkan lingkungan (produksi atau development)
   if (hostname === 'billingftth.my.id') {
-      // Produksi (Sudah Benar)
       wsUrl = `${protocol}//${hostname}/ws/notifications?token=${token}`;
   } else {
-      // Lokal - Gunakan konfigurasi dari environment variable jika tersedia
       const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
-      // Ubah http:// ke ws:// atau https:// ke wss://
       const wsProtocol = API_BASE_URL.startsWith('https') ? 'wss:' : 'ws:';
       const wsHost = API_BASE_URL.replace(/^https?:\/\//, '');
       wsUrl = `${wsProtocol}//${wsHost}/ws/notifications?token=${token}`; 
   }
 
-  // 3. Buat koneksi dengan URL yang sudah pasti benar
   console.log(`[WebSocket] Mencoba terhubung ke ${wsUrl}`);
   socket = new WebSocket(wsUrl);
 
-  // --- Sisa event handler (onopen, onmessage, dll.) bisa tetap sama ---
   socket.onopen = () => {
     console.log('[WebSocket] Koneksi berhasil dibuat.');
 
-    // Hentikan interval yang mungkin sudah ada
     if (pingInterval) clearInterval(pingInterval);
     if (tokenCheckInterval) clearInterval(tokenCheckInterval);
 
-    // Setup ping interval
     pingInterval = setInterval(() => {
       if (socket && socket.readyState === WebSocket.OPEN) {
         socket.send('ping');
       }
     }, 30000);
 
-    // Setup token health check interval
     tokenCheckInterval = setInterval(async () => {
       if (socket && socket.readyState === WebSocket.OPEN) {
-        // Verify token validity setiap menit
         const isValid = await authStore.verifyToken();
         if (!isValid) {
           console.log('[WebSocket] Token no longer valid, refreshing...');
@@ -547,17 +615,15 @@ function connectWebSocket() {
           await refreshTokenAndReconnect();
         }
       }
-    }, 60000); // Check every minute
+    }, 60000);
   };
 
   socket.onmessage = (event) => {
-    // Filter out system messages sebelum processing
     if (event.data === 'pong' || event.data === 'ping') {
-      return; // Silent filter for system messages
+      return;
     }
 
     try {
-      // PERBAIKAN: Validasi data sebelum parsing
       if (!event.data) {
         console.warn('[WebSocket] Received empty message');
         return;
@@ -576,54 +642,42 @@ function connectWebSocket() {
         data = event.data;
       }
       
-      // PERBAIKAN: Validasi struktur data
       if (!data || typeof data !== 'object') {
         console.warn('[WebSocket] Invalid data format received:', data);
         return;
       }
 
-      // Filter out ping/pong messages in JSON format
       if (data.type === 'ping' || data.type === 'pong') {
-        return; // Silent filter for system messages
+        return;
       }
       
-      // PERBAIKAN: Pastikan notifications.value adalah array
       if (!notifications.value || !Array.isArray(notifications.value)) {
         console.warn('[WebSocket] notifications.value bukan array, inisialisasi ulang...');
         notifications.value = [];
       }
       
-      // PERBAIKAN: Filter notifikasi yang tidak relevan
-      // Jangan tampilkan notifikasi dengan action seperti auth/logout
       if (data.action && data.action.includes('/auth/')) {
         console.log('[WebSocket] Skipping auth-related notification:', data.action);
         return;
       }
       
-      // PERBAIKAN: Tambahkan ID unik jika tidak ada
       if (!data.id) {
         data.id = Date.now() + Math.floor(Math.random() * 10000);
         console.log('[WebSocket] Generated ID for notification:', data.id);
       }
       
-      // PERBAIKAN: Validasi dan normalisasi type notifikasi
       const validTypes = ['new_payment', 'new_technical_data', 'new_customer_for_noc', 'new_customer'];
       
-      // Normalisasi tipe notifikasi
       if (data.type === 'new_customer') {
-        // Konversi new_customer ke new_customer_for_noc untuk konsistensi
         data.type = 'new_customer_for_noc';
         console.log('[WebSocket] Normalized notification type from new_customer to new_customer_for_noc');
       }
       
-      // Hanya proses notifikasi dengan tipe yang valid
       if (validTypes.includes(data.type)) {
-        // PERBAIKAN: Tambahkan timestamp jika tidak ada
         if (!data.timestamp) {
           data.timestamp = new Date().toISOString();
         }
         
-        // PERBAIKAN: Tambahkan message default jika tidak ada
         if (!data.message) {
           switch (data.type) {
             case 'new_payment':
@@ -640,13 +694,10 @@ function connectWebSocket() {
           }
         }
         
-        // PERBAIKAN: Pastikan data object ada
         if (!data.data) {
           data.data = {};
         }
         
-        // PERBAIKAN: Filter notifikasi dengan data kosong
-        // Jangan tampilkan notifikasi jika data penting tidak ada
         if (data.type === 'new_payment' && !data.data.invoice_number) {
           console.log('[WebSocket] Skipping new_payment notification without invoice_number');
           return;
@@ -660,28 +711,19 @@ function connectWebSocket() {
           return;
         }
         
-        // PERBAIKAN: Gunakan unshift alih-alih spread operator untuk performa dan konsistensi
         notifications.value.unshift(data);
         
-        // Batasi jumlah notifikasi maksimal 20
         if (notifications.value.length > 20) {
           notifications.value = notifications.value.slice(0, 20);
         }
         
         console.log('[WebSocket] Notification added to list:', data.type, data.message);
         
-        // PERBAIKAN: Play sound dengan validasi
         playSound(data.type);
         
-        // PERBAIKAN: Dispatch event dengan validasi
         if (typeof window !== 'undefined' && window.dispatchEvent) {
           window.dispatchEvent(new CustomEvent('new-notification', { detail: data }));
         }
-        
-        console.log('[WebSocket] Notification processed successfully:', data.type);
-      } else {
-        // Jangan tampilkan notifikasi dengan tipe unknown
-        console.warn('[WebSocket] Unknown notification type (filtered out):', data.type, data);
       }
       
     } catch (error) {
@@ -699,17 +741,14 @@ function connectWebSocket() {
     console.warn(`[WebSocket] Koneksi ditutup: Kode ${event.code}`);
     socket = null;
 
-    // Clean up all intervals
     if (pingInterval) clearInterval(pingInterval);
     if (tokenCheckInterval) clearInterval(tokenCheckInterval);
 
-    // Don't reconnect if it's a normal closure or connection replacement
     const shouldNotReconnect = [1000, 1001, 1005].includes(event.code) ||
                                event.reason === "Connection replaced" ||
                                event.reason === "Logout Pengguna";
 
     if (authStore.isAuthenticated && !shouldNotReconnect) {
-      // Check if closed due to token expiration (code 1008 = Policy Violation)
       if (event.code === 1008) {
         console.log('[WebSocket] Connection closed due to token policy, attempting refresh...');
         reconnectTimeout = setTimeout(refreshTokenAndReconnect, 1000);
@@ -743,13 +782,11 @@ function disconnectWebSocket() {
   }
 
   if (socket) {
-    socket.onclose = null; // Hapus listener onclose agar tidak memicu reconnect
+    socket.onclose = null;
     socket.close(1000, "Logout Pengguna");
     socket = null;
   }
 }
-// --- AKHIR BLOK KODE WEBSOCKET ---
-
 
 const menuGroups = ref([
     { title: 'DASHBOARD', items: [
@@ -773,7 +810,11 @@ const menuGroups = ref([
   ]},
   { title: 'LAINNYA', items: [
     { title: 'Simulasi Harga', icon: 'mdi-calculator', value: 'kalkulator', to: '/kalkulator', permission: 'view_simulasi_harga' },
-    { title: 'S&K', icon: 'mdi-file-document-outline', value: 'sk', to: '/syarat-ketentuan', permission: null } // <-- Tambahkan ini
+    { title: 'S&K', icon: 'mdi-file-document-outline', value: 'sk', to: '/syarat-ketentuan', permission: null }
+  ]},
+  { title: 'SUPPORT', items: [
+    { title: 'Trouble Tickets', icon: 'mdi-ticket-confirmation-outline', value: 'trouble-tickets', to: '/trouble-tickets', permission: 'view_trouble_tickets' },
+    { title: 'Ticket Reports', icon: 'mdi-chart-box-outline', value: 'trouble-ticket-reports', to: '/trouble-tickets/reports', permission: 'view_trouble_tickets' },
   ]},
   { title: 'BILLING', items: [
     { title: 'Invoices', icon: 'mdi-file-document-outline', value: 'invoices', to: '/invoices', badge: 0, badgeColor: 'grey-darken-1', permission: 'view_invoices' },
@@ -803,24 +844,21 @@ const filteredMenuGroups = computed(() => {
   })).filter(group => group.items.length > 0);
 });
 
-
-
 onMounted(async () => {
   const savedTheme = localStorage.getItem('theme');
   if (savedTheme) theme.change(savedTheme);
 
-
   await settingsStore.fetchMaintenanceStatus(); 
 
-  // Set drawer behavior based on screen size
   if (isMobile.value) {
     drawer.value = false;
     rail.value = false;
   }
 
+  // Update active bottom nav based on current route
+  updateActiveBottomNav(route.path);
+
   const enableAudioContext = () => {
-    // Fungsi ini akan dijalankan sekali saat user mengklik
-    // dan setelah itu listener-nya akan dihapus.
     console.log('User interaction detected. Audio playback is now enabled for this session.');
     document.removeEventListener('click', enableAudioContext);
   };
@@ -835,27 +873,22 @@ onMounted(async () => {
     }
     fetchRoleCount();
     fetchUserCount();
-    // fetchSuspendedCount();
     fetchSidebarBadges();
-    fetchUnreadNotifications(); // <-- PANGGIL FUNGSI UNTUK MENGAMBIL NOTIFIKASI
-    connectWebSocket(); // Memulai WebSocket setelah user terverifikasi
+    fetchUnreadNotifications();
+    connectWebSocket();
     
-    // Bersihkan notifikasi yang tidak relevan setiap 30 detik
     notificationCleanupInterval = setInterval(() => {
       if (notifications.value && Array.isArray(notifications.value)) {
         const validTypes = ['new_payment', 'new_technical_data', 'new_customer_for_noc', 'new_customer'];
         notifications.value = notifications.value.filter(notif => {
-          // Filter out auth-related notifications
           if (notif.action && notif.action.includes('/auth/')) {
             return false;
           }
           
-          // Filter out unknown types
           if (!validTypes.includes(notif.type)) {
             return false;
           }
           
-          // Filter out notifications with missing data
           if (notif.type === 'new_payment' && !notif.data?.invoice_number) {
             return false;
           }
@@ -869,7 +902,7 @@ onMounted(async () => {
           return true;
         });
       }
-    }, 30000); // 30 detik
+    }, 30000);
   }
 });
 
@@ -883,25 +916,19 @@ function toggleTheme() {
   localStorage.setItem('theme', newTheme);
 }
 
-// --- FUNGSI BARU UNTUK MENGAMBIL NOTIFIKASI DARI DATABASE ---
 async function fetchUnreadNotifications() {
   try {
-    // Ganti dengan endpoint API Anda yang sebenarnya
     const response = await apiClient.get('/notifications/unread'); 
-    // Filter notifikasi yang relevan saja
     const validTypes = ['new_payment', 'new_technical_data', 'new_customer_for_noc', 'new_customer'];
     const filteredNotifications = response.data.notifications.filter((notif: any) => {
-      // Filter out auth-related notifications
       if (notif.action && notif.action.includes('/auth/')) {
         return false;
       }
       
-      // Filter out unknown types
       if (!validTypes.includes(notif.type)) {
         return false;
       }
       
-      // Filter out notifications with missing data
       if (notif.type === 'new_payment' && !notif.data?.invoice_number) {
         return false;
       }
@@ -915,7 +942,7 @@ async function fetchUnreadNotifications() {
       return true;
     });
     
-    notifications.value = filteredNotifications.slice(0, 20); // Batasi maksimal 20 notifikasi
+    notifications.value = filteredNotifications.slice(0, 20);
   } catch (error) {
     console.error("Gagal mengambil notifikasi yang belum dibaca:", error);
   }
@@ -940,7 +967,6 @@ function getNotificationColor(type: string) {
 }
 
 async function handleNotificationClick(notification: any) {
-  // PERBAIKAN: Validasi parameter dengan lebih baik
   console.log('[Notification] handleNotificationClick called with:', notification);
   
   if (!notification) {
@@ -949,14 +975,12 @@ async function handleNotificationClick(notification: any) {
     return;
   }
   
-  // PERBAIKAN: Validasi struktur object notification
   if (typeof notification !== 'object') {
     console.error("[Notification] Invalid notification object type:", typeof notification, notification);
     alert("Notifikasi tidak valid. Silakan refresh halaman.");
     return;
   }
   
-  // PERBAIKAN: Validasi ID notifikasi dengan lebih baik
   if (!notification.hasOwnProperty('id')) {
     console.error("[Notification] Notification object missing 'id' property:", notification);
     alert("Notifikasi tidak valid (missing ID). Silakan refresh halaman.");
@@ -970,17 +994,13 @@ async function handleNotificationClick(notification: any) {
     return;
   }
   
-  // PERBAIKAN: Validasi type notifikasi
   if (!notification.hasOwnProperty('type')) {
     console.warn("[Notification] Notification object missing 'type' property:", notification);
-    // Jangan hentikan proses, lanjutkan dengan type default
     notification.type = 'unknown';
   }
 
-  // Jangan proses notifikasi dengan tipe unknown
   if (notification.type === 'unknown') {
     console.warn("[Notification] Skipping unknown notification type:", notification);
-    // Hapus notifikasi dari daftar
     if (notifications.value && Array.isArray(notifications.value)) {
       notifications.value = notifications.value.filter(n => n.id !== notificationId);
     }
@@ -989,20 +1009,16 @@ async function handleNotificationClick(notification: any) {
 
   console.log('[Notification] Processing notification click for ID:', notificationId);
 
-  // 1. Tandai notifikasi sebagai sudah dibaca di backend
   try {
-    // PERBAIKAN: Validasi API client sebelum panggil
     if (!apiClient) {
       throw new Error("API client not initialized");
     }
     
     console.log(`[Notification] Calling API to mark notification ${notificationId} as read`);
     
-    // Ganti dengan endpoint API Anda
     const response = await apiClient.post(`/notifications/${notificationId}/mark-as-read`);
     console.log(`[Notification] API response for marking ${notificationId} as read:`, response.status);
     
-    // 2. Hapus notifikasi dari daftar di frontend secara visual
     if (notifications.value && Array.isArray(notifications.value)) {
       console.log(`[Notification] Removing notification ${notificationId} from frontend list`);
       notifications.value = notifications.value.filter(n => {
@@ -1013,14 +1029,11 @@ async function handleNotificationClick(notification: any) {
       console.log(`[Notification] Updated notifications list length: ${notifications.value.length}`);
     } else {
       console.warn("[Notification] notifications.value bukan array:", notifications.value);
-      // Fallback: Inisialisasi ulang jika bukan array
       notifications.value = [];
     }
 
-    // 3. Arahkan pengguna ke halaman yang relevan
     console.log(`[Notification] Redirecting based on type: ${notification.type}`);
     
-    // Jangan redirect untuk notifikasi unknown
     if (notification.type === 'unknown') {
       console.log("[Notification] No redirect for unknown notification type");
       return;
@@ -1037,24 +1050,19 @@ async function handleNotificationClick(notification: any) {
       router.push('/invoices');
     } else {
       console.warn("[Notification] Unknown notification type, redirecting to home:", notification.type);
-      // Fallback: Arahkan ke halaman default
       router.push('/');
     }
 
   } catch (error) {
     console.error("[Notification] Gagal menandai notifikasi sebagai sudah dibaca:", error);
     
-    // PERBAIKAN: Tampilkan pesan error yang lebih informatif
     if (error instanceof Error) {
-      // Cek apakah ini error 404
       const errorMessage = error.message.toLowerCase();
       if (errorMessage.includes('404') || errorMessage.includes('not found')) {
         console.warn("[Notification] Notifikasi tidak ditemukan di server, hapus dari daftar lokal");
-        // Hapus notifikasi dari daftar lokal meskipun error
         if (notifications.value && Array.isArray(notifications.value)) {
           notifications.value = notifications.value.filter(n => n.id !== notificationId);
         }
-        // Masih arahkan pengguna ke halaman yang relevan
         if (notification.type === 'new_technical_data') {
           router.push('/langganan');
         } else if (notification.type === 'new_customer_for_noc' || notification.type === 'new_customer') {
@@ -1065,7 +1073,6 @@ async function handleNotificationClick(notification: any) {
           router.push('/');
         }
       } else {
-        // Tampilkan pesan error ke pengguna
         alert(`Gagal menandai notifikasi sebagai sudah dibaca: ${error.message}`);
       }
     } else {
@@ -1076,19 +1083,15 @@ async function handleNotificationClick(notification: any) {
 
 async function markAllAsRead() {
   try {
-    // PERBAIKAN: Validasi API client sebelum panggil
     if (!apiClient) {
       throw new Error("API client not initialized");
     }
     
-    // Ganti dengan endpoint API Anda
     const response = await apiClient.post('/notifications/mark-all-as-read'); 
     
-    // PERBAIKAN: Validasi response sebelum update UI
     if (response && response.status === 200) {
-      // Kosongkan daftar di frontend hanya jika sukses
       if (notifications.value && Array.isArray(notifications.value)) {
-        notifications.value = []; // Kosongkan daftar notifikasi
+        notifications.value = [];
       } else {
         console.warn("[Notification] notifications.value bukan array, inisialisasi ulang...");
         notifications.value = [];
@@ -1102,14 +1105,12 @@ async function markAllAsRead() {
   } catch (error) {
     console.error("[Notification] Gagal membersihkan notifikasi:", error);
     
-    // PERBAIKAN: Tampilkan pesan error yang lebih informatif
     if (error instanceof Error) {
       alert(`Gagal membersihkan notifikasi: ${error.message}`);
     } else {
       alert("Gagal membersihkan notifikasi. Silakan coba lagi.");
     }
     
-    // PERBAIKAN: Fallback ke penghapusan lokal jika API gagal
     console.warn("[Notification] Fallback ke penghapusan lokal...");
     if (notifications.value && Array.isArray(notifications.value)) {
       notifications.value = [];
@@ -1118,17 +1119,6 @@ async function markAllAsRead() {
     }
   }
 }
-
-
-
-// async function fetchSuspendedCount() {
-//   try {
-//     const response = await apiClient.get('/langganan?status=Ditangguhkan');
-//     suspendedCount.value = response.data.length;
-//   } catch (error) {
-//     console.error("Gagal mengambil jumlah langganan yang ditangguhkan:", error);
-//   }
-// }
 
 async function fetchRoleCount() {
   try {
@@ -1172,9 +1162,7 @@ function handleLogout() {
   color: rgba(var(--v-theme-on-surface), 0.8);
   min-height: 44px;
   transition: all 0.3s ease;
-  /* Mengurangi padding kiri untuk menyelaraskan dengan parent */
   padding-left: 16px !important;
-  /* Atau gunakan margin-left negatif untuk menarik ke kiri */
   margin-left: -8px;
 }
 
@@ -1189,12 +1177,10 @@ function handleLogout() {
   transform: translateX(2px);
 }
 
-/* Alternatif lain - override Vuetify's default indentation */
 .v-list-group .v-list-item {
   padding-inline-start: 16px !important;
 }
 
-/* Atau gunakan custom class untuk lebih spesifik */
 .nav-sub-item.v-list-item {
   padding-inline-start: 16px !important;
   margin-inline-start: 0 !important;
@@ -1216,10 +1202,10 @@ function handleLogout() {
 }
 
 .notification-item .v-list-item-subtitle {
-  white-space: normal !important;      /* Izinkan teks untuk wrap ke baris baru */
-  line-height: 1.4;                  /* Perbaiki jarak antar baris agar mudah dibaca */
+  white-space: normal !important;
+  line-height: 1.4;
   -webkit-line-clamp: 2; 
-  line-clamp: 2;              /* Batasi teks hingga 2 baris */
+  line-clamp: 2;
   -webkit-box-orient: vertical;
   display: -webkit-box;
   overflow: hidden;
@@ -1227,9 +1213,9 @@ function handleLogout() {
 }
 
 .notification-item.v-list-item {
-  min-height: 60px !important;         /* Beri tinggi minimal untuk menampung 2 baris */
-  height: auto !important;             /* Biarkan tinggi item menyesuaikan konten */
-  align-items: center;               /* Posisikan avatar dan teks di tengah */
+  min-height: 60px !important;
+  height: auto !important;
+  align-items: center;
 }
 
 .sidebar-header {
@@ -1254,7 +1240,6 @@ function handleLogout() {
   transition: filter 0.3s ease;
 }
 
-/* Dark mode logo adjustment */
 .v-theme--dark .sidebar-logo-full {
   filter: brightness(1.2) contrast(1.1);
 }
@@ -1345,12 +1330,10 @@ function handleLogout() {
   height: 20px;
   font-weight: 600;
   border-radius: 10px;
-  /* Hapus 'color: white;' dari sini agar warna default Vuetify berlaku */
 }
 
-/* Tambahkan aturan baru ini */
 .v-list-item--active .badge-chip {
-  color: white !important; /* Jadikan warna teks putih HANYA saat item aktif */
+  color: white !important;
 }
 
 .logout-section {
@@ -1400,21 +1383,60 @@ function handleLogout() {
   transition: background-color 0.3s ease;
 }
 
-.maintenance-banner {
-  /* Memperbesar tinggi banner */
-  height: 50px !important; 
-  
-  /* Memperbesar ukuran font */
-  font-size: 2rem !important; 
-  
-  /* Membuat teks sedikit lebih tebal */
-  font-weight: 600;
+/* Add padding bottom for mobile to accommodate bottom nav */
+.modern-main.with-bottom-nav {
+  padding-bottom: 65px !important;
+}
 
-  /* Memastikan konten berada di tengah secara horizontal */
+/* Bottom Navigation Styles */
+.mobile-bottom-nav {
+  position: fixed !important;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  background: rgb(var(--v-theme-surface)) !important;
+  border-top: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.mobile-bottom-nav :deep(.v-btn) {
+  height: 65px !important;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.7rem;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.mobile-bottom-nav :deep(.v-btn .v-icon) {
+  font-size: 24px;
+  margin-bottom: 2px;
+}
+
+.mobile-bottom-nav :deep(.v-btn--active) {
+  color: rgb(var(--v-theme-primary)) !important;
+}
+
+.mobile-bottom-nav :deep(.v-btn--active .v-icon) {
+  color: rgb(var(--v-theme-primary)) !important;
+}
+
+.mobile-bottom-nav :deep(.v-badge__badge) {
+  font-size: 0.65rem;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+}
+
+.maintenance-banner {
+  height: 50px !important; 
+  font-size: 2rem !important; 
+  font-weight: 600;
   justify-content: center; 
 }
 
-/* Footer responsive */
 .footer-responsive {
   padding: 0 1rem;
 }
@@ -1452,6 +1474,12 @@ function handleLogout() {
 
 .v-theme--dark .nav-item:not(.v-list-item--active):hover {
   background-color: rgba(129, 140, 248, 0.15);
+}
+
+.v-theme--dark .mobile-bottom-nav {
+  background: #1e293b !important;
+  border-top: 1px solid #334155;
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.3);
 }
 
 /* Mobile responsiveness */
@@ -1514,6 +1542,14 @@ function handleLogout() {
     font-size: 0.75rem;
     padding: 0.5rem 0;
   }
+
+  .mobile-bottom-nav :deep(.v-btn) {
+    font-size: 0.65rem;
+  }
+
+  .mobile-bottom-nav :deep(.v-btn .v-icon) {
+    font-size: 22px;
+  }
 }
 
 @media (max-width: 360px) {
@@ -1539,6 +1575,15 @@ function handleLogout() {
   
   .footer-content {
     font-size: 0.7rem;
+  }
+
+  .mobile-bottom-nav :deep(.v-btn) {
+    font-size: 0.6rem;
+    gap: 2px;
+  }
+
+  .mobile-bottom-nav :deep(.v-btn .v-icon) {
+    font-size: 20px;
   }
 }
 </style>

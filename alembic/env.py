@@ -39,6 +39,8 @@ from app.models.inventory_status import InventoryStatus
 from app.models.inventory_item import InventoryItem
 from app.models.inventory_history import InventoryHistory
 
+from app.models.trouble_ticket import TroubleTicket, TicketHistory
+
 # ====================================================================
 
 

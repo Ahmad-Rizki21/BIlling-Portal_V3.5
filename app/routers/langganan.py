@@ -1,5 +1,6 @@
 import csv
 import io
+import logging
 from calendar import monthrange
 from datetime import date, datetime
 from typing import List, Optional
@@ -29,6 +30,8 @@ from ..schemas.langganan import (
 from ..schemas.pelanggan import Pelanggan as PelangganSchema
 
 router = APIRouter(prefix="/langganan", tags=["Langganan"])
+
+logger = logging.getLogger(__name__)
 
 
 # --- Skema Respons Baru ---
@@ -422,6 +425,7 @@ async def import_from_csv_langganan(file: UploadFile = File(...), db: AsyncSessi
     errors = []
     langganan_to_create = []
     processed_emails_in_file = set()
+    skipped_rows = 0
 
     emails_to_find = {row.get("email_pelanggan", "").lower().strip() for row in reader if row.get("email_pelanggan")}
     paket_names_to_find = {
@@ -447,6 +451,11 @@ async def import_from_csv_langganan(file: UploadFile = File(...), db: AsyncSessi
     subscribed_pelanggan_ids = set(existing_langganan_q.scalars().all())
 
     for row_num, row in enumerate(reader, start=2):
+        # Skip baris jika benar-benar kosong (tidak ada data sama sekali)
+        if not any(row.values()):
+            skipped_rows += 1
+            continue
+
         try:
             data_import = LanggananImport(**row)  # type: ignore
 
@@ -521,7 +530,13 @@ async def import_from_csv_langganan(file: UploadFile = File(...), db: AsyncSessi
         await db.rollback()
         raise HTTPException(status_code=500, detail=f"Gagal menyimpan ke database: {e}")
 
-    return {"message": f"Berhasil mengimpor {len(langganan_to_create)} langganan baru."}
+    success_message = f"Berhasil mengimpor {len(langganan_to_create)} langganan baru."
+    if skipped_rows > 0:
+        success_message += f" {skipped_rows} baris kosong dilewati."
+
+    logger.info(f"Import CSV langganan selesai: {len(langganan_to_create)} berhasil, {len(errors)} error, {skipped_rows} baris kosong dilewati")
+
+    return {"message": success_message}
 
 
 # INVOICE GABUNGAN PRORATE + HARGA PAKET BUAT 2 BULAN

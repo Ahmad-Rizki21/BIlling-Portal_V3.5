@@ -92,7 +92,7 @@
               </label>
               <v-switch
                 v-model="includeNextMonth"
-                label="Termasuk harga bulan depan"
+                label="Termasuk harga bulan depan (dengan PPN)"
                 color="primary"
                 inset
                 class="mt-2"
@@ -238,23 +238,36 @@
                   </div>
                 </div>
                 
-                <!-- Next Month Price -->
-                <div v-if="includeNextMonth && fullMonthlyPriceValue" class="next-month-section mt-4">
+                <!-- Next Month Price with PPN -->
+                <div v-if="includeNextMonth && calculationResult.total_bulan_depan_dengan_ppn !== null" class="next-month-section mt-4">
                   <div class="d-flex align-center justify-space-between">
                     <div class="next-month-info">
-                      <div class="next-month-label text-medium-emphasis">Harga Bulan Depan</div>
-                      <div class="next-month-amount">{{ formatCurrency(fullMonthlyPriceValue) }}</div>
+                      <div class="next-month-label text-medium-emphasis">Harga Bulan Depan + PPN</div>
+                      <div class="next-month-amount">{{ formatCurrency(calculationResult.total_bulan_depan_dengan_ppn || 0) }}</div>
                     </div>
-                    <v-chip color="info" size="small" variant="tonal">
-                      <v-icon start>mdi-calendar-arrow-right</v-icon>
-                      Bulan Penuh
+                    <v-chip color="success" size="small" variant="tonal">
+                      <v-icon start>mdi-percent</v-icon>
+                      Dengan PPN
                     </v-chip>
                   </div>
+
+                  <!-- PPN Breakdown -->
+                  <div v-if="calculationResult.ppn_bulan_depan" class="ppn-breakdown mt-3">
+                    <div class="d-flex justify-space-between mb-1">
+                      <span class="text-medium-emphasis">Harga Dasar Bulan Depan:</span>
+                      <span>{{ formatCurrency(calculationResult.harga_bulan_depan || 0) }}</span>
+                    </div>
+                    <div class="d-flex justify-space-between mb-2">
+                      <span class="text-medium-emphasis">PPN ({{ selectedBrand?.pajak || 0 }}%):</span>
+                      <span class="text-success">{{ formatCurrency(calculationResult.ppn_bulan_depan) }}</span>
+                    </div>
+                  </div>
+
                   <v-divider class="my-3"></v-divider>
                   <div class="d-flex align-center justify-space-between">
                     <div class="grand-total-label">Total Keseluruhan</div>
                     <div class="grand-total-amount font-weight-bold text-h6">
-                      {{ formatCurrency(calculationResult.total_harga_prorate + fullMonthlyPriceValue) }}
+                      {{ formatCurrency(calculationResult.total_keseluruhan || 0) }}
                     </div>
                   </div>
                 </div>
@@ -301,6 +314,10 @@ interface ProrateResult {
   pajak: number;
   total_harga_prorate: number;
   periode_hari: number;
+  harga_bulan_depan?: number | null;
+  ppn_bulan_depan?: number | null;
+  total_bulan_depan_dengan_ppn?: number | null;
+  total_keseluruhan?: number | null;
 }
 
 // State
@@ -327,20 +344,16 @@ const completionPercentage = computed(() => {
   return Math.round(completed);
 });
 
-const fullMonthlyPriceValue = computed(() => {
-  if (!selectedPaket.value) return 0;
-  const paket = paketList.value.find(p => p.id === selectedPaket.value);
-  return paket ? paket.harga : 0;
-});
 
 // Watcher to trigger calculation
-watch([selectedBrand, selectedPaket, startDate], debounce(async () => {
+watch([selectedBrand, selectedPaket, startDate, includeNextMonth], debounce(async () => {
   if (selectedBrand.value && selectedPaket.value && startDate.value) {
     try {
       const response = await apiClient.post('/calculator/prorate', {
         id_brand: selectedBrand.value.id_brand,
         paket_layanan_id: selectedPaket.value,
         tgl_mulai: startDate.value,
+        include_ppn_next_month: includeNextMonth.value,
       });
       calculationResult.value = response.data;
     } catch (error) {
@@ -392,12 +405,13 @@ function resetCalculation() {
   selectedPaket.value = null;
   startDate.value = new Date().toISOString().split('T')[0];
   calculationResult.value = null;
+  includeNextMonth.value = false;
 }
 
 async function copyResult() {
   if (!calculationResult.value) return;
-  
-  const resultText = `
+
+  let resultText = `
 Hasil Kalkulasi Harga Prorate:
 Brand: ${selectedBrand.value?.brand}
 Paket: ${filteredPaketList.value.find(p => p.id === selectedPaket.value)?.nama_paket}
@@ -405,8 +419,19 @@ Periode: ${calculationResult.value.periode_hari} hari
 Harga Dasar: ${formatCurrency(calculationResult.value.harga_dasar_prorate)}
 Pajak: ${formatCurrency(calculationResult.value.pajak)}
 Total: ${formatCurrency(calculationResult.value.total_harga_prorate)}
-  `;
-  
+`;
+
+  // Add next month info if included
+  if (includeNextMonth.value && calculationResult.value.total_bulan_depan_dengan_ppn !== null) {
+    resultText += `
+Harga Bulan Depan (Dengan PPN):
+- Harga Dasar: ${formatCurrency(calculationResult.value.harga_bulan_depan || 0)}
+- PPN (${selectedBrand.value?.pajak || 0}%): ${formatCurrency(calculationResult.value.ppn_bulan_depan || 0)}
+- Total Bulan Depan: ${formatCurrency(calculationResult.value.total_bulan_depan_dengan_ppn || 0)}
+Total Keseluruhan: ${formatCurrency(calculationResult.value.total_keseluruhan || 0)}
+`;
+  }
+
   try {
     await navigator.clipboard.writeText(resultText.trim());
     // You can add a toast notification here
@@ -764,6 +789,24 @@ onMounted(() => {
   font-weight: 800;
   color: rgb(var(--v-theme-success));
   line-height: 1.2;
+}
+
+/* PPN Breakdown Styles */
+.ppn-breakdown {
+  background: rgba(var(--v-theme-success), 0.05);
+  padding: 1rem;
+  border-radius: 8px;
+  border: 1px solid rgba(var(--v-theme-success), 0.1);
+  font-size: 0.9rem;
+}
+
+.ppn-breakdown .text-medium-emphasis {
+  color: rgba(var(--v-theme-on-surface), 0.7);
+}
+
+.ppn-breakdown .text-success {
+  color: rgb(var(--v-theme-success));
+  font-weight: 600;
 }
 
 .result-actions {

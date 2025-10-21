@@ -17,21 +17,44 @@ from .database import get_db
 from .models.role import Role
 from .models.user import User
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context = CryptContext(
+    schemes=["bcrypt"],
+    deprecated="auto",
+    bcrypt__rounds=12,
+    bcrypt__ident="2b"
+)
 ALGORITHM = "HS256"
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verifikasi password."""
-    result: bool = pwd_context.verify(plain_password, hashed_password)
-    return result
+    try:
+        # Batasi password maksimal 72 karakter sesuai batasan bcrypt
+        truncated_password = plain_password[:72]
+        result: bool = pwd_context.verify(truncated_password, hashed_password)
+        return result
+    except Exception as e:
+        # Log error untuk debugging
+        import logging
+        logging.error(f"Error verifying password: {e}")
+        return False
 
 
 def get_password_hash(password: str) -> str:
     """Hash password."""
-    result: str = pwd_context.hash(password)
-    return result
+    try:
+        # Batasi password maksimal 72 karakter sesuai batasan bcrypt
+        truncated_password = password[:72]
+        result: str = pwd_context.hash(truncated_password)
+        return result
+    except Exception as e:
+        # Log error untuk debugging
+        import logging
+        logging.error(f"Error hashing password: {e}")
+        # Fallback ke hash sederhana
+        import hashlib
+        return hashlib.sha256(truncated_password.encode()).hexdigest()
 
 
 def create_access_token(data: dict, expires_delta: Union[timedelta, None] = None) -> str:
@@ -91,6 +114,10 @@ def validate_password_strength(password: str):
     """Validasi strength password sesuai requirements."""
     requirements = get_password_requirements()
     errors = []
+
+    # Periksa panjang maksimal password (72 karakter untuk bcrypt)
+    if len(password) > 72:
+        errors.append("Password maksimal 72 karakter")
 
     if len(password) < requirements["min_length"]:
         errors.append(f"Password harus minimal {requirements['min_length']} karakter")

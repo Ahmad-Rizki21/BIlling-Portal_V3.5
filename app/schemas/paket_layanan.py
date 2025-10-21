@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional
 import re
 
@@ -9,7 +9,8 @@ class PaketLayananBase(BaseModel):
     kecepatan: int = Field(..., gt=0, le=10000, description="Kecepatan internet (Mbps)")
     harga: float = Field(..., gt=0, description="Harga paket per bulan")
 
-    @validator("id_brand", pre=True)
+    @field_validator("id_brand", mode="before")
+    @classmethod
     def validate_id_brand(cls, v):
         if v is None:
             raise ValueError("ID brand tidak boleh kosong")
@@ -23,7 +24,8 @@ class PaketLayananBase(BaseModel):
 
         return v_str
 
-    @validator("nama_paket", pre=True)
+    @field_validator("nama_paket", mode="before")
+    @classmethod
     def validate_nama_paket(cls, v):
         if v is None:
             raise ValueError("Nama paket tidak boleh kosong")
@@ -44,7 +46,8 @@ class PaketLayananBase(BaseModel):
 
         return v_str
 
-    @validator("kecepatan", pre=True)
+    @field_validator("kecepatan", mode="before")
+    @classmethod
     def validate_kecepatan(cls, v):
         if v is None:
             raise ValueError("Kecepatan tidak boleh kosong")
@@ -62,7 +65,8 @@ class PaketLayananBase(BaseModel):
 
         return v_int
 
-    @validator("harga", pre=True)
+    @field_validator("harga", mode="before")
+    @classmethod
     def validate_harga(cls, v):
         if v is None:
             raise ValueError("Harga tidak boleh kosong")
@@ -88,7 +92,8 @@ class PaketLayananUpdate(BaseModel):
     kecepatan: Optional[int] = Field(None, gt=0, le=10000, description="Kecepatan internet (Mbps)")
     harga: Optional[float] = Field(None, gt=0, description="Harga paket per bulan")
 
-    @validator("nama_paket", pre=True)
+    @field_validator("nama_paket", mode="before")
+    @classmethod
     def validate_nama_paket_update(cls, v):
         if v is None:
             return v
@@ -109,7 +114,8 @@ class PaketLayananUpdate(BaseModel):
 
         return v_str
 
-    @validator("kecepatan", pre=True)
+    @field_validator("kecepatan", mode="before")
+    @classmethod
     def validate_kecepatan_update(cls, v):
         if v is None:
             return v
@@ -127,7 +133,8 @@ class PaketLayananUpdate(BaseModel):
 
         return v_int
 
-    @validator("harga", pre=True)
+    @field_validator("harga", mode="before")
+    @classmethod
     def validate_harga_update(cls, v):
         if v is None:
             return v

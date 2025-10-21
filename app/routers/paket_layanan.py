@@ -15,11 +15,36 @@ router = APIRouter(prefix="/paket_layanan", tags=["Paket Layanan"])
 
 @router.post("/", response_model=PaketLayananSchema, status_code=status.HTTP_201_CREATED)
 async def create_paket_layanan(paket: PaketLayananCreate, db: AsyncSession = Depends(get_db)):
-    db_paket = PaketLayananModel(**paket.model_dump())
-    db.add(db_paket)
-    await db.commit()
-    await db.refresh(db_paket)
-    return db_paket
+    try:
+        # Check if id_brand exists in harga_layanan table
+        from ..models.harga_layanan import HargaLayanan as HargaLayananModel
+
+        harga_layanan_result = await db.execute(
+            select(HargaLayananModel).where(HargaLayananModel.id_brand == paket.id_brand)
+        )
+        harga_layanan = harga_layanan_result.scalar_one_or_none()
+
+        if not harga_layanan:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Brand '{paket.id_brand}' tidak ditemukan. Silakan tambahkan brand terlebih dahulu."
+            )
+
+        db_paket = PaketLayananModel(**paket.model_dump())
+        db.add(db_paket)
+        await db.commit()
+        await db.refresh(db_paket)
+
+        return db_paket
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Gagal membuat paket layanan: {str(e)}"
+        )
 
 
 @router.get("/", response_model=List[PaketLayananSchema])
@@ -52,7 +77,7 @@ async def update_paket_layanan(paket_id: int, paket_update: PaketLayananUpdate, 
     return db_paket
 
 
-@router.delete("/{paket_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{paket_id}")
 async def delete_paket_layanan(paket_id: int, db: AsyncSession = Depends(get_db)):
     db_paket = await db.get(PaketLayananModel, paket_id)
     if not db_paket:
@@ -60,4 +85,4 @@ async def delete_paket_layanan(paket_id: int, db: AsyncSession = Depends(get_db)
 
     await db.delete(db_paket)
     await db.commit()
-    return None
+    return {"message": "Paket layanan berhasil dihapus"}
