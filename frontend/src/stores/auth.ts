@@ -112,11 +112,9 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       const refreshToken = getEncryptedToken('refresh_token');
       if (!refreshToken) {
-        console.log('[Auth] No refresh token available');
         return false;
       }
 
-      console.log('[Auth] Attempting to refresh access token...');
       const response = await apiClient.post('/auth/refresh', {
         refresh_token: refreshToken
       });
@@ -128,8 +126,6 @@ export const useAuthStore = defineStore('auth', () => {
       if (refresh_token) {
         setEncryptedToken('refresh_token', refresh_token);
       }
-
-      console.log('[Auth] Token refreshed successfully');
       return true;
     } catch (error) {
       console.error('[Auth] Token refresh failed:', error);

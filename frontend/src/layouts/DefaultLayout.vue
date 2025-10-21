@@ -18,6 +18,7 @@
       :permanent="!isMobile"
       class="modern-drawer"
       :width="isMobile ? '280' : '280'"
+      :key="forceRender"
     >
       <v-list-item class="sidebar-header" :class="{'px-0': rail && !isMobile}" :ripple="false">
         <div class="header-flex-container">
@@ -52,15 +53,16 @@
 
       <v-divider></v-divider>
 
-      <div class="navigation-wrapper">
-        <v-list nav class="navigation-menu">
-          <template v-for="group in filteredMenuGroups" :key="group.title">
-            <v-list-subheader v-if="!rail || isMobile" class="menu-subheader">{{ group.title }}</v-list-subheader>
-            
-            <template v-for="item in group.items" :key="item.title">
-              <v-list-group 
+      <div class="navigation-wrapper" :key="'nav-wrapper-' + forceRender">
+        <v-list nav class="navigation-menu" :key="menuKey">
+          <template v-for="group in filteredMenuGroups" :key="group.title + '-' + menuKey + '-' + forceRender">
+            <v-list-subheader v-if="!rail || isMobile" class="menu-subheader" :key="'subheader-' + group.title + '-' + forceRender">{{ group.title }}</v-list-subheader>
+
+            <template v-for="item in group.items" :key="item.title + '-' + item.value + '-' + forceRender">
+              <v-list-group
                 v-if="'children' in item"
                 :value="item.value"
+                :key="'group-' + item.value + '-' + forceRender"
               >
                 <template v-slot:activator="{ props }">
                   <v-list-item
@@ -68,19 +70,20 @@
                     :prepend-icon="item.icon"
                     :title="item.title"
                     class="nav-item"
+                    :key="'activator-' + item.value + '-' + forceRender"
                   ></v-list-item>
                 </template>
 
                 <v-list-item
                   v-for="subItem in item.children"
-                  :key="subItem.title"
+                  :key="subItem.title + '-' + subItem.to + '-' + forceRender"
                   :title="subItem.title"
                   :to="subItem.to"
                   :prepend-icon="subItem.icon"
                   class="nav-sub-item"
                 ></v-list-item>
               </v-list-group>
-              
+
               <v-list-item
                 v-else
                 :prepend-icon="item.icon"
@@ -88,6 +91,7 @@
                 :value="item.value"
                 :to="item.to"
                 class="nav-item"
+                :key="'item-' + item.value + '-' + forceRender"
               >
                 <template v-slot:append>
                   <v-tooltip location="end">
@@ -318,7 +322,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useTheme } from 'vuetify'
 import { useDisplay } from 'vuetify'
 import { useRouter, useRoute } from 'vue-router'
@@ -352,9 +356,66 @@ const stoppedCount = ref(0);
 const openTicketsCount = ref(0);
 const userCount = ref(0);
 const roleCount = ref(0);
-const userPermissions = ref<string[]>([]);
 const authStore = useAuthStore();
 let socket: WebSocket | null = null;
+
+// Use ref with watcher for better reactivity with Proxy objects
+const userPermissions = ref<string[]>([]);
+
+// Watch authStore.user for changes and update permissions reactively
+watch(
+  () => authStore.user,
+  (newUser) => {
+    if (newUser?.role) {
+      const role = newUser.role;
+      if (typeof role === 'object' && role !== null && role.name) {
+        if (role.name.toLowerCase() === 'admin') {
+          userPermissions.value = ['*'];
+        } else {
+          userPermissions.value = role.permissions?.map((p: any) => p.name) || [];
+        }
+      } else {
+        userPermissions.value = [];
+      }
+    } else {
+      userPermissions.value = [];
+    }
+  },
+  { deep: true, immediate: true }
+);
+
+// Additional watch for role specifically
+watch(
+  () => authStore.user?.role,
+  (newRole) => {
+    if (newRole) {
+      if (newRole.name?.toLowerCase() === 'admin') {
+        userPermissions.value = ['*'];
+      } else {
+        userPermissions.value = newRole.permissions?.map((p: any) => p.name) || [];
+      }
+    }
+  },
+  { deep: true, immediate: true }
+);
+
+// Force re-render trigger
+const forceRender = ref(0);
+
+// Manual function to trigger menu refresh
+function refreshMenu() {
+  forceRender.value++;
+
+  // Force next tick to ensure DOM updates
+  nextTick(() => {
+    // DOM updated
+  });
+}
+
+// Watch permissions array specifically
+watch(userPermissions, () => {
+  refreshMenu();
+}, { deep: true });
 
 // Computed untuk mobile detection
 const isMobile = computed(() => mobile.value);
@@ -412,8 +473,6 @@ let tokenCheckInterval: NodeJS.Timeout | null = null;
 
 function playSound(type: string) {
   try {
-    console.log(`[Audio] Attempting to play sound for type: ${type}`);
-    
     let audioFile = '';
     switch (type) {
       case 'new_payment':
@@ -428,107 +487,85 @@ function playSound(type: string) {
         break;
       default:
         audioFile = '/notification.mp3';
-        console.warn(`[Audio] Unknown notification type: ${type}, using fallback audio`);
     }
 
     if (audioFile) {
-      console.log(`[Audio] Loading audio file: ${audioFile}`);
-      
       const audio = new Audio(audioFile);
-      
-      audio.addEventListener('loadstart', () => {
-        console.log(`[Audio] Loading started for ${audioFile}`);
-      });
-      
-      audio.addEventListener('loadeddata', () => {
-        console.log(`[Audio] Audio data loaded for ${audioFile}`);
-      });
-      
-      audio.addEventListener('canplay', () => {
-        console.log(`[Audio] Audio can play for ${audioFile}`);
-      });
-      
+
       audio.addEventListener('error', (e) => {
-        console.error(`[Audio] Gagal memuat audio (${audioFile}):`, e);
-        console.error(`[Audio] Error code: ${audio.error?.code}, message: ${audio.error?.message}`);
+        console.error(`[Audio] Failed to load audio (${audioFile}):`, e);
         fallbackBeep();
       });
-      
-      audio.addEventListener('play', () => {
-        console.log(`[Audio] Playing audio: ${audioFile}`);
-      });
-      
+
       audio.addEventListener('ended', () => {
-        console.log(`[Audio] Finished playing audio: ${audioFile}`);
+        // Audio finished playing
       });
-      
+
       const playPromise = audio.play();
       if (playPromise !== undefined) {
         playPromise.then(() => {
-          console.log(`[Audio] Playback started successfully for ${audioFile}`);
+          // Playback successful
         }).catch(error => {
-          console.warn(`[Audio] Gagal memutar audio (${audioFile}):`, error);
+          console.warn(`[Audio] Failed to play audio (${audioFile}):`, error);
           fallbackBeep();
         });
       } else {
-        console.warn(`[Audio] Play promise undefined for ${audioFile}`);
         fallbackBeep();
       }
     } else {
-      console.warn(`[Audio] Tidak ada file audio untuk type: ${type}`);
       fallbackBeep();
     }
   } catch (error) {
-    console.error('[Audio] Gagal membuat/memutar audio:', error);
+    console.error('[Audio] Failed to create/play audio:', error);
     fallbackBeep();
   }
 }
 
 function fallbackBeep() {
   try {
-    console.log('[Audio] Fallback beep activated');
-    
+    // console.log('[Audio] Fallback beep activated');
+
     const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
     if (AudioContext) {
       const context = new AudioContext();
       const oscillator = context.createOscillator();
       const gainNode = context.createGain();
-      
+
       oscillator.connect(gainNode);
       gainNode.connect(context.destination);
-      
+
       oscillator.frequency.value = 800;
       oscillator.type = 'sine';
       gainNode.gain.setValueAtTime(0.3, context.currentTime);
       gainNode.gain.exponentialRampToValueAtTime(0.01, context.currentTime + 0.5);
-      
+
       oscillator.start(context.currentTime);
       oscillator.stop(context.currentTime + 0.5);
-      
-      console.log('[Audio] Fallback beep played using AudioContext');
+
+      // console.log('[Audio] Fallback beep played using AudioContext');
       return;
     }
   } catch (error) {
     console.warn('[Audio] AudioContext fallback failed:', error);
   }
-  
+
   try {
     const context = new (window.AudioContext || (window as any).webkitAudioContext)();
     const oscillator = context.createOscillator();
     const gainNode = context.createGain();
-    
+
     oscillator.connect(gainNode);
     gainNode.connect(context.destination);
-    
+
     oscillator.frequency.value = 1000;
     oscillator.type = 'square';
     gainNode.gain.setValueAtTime(0.3, context.currentTime);
     gainNode.gain.exponentialRampToValueAtTime(0.01, context.currentTime + 0.3);
-    
+
     oscillator.start(context.currentTime);
     oscillator.stop(context.currentTime + 0.3);
-    
-    console.log('[Audio] Fallback beep played (square wave)');
+
+    // console.log('[Audio] Fallback beep played (square wave)');
   } catch (fallbackError) {
     console.warn('[Audio] All fallback methods failed:', fallbackError);
     
@@ -543,7 +580,7 @@ function fallbackBeep() {
         document.title = originalTitle;
       }, 3000);
       
-      console.log('[Audio] Visual notification shown (Title flash)');
+      // console.log('[Audio] Visual notification shown (Title flash)');
     } catch (visualError) {
       console.error('[Audio] All audio/visual methods failed:', visualError);
     }
@@ -552,13 +589,13 @@ function fallbackBeep() {
 
 async function refreshTokenAndReconnect() {
   try {
-    console.log('[WebSocket] Attempting to refresh token...');
+    // console.log('[WebSocket] Attempting to refresh token...');
     const success = await authStore.refreshToken();
     if (success) {
-      console.log('[WebSocket] Token refreshed, reconnecting...');
+      // console.log('[WebSocket] Token refreshed, reconnecting...');
       connectWebSocket();
     } else {
-      console.log('[WebSocket] Token refresh failed, logging out...');
+      // console.log('[WebSocket] Token refresh failed, logging out...');
       authStore.logout();
     }
   } catch (error) {
@@ -588,11 +625,11 @@ function connectWebSocket() {
       wsUrl = `${wsProtocol}//${wsHost}/ws/notifications?token=${token}`; 
   }
 
-  console.log(`[WebSocket] Mencoba terhubung ke ${wsUrl}`);
+  // console.log(`[WebSocket] Mencoba terhubung ke ${wsUrl}`);
   socket = new WebSocket(wsUrl);
 
   socket.onopen = () => {
-    console.log('[WebSocket] Koneksi berhasil dibuat.');
+    // console.log('[WebSocket] Koneksi berhasil dibuat.');
 
     if (pingInterval) clearInterval(pingInterval);
     if (tokenCheckInterval) clearInterval(tokenCheckInterval);
@@ -607,7 +644,7 @@ function connectWebSocket() {
       if (socket && socket.readyState === WebSocket.OPEN) {
         const isValid = await authStore.verifyToken();
         if (!isValid) {
-          console.log('[WebSocket] Token no longer valid, refreshing...');
+          // console.log('[WebSocket] Token no longer valid, refreshing...');
           if (tokenCheckInterval) {
             clearInterval(tokenCheckInterval);
             tokenCheckInterval = null;
@@ -657,20 +694,20 @@ function connectWebSocket() {
       }
       
       if (data.action && data.action.includes('/auth/')) {
-        console.log('[WebSocket] Skipping auth-related notification:', data.action);
+        // console.log('[WebSocket] Skipping auth-related notification:', data.action);
         return;
       }
-      
+
       if (!data.id) {
         data.id = Date.now() + Math.floor(Math.random() * 10000);
-        console.log('[WebSocket] Generated ID for notification:', data.id);
+        // console.log('[WebSocket] Generated ID for notification:', data.id);
       }
-      
+
       const validTypes = ['new_payment', 'new_technical_data', 'new_customer_for_noc', 'new_customer'];
-      
+
       if (data.type === 'new_customer') {
         data.type = 'new_customer_for_noc';
-        console.log('[WebSocket] Normalized notification type from new_customer to new_customer_for_noc');
+        // console.log('[WebSocket] Normalized notification type from new_customer to new_customer_for_noc');
       }
       
       if (validTypes.includes(data.type)) {
@@ -699,25 +736,25 @@ function connectWebSocket() {
         }
         
         if (data.type === 'new_payment' && !data.data.invoice_number) {
-          console.log('[WebSocket] Skipping new_payment notification without invoice_number');
+          // console.log('[WebSocket] Skipping new_payment notification without invoice_number');
           return;
         }
         if ((data.type === 'new_customer_for_noc' || data.type === 'new_customer') && !data.data.pelanggan_nama) {
-          console.log('[WebSocket] Skipping new_customer notification without pelanggan_nama');
+          // console.log('[WebSocket] Skipping new_customer notification without pelanggan_nama');
           return;
         }
         if (data.type === 'new_technical_data' && !data.data.pelanggan_nama) {
-          console.log('[WebSocket] Skipping new_technical_data notification without pelanggan_nama');
+          // console.log('[WebSocket] Skipping new_technical_data notification without pelanggan_nama');
           return;
         }
-        
+
         notifications.value.unshift(data);
-        
+
         if (notifications.value.length > 20) {
           notifications.value = notifications.value.slice(0, 20);
         }
-        
-        console.log('[WebSocket] Notification added to list:', data.type, data.message);
+
+        // console.log('[WebSocket] Notification added to list:', data.type, data.message);
         
         playSound(data.type);
         
@@ -750,20 +787,20 @@ function connectWebSocket() {
 
     if (authStore.isAuthenticated && !shouldNotReconnect) {
       if (event.code === 1008) {
-        console.log('[WebSocket] Connection closed due to token policy, attempting refresh...');
+        // console.log('[WebSocket] Connection closed due to token policy, attempting refresh...');
         reconnectTimeout = setTimeout(refreshTokenAndReconnect, 1000);
       } else {
-        console.log('[WebSocket] Menjadwalkan reconnect dalam 5 detik...');
+        // console.log('[WebSocket] Menjadwalkan reconnect dalam 5 detik...');
         reconnectTimeout = setTimeout(connectWebSocket, 5000);
       }
     } else if (shouldNotReconnect) {
-      console.log(`[WebSocket] Tidak reconnect karena penutupan normal: ${event.reason || event.code}`);
+      // console.log(`[WebSocket] Tidak reconnect karena penutupan normal: ${event.reason || event.code}`);
     }
   };
 }
 
 function disconnectWebSocket() {
-  console.log('[WebSocket] Memutuskan koneksi secara manual...');
+  // console.log('[WebSocket] Memutuskan koneksi secara manual...');
   if (reconnectTimeout) {
     clearTimeout(reconnectTimeout);
     reconnectTimeout = null;
@@ -836,19 +873,36 @@ const menuGroups = ref([
   ]},
 ]);
 
+// Key untuk memaksa re-render menu ketika permissions berubah
+const menuKey = computed(() => {
+  return JSON.stringify(userPermissions.value) + '-' + forceRender.value + '-' + Date.now();
+});
+
 const filteredMenuGroups = computed(() => {
-  if (userPermissions.value.includes('*')) return menuGroups.value;
-  return menuGroups.value.map(group => ({
-    ...group,
-    items: group.items.filter(item => !item.permission || userPermissions.value.includes(item.permission)),
-  })).filter(group => group.items.length > 0);
+  if (userPermissions.value.includes('*')) {
+    return menuGroups.value;
+  }
+
+  const filtered = menuGroups.value.map(group => {
+    const allowedItems = group.items.filter(item => {
+      const hasPermission = !item.permission || userPermissions.value.includes(item.permission);
+      return hasPermission;
+    });
+
+    return {
+      ...group,
+      items: allowedItems
+    };
+  }).filter(group => group.items.length > 0);
+
+  return filtered;
 });
 
 onMounted(async () => {
   const savedTheme = localStorage.getItem('theme');
   if (savedTheme) theme.change(savedTheme);
 
-  await settingsStore.fetchMaintenanceStatus(); 
+  await settingsStore.fetchMaintenanceStatus();
 
   if (isMobile.value) {
     drawer.value = false;
@@ -859,18 +913,33 @@ onMounted(async () => {
   updateActiveBottomNav(route.path);
 
   const enableAudioContext = () => {
-    console.log('User interaction detected. Audio playback is now enabled for this session.');
+    // console.log('User interaction detected. Audio playback is now enabled for this session.');
     document.removeEventListener('click', enableAudioContext);
   };
   document.addEventListener('click', enableAudioContext);
-  
-  const userIsValid = await authStore.verifyToken();
-  if (userIsValid && authStore.user?.role) {
+
+  // Check if user is already authenticated
+  if (authStore.isAuthenticated && authStore.user) {
     const role = authStore.user.role;
-    if (typeof role === 'object' && role !== null && role.name) {
-      if (role.name.toLowerCase() === 'admin') userPermissions.value = ['*'];
-      else userPermissions.value = role.permissions?.map((p: any) => p.name) || [];
+    if (role) {
+      if (role.name?.toLowerCase() === 'admin') {
+        userPermissions.value = ['*'];
+      } else {
+        userPermissions.value = role.permissions?.map((p: any) => p.name) || [];
+      }
+      // Force menu refresh after initial permissions set
+      setTimeout(() => refreshMenu(), 50);
     }
+  }
+
+  const userIsValid = await authStore.verifyToken();
+
+  // Force menu refresh after verification
+  setTimeout(() => {
+    refreshMenu();
+  }, 100);
+
+  if (userIsValid && authStore.user?.role) {
     fetchRoleCount();
     fetchUserCount();
     fetchSidebarBadges();
@@ -967,26 +1036,26 @@ function getNotificationColor(type: string) {
 }
 
 async function handleNotificationClick(notification: any) {
-  console.log('[Notification] handleNotificationClick called with:', notification);
-  
+  // console.log('[Notification] handleNotificationClick called with:', notification);
+
   if (!notification) {
     console.error("[Notification] Invalid notification object: null or undefined");
     alert("Notifikasi tidak valid. Silakan refresh halaman.");
     return;
   }
-  
+
   if (typeof notification !== 'object') {
     console.error("[Notification] Invalid notification object type:", typeof notification, notification);
     alert("Notifikasi tidak valid. Silakan refresh halaman.");
     return;
   }
-  
+
   if (!notification.hasOwnProperty('id')) {
     console.error("[Notification] Notification object missing 'id' property:", notification);
     alert("Notifikasi tidak valid (missing ID). Silakan refresh halaman.");
     return;
   }
-  
+
   const notificationId = notification.id;
   if (notificationId === undefined || notificationId === null || notificationId === '') {
     console.error("[Notification] Invalid notification ID:", notificationId);
@@ -1007,46 +1076,46 @@ async function handleNotificationClick(notification: any) {
     return;
   }
 
-  console.log('[Notification] Processing notification click for ID:', notificationId);
+  // console.log('[Notification] Processing notification click for ID:', notificationId);
 
   try {
     if (!apiClient) {
       throw new Error("API client not initialized");
     }
-    
-    console.log(`[Notification] Calling API to mark notification ${notificationId} as read`);
-    
-    const response = await apiClient.post(`/notifications/${notificationId}/mark-as-read`);
-    console.log(`[Notification] API response for marking ${notificationId} as read:`, response.status);
-    
+
+    // console.log(`[Notification] Calling API to mark notification ${notificationId} as read`);
+
+    await apiClient.post(`/notifications/${notificationId}/mark-as-read`);
+    // console.log(`[Notification] API response for marking ${notificationId} as read:`);
+
     if (notifications.value && Array.isArray(notifications.value)) {
-      console.log(`[Notification] Removing notification ${notificationId} from frontend list`);
+      // console.log(`[Notification] Removing notification ${notificationId} from frontend list`);
       notifications.value = notifications.value.filter(n => {
         const match = n.id !== notificationId;
-        console.log(`[Notification] Filter check - comparing ${n.id} !== ${notificationId} = ${match}`);
+        // console.log(`[Notification] Filter check - comparing ${n.id} !== ${notificationId} = ${match}`);
         return match;
       });
-      console.log(`[Notification] Updated notifications list length: ${notifications.value.length}`);
+      // console.log(`[Notification] Updated notifications list length: ${notifications.value.length}`);
     } else {
       console.warn("[Notification] notifications.value bukan array:", notifications.value);
       notifications.value = [];
     }
 
-    console.log(`[Notification] Redirecting based on type: ${notification.type}`);
+    // console.log(`[Notification] Redirecting based on type: ${notification.type}`);
     
     if (notification.type === 'unknown') {
-      console.log("[Notification] No redirect for unknown notification type");
+      // console.log("[Notification] No redirect for unknown notification type");
       return;
     }
-    
+
     if (notification.type === 'new_technical_data') {
-      console.log("[Notification] Redirecting to /langganan");
+      // console.log("[Notification] Redirecting to /langganan");
       router.push('/langganan');
     } else if (notification.type === 'new_customer_for_noc' || notification.type === 'new_customer') {
-      console.log("[Notification] Redirecting to /data-teknis");
+      // console.log("[Notification] Redirecting to /data-teknis");
       router.push('/data-teknis');
     } else if (notification.type === 'new_payment') {
-      console.log("[Notification] Redirecting to /invoices");
+      // console.log("[Notification] Redirecting to /invoices");
       router.push('/invoices');
     } else {
       console.warn("[Notification] Unknown notification type, redirecting to home:", notification.type);
@@ -1097,7 +1166,7 @@ async function markAllAsRead() {
         notifications.value = [];
       }
       
-      console.log("[Notification] Semua notifikasi telah ditandai sebagai sudah dibaca");
+      // console.log("[Notification] Semua notifikasi telah ditandai sebagai sudah dibaca");
     } else {
       throw new Error(`Unexpected response status: ${response.status}`);
     }
