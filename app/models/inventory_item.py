@@ -1,6 +1,20 @@
-# app/models/inventory_item.py
+# ====================================================================
+# MODEL INVENTORY ITEM - EQUIPMENT MANAGEMENT
+# ====================================================================
+# Model ini mendefinisikan tabel inventory_items untuk menyimpan data
+# barang-barang inventaris seperti ONU, router, kabel, dll.
+#
+# Hubungan dengan tabel lain:
+# - inventory_item_type : Tipe/kategori barang ini
+# - inventory_status    : Status barang (available, assigned, broken, etc)
+# - pelanggan          : Pelanggan yang menggunakan barang ini (jika assigned)
+#
+# Status Flow:
+# - available -> assigned -> returned -> available
+# - available -> assigned -> broken -> repair -> available
+# - available -> lost (end of lifecycle)
+# ====================================================================
 
-# --- 1. Pastikan import ini ada ---
 from __future__ import annotations
 from typing import TYPE_CHECKING
 from sqlalchemy import ForeignKey, String, Date, Text
@@ -11,7 +25,7 @@ if TYPE_CHECKING:
 else:
     from ..database import Base
 
-# --- 2. Tambahkan blok TYPE_CHECKING untuk menghindari circular import ---
+# Import buat relationship
 if TYPE_CHECKING:
     from .inventory_item_type import InventoryItemType
     from .inventory_status import InventoryStatus
@@ -19,6 +33,10 @@ if TYPE_CHECKING:
 
 
 class InventoryItem(Base):
+    """
+    Model tabel InventoryItem - nyimpen semua data barang inventaris.
+    Ini buat tracking peralatan yang dipake buat instalasi dan maintenance.
+    """
     __tablename__ = "inventory_items"
     id: Mapped[int] = mapped_column(primary_key=True)
     serial_number: Mapped[str] = mapped_column(String(255), unique=True, index=True)

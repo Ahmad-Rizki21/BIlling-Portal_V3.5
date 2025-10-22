@@ -1,4 +1,49 @@
 # app/services/token_service.py
+"""
+Token Management Service - JWT token lifecycle management
+
+Service ini handle semua aspek JWT token management dalam aplikasi.
+Fokus pada refresh token mechanism dan token blacklisting buat security.
+
+Token Management Features:
+- JWT access token generation dan validation
+- Refresh token rotation buat enhanced security
+- Token blacklisting buat revocation
+- User session management (logout dari semua devices)
+- Automatic cleanup buat expired tokens
+
+Security Features:
+- Refresh token rotation (token baru setiap refresh)
+- Token blacklisting dengan JWT ID tracking
+- Automatic session revocation (logout all)
+- Secure token hashing buat storage
+- Protection against token reuse attacks
+
+Token Types:
+1. Access Token:
+   - Short lifetime (15 menit)
+   - Buat API access
+   - Include user data dan permissions
+
+2. Refresh Token:
+   - Long lifetime (7 hari)
+   - Buat dapatkan access token baru
+   - Include JWT ID buat blacklisting
+   - Rotation every refresh
+
+Use Cases:
+- User login dan session management
+- API authentication
+- Security enforcement
+- Session revocation
+- Token cleanup dan maintenance
+
+Configuration:
+- Access token lifetime: 15 menit
+- Refresh token lifetime: 7 hari
+- Token cleanup interval: 30 hari retention
+- Hash algorithm: SHA256 buat token storage
+"""
 
 import logging
 import uuid
@@ -19,7 +64,50 @@ logger = logging.getLogger(__name__)
 
 
 class TokenService:
-    """Service for managing JWT tokens and refresh tokens"""
+    """
+    JWT Token Management Service - Core token operations
+
+    Service class yang handle semua JWT token operations, termasuk
+    generation, validation, refresh, dan revocation.
+
+    Service Configuration:
+    - secret_key: JWT signing key dari environment
+    - algorithm: JWT algorithm (HS256)
+    - access_token_expire_minutes: Access token lifetime
+    - refresh_token_expire_days: Refresh token lifetime
+
+    Core Operations:
+    1. Token Generation (access & refresh)
+    2. Token Validation
+    3. Token Refresh dengan rotation
+    4. Token Blacklisting
+    5. Session Management (logout all)
+    6. Token Cleanup
+
+    Security Features:
+    - Refresh token rotation (prevent reuse)
+    - Token blacklisting dengan JTI tracking
+    - Automatic session revocation
+    - Secure token hashing buat storage
+    - Protection against replay attacks
+
+    Integration Points:
+    - Auth endpoints (login, refresh, logout)
+    - Database models (TokenBlacklist)
+    - Configuration management
+    - Logging dan monitoring
+
+    Performance Considerations:
+    - Efficient database queries
+    - Minimal memory footprint
+    - Async operations throughout
+    - Batch cleanup operations
+
+    Usage Pattern:
+    service = TokenService()
+    access_token = service.create_access_token({"sub": "123"})
+    refresh_token = service.create_refresh_token({"sub": "123"})
+    """
 
     def __init__(self):
         self.secret_key = settings.SECRET_KEY
@@ -115,7 +203,47 @@ class TokenService:
             return False
 
     async def refresh_access_token(self, db: AsyncSession, refresh_token: str) -> Optional[Tuple[str, str, int]]:
-        """Refresh access token using refresh token"""
+        """
+        Refresh Access Token dengan Security Features
+
+        Function ini implement refresh token mechanism dengan rotation dan security checks.
+        Ini adalah core function buat maintain user session tanpa repeated login.
+
+        Refresh Token Flow:
+        1. Verify refresh token signature dan expiration
+        2. Check token type (must be "refresh")
+        3. Validate JWT ID (JTI) existence
+        4. Check blacklist status
+        5. Validate user existence
+        6. Check user session revocation status
+        7. Generate new token pair
+        8. Blacklist old refresh token
+
+        Security Features:
+        - Token rotation (new refresh token setiap refresh)
+        - Old token blacklisting (prevent reuse)
+        - Session revocation checking (logout all)
+        - User existence validation
+        - Comprehensive audit logging
+
+        Return Value:
+        - Tuple(new_access_token, new_refresh_token, expires_in)
+        - None kalau refresh token invalid atau expired
+
+        Error Cases:
+        - Invalid token signature -> None
+        - Wrong token type -> None + warning log
+        - Token already blacklisted -> None + warning
+        - User not found -> None + warning
+        - User session revoked -> None + warning
+
+        Args:
+            db: AsyncSession database connection
+            refresh_token: Refresh token yang mau dipake
+
+        Returns:
+            Optional[Tuple[str, str, int]]: New tokens atau None kalau failed
+        """
         payload = self.verify_token(refresh_token)
         if not payload:
             return None
@@ -162,7 +290,49 @@ class TokenService:
         return new_access_token, new_refresh_token, int(access_token_expires.total_seconds())
 
     async def revoke_all_user_tokens(self, db: AsyncSession, user_id: int) -> None:
-        """Revoke all tokens for a user by setting the revoked_before timestamp."""
+        """
+        Revoke All User Tokens - Forced logout dari semua devices
+
+        Function ini revoke semua refresh token user dengan setting revoked_before
+        timestamp. Ini memaksa logout dari semua devices yang sedang aktif.
+
+        Revocation Mechanism:
+        - Set user.revoked_before = current time
+        - Semua refresh token yang issued sebelum waktu ini akan invalid
+        - Tidak perlu blacklist individual tokens
+        - Efficient buat mass session termination
+
+        Security Benefits:
+        - Immediate session termination
+        - Protection against compromised sessions
+    - Emergency response untuk security incidents
+        - Account takeover mitigation
+
+        Use Cases:
+        - User request "logout dari semua devices"
+        - Security incident response
+        - Password change forced logout
+        - Suspicious activity detection
+        - Admin session management
+
+        Implementation Details:
+        - Update user model dengan revoked_before timestamp
+        - Token validation akan check field ini
+        - All existing refresh tokens become invalid
+        - New token issued setelah revocation
+
+        Error Handling:
+        - Database rollback on failure
+        - Comprehensive error logging
+        - Atomic operation guarantee
+
+        Args:
+            db: AsyncSession database connection
+            user_id: ID user yang tokens mau direvoke
+
+        Raises:
+            Exception: Database operation failure (dengan rollback)
+        """
         try:
             user = await db.get(UserModel, user_id)
             if user:

@@ -1,4 +1,23 @@
-# app/models/invoice.py - OPTIMIZED VERSION
+# ====================================================================
+# MODEL INVOICE - BILLING & PAYMENT MANAGEMENT
+# ====================================================================
+# Model ini mendefinisikan tabel invoices untuk menyimpan semua data
+# tagihan/invoice pelanggan layanan internet FTTH.
+#
+# Hubungan dengan tabel lain:
+# - pelanggan : Customer yang punya invoice ini
+#
+# Status Invoice:
+# - Belum Dibayar : Invoice baru yang belum dibayar pelanggan
+# - Lunas        : Invoice yang sudah dibayar penuh
+# - Expired      : Invoice yang melewati batas waktu pembayaran
+# - Batal        : Invoice yang dibatalkan
+#
+# Payment Gateway Integration:
+# - Xendit API untuk pembayaran online
+# - Link pembayaran yang kadaluarsa otomatis
+# - Callback system untuk update status pembayaran
+# ====================================================================
 
 from __future__ import annotations
 from typing import TYPE_CHECKING
@@ -29,53 +48,86 @@ if TYPE_CHECKING:
 
 
 class Invoice(Base):
+    """
+    Model tabel Invoice - nyimpen semua data tagihan pelanggan.
+    Ini adalah tabel krusial buat sistem billing dan pembayaran.
+    """
     __tablename__ = "invoices"
 
-    # OPTIMIZED index strategy - Hanya index yang BENAR-BENAR PENTING
-    # Total: 10 indexes (dari 15+) untuk balance performa read/write
+    # ====================================================================
+    # DATABASE INDEXES - OPTIMIZED FOR BILLING PERFORMANCE
+    # ====================================================================
+    # Index strategy yang dioptimasi buat operasi billing dan dashboard finance.
+    # Total: 10 indexes buat balance antara query performance dan write speed.
+    # Dari 15+ index jadi 10 aja biar operasi invoice lebih cepat.
     __table_args__ = (
-        CheckConstraint("pelanggan_id IS NOT NULL", name="ck_invoice_pelanggan_id_not_null"),
-        # CORE indexes untuk query kritis yang sering digunakan
-        Index("idx_invoice_customer_status", "pelanggan_id", "status_invoice"),  # Customer dashboard
-        Index("idx_invoice_status_brand", "status_invoice", "brand"),  # Dashboard filtering
-        Index("idx_invoice_date_range", "tgl_invoice", "tgl_jatuh_tempo"),  # Date filtering
-        Index("idx_invoice_payment_tracking", "status_invoice", "paid_at"),  # Payment tracking
-        # PERFORMANCE indexes untuk dashboard revenue
-        Index("idx_invoice_revenue_analysis", "status_invoice", "tgl_invoice", "total_harga"),  # Revenue dashboard
-        Index("idx_invoice_late_payment", "paid_at", "tgl_jatuh_tempo"),  # Loyalty analysis
-        Index("idx_invoice_brand_revenue", "brand", "tgl_invoice", "total_harga"),  # Brand reporting
-        # INTEGRATION indexes untuk payment processing
-        Index("idx_invoice_xendit_lookup", "xendit_id", "status_invoice"),  # Xendit callback
-        Index("idx_invoice_number_lookup", "invoice_number", "status_invoice"),  # Invoice search
-        Index("idx_invoice_payment_method", "metode_pembayaran", "status_invoice"),  # Payment analysis
+        # Constraint untuk validasi data
+        CheckConstraint("pelanggan_id IS NOT NULL", name="ck_invoice_pelanggan_id_not_null"),  # Pastikan pelanggan_id tidak kosong
+
+        # Index buat query CORE yang sering dipake finance team
+        Index("idx_invoice_customer_status", "pelanggan_id", "status_invoice"),  # Dashboard pelanggan per status
+        Index("idx_invoice_status_brand", "status_invoice", "brand"),              # Filter invoice berdasarkan brand
+        Index("idx_invoice_date_range", "tgl_invoice", "tgl_jatuh_tempo"),        # Filter invoice berdasarkan tanggal
+        Index("idx_invoice_payment_tracking", "status_invoice", "paid_at"),        # Tracking pembayaran
+
+        # Index buat PERFORMANCE dashboard dan laporan keuangan
+        Index("idx_invoice_revenue_analysis", "status_invoice", "tgl_invoice", "total_harga"),  # Analisis pendapatan
+        Index("idx_invoice_late_payment", "paid_at", "tgl_jatuh_tempo"),                          # Analisis pembayaran terlambat
+        Index("idx_invoice_brand_revenue", "brand", "tgl_invoice", "total_harga"),               # Laporan pendapatan per brand
+
+        # Index buat INTEGRASI payment gateway
+        Index("idx_invoice_xendit_lookup", "xendit_id", "status_invoice"),        # Lookup invoice dari Xendit callback
+        Index("idx_invoice_number_lookup", "invoice_number", "status_invoice"),    # Search invoice by number
+        Index("idx_invoice_payment_method", "metode_pembayaran", "status_invoice"), # Analisis metode pembayaran
     )
 
+    # ====================================================================
+    # FIELD DEFINITIONS - DATA INVOICE
+    # ====================================================================
+
+    # Primary Key - ID unik buat setiap invoice
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, index=True)
-    invoice_number: Mapped[str] = mapped_column(String(191), unique=True, index=True)  # Unique index untuk invoice lookup
-    pelanggan_id: Mapped[int] = mapped_column(ForeignKey("pelanggan.id"), nullable=False)  # Foreign key index otomatis dibuat
-    id_pelanggan: Mapped[str] = mapped_column(String(255))  # Tidak perlu index, jarang diquery
-    brand: Mapped[str] = mapped_column(String(191))  # Sudah ada di composite index
-    total_harga: Mapped[float] = mapped_column(Numeric(15, 2))  # Sudah ada di composite index
-    no_telp: Mapped[str] = mapped_column(String(191))  # Tidak perlu index, jarang diquery
-    email: Mapped[str] = mapped_column(String(191))  # Tidak perlu index, jarang diquery
-    tgl_invoice: Mapped[Date] = mapped_column(Date)  # Sudah ada di composite index
-    tgl_jatuh_tempo: Mapped[Date] = mapped_column(Date)  # Sudah ada di composite index
-    status_invoice: Mapped[str] = mapped_column(String(50))  # Sudah ada di composite index
-    payment_link: Mapped[str | None] = mapped_column(Text)  # Tidak perlu index
-    metode_pembayaran: Mapped[str | None] = mapped_column(String(50))  # Sudah ada di composite index
-    expiry_date: Mapped[datetime | None] = mapped_column(DateTime)  # Tidak perlu index
-    xendit_id: Mapped[str | None] = mapped_column(String(191))  # Sudah ada di composite index
-    xendit_external_id: Mapped[str | None] = mapped_column(String(191))  # Tidak perlu index
-    paid_amount: Mapped[float | None] = mapped_column(Numeric(15, 2))  # Tidak perlu index
-    paid_at: Mapped[datetime | None] = mapped_column(TIMESTAMP)  # Sudah ada di composite index
-    is_processing: Mapped[bool] = mapped_column(Boolean, default=False)  # Tidak perlu index
-    created_at: Mapped[datetime | None] = mapped_column(DateTime, server_default=func.now())  # Tidak perlu index
+
+    # Data Identitas Invoice
+    invoice_number: Mapped[str] = mapped_column(String(191), unique=True, index=True)  # Nomor invoice unik (contoh: "INV/2024/001")
+    pelanggan_id: Mapped[int] = mapped_column(ForeignKey("pelanggan.id"), nullable=False)  # Foreign key ke pelanggan
+
+    # Data Pelanggan (Redundant buat performance & history)
+    id_pelanggan: Mapped[str] = mapped_column(String(255))  # ID pelanggan (disimpan buat history)
+    brand: Mapped[str] = mapped_column(String(191))        # Brand/provider (disimpan buat history)
+    no_telp: Mapped[str] = mapped_column(String(191))      # Nomor telepon (buat notifikasi)
+    email: Mapped[str] = mapped_column(String(191))        # Email (buat kirim invoice)
+
+    # Data Tagihan
+    total_harga: Mapped[float] = mapped_column(Numeric(15, 2))  # Total tagihan dalam Rupiah
+    tgl_invoice: Mapped[Date] = mapped_column(Date)              # Tanggal pembuatan invoice
+    tgl_jatuh_tempo: Mapped[Date] = mapped_column(Date)          # Tanggal jatuh tempo pembayaran
+    status_invoice: Mapped[str] = mapped_column(String(50))      # Status invoice (Belum Dibayar/Lunas/Expired/Batal)
+
+    # Data Pembayaran
+    payment_link: Mapped[str | None] = mapped_column(Text)                # Link pembayaran dari Xendit
+    metode_pembayaran: Mapped[str | None] = mapped_column(String(50))     # Metode pembayaran yang dipake
+    expiry_date: Mapped[datetime | None] = mapped_column(DateTime)        # Tanggal kadaluarsa link pembayaran
+    paid_amount: Mapped[float | None] = mapped_column(Numeric(15, 2))    # Jumlah yang sudah dibayar
+    paid_at: Mapped[datetime | None] = mapped_column(TIMESTAMP)          # Waktu pembayaran dilakukan
+
+    # Data Payment Gateway (Xendit Integration)
+    xendit_id: Mapped[str | None] = mapped_column(String(191))           # ID dari Xendit API
+    xendit_external_id: Mapped[str | None] = mapped_column(String(191))  # External ID buat Xendit
+    is_processing: Mapped[bool] = mapped_column(Boolean, default=False)  # Flag buat hindari duplicate processing
+
+    # Timestamps
+    created_at: Mapped[datetime | None] = mapped_column(DateTime, server_default=func.now())  # Waktu invoice dibuat
     updated_at: Mapped[datetime | None] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now()
-    )  # Tidak perlu index
-    deleted_at: Mapped[datetime | None] = mapped_column(TIMESTAMP)  # Tidak perlu index
+    )  # Waktu invoice diupdate
+    deleted_at: Mapped[datetime | None] = mapped_column(TIMESTAMP)  # Waktu invoice dihapus (soft delete)
 
-    # Relationship - TIDAK DIUBAH SAMA SEKALI!
+    # ====================================================================
+    # RELATIONSHIPS - HUBUNGAN TABEL
+    # ====================================================================
+
+    # Relasi ke Pelanggan - Customer yang punya invoice ini
     pelanggan = relationship("Pelanggan", back_populates="invoices")
 
     def to_dict(self):

@@ -1,6 +1,34 @@
 # app/middleware/rate_limit.py
 """
-Rate limiting middleware untuk melindungi API dari brute force attacks
+Rate Limiting Middleware - Proteksi API dari serangan dan abuse
+
+Middleware ini jaga API dari request yang berlebihan dan brute force attacks.
+Fungsi utamanya nge-limit request dari IP tertentu biar server nggak down.
+
+Security Features:
+- Rate limiting per IP address
+- Brute force protection buat login attempts
+- Automatic IP blocking kalau melebihi threshold
+- Failed login tracking dan user blocking
+- Auto-unblock setelah waktu tertentu
+
+How it works:
+1. Track request count per IP dalam time window
+2. Block request kalau melebihi batas maksimal
+3. Kirim response 429 Too Many Requests
+4. Auto-reset counter setelah time window habis
+5. Block user kalau failed login terlalu banyak
+
+Configuration:
+- Default rate limit: 100 requests per hour per IP
+- Failed login threshold: 5 attempts per 15 minutes
+- IP block duration: 1 hour
+- User block duration: 30 minutes
+
+Usage:
+- @rate_limit() decorator buat endpoints
+- @login_rate_limit() buat login endpoints
+- rate_limiter.is_rate_limited() buat manual checks
 """
 
 import hashlib
@@ -16,6 +44,29 @@ logger = logging.getLogger(__name__)
 
 
 class RateLimiter:
+    """
+    Rate Limiter Implementation - Core rate limiting logic
+
+    Class ini handle semua rate limiting logic di aplikasi.
+    Nge-track request per IP dan failed login attempts.
+
+    Data Storage:
+    - requests: Track semua request per IP
+    - failed_logins: Track failed login attempts per IP dan user
+    - blocked_ips: Daftar IP yang diblock + waktu unblock
+    - blocked_users: Daftar user yang diblock + waktu unblock
+
+    Production Note:
+    - Saat ini pake memory storage (defaultdict)
+    - Buat production, recommended pake Redis biar persistent
+
+    Security Features:
+    - Separate tracking untuk request dan failed login
+    - Automatic cleanup data yang expired
+    - IP address extraction dari headers (X-Forwarded-For)
+    - Unique key generation per identifier
+    """
+
     def __init__(self):
         # Store rate limit data in memory (for production, use Redis)
         self.requests: Dict[str, list] = defaultdict(list)
@@ -24,7 +75,34 @@ class RateLimiter:
         self.blocked_users: Dict[str, float] = {}  # Username -> unblock time
 
     def _get_client_ip(self, request: Request) -> str:
-        """Get real client IP address"""
+        """
+        Extract Real Client IP Address - Handle reverse proxy configuration
+
+        Function ini extract IP address asli dari client, even kalau aplikasi
+        jalan di belakang reverse proxy (nginx, cloudflare, dll).
+
+        IP Resolution Priority:
+        1. X-Forwarded-For header (comma-separated list, ambil yang pertama)
+        2. X-Real-IP header (nginx standard)
+        3. request.client.host (direct connection)
+
+        Security Note:
+        - Header bisa di-spoof, jadi harus careful di production
+        - X-Forwarded-For format: "client, proxy1, proxy2"
+        - Ambil IP pertama (client asli)
+
+        Use Cases:
+        - Rate limiting per IP
+        - Failed login tracking
+        - Geographic blocking
+        - Security monitoring
+
+        Args:
+            request: FastAPI Request object
+
+        Returns:
+            IP address string dari client asli
+        """
         # Check for forwarded headers
         forwarded = request.headers.get("X-Forwarded-For")
         if forwarded:
@@ -39,11 +117,68 @@ class RateLimiter:
         return request.client.host if request.client else "unknown"
 
     def _generate_key(self, identifier: str, endpoint: str = "") -> str:
-        """Generate unique key for rate limiting"""
+        """
+        Generate Unique Key for Rate Limiting - Hashing identifiers
+
+        Generate unique key pake MD5 hash buat identifier rate limiting.
+        Ini memastikan setiap kombinasi IP + endpoint punya key yang unik.
+
+        Key Format:
+        - Input: "{identifier}:{endpoint}"
+        - Hash: MD5 (32 character hex string)
+        - Examples:
+          - "192.168.1.1:/api/users" -> "a1b2c3d4e5f6..."
+          - "192.168.1.1:/api/login" -> "f6e5d4c3b2a1..."
+
+        Why MD5?
+        - Cepat dan lightweight
+        - Fixed length output (32 chars)
+        - Low collision rate buat use case ini
+        - Sufficient buat rate limiting key
+
+        Security Note:
+        - MD5 cryptographically broken, tapi fine buat rate limiting
+        - Not buat password atau sensitive data
+        - Cuma buat generate consistent keys
+
+        Args:
+            identifier: IP address atau user identifier
+            endpoint: API endpoint path (optional)
+
+        Returns:
+            32-character hexadecimal MD5 hash
+        """
         return hashlib.md5(f"{identifier}:{endpoint}".encode()).hexdigest()
 
     def is_blocked(self, identifier: str) -> bool:
-        """Check if identifier (IP or username) is blocked"""
+        """
+        Check if Identifier is Blocked - IP/Username blocking verification
+
+        Cek apakah IP address atau username sedang diblock.
+        Function ini auto-unblock identifiers yang sudah expired.
+
+        Blocking Logic:
+        - Check di blocked_ips dictionary untuk IP blocking
+        - Check di blocked_users dictionary untuk username blocking
+        - Auto-unblock kalau block time sudah expired
+        - Clean up expired entries buat memory efficiency
+
+        Block Duration:
+        - IP blocking: 1 jam (3600 seconds)
+        - User blocking: 30 menit (1800 seconds)
+        - Auto-cleanup setelah expired
+
+        Performance:
+        - O(1) lookup pake dictionary
+        - Auto cleanup prevent memory bloat
+        - Efficient buat high-traffic applications
+
+        Args:
+            identifier: IP address atau username yang mau dicek
+
+        Returns:
+            True kalau identifier masih diblock, False kalau tidak
+        """
         current_time = time.time()
 
         # Check IP blocking
@@ -57,7 +192,40 @@ class RateLimiter:
         return False
 
     def record_failed_login(self, client_ip: str, username: str):
-        """Record failed login attempt"""
+        """
+        Record Failed Login Attempt - Brute force protection tracking
+
+        Track failed login attempts per IP dan per username.
+        Function ini akan block IP atau username kalau failed attempts terlalu banyak.
+
+        Brute Force Protection Strategy:
+        - Track failed attempts per IP address
+        - Track failed attempts per username
+        - Separate thresholds buat IP vs user blocking
+        - Time-based window (rolling 15 minutes)
+
+        Threshold Configuration:
+        - Max IP attempts: 20 per 15 menit
+        - Max user attempts: 5 per 15 menit
+        - IP block duration: 1 jam
+        - User block duration: 30 menit
+
+        Security Benefits:
+        - Prevent credential stuffing attacks
+        - Block automated password guessing
+        - Protect specific accounts dari targeting
+        - Rate limiting per IP dan per user
+
+        Implementation Details:
+        - Rolling time window (bukan fixed interval)
+        - Auto cleanup old attempts
+        - Case-insensitive username blocking
+        - Comprehensive logging buat security monitoring
+
+        Args:
+            client_ip: IP address dari failed login attempt
+            username: Username yang gagal login
+        """
         current_time = time.time()
         key_ip = f"ip:{client_ip}"
         key_user = f"user:{username.lower()}"
@@ -90,7 +258,40 @@ class RateLimiter:
             logger.warning(f"Blocking user {username} due to {max_user_attempts} failed login attempts")
 
     def reset_failed_attempts(self, client_ip: str, username: str):
-        """Reset failed login attempts on successful login"""
+        """
+        Reset Failed Login Attempts - Clear successful login data
+
+        Reset semua failed login attempts untuk IP dan username setelah login berhasil.
+        Ini memastikan user legitimate nggak kena block karena failed attempts sebelumnya.
+
+        Reset Logic:
+        - Clear failed attempts history untuk IP
+        - Clear failed attempts history untuk username
+        - Unblock username kalau sebelumnya diblock
+        - Clean up data buat memory efficiency
+
+        Use Cases:
+        - Setelah successful login
+        - Setelah password reset
+        - Manual admin intervention
+        - False positive correction
+
+        Security Benefits:
+        - Prevent false positives
+        - Allow legitimate users setelah successful auth
+        - Clean tracking data buat fresh start
+        - Remove temporary blocks immediately
+
+        Important Note:
+        - IP block tetap dipertahankan (security measure)
+        - Hanya username block yang direset
+        - Failed attempts dihapus permanen
+        - User bisa coba lagi dari IP yang sama
+
+        Args:
+            client_ip: IP address yang berhasil login
+            username: Username yang berhasil login
+        """
         key_ip = f"ip:{client_ip}"
         key_user = f"user:{username.lower()}"
 
@@ -111,10 +312,46 @@ class RateLimiter:
         endpoint_specific: bool = False,
     ) -> tuple[bool, dict]:
         """
-        Check if request is rate limited
+        Rate Limiting Check - Core rate limiting logic
+
+        Function utama buat cek apakah request harus dibatasi atau tidak.
+        Ini implementasi sliding window rate limiting algorithm.
+
+        Rate Limiting Algorithm:
+        - Sliding time window (bukan fixed interval)
+        - Track request timestamps per IP
+        - Clean up old requests outside window
+        - Block kalau melebihi threshold
+
+        Parameters:
+        - max_requests: Maximum requests allowed dalam window
+        - window_seconds: Time window dalam detik
+        - endpoint_specific: True = rate limit per endpoint, False = global
+
+        Blocking Logic:
+        - Check IP block status dulu
+        - Hitung request dalam current window
+        - Block IP kalau melebihi limit
+        - Auto cleanup expired requests
+
+        Response Format:
+        - True, {"retry_after": 3600, "reason": "..."} kalau diblock
+        - False, {"remaining": 50, "reset": timestamp} kalau dibolehin
+
+        Performance Features:
+        - O(n) complexity dimana n = requests dalam window
+        - Auto cleanup prevent memory bloat
+        - Efficient time comparison
+        - Fast dictionary lookup
+
+        Args:
+            request: FastAPI Request object
+            max_requests: Max requests per time window (default: 100)
+            window_seconds: Window duration dalam detik (default: 3600)
+            endpoint_specific: Rate limit per endpoint atau global
 
         Returns:
-            tuple: (is_limited: bool, info: dict)
+            Tuple (is_limited: bool, info: dict) dengan status dan detail info
         """
         client_ip = self._get_client_ip(request)
         endpoint = request.url.path if endpoint_specific else ""

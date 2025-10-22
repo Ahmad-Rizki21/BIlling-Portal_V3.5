@@ -1,4 +1,41 @@
 # app/routers/auth.py
+"""
+Authentication Router - Login, logout, dan token management
+
+Router ini handle semua authentication operations di sistem billing.
+Fokus pada JWT-based authentication dengan refresh token mechanism.
+
+Authentication Flow:
+1. Login -> dapat access token + refresh token
+2. API calls -> pake access token (short-lived)
+3. Token refresh -> pake refresh token (long-lived)
+4. Logout -> blacklist refresh token
+
+Security Features:
+- JWT access tokens (15 menit lifetime)
+- Refresh token rotation (7 hari lifetime)
+- Token blacklisting untuk logout
+- Rate limiting untuk brute force protection
+- Session management (logout all devices)
+
+Token Types:
+- Access Token: API authentication (short-lived)
+- Refresh Token: Token renewal (long-lived)
+- Token blacklisting: Revocation mechanism
+
+Endpoints:
+- POST /auth/token - Login dan dapatkan tokens
+- POST /auth/refresh - Refresh access token
+- POST /auth/logout - Logout dari current device
+- POST /auth/logout-all - Logout dari semua devices
+- GET /auth/password-requirements - Password policy
+
+Integration Points:
+- Rate limiting middleware
+- Token service untuk refresh mechanism
+- User model untuk authentication
+- Permission system untuk authorization
+"""
 
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
@@ -36,6 +73,21 @@ router = APIRouter(
 )
 
 
+# POST /auth/token - Login dan dapatkan access token
+# Endpoint buat login user ke sistem dan dapetin JWT token
+# Request body: form_data dengan username (email) dan password
+# Response: access_token, refresh_token, token_type, expires_in
+# Security:
+# - Menggunakan OAuth2PasswordRequestForm untuk security
+# - Password verification dengan hashing
+# - JWT token dengan expiration time
+# Token details:
+# - Access token: 15 menit (configurable)
+# - Refresh token: 7 hari
+# - Token type: Bearer
+# Validation: email dan password harus match di database
+# Error handling: 401 kalo email/password salah
+# Logging: log successful login untuk audit trail
 @router.post("/token", response_model=dict)
 async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)):
     """
@@ -69,6 +121,20 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
     }
 
 
+# POST /auth/refresh - Refresh access token
+# Buat dapatkan access token baru pake refresh token (tanpa login lagi)
+# Request body: refresh_token yang masih valid
+# Response: access_token baru, refresh_token baru, token_type, expires_in
+# Security:
+# - Validasi refresh token sebelum generate token baru
+# - Refresh token rotation: refresh token lama di-blacklist, dapet baru
+# - Auto-expired refresh token handling
+# Token management:
+# - Access token baru: 15 menit
+# - Refresh token baru: 7 hari (extend dari yang lama)
+# - Blacklist refresh token lama biar nggak bisa dipake lagi
+# Use case: keep user logged in tanpa harus login ulang tiap 15 menit
+# Error handling: 401 kalo refresh token invalid atau expired
 @router.post("/refresh", response_model=TokenRefreshResponse)
 async def refresh_access_token(
     refresh_request: TokenRefreshRequest,
@@ -91,6 +157,20 @@ async def refresh_access_token(
     )
 
 
+# POST /auth/logout - Logout dari perangkat saat ini
+# Buat logout user dan blacklist refresh token yang dipake
+# Request body: refresh_token yang mau di-blacklist
+# Response: success message
+# Security:
+# - Blacklist refresh token biar nggak bisa dipake lagi
+# - Verify refresh token sebelum blacklist (validasi JWT)
+# - Simpan alasan blacklist (User logout) untuk audit
+# Token management:
+# - Extract JTI (JWT ID) dari token untuk unique identification
+# - Extract user ID dan expiration time dari token
+# - Add ke token blacklist table
+# Use case: logout normal user dari satu device
+# Error handling: 401 kalo refresh token invalid atau expired
 @router.post("/logout")
 async def logout(
     refresh_request: TokenRefreshRequest,
@@ -118,6 +198,21 @@ async def logout(
     return {"message": "Logout berhasil"}
 
 
+# POST /auth/logout-all - Logout dari semua perangkat
+# Buat logout user dari semua device/session yang aktif
+# Authentication: butuh access token yang valid (current user)
+# Response: success message
+# Security:
+# - Revoke semua refresh token yang terkait user ini
+# - Forced logout dari semua device yang sedang aktif
+# - Gunakan current user dependency (authenticated user)
+# Use case: security action (kalo curiga akun kena hack), reset session
+# Token management:
+# - Cari semua refresh token yang aktif untuk user ini
+# - Blacklist semua token yang ditemukan
+# - Include refresh token yang mungkin belum expired
+# Performance: efficient query dengan filter by user_id
+# Error handling: butuh authentication (401 kalo nggak login)
 @router.post("/logout-all")
 async def logout_all(
     current_user: UserModel = Depends(get_current_active_user),
@@ -131,6 +226,20 @@ async def logout_all(
     return {"message": "Logout dari semua perangkat berhasil"}
 
 
+# GET /auth/password-requirements - Ambil requirement password
+# Buat ngambil aturan password yang berlaku di sistem
+# Response: password requirements (min length, uppercase, lowercase, dll)
+# Use case: buat frontend validation form registration/change password
+# Security features:
+# - Minimum length requirement
+# - Uppercase letter requirement
+# - Lowercase letter requirement
+# - Number requirement
+# - Special character requirement
+# - Custom pattern rules
+# Implementation: import from main auth module
+# Benefits: client-side validation tanpa hardcode rules di frontend
+# Maintenance: centralized password policy management
 @router.get("/password-requirements")
 async def get_password_requirements():
     """

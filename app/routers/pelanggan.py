@@ -64,6 +64,12 @@ class PelangganListResponse(BaseModel):
     total_count: int
 
 
+# POST /pelanggan - Tambah pelanggan baru
+# Buat nambahin data pelanggan baru ke sistem
+# Request body: data pelanggan (nama, email, no_telp, alamat, dll)
+# Response: data pelanggan yang baru dibuat
+# Validation: cek duplikasi email dan KTP
+# Error handling: rollback transaction kalau ada error, kirim notifikasi ke tim NOC/CS
 @router.post("/", response_model=PelangganSchema, status_code=status.HTTP_201_CREATED)
 async def create_pelanggan(
     pelanggan: PelangganCreate, db: AsyncSession = Depends(get_db), current_user: UserModel = Depends(get_current_active_user)
@@ -126,6 +132,18 @@ async def create_pelanggan(
     return db_pelanggan
 
 
+# GET /pelanggan - Ambil semua data pelanggan
+# Endpoint ini buat nampilin list pelanggan dengan fitur pencarian dan filter
+# Query parameters:
+# - skip: offset untuk pagination (default: 0)
+# - limit: jumlah data per halaman (default: 15)
+# - search: cari pelanggan berdasarkan nama, email, atau no_telp
+# - alamat: filter berdasarkan alamat
+# - id_brand: filter berdasarkan brand/provider
+# - fields: pilih field yang mau ditampilin (biar response lebih kecil)
+# - for_invoice_selection: kalo true, ambil semua data tanpa limit
+# Response: list pelanggan dengan total count
+# Performance optimization: eager loading biar ga N+1 query
 @router.get("/", response_model=PelangganListResponse)
 async def read_all_pelanggan(
     skip: int = 0,
@@ -205,6 +223,16 @@ async def read_all_pelanggan(
     return PelangganListResponse(data=list(pelanggan_list), total_count=total_count)
 
 
+# GET /pelanggan/paginated - Ambil data pelanggan dengan pagination lengkap
+# Sama seperti GET /pelanggan tapi response-nya lebih detail pagination info-nya
+# Query parameters:
+# - skip: offset untuk pagination (min: 0)
+# - limit: jumlah data per halaman (min: 1, max: 100)
+# - search: cari pelanggan berdasarkan nama, email, atau no_telp
+# - alamat: filter berdasarkan alamat
+# - id_brand: filter berdasarkan ID Brand
+# Response: data pelanggan + pagination info (totalItems, currentPage, totalPages, hasNext, hasPrevious)
+# Performance optimization: eager loading untuk prevent N+1 queries
 @router.get("/paginated", response_model=PaginatedPelangganResponse)
 async def read_pelanggan_paginated(
     skip: int = Query(0, ge=0, description="Jumlah items untuk dilewati (offset)"),
@@ -283,6 +311,13 @@ async def read_pelanggan_paginated(
         )
 
 
+# GET /pelanggan/{pelanggan_id} - Ambil detail pelanggan berdasarkan ID
+# Buat nampilin detail data pelanggan tertentu
+# Path parameters:
+# - pelanggan_id: ID pelanggan yang mau diambil
+# Response: data pelanggan lengkap dengan relasi (harga_layanan, data_teknis, langganan)
+# Error handling: 404 kalau pelanggan nggak ketemu
+# Performance optimization: eager loading biar ga N+1 query
 @router.get("/{pelanggan_id}", response_model=PelangganSchema)
 async def read_pelanggan_by_id(
     pelanggan_id: int, db: AsyncSession = Depends(get_db), current_user: UserModel = Depends(get_current_active_user)
@@ -307,6 +342,15 @@ async def read_pelanggan_by_id(
     return db_pelanggan
 
 
+# PATCH /pelanggan/{pelanggan_id} - Update data pelanggan
+# Buat update data pelanggan yang udah ada
+# Path parameters:
+# - pelanggan_id: ID pelanggan yang mau diupdate
+# Request body: field yang mau diupdate (cuma field yang diisi yang bakal keupdate)
+# Response: data pelanggan setelah diupdate
+# Validation: cek ID Brand dan Mikrotik Server kalau diubah
+# Error handling: 404 kalau pelanggan nggak ketemu, rollback transaction kalau error
+# Transaction safety: semua perubahan atomic atau rollback semua
 @router.patch("/{pelanggan_id}", response_model=PelangganSchema)
 async def update_pelanggan(
     pelanggan_id: int,
@@ -392,6 +436,14 @@ async def update_pelanggan(
     return db_pelanggan
 
 
+# DELETE /pelanggan/{pelanggan_id} - Hapus pelanggan dan semua data terkait
+# Buat hapus pelanggan beserta semua data yang berelasi (cascade delete)
+# Path parameters:
+# - pelanggan_id: ID pelanggan yang mau dihapus
+# Response: 204 No Content (sukses tapi nggak ada response body)
+# Cascade delete: hapus data_teknis, langganan, dan invoice yang berelasi
+# Error handling: 404 kalau pelanggan nggak ketemu, rollback kalau ada error
+# Safety warning: HATI-HATI! Ini akan menghapus semua data terkait pelanggan
 @router.delete("/{pelanggan_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_pelanggan(
     pelanggan_id: int, db: AsyncSession = Depends(get_db), current_user: UserModel = Depends(get_current_active_user)
@@ -447,6 +499,11 @@ async def delete_pelanggan(
     return None
 
 
+# GET /pelanggan/template/csv - Download template CSV untuk import
+# Buat download file template CSV yang bisa dipakai buat import data pelanggan
+# Response: file CSV dengan header dan contoh data
+# Format file: CSV dengan BOM (biar compatibility dengan Excel)
+# Contoh data: include sample data biar gampang ngikutin format
 @router.get("/template/csv", response_class=StreamingResponse)
 async def download_csv_template(current_user: UserModel = Depends(get_current_active_user)):
     output = io.StringIO()
@@ -491,6 +548,17 @@ async def download_csv_template(current_user: UserModel = Depends(get_current_ac
     )
 
 
+# GET /pelanggan/export/csv - Export data pelanggan ke CSV
+# Buat export data pelanggan ke file CSV dengan filter yang sama seperti list
+# Query parameters:
+# - skip: offset untuk pagination (default: 0)
+# - limit: maksimal 50,000 records per export (biar ga crash)
+# - search: filter pencarian (sama seperti di list)
+# - alamat: filter berdasarkan alamat
+# - id_brand: filter berdasarkan brand/provider
+# Response: file CSV dengan semua field pelanggan
+# Performance optimization: pagination dan eager loading biar ga memory issues
+# Format file: CSV dengan BOM dan timestamp di filename
 @router.get("/export/csv", response_class=StreamingResponse)
 async def export_to_csv(
     skip: int = 0,
@@ -564,6 +632,18 @@ async def export_to_csv(
     )
 
 
+# POST /pelanggan/import - Import data pelanggan dari CSV
+# Buat import data pelanggan dari file CSV
+# Request body: file CSV dengan format yang sesuai template
+# Response: jumlah pelanggan yang berhasil diimport + error message kalau ada
+# Validation:
+# - cek format file (.csv)
+# - cek header CSV
+# - cek duplikasi email dan KTP (dalam file dan di database)
+# - cek format tanggal (YYYY-MM-DD)
+# Error handling: rollback semua data kalau ada error, return detail error per baris
+# Performance: batch insert biar lebih cepat
+# Supported encoding: auto-detect encoding (utf-8, latin1, dll)
 @router.post("/import")
 async def import_from_csv(
     file: UploadFile = File(...),
@@ -718,6 +798,11 @@ async def import_from_csv(
     return {"message": success_message}
 
 
+# GET /pelanggan/lokasi/unik - Ambil daftar lokasi unik
+# Buat ngambil list alamat/lokasi pelanggan yang unik (untuk dropdown filter)
+# Response: array of string lokasi pelanggan
+# Use case: buat dropdown filter di frontend
+# Performance: query dengan distinct biar efficient
 @router.get("/lokasi/unik", response_model=List[str])
 async def get_unique_lokasi(db: AsyncSession = Depends(get_db), current_user: UserModel = Depends(get_current_active_user)):
     # OPTIMIZED: Query untuk lokasi unik dengan index hint untuk performance

@@ -1,6 +1,46 @@
+# app/middleware/response_optimization.py
 """
-Middleware for API Response Optimization.
-Menyediakan response compression, monitoring, dan optimization.
+Response Optimization Middleware - Compress dan monitor API responses
+
+Middleware ini optimasi API responses buat better performance dan user experience.
+Fokus pada compression dan monitoring buat reduce bandwidth usage.
+
+Optimization Features:
+- Gzip compression untuk JSON responses
+- Response size monitoring dan logging
+- Performance metrics collection
+- Automatic compression decision making
+
+How it works:
+1. Intercept semua HTTP responses
+2. Analyze content type dan size
+3. Apply gzip compression kalau beneficial
+4. Add performance headers buat monitoring
+5. Log large responses buat optimization insights
+
+Compression Strategy:
+- Minimum size threshold: 1KB (biar worth the effort)
+- Target compression: minimum 10% size reduction
+- Compress only JSON responses (skip binary files)
+- Respect client Accept-Encoding headers
+
+Performance Benefits:
+- Reduced bandwidth usage
+- Faster API response times
+- Better mobile experience
+- Lower server bandwidth costs
+
+Monitoring Features:
+- Large response warnings (>50KB)
+- Compression statistics logging
+- Performance headers in responses
+- Size optimization metrics
+
+Usage:
+- Automatically applied ke semua responses
+- Configurable compression thresholds
+- Detailed logging buat performance analysis
+- Production-ready optimization
 """
 
 import gzip
@@ -18,10 +58,44 @@ logger = logging.getLogger("app.response_optimization")
 
 class ResponseOptimizationMiddleware(BaseHTTPMiddleware):
     """
-    Middleware untuk optimasi response API:
-    - Response size monitoring
-    - JSON response compression
-    - Performance tracking
+    Response Optimization Implementation - Smart compression middleware
+
+    Middleware implementation buat optimize API responses dengan compression
+    dan performance monitoring. Fokus pada JSON API responses.
+
+    Core Features:
+    - Automatic gzip compression untuk responses yang layak
+    - Response size monitoring dan logging
+    - Performance metrics collection
+    - Intelligent compression decision making
+
+    Compression Logic:
+    1. Check content type (hanya application/json)
+    2. Verify minimum size threshold (default: 1KB)
+    3. Check client Accept-Encoding header
+    4. Apply compression kalau beneficial (>10% reduction)
+    5. Add compression headers buat client
+
+    Performance Monitoring:
+    - Processing time tracking
+    - Original vs compressed size comparison
+    - Large response warnings (>50KB)
+    - Compression effectiveness metrics
+
+    Response Headers Added:
+    - X-Process-Time: Processing time dalam detik
+    - X-Response-Size: Final response size dalam bytes
+    - X-Original-Size: Original response size sebelum compression
+    - X-Optimization: Middleware identifier
+    - Content-Encoding: gzip (kalau compressed)
+
+    Configuration:
+    - compress_min_size: Minimum size buat compression (default: 1024 bytes)
+    - compression_enabled: Enable/disable compression (default: True)
+
+    Args:
+        app: FastAPI application instance
+        compress_min_size: Minimum response size untuk compression (bytes)
     """
 
     def __init__(self, app, compress_min_size: int = 1024):

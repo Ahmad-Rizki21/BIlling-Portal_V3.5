@@ -1,4 +1,31 @@
 # app/logging_config.py
+"""
+Comprehensive logging configuration untuk Artacom FTTH Billing system.
+Module ini handle semua kebutuhan logging dengan features yang lengkap.
+
+Features:
+- Multi-level logging (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+- Multiple output destinations (console, files)
+- Rotating log files buat manage size
+- Enhanced colored formatter buat console
+- Unicode/ASCII compatibility (Windows friendly)
+- Structured logging functions buat consistency
+- Sensitive data filtering
+- Module-specific log routing
+
+Log files generated:
+- logs/app.log (Main application log, 10MB, 5 backups)
+- logs/errors.log (Errors only, 5MB, 3 backups)
+- logs/access.log (API access log, 10MB, 5 backups)
+
+Usage:
+    from app.logging_config import setup_logging
+    logger = setup_logging()
+
+    # Atau pake structured logging functions
+    from app.logging_config import log_scheduler_event, log_payment_event
+    log_scheduler_event(logger, "job_name", "started", "details")
+"""
 
 import logging
 import logging.config
@@ -49,9 +76,36 @@ STARTUP_BANNER = """
 """
 
 
-# Detect if we can use Unicode characters
 def can_use_unicode() -> bool:
-    """Check if terminal supports Unicode characters"""
+    """
+    Detect terminal support buat Unicode characters dan emojis.
+    Fungsinya buat ensure compatibility cross-platform.
+
+    Returns:
+        True kalau terminal support Unicode, False kalau harus pake ASCII
+
+    Detection logic:
+    - Windows cmd/PowerShell: cek modern terminal indicators
+    - WSL (Windows Subsystem for Linux): Unicode supported
+    - Linux/macOS: Default Unicode support
+    - Modern terminals (Windows Terminal, VS Code): Unicode supported
+
+    Environment variables checked:
+    - WT_SESSION: Windows Terminal indicator
+    - TERM_PROGRAM: VS Code terminal indicator
+    - TERM: Unix terminal type
+
+    Usage:
+        if can_use_unicode():
+            print("✅ Success!")
+        else:
+            print("[OK] Success!")
+
+    Note:
+    - Fallback ke ASCII kalau tidak yakin
+    - Prevent garbled text output
+    - Cross-platform compatibility
+    """
     try:
         # Check if we're in Windows cmd
         if platform.system() == "Windows":
@@ -70,7 +124,37 @@ USE_UNICODE = can_use_unicode()
 
 
 def log_scheduler_event(logger: logging.Logger, job_name: str, status: str, details: str = "") -> None:
-    """Enhanced scheduler logging with better formatting"""
+    """
+    Structured logging function buat scheduler/job events.
+    Standardize format buat semua scheduler logging.
+
+    Args:
+        logger: Logger instance yang mau dipake
+        job_name: Nama job/scheduler (misal: "daily_billing")
+        status: Job status ("started", "completed", "failed", "skipped")
+        details: Additional information (optional)
+
+    Status icons:
+    - 🟢 [START] = Job dimulai
+    - ✅ [DONE] = Job selesai berhasil
+    - 🔴 [FAIL] = Job gagal (error)
+    - ⚠️ [SKIP] = Job dilewati (misal: tidak ada data)
+
+    Usage examples:
+        log_scheduler_event(logger, "daily_billing", "started", "Processing 150 customers")
+        log_scheduler_event(logger, "payment_reminder", "completed", "Sent 50 reminders")
+        log_scheduler_event(logger, "invoice_generation", "failed", "Database connection error")
+
+    Log level mapping:
+    - failed -> ERROR
+    - completed -> INFO
+    - started/skipped -> INFO
+
+    Note:
+    - Auto Unicode/ASCII adaptation
+    - Consistent format across all scheduler jobs
+    - Easy parsing buat monitoring tools
+    """
     if USE_UNICODE:
         status_icons = {
             "started": "🟢 [START]",
@@ -264,7 +348,48 @@ class FileFormatter(logging.Formatter):
 
 
 def setup_logging() -> logging.Logger:
-    """Enhanced logging setup with beautiful banner"""
+    """
+    Main function buat setup comprehensive logging system.
+    Initialize semua log handlers, formatters, dan konfigurasi.
+
+    Returns:
+        Main logger instance (app.main)
+
+    Setup process:
+    1. Create logs directory kalau belum ada
+    2. Print ASCII art banner (cross-platform compatible)
+    3. Setup logging configuration dictionary
+    4. Initialize multiple handlers (console + files)
+    5. Configure module-specific loggers
+    6. Apply sensitive data filters
+    7. Print startup information
+
+    Log file configuration:
+    - app.log: Debug level, detailed format, 10MB rotation
+    - errors.log: Error level only, 5MB rotation
+    - access.log: API access, simple format, 10MB rotation
+
+    Handler features:
+    - RotatingFileHandler: Automatic log rotation
+    - UTF-8 encoding: Support Unicode characters
+    - Sensitive data filtering: Hide passwords/API keys
+    - Cross-platform compatibility: Windows/Linux/macOS
+
+    Module loggers:
+    - app.*: Main application modules
+    - sqlalchemy.engine: Database queries (WARNING+)
+    - apscheduler: Job scheduling
+    - uvicorn: Web server
+
+    Usage:
+        logger = setup_logging()
+        logger.info("Application started successfully")
+
+    Note:
+    - Must dipanggil sekali di application startup
+    - Creates log directory otomatis
+    - Handles Unicode encoding errors gracefully
+    """
 
     # Create log directory
     log_dir = Path("logs")

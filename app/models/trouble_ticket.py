@@ -1,4 +1,25 @@
-# app/models/trouble_ticket.py
+# ====================================================================
+# MODEL TROUBLE TICKET - CUSTOMER SUPPORT MANAGEMENT
+# ====================================================================
+# Model ini mendefinisikan sistem trouble ticket untuk mengelola laporan
+# masalah dari pelanggan layanan internet FTTH.
+#
+# Hubungan dengan tabel lain:
+# - pelanggan      : Customer yang buat ticket ini
+# - data_teknis    : Data teknis terkait masalah ini
+# - users          : User/team yang ditugaskan menangani ticket
+#
+# Status Flow:
+# - open -> in_progress -> resolved -> closed
+# - open -> pending_customer -> in_progress -> ...
+# - open -> pending_vendor -> in_progress -> ...
+#
+# Prioritas Level:
+# - critical : Seluruh area down / emergency
+# - high     : Pelanggan VIP / bisnis terganggu
+# - medium   : Masalah koneksi individual
+# - low      : Minor issues / pertanyaan
+# ====================================================================
 
 from __future__ import annotations
 from typing import TYPE_CHECKING
@@ -20,35 +41,44 @@ if TYPE_CHECKING:
 
 
 class TicketStatus(enum.Enum):
-    """Enum untuk status trouble ticket"""
-    OPEN = "open"
-    IN_PROGRESS = "in_progress"
-    PENDING_CUSTOMER = "pending_customer"
-    PENDING_VENDOR = "pending_vendor"
-    RESOLVED = "resolved"
-    CLOSED = "closed"
-    CANCELLED = "cancelled"
+    """
+    Enum untuk status trouble ticket - Alur kerja ticket management.
+    Ini mendefinisikan tahapan dari laporan masalah sampe solved.
+    """
+    OPEN = "open"                      # Ticket baru dibuat, belum ditangani
+    IN_PROGRESS = "in_progress"        # Sedang ditangani oleh teknisi/support
+    PENDING_CUSTOMER = "pending_customer"  # Menunggu konfirmasi dari pelanggan
+    PENDING_VENDOR = "pending_vendor"  # Menunggu pihak ketiga/vendor
+    RESOLVED = "resolved"              # Masalah sudah solved
+    CLOSED = "closed"                  # Ticket ditutup (final state)
+    CANCELLED = "cancelled"            # Ticket dibatalkan
 
 
 class TicketPriority(enum.Enum):
-    """Enum untuk prioritas trouble ticket"""
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
-    CRITICAL = "critical"
+    """
+    Enum untuk prioritas trouble ticket - Level urgency masalah.
+    Ini menentukan seberapa cepat ticket harus ditangani.
+    """
+    LOW = "low"          # Prioritas rendah - bisa ditangani nanti
+    MEDIUM = "medium"    # Prioritas sedang - normal response time
+    HIGH = "high"        # Prioritas tinggi - perlu cepat ditangani
+    CRITICAL = "critical"  # Prioritas kritis - emergency response
 
 
 class TicketCategory(enum.Enum):
-    """Enum untuk kategori masalah"""
-    NO_CONNECTION = "no_connection"
-    SLOW_CONNECTION = "slow_connection"
-    INTERMITTENT = "intermittent"
-    HARDWARE_ISSUE = "hardware_issue"
-    CABLE_ISSUE = "cable_issue"
-    ONU_ISSUE = "onu_issue"
-    OLT_ISSUE = "olt_issue"
-    MIKROTIK_ISSUE = "mikrotik_issue"
-    OTHER = "other"
+    """
+    Enum untuk kategori masalah - Jenis masalah yang dilaporkan.
+    Ini membantu klasifikasi dan routing ke tim yang tepat.
+    """
+    NO_CONNECTION = "no_connection"        # Tidak ada koneksi sama sekali
+    SLOW_CONNECTION = "slow_connection"    # Koneksi lambat
+    INTERMITTENT = "intermittent"          # Koneksi putus-nyambung
+    HARDWARE_ISSUE = "hardware_issue"      # Masalah hardware (router, etc)
+    CABLE_ISSUE = "cable_issue"            # Masalah kabel fiber
+    ONU_ISSUE = "onu_issue"                # Masalah device ONU di pelanggan
+    OLT_ISSUE = "olt_issue"                # Masalah device OLT pusat
+    MIKROTIK_ISSUE = "mikrotik_issue"      # Masalah konfigurasi Mikrotik
+    OTHER = "other"                        # Masalah lain-lain
 
 
 class TroubleTicket(Base):

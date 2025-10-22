@@ -1,6 +1,44 @@
 #!/usr/bin/env python3
+# app/query_optimization.py
 """
-Query Optimization Utilities for Eliminating N+1 Problems
+Database query optimization utilities buat eliminate N+1 problems.
+Module ini fokus ke performance optimization dan efficient database queries.
+
+Problems solved:
+- N+1 query problems (multiple database trips)
+- Inefficient JOIN operations
+- Pagination performance issues
+- Unnecessary data loading
+- Database roundtrip minimization
+
+Techniques used:
+- Eager loading (joinedload, selectinload)
+- Subquery optimization
+- Aggregate statistics calculation
+- Efficient pagination
+- Query batching
+
+Performance benefits:
+- Reduced database queries from N+1 to 1
+- Faster response times
+- Lower database load
+- Better scalability
+- Consistent performance
+
+Usage:
+    from app.query_optimization import optimize_pelanggan_query_with_stats
+
+    # Optimized query with statistics
+    query = select(Pelanggan)
+    optimized = optimize_pelanggan_query_with_stats(query)
+    result = await db.execute(optimized)
+
+Target queries:
+- Customer listings with statistics
+- Invoice reports with related data
+- Dashboard queries with aggregates
+- Export operations
+- Complex reporting
 """
 
 from sqlalchemy import func, select
@@ -14,8 +52,44 @@ from app.models.pelanggan import Pelanggan
 
 def optimize_pelanggan_query_with_stats(query):
     """
-    Optimasi query pelanggan dengan statistik agregat untuk menghindari N+1 problem
-    """
+    Optimize pelanggan query dengan aggregate statistics buat eliminate N+1 problems.
+    Fungsi ini menggabungkan data pelanggan dengan statistik terkait dalam single query.
+
+    Args:
+        query: Base SQLAlchemy query untuk Pelanggan model
+
+    Returns:
+        Optimized query dengan statistics tergabung
+
+    Statistics included:
+    - Total invoice count per pelanggan
+    - Total invoice amount per pelanggan
+    - Total langganan count per pelanggan
+
+    Performance impact:
+    - Reduces queries dari 1+N ke 1
+    - Faster customer listings
+    - Better dashboard performance
+    - Reduced database load
+
+    Before optimization:
+        # N+1 problem - separate query untuk setiap pelanggan
+        for pelanggan in pelanggans:
+            invoice_count = db.query(func.count(Invoice.id)).filter(
+                Invoice.pelanggan_id == pelanggan.id
+            ).scalar()
+
+    After optimization:
+        # Single query dengan semua statistics
+        optimized_query = optimize_pelanggan_query_with_stats(query)
+        result = await db.execute(optimized_query)
+
+    Use cases:
+        - Customer dashboard
+        - Customer listings
+        - Export operations
+        - Reports generation
+        """
     # Tambahkan subquery untuk menghitung jumlah invoice per pelanggan
     invoice_count_subq = (
         select(

@@ -1,4 +1,42 @@
 # app/services/xendit_service.py
+"""
+Xendit payment gateway integration service.
+Handle semua payment processing via Xendit API.
+
+Features:
+- Invoice creation via Xendit API
+- Multiple payment methods (Bank transfer, E-wallet, Credit card)
+- Payment status checking
+- Webhook callback handling
+- Multi-brand payment routing
+- Payment reconciliation
+
+Payment methods supported:
+- Virtual Account (BCA, BNI, BRI, Mandiri)
+- E-wallet (GoPay, OVO, DANA)
+- Credit/Debit cards
+- QRIS
+- Convenience stores
+
+Integration:
+- Xendit API v2.0
+- Multi-brand API key management
+- Invoice model integration
+- Payment callback processing
+- Email/SMS notifications
+
+Security:
+- API key encryption
+- HTTPS communication
+- Request validation
+- Error handling
+- Audit logging
+
+Configuration:
+- XENDIT_API_KEYS: Dictionary of API keys per brand
+- Base64 Basic authentication
+- Timeout handling
+"""
 
 import httpx
 from ..config import settings
@@ -24,7 +62,55 @@ async def create_xendit_invoice(
     pajak: float,
     no_telp_xendit: str = "",
 ) -> dict:
-    """Mengirim request ke Xendit untuk membuat invoice baru."""
+    """
+    Create payment invoice via Xendit API.
+    Core function buat generate payment link dan process payment.
+
+    Args:
+        invoice: Invoice model instance
+        pelanggan: Pelanggan model instance
+        paket: PaketLayanan model instance
+        deskripsi_xendit: Description untuk payment page
+        pajak: Tax amount
+        no_telp_xendit: Customer phone number (optional)
+
+    Returns:
+        Dictionary dengan Xendit API response:
+        - id: Xendit invoice ID
+        - external_id: Our invoice number
+        - short_url: Payment page URL
+        - invoice_url: Alternative payment URL
+        - status: Invoice status
+        - expiry_date: Payment expiry
+
+    Process flow:
+    1. Select API key based on customer brand
+    2. Validate all required data
+    3. Calculate payment amounts
+    4. Build Xendit API request
+    5. Send HTTP POST to Xendit
+    6. Process response and return result
+
+    Error handling:
+    - API key not found
+    - Invalid data validation
+    - Network timeout
+    - Xendit API errors
+    - HTTP errors
+
+    Payment options included:
+    - Virtual Account (all major banks)
+    - E-wallets (GoPay, OVO, DANA, ShopeePay)
+    - Credit/Debit cards
+    - QRIS
+    - Convenience stores
+
+    Security:
+    - API key encryption in config
+    - HTTPS communication
+    - Input validation
+    - Error logging without sensitive data
+    """
     target_key_name = pelanggan.harga_layanan.xendit_key_name
     api_key = settings.XENDIT_API_KEYS.get(target_key_name)
     if not api_key:

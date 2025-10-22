@@ -1,5 +1,43 @@
+# app/utils/pagination.py
 """
-Pagination utilities for API endpoints to prevent memory issues and improve performance.
+Pagination utilities buat API endpoints buat prevent memory issues dan improve performance.
+Module ini handle pagination dengan standar yang konsisten di seluruh aplikasi.
+
+Features:
+- Standard pagination parameters (skip, limit)
+- Paginated response format
+- Total count calculation
+- Performance optimization
+- Query builder integration
+- Pagination headers generation
+
+Performance benefits:
+- Prevent loading entire database tables
+- Memory efficient queries
+- Consistent response times
+- Scalable pagination
+- Optimized COUNT queries
+
+Usage in API endpoints:
+    @router.get("/customers")
+    async def get_customers(
+        skip: int = 0,
+        limit: int = 100,
+        db: AsyncSession = Depends(get_db)
+    ):
+        result = await get_paginated_results(
+            db, Customer, skip=skip, limit=limit
+        )
+        return result
+
+Response format:
+    {
+        "data": [...],
+        "total": 1250,
+        "skip": 0,
+        "limit": 100,
+        "has_more": true
+    }
 """
 
 from typing import TypeVar, Generic, Optional, List, Dict, Any, Type
@@ -12,14 +50,81 @@ T = TypeVar("T")
 
 
 class PaginationParams(BaseModel):
-    """Standard pagination parameters for API endpoints."""
+    """
+    Standard pagination parameters buat API endpoints.
+    Validasi input pagination dengan reasonable limits.
+
+    Attributes:
+        skip: Number of records to skip (offset)
+        limit: Maximum records per request
+
+    Validation:
+        - skip: Minimum 0, tidak ada maximum
+        - limit: Minimum 1, Maximum 10,000 (prevent overload)
+
+    Usage:
+        @router.get("/users")
+        async def get_users(
+            pagination: PaginationParams = Depends()
+        ):
+            result = await get_paginated_results(
+                db, User, skip=pagination.skip, limit=pagination.limit
+            )
+            return result
+
+    Performance considerations:
+        - Limit 10,000 buat prevent server overload
+        - Default limit 100 buat reasonable performance
+        - Skip 0 berarti mulai dari record pertama
+        - Large limit bisa cause memory issues
+    """
 
     skip: int = Field(default=0, ge=0, description="Number of records to skip")
     limit: int = Field(default=100, ge=1, le=10000, description="Maximum 10,000 records per request")
 
 
 class PaginatedResponse(BaseModel, Generic[T]):
-    """Standard paginated response format."""
+    """
+    Standard paginated response format buat consistency.
+    Generic class yang bisa dipake buat semua model types.
+
+    Attributes:
+        data: List of records (dari specific model)
+        total: Total number of records di database
+        skip: Current offset (berapa records yang di-skip)
+        limit: Current limit (berapa records per request)
+        has_more: True kalau masih ada records di halaman berikutnya
+
+    Response example:
+        {
+            "data": [
+                {"id": 1, "name": "Customer 1"},
+                {"id": 2, "name": "Customer 2"}
+            ],
+            "total": 150,
+            "skip": 0,
+            "limit": 100,
+            "has_more": true
+        }
+
+    Usage in API:
+        return PaginatedResponse(
+            data=customers,
+            total=total_customers,
+            skip=skip,
+            limit=limit,
+            has_more=(skip + limit) < total_customers
+        )
+
+    Frontend integration:
+        // Load next page
+        if (response.has_more) {
+            loadMore(response.skip + response.limit);
+        }
+
+        // Calculate total pages
+        totalPages = Math.ceil(response.total / response.limit);
+    """
 
     data: List[T]
     total: int

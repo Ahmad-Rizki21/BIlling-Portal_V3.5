@@ -43,6 +43,16 @@ class LanggananListResponse(BaseModel):
 # --- Endpoint Utama untuk Manajemen Langganan ---
 
 
+# POST /langganan - Buat langganan baru
+# Endpoint buat nambahin langganan pelanggan ke sistem
+# Request body: data langganan (pelanggan_id, paket_layanan_id, status, metode_pembayaran, dll)
+# Response: data langganan yang baru dibuat dengan harga yang udah dihitung otomatis
+# Fitur:
+# - Hitung harga otomatis (include pajak)
+# - Dukung metode pembayaran: Otomatis dan Prorate
+# - Prorate: hitung harga proporsional bulan ini +/- bulan depan
+# - Auto set tanggal jatuh tempo
+# Validation: cek pelanggan dan paket layanan harus ada
 @router.post("/", response_model=LanggananSchema, status_code=status.HTTP_201_CREATED)
 async def create_langganan(langganan_data: LanggananCreate, db: AsyncSession = Depends(get_db)):
     """
@@ -117,6 +127,18 @@ async def create_langganan(langganan_data: LanggananCreate, db: AsyncSession = D
     return created_langganan
 
 
+# GET /langganan - Ambil semua data langganan
+# Buat nampilin list langganan dengan fitur filter dan pencarian
+# Query parameters:
+# - search: cari berdasarkan nama pelanggan
+# - alamat: filter berdasarkan alamat pelanggan
+# - paket_layanan_name: filter berdasarkan nama paket
+# - status: filter berdasarkan status (Aktif/Berhenti)
+# - for_invoice_selection: kalo true, exclude langganan status "Berhenti"
+# - skip: offset pagination (default: 0)
+# - limit: jumlah data per halaman (default: 15)
+# Response: list langganan dengan total count + eager loading relasi
+# Performance: eager loading biar ga N+1 query
 @router.get("/", response_model=LanggananListResponse)
 async def get_all_langganan(
     search: Optional[str] = None,
@@ -198,6 +220,14 @@ async def get_all_langganan(
     return LanggananListResponse(data=langganan_list, total_count=total_count)
 
 
+# PATCH /langganan/{langganan_id} - Update data langganan
+# Buat update data langganan yang udah ada
+# Path parameters:
+# - langganan_id: ID langganan yang mau diupdate
+# Request body: field yang mau diupdate (cuma field yang diisi yang bakal keupdate)
+# Response: data langganan setelah diupdate dengan relasi lengkap
+# Validation: cek ID langganan harus ada
+# Error handling: 404 kalau langganan nggak ketemu
 @router.patch("/{langganan_id}", response_model=LanggananSchema)
 async def update_langganan(
     langganan_id: int,
@@ -230,6 +260,14 @@ async def update_langganan(
     return updated_langganan
 
 
+# DELETE /langganan/{langganan_id} - Hapus langganan
+# Buat hapus data langganan dari sistem
+# Path parameters:
+# - langganan_id: ID langganan yang mau dihapus
+# Response: 204 No Content (sukses tapi nggak ada response body)
+# Warning: HATI-HATI! Ini akan hapus langganan permanen
+# Error handling: 404 kalau langganan nggak ketemu
+# Note: Invoice yang berelasi mungkin masih ada (cek constraint di database)
 @router.delete("/{langganan_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_langganan(langganan_id: int, db: AsyncSession = Depends(get_db)):
     """Menghapus langganan berdasarkan ID."""
@@ -257,6 +295,15 @@ class LanggananCalculateResponse(BaseModel):
     tgl_jatuh_tempo: date
 
 
+# POST /langganan/calculate-price - Kalkulasi harga langganan
+# Buat hitung harga awal dan tanggal jatuh tempo sebelum buat langganan
+# Request body: pelanggan_id, paket_layanan_id, metode_pembayaran, tgl_mulai
+# Response: harga_awal (sudah include pajak) dan tgl_jatuh_tempo
+# Fitur:
+# - Otomatis: harga penuh + jatuh tempo tanggal 1 bulan depan
+# - Prorate: harga proporsional sisa bulan ini + jatuh tempo akhir bulan
+# - Include pajak dari brand pelanggan
+# Use case: buat preview harga di frontend sebelum submit
 @router.post("/calculate-price", response_model=LanggananCalculateResponse)
 async def calculate_langganan_price(request_data: LanggananCalculateRequest, db: AsyncSession = Depends(get_db)):
     """Menghitung harga awal dan tanggal jatuh tempo untuk frontend."""
@@ -303,6 +350,12 @@ async def calculate_langganan_price(request_data: LanggananCalculateRequest, db:
 # --- Endpoint untuk Import, Export, dan Template CSV ---
 
 
+# GET /langganan/template/csv - Download template CSV untuk import langganan
+# Buat download file template CSV yang bisa dipakai buat import data langganan
+# Response: file CSV dengan header dan contoh data
+# Format file: CSV dengan BOM (biar compatibility dengan Excel)
+# Header: email_pelanggan, id_brand, nama_paket_layanan, status, metode_pembayaran, tgl_jatuh_tempo
+# Contoh data: include sample data biar gampang ngikutin format
 @router.get("/template/csv", response_class=StreamingResponse)
 async def download_csv_template_langganan():
     """Men-download template CSV untuk import langganan."""
@@ -340,6 +393,16 @@ async def download_csv_template_langganan():
     )
 
 
+# GET /langganan/export/csv - Export data langganan ke CSV
+# Buat export data langganan ke file CSV dengan filter yang sama seperti list
+# Query parameters:
+# - search: filter pencarian (sama seperti di list)
+# - alamat: filter berdasarkan alamat
+# - paket_layanan_name: filter berdasarkan nama paket
+# - status: filter berdasarkan status
+# Response: file CSV dengan kolom: Nama Pelanggan, Email, Paket Layanan, Status, Metode Pembayaran, Harga, dll
+# Format file: CSV dengan BOM dan timestamp di filename
+# Performance: eager loading biar efficient
 @router.get("/export/csv", response_class=StreamingResponse)
 async def export_to_csv_langganan(
     search: Optional[str] = None,
@@ -409,6 +472,19 @@ async def export_to_csv_langganan(
     )
 
 
+# POST /langganan/import/csv - Import data langganan dari CSV
+# Buat import data langganan dari file CSV
+# Request body: file CSV dengan format yang sesuai template
+# Response: jumlah langganan yang berhasil diimport + error message kalau ada
+# Validation:
+# - cek format file (.csv)
+# - cek email pelanggan harus ada di database
+# - cek paket layanan dan brand harus ada
+# - cek duplikasi email (dalam file dan database)
+# - cek pelanggan belum punya langganan
+# - cek format tanggal (YYYY-MM-DD)
+# Error handling: rollback semua data kalau ada error, return detail error per baris
+# Performance: batch insert biar lebih cepat, eager loading buat validation
 @router.post("/import/csv")
 async def import_from_csv_langganan(file: UploadFile = File(...), db: AsyncSession = Depends(get_db)):
     """Mengimpor data langganan dari file CSV."""
@@ -549,6 +625,16 @@ class LanggananCalculateProratePlusFullResponse(BaseModel):
     tgl_jatuh_tempo: date
 
 
+# POST /langganan/calculate-prorate-plus-full - Kalkulasi harga gabungan (prorate + bulan depan)
+# Buat hitung harga prorate bulan ini + harga penuh bulan depan (buat invoice gabungan)
+# Request body: pelanggan_id, paket_layanan_id, metode_pembayaran, tgl_mulai
+# Response: harga_prorate, harga_normal, harga_total_awal, tgl_jatuh_tempo
+# Fitur:
+# - harga_prorate: harga proporsional sisa bulan ini (include pajak)
+# - harga_normal: harga penuh bulan depan (include pajak)
+# - harga_total_awal: total harga gabungan
+# - tgl_jatuh_tempo: akhir bulan ini
+# Use case: buat preview harga invoice gabungan di frontend
 @router.post(
     "/calculate-prorate-plus-full",
     response_model=LanggananCalculateProratePlusFullResponse,
@@ -596,6 +682,11 @@ async def calculate_langganan_price_plus_full(request_data: LanggananCalculateRe
     )
 
 
+# GET /langganan/count - Hitung total jumlah langganan
+# Buat ngambil total jumlah langganan di database
+# Response: integer (total count)
+# Use case: buat dashboard atau statistik
+# Performance: simple count query, efficient
 @router.get("/count", response_model=int)
 async def get_langganan_count(db: AsyncSession = Depends(get_db)):
     """
@@ -607,6 +698,11 @@ async def get_langganan_count(db: AsyncSession = Depends(get_db)):
     return total_count
 
 
+# GET /langganan/pelanggan/list - Ambil semua pelanggan dengan status langganan
+# Buat nampilin list pelanggan plus status langganan mereka (ada/nggak)
+# Response: list pelanggan dengan field has_subscription (boolean)
+# Use case: buat nampilin pelanggan di dropdown atau list dengan indikator status langganan
+# Performance: eager loading langganan relasi biar efficient
 @router.get("/pelanggan/list", response_model=List[PelangganSchema])
 async def get_all_pelanggan_with_status(db: AsyncSession = Depends(get_db)):
     """

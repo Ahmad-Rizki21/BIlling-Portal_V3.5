@@ -1,3 +1,47 @@
+# app/routers/role.py
+"""
+Role Management Router - CRUD operations untuk role-based access control
+
+Router ini handle semua role management operations di sistem billing.
+Role adalah kumpulan permissions yang bisa diassign ke users.
+
+Role-Based Access Control (RBAC):
+- User -> Role -> Permission
+- Multiple users bisa punya role yang sama
+- Role bisa punya multiple permissions
+- Flexible dan scalable permission system
+
+Role Structure:
+- Role name: Unique identifier (admin, finance, support, dll)
+- Permissions: List of permission IDs
+- Users: List of users assigned to role
+
+Common Role Examples:
+- admin: Full system access
+- finance: Billing, invoice, and financial reports
+- support: Customer data and trouble tickets
+- teknisi: Network monitoring and technical data
+- operator: Basic operational access
+
+Security Features:
+- Unique role names (no duplicates)
+- Permission assignment validation
+- Efficient eager loading (prevent N+1 queries)
+- Atomic database operations
+
+Integration Points:
+- Permission management system
+- User management and assignment
+- Authorization decorators (@has_permission)
+- Frontend access control
+
+Usage Flow:
+1. Create role dengan specific permissions
+2. Assign role ke users
+3. Users inherit all role permissions
+4. Check permissions di protected endpoints
+"""
+
 from fastapi import APIRouter, Depends, status, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -19,6 +63,53 @@ router = APIRouter(
 
 @router.post("/", response_model=RoleSchema, status_code=status.HTTP_201_CREATED)
 async def create_role(role_data: RoleCreate, db: AsyncSession = Depends(get_db)):
+    """
+    Create New Role - Buat role baru dengan permissions
+
+    Function ini buat role baru dan assign permissions ke role tersebut.
+    Role adalah container buat permissions yang bisa diassign ke users.
+
+    Role Creation Process:
+    1. Validate role name uniqueness
+    2. Create role entity dengan name
+    3. Assign permissions kalau ada
+    4. Save ke database dengan atomic operation
+    5. Return complete role dengan permissions loaded
+
+    Validation Features:
+    - Unique role name checking (prevent duplicates)
+    - Permission existence validation
+    - Proper HTTP status codes
+    - Comprehensive error messages
+
+    Permission Assignment:
+    - Optional: role bisa dibuat tanpa permissions
+    - Validation: hanya existing permissions yang diassign
+    - Many-to-many relationship handling
+    - Efficient bulk assignment
+
+    Database Operations:
+    - Atomic transaction (commit atau rollback)
+    - Eager loading untuk complete response
+    - Efficient permission lookup dengan IN clause
+    - Proper relationship management
+
+    Security Features:
+    - Input validation dan sanitization
+    - SQL injection prevention via SQLAlchemy
+    - Permission existence checking
+    - Consistent error handling
+
+    Args:
+        role_data: RoleCreate schema dengan name dan permission_ids
+        db: AsyncSession database connection
+
+    Returns:
+        RoleSchema: Complete role yang baru dibuat dengan permissions
+
+    Raises:
+        HTTPException 409: Role name already exists
+    """
 
     # --- TAMBAHKAN BLOK PENGECEKAN INI ---
     # Cek apakah role dengan nama yang sama sudah ada

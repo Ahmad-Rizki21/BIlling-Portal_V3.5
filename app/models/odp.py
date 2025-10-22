@@ -1,4 +1,20 @@
-# Jadikan ini baris paling pertama di file Anda
+# ====================================================================
+# MODEL ODP - OPTICAL DISTRIBUTION POINT MANAGEMENT
+# ====================================================================
+# Model ini mendefinisikan tabel ODP (Optical Distribution Point) untuk
+# menyimpan data titik distribusi fiber optik di area pelanggan.
+#
+# Hubungan dengan tabel lain:
+# - olt         : Device OLT induk yang menjadi sumber ODP ini
+# - data_teknis : Pelanggan-pelanggan yang terhubung ke ODP ini
+# - ODP         : ODP lain yang terhubung (hierarchy)
+#
+# Hierarki ODP:
+# - OLT (induk) -> ODP Utama -> ODP Cabang -> Pelanggan
+# - Satu OLT bisa punya banyak ODP
+# - ODP bisa punya child ODP (tree structure)
+# ====================================================================
+
 from __future__ import annotations
 from typing import List, TYPE_CHECKING
 from sqlalchemy import String, Integer, Float, ForeignKey
@@ -15,6 +31,10 @@ if TYPE_CHECKING:
 
 
 class ODP(Base):
+    """
+    Model tabel ODP - nyimpen semua data Optical Distribution Point.
+    Ini adalah titik distribusi fiber optik yang ada di perumahan/area.
+    """
     __tablename__ = "odp"
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)

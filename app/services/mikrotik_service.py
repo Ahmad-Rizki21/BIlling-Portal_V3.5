@@ -1,4 +1,36 @@
 # app/services/mikrotik_service.py
+"""
+Mikrotik RouterOS service buat manage network device operations.
+Ini core service yang handle semua interaksi dengan Mikrotik devices.
+
+Features:
+- RouterOS API integration via routeros_api library
+- Connection pooling buat efficiency
+- Automatic retry mechanism
+- PPPoE user management
+- Network monitoring
+- Device configuration
+
+Operations supported:
+- Create/update/delete PPPoE users
+- Monitor connection status
+- Manage bandwidth limits
+- Update user passwords
+- Check device health
+- Connection pool management
+
+Integration:
+- Mikrotik connection pool
+- Database models (Langganan, DataTeknis, MikrotikServer)
+- Encryption service buat password handling
+- Logging system buat operation tracking
+
+Security:
+- Encrypted password storage
+- Connection timeout handling
+- Safe error handling
+- Audit logging
+"""
 
 import routeros_api
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,7 +53,46 @@ logger = logging.getLogger(__name__)
 
 def perform_routeros_connection(device_details: dict):
     """
-    Fungsi synchronous terpisah untuk menangani koneksi RouterOS API ke Mikrotik.
+    Test connection ke Mikrotik device via RouterOS API.
+    Fungsi ini buat validate connectivity dan dapat device info.
+
+    Args:
+        device_details: Dictionary dengan connection details
+            - host: IP address Mikrotik
+            - port: API port (default: 8728)
+            - username: Login username
+            - password: Login password (encrypted)
+
+    Returns:
+        Dictionary dengan connection result:
+        - status: "success" atau "error"
+        - message: Human readable status
+        - data: Device info (identity, ROS version)
+
+    Operations performed:
+    1. Connect ke Mikrotik via API
+    2. Get system identity info
+    3. Get system resource info
+    4. Return device status
+
+    Usage:
+        result = perform_routeros_connection({
+            "host": "192.168.1.1",
+            "port": 8728,
+            "username": "admin",
+            "password": "encrypted_password"
+        })
+
+    Error handling:
+    - Connection timeout
+    - Authentication failure
+    - Network issues
+    - Device offline
+
+    Integration:
+    - Mikrotik connection pool
+    - Retry mechanism
+    - Encrypted password handling
     """
 
     def connection_operation(api):

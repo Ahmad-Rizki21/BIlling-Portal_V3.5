@@ -1,40 +1,68 @@
-# app/models/langganan.py
+# ====================================================================
+# MODEL LANGGANAN - SUBSCRIPTION MANAGEMENT
+# ====================================================================
+# Model ini mendefinisikan tabel langganan untuk menyimpan data
+# berlangganan aktif pelanggan pada paket layanan tertentu.
+#
+# Hubungan dengan tabel lain:
+# - pelanggan         : Customer yang punya langganan
+# - paket_layanan     : Paket layanan yang diambil pelanggan
+# - invoices          : Tagihan yang terkait dengan langganan ini
+#
+# Status Langganan:
+# - aktif             : Langganan aktif dan berjalan normal
+# - nonaktif          : Langganan berhenti/dinonaktifkan
+# - suspend           : Langganan ditangguhkan (biasanya karena tunggakan)
+# - pending           : Menunggu aktivasi
+# ====================================================================
 
 from __future__ import annotations
 from typing import TYPE_CHECKING
 from datetime import date, datetime
 from sqlalchemy import BigInteger, ForeignKey, Date, String, func, Numeric, Column, Index
 from sqlalchemy.orm import relationship, Mapped, mapped_column
-# Import Base dengan type annotation yang benar untuk mypy
+
+# Import Base dengan type annotation yang benar buat mypy
 if TYPE_CHECKING:
     from sqlalchemy.orm import DeclarativeBase as Base
 else:
     from ..database import Base
 
+# Import models buat relationship (dengan TYPE_CHECKING buat prevent circular import)
 if TYPE_CHECKING:
-    from .pelanggan import Pelanggan
-    from .paket_layanan import PaketLayanan
+    from .pelanggan import Pelanggan        # Data pelanggan
+    from .paket_layanan import PaketLayanan  # Data paket layanan
 
 
 class Langganan(Base):
+    """
+    Model tabel Langganan - menyimpan data langganan aktif pelanggan.
+    Ini adalah tabel penghubung antara pelanggan dan paket layanan.
+    """
     __tablename__ = "langganan"
 
-    # OPTIMIZED index strategy - Hanya index yang BENAR-BENAR PENTING untuk performa
-    # Total: 10 indexes (dari 16+) untuk balance performa read/write
+    # ====================================================================
+    # DATABASE INDEXES - OPTIMIZED FOR BILLING PERFORMANCE
+    # ====================================================================
+    # Index strategy yang dioptimasi buat query billing dan dashboard.
+    # Total: 10 indexes buat balance antara performance query dan storage.
+
     __table_args__ = (
-        # CORE indexes untuk query kritis yang sering digunakan
-        Index("idx_langganan_customer_status", "pelanggan_id", "status"),  # Customer dashboard
-        Index("idx_langganan_package_status", "paket_layanan_id", "status"),  # Package analytics
-        Index("idx_langganan_due_date", "status", "tgl_jatuh_tempo"),  # Due date tracking
+        # Index buat query CORE yang sering dipake sehari-hari
+        Index("idx_langganan_customer_status", "pelanggan_id", "status"),        # Dashboard pelanggan
+        Index("idx_langganan_package_status", "paket_layanan_id", "status"),     # Analisis paket
+        Index("idx_langganan_due_date", "status", "tgl_jatuh_tempo"),           # Tracking jatuh tempo
         Index(
             "idx_langganan_subscription_dates", "tgl_mulai_langganan", "tgl_jatuh_tempo", "tgl_berhenti"
-        ),  # Subscription lifecycle
-        # PERFORMANCE indexes untuk dashboard dan reporting
-        Index("idx_langganan_active_subscriptions", "status", "paket_layanan_id"),  # Active customers by package
-        Index("idx_langganan_revenue_tracking", "status", "harga_awal", "tgl_jatuh_tempo"),  # Revenue tracking
-        Index("idx_langganan_payment_analysis", "metode_pembayaran", "status", "tgl_jatuh_tempo"),  # Payment analysis
-        # FOREIGN KEY indexes (otomatis dibuat tapi perlu composite untuk performance)
-        Index("idx_langganan_customer_package", "pelanggan_id", "paket_layanan_id", "status"),  # Customer-package analysis
+        ),  # Siklus hidup langganan
+
+        # Index buat PERFORMANCE dashboard dan reporting
+        Index("idx_langganan_active_subscriptions", "status", "paket_layanan_id"),     # Pelanggan aktif per paket
+        Index("idx_langganan_revenue_tracking", "status", "harga_awal", "tgl_jatuh_tempo"),  # Tracking pendapatan
+        Index("idx_langganan_payment_analysis", "metode_pembayaran", "status", "tgl_jatuh_tempo"),  # Analisis pembayaran
+
+        # Composite foreign key indexes buat query join performance
+        Index("idx_langganan_customer_package", "pelanggan_id", "paket_layanan_id", "status"),  # Analisis pelanggan-paket
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, index=True)

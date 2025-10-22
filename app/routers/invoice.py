@@ -116,6 +116,18 @@ router = APIRouter(
 )
 
 
+# GET /invoices - Ambil semua data invoice
+# Buat nampilin list invoice dengan fitur filter dan pencarian lengkap
+# Query parameters:
+# - search: cari berdasarkan nomor invoice, nama pelanggan, atau ID pelanggan
+# - status_invoice: filter berdasarkan status (Belum Dibayar, Lunas, Kadaluarsa)
+# - start_date: filter tanggal jatuh tempo mulai dari
+# - end_date: filter tanggal jatuh tempo sampai dengan
+# - show_active_only: kalo true, cuma tampilkan invoice yang punya payment_link aktif (90 hari terakhir)
+# - skip: offset pagination (default: 0)
+# - limit: jumlah data per halaman (default: semua)
+# Response: list invoice dengan relasi lengkap (pelanggan, langganan, paket, data teknis)
+# Performance: eager loading biar ga N+1 query
 @router.get("/", response_model=List[InvoiceSchema])
 async def get_all_invoices(
     db: AsyncSession = Depends(get_db),
@@ -380,6 +392,22 @@ async def _process_successful_payment(db: AsyncSession, invoice: InvoiceModel, p
 #         )
 
 
+# POST /invoices/xendit-callback - Callback dari Xendit payment gateway
+# Endpoint buat terima callback dari Xendit setelah customer bayar invoice
+# Request headers:
+# - x_callback_token: token untuk validasi callback (sesuai brand)
+# Request body: payment data dari Xendit (JSON)
+# Response: success message
+# Security:
+# - Validasi callback token berdasarkan brand prefix
+# - Cek duplikasi callback biar idempotent
+# - Log semua callback untuk audit trail
+# Fitur:
+# - Update status invoice jadi "Lunas" kalo payment sukses
+# - Update status jadi "Kadaluarsa" kalo payment expired
+# - Trigger re-aktivasi Mikrotik kalo pelanggan sebelumnya suspended
+# - Kirim notifikasi ke Admin/NOC/Finance
+# Error handling: graceful degradation, payment tetep valid walau notifikasi gagal
 @router.post("/xendit-callback", status_code=status.HTTP_200_OK)
 async def handle_xendit_callback(
     request: Request,
@@ -556,6 +584,23 @@ async def handle_xendit_callback(
     return {"message": "Callback processed successfully"}
 
 
+# POST /invoices/generate - Generate invoice manual
+# Buat bikin invoice baru secara manual berdasarkan langganan yang udah ada
+# Request body: langganan_id
+# Response: data invoice yang baru dibuat dengan payment link dari Xendit
+# Permission: butuh permission "create_invoices"
+# Fitur:
+# - Hitung harga otomatis berdasarkan paket dan pajak
+# - Generate nomor invoice otomatis
+# - Create payment link di Xendit
+# - Dynamic description (prorate/bulan penuh)
+# - Format nomor telepon buat Xendit (0xx -> 62xx)
+# Validation:
+# - Cek langganan harus ada
+# - Cek pelanggan harus ada
+# - Cek status langganan (boleh: Aktif, Suspended)
+# - Cek duplicate invoice di bulan yang sama
+# Error handling: rollback transaction kalo ada error
 @router.post(
     "/generate",
     response_model=InvoiceSchema,
@@ -753,6 +798,24 @@ async def generate_manual_invoice(invoice_data: InvoiceGenerate, db: AsyncSessio
     return db_invoice
 
 
+# POST /invoices/{invoice_id}/mark-as-paid - Tandai invoice lunas manual
+# Buat nandai invoice udah dibayar secara manual (bukan via Xendit)
+# Path parameters:
+# - invoice_id: ID invoice yang mau ditandai lunas
+# Request body: metode_pembayaran (cash, transfer, dll)
+# Response: data invoice yang udah diupdate
+# Permission: butuh permission "edit_invoices"
+# Fitur:
+# - Update status invoice jadi "Lunas"
+# - Update tanggal pembayaran
+# - Update status langganan jadi "Aktif"
+# - Hitung tanggal jatuh tempo berikutnya
+# - Trigger re-aktivasi Mikrotik kalo sebelumnya suspended
+# - Kirim notifikasi ke Admin/NOC/Finance
+# Validation:
+# - Cek invoice harus ada
+# - Cek invoice belum lunas sebelumnya
+# Error handling: 404 kalo invoice nggak ada, 400 kalo udah lunas
 @router.post(
     "/{invoice_id}/mark-as-paid",
     response_model=InvoiceSchema,
@@ -793,6 +856,15 @@ async def mark_invoice_as_paid(invoice_id: int, payload: MarkAsPaidRequest, db: 
     return invoice
 
 
+# DELETE /invoices/{invoice_id} - Hapus invoice
+# Buat hapus invoice dari sistem
+# Path parameters:
+# - invoice_id: ID invoice yang mau dihapus
+# Response: 204 No Content (sukses tapi nggak ada response body)
+# Permission: butuh permission "delete_invoices"
+# Warning: HATI-HATI! Ini akan hapus invoice permanen
+# Note: Payment link di Xendit mungkin masih aktif
+# Error handling: 404 kalau invoice nggak ketemu
 @router.delete(
     "/{invoice_id}",
     status_code=status.HTTP_204_NO_CONTENT,
@@ -815,6 +887,19 @@ async def delete_invoice(invoice_id: int, db: AsyncSession = Depends(get_db)):
 # Logic atau EndPoint untuk melihat Status Invoice itu masih layar atau sudah kadaluarsa ??
 
 
+# POST /invoices/internal/update-overdue-status - Update status invoice kadaluarsa (Internal)
+# Endpoint internal buat update status invoice yang telat bayar dan suspend layanan
+# Endpoint ini HARUS dipanggil oleh scheduler (cron job) setiap hari
+# Response: jumlah invoice yang diupdate + jumlah layanan yang disuspend
+# Security: include_in_schema=False (nggak muncul di dokumentasi API publik)
+# Logic:
+# - Cari invoice "Belum Dibayar" yang udah lewat 5 hari dari jatuh tempo
+# - Update status jadi "Kadaluarsa"
+# - Update status langganan jadi "Suspended"
+# - Trigger suspend Mikrotik
+# Aturan: Kadaluarsa kalo hari ini adalah hari ke-6 setelah jatuh tempo (lewat 5 hari)
+# Use case: automated system untuk penagihan dan penonaktifan layanan
+# Error handling: graceful error handling, log semua error
 @router.post(
     "/internal/update-overdue-status",
     status_code=status.HTTP_200_OK,
@@ -899,6 +984,20 @@ async def update_overdue_invoices(db: AsyncSession = Depends(get_db)):
     return {"message": message}
 
 
+# GET /invoices/export-payment-links-excel - Export payment links ke Excel
+# Buat export semua payment link invoice ke file Excel
+# Query parameters:
+# - search: filter pencarian (sama seperti di list)
+# - status_invoice: filter berdasarkan status
+# - start_date: filter tanggal mulai
+# - end_date: filter tanggal akhir
+# Response: file Excel (.xlsx) dengan kolom:
+#   ID Invoice, Nomor Invoice, Nama Pelanggan, ID Pelanggan, Alamat,
+#   Total Harga, Status Invoice, Tanggal Invoice, Tanggal Jatuh Tempo,
+#   Payment Link, Email, No. Telepon, Brand
+# Use case: buat share payment links ke tim collection atau customer
+# Performance: query dengan eager loading biar efficient
+# Format: Excel dengan header bold dan auto-size columns
 @router.get("/export-payment-links-excel")
 async def export_payment_links_excel(
     db: AsyncSession = Depends(get_db),

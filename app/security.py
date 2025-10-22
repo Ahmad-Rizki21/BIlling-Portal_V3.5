@@ -1,3 +1,27 @@
+# app/security.py
+"""
+Security utilities untuk tambahan layer keamanan aplikasi.
+Module ini handle encryption/decryption data sensitif tambahan.
+
+Fungsi utama:
+- Password encryption (selain bcrypt)
+- Secure cipher suite initialization
+- Key validation dan management
+- Backward compatibility support
+
+Security approach:
+- Fernet encryption (AES 128 + HMAC + timestamp)
+- Key validation untuk prevent misconfiguration
+- Graceful fallback buat compatibility
+- Comprehensive error handling
+
+Usage:
+- Backup encryption method
+- Sensitive data protection
+- Legacy data migration
+- Additional security layer
+"""
+
 import base64
 import logging
 
@@ -8,9 +32,39 @@ from .config import settings
 logger = logging.getLogger(__name__)
 
 
-# Inisialisasi cipher suite dengan kunci rahasia dari file config Anda
 def get_cipher_suite() -> Fernet:
-    """Get cipher suite with proper key handling"""
+    """
+    Initialize Fernet cipher suite dengan validasi key yang comprehensive.
+    Function ini ensure encryption key valid dan properly configured.
+
+    Returns:
+        Fernet cipher suite instance
+
+    Key validation:
+    - Base64 format checking
+    - 32 bytes length validation (Fernet requirement)
+    - Proper URL-safe encoding
+    - Fallback generation untuk development
+
+    Error handling:
+    - Invalid format: raise ValueError dengan detail error
+    - Wrong length: specify expected vs actual length
+    - Missing key: generate temporary key (development only)
+
+    Security notes:
+    - Production harus punya valid ENCRYPTION_KEY
+    - Key generation only buat development/testing
+    - Base64 URL-safe encoding required
+    - 32 bytes = 256 bits key strength
+
+    Example:
+        cipher = get_cipher_suite()
+        encrypted = cipher.encrypt(b"secret data")
+        decrypted = cipher.decrypt(encrypted)
+
+    Configuration:
+        ENCRYPTION_KEY=base64url-encoded-32-byte-key
+    """
     try:
         # Pastikan key dalam format yang benar
         key = settings.ENCRYPTION_KEY
@@ -41,7 +95,43 @@ cipher_suite = get_cipher_suite()
 
 
 def encrypt_password(password: str) -> str:
-    """Mengenkripsi password teks biasa."""
+    """
+    Enkripsi password plaintext pake Fernet encryption.
+    Alternative encryption method selain bcrypt hashing.
+
+    Args:
+        password: Password plaintext yang mau dienkripsi
+
+    Returns:
+        Encrypted password string (base64)
+
+    Security features:
+    - AES 128-bit encryption
+    - HMAC untuk integrity verification
+    - Timestamp buat replay protection
+    - Graceful fallback kalau encryption gagal
+
+    Use cases:
+    - Temporary password storage
+    - Sensitive config data
+    - Additional security layer
+    - Backup encryption method
+
+    Difference dengan bcrypt:
+    - Bcrypt = one-way hash (authentication)
+    - Fernet = two-way encryption (storage)
+    - Bcrypt buat password verification
+    - Fernet buat data yang perlu di-decrypt
+
+    Error handling:
+    - Log error tanpa expose sensitive data
+    - Return original password kalau gagal (fallback)
+    - Prevent data loss saat encryption error
+
+    Note:
+    - Ini tambahan ke bcrypt, bukan replacement
+    - Dipake buat data yang perlu di-recover
+    """
     if not password:
         return ""
     try:
@@ -55,7 +145,46 @@ def encrypt_password(password: str) -> str:
 
 
 def decrypt_password(encrypted_password: str) -> str:
-    """Mendekripsi password yang sudah terenkripsi."""
+    """
+    Dekripsi password yang dienkripsi dengan Fernet.
+    Handle multiple format buat backward compatibility.
+
+    Args:
+        encrypted_password: Encrypted password string
+
+    Returns:
+        Decrypted password plaintext
+
+    Compatibility handling:
+    1. Bcrypt hash ($2b$ or $2a$) -> return as-is (verification only)
+    2. Fernet token (gAAAAA...) -> decrypt dengan Fernet
+    3. Plain text -> return as-is (legacy data)
+    4. Invalid/corrupted -> raise ValueError
+
+    Security flow:
+    - Detect password format otomatis
+    - Apply appropriate decryption method
+    - Validate decryption success
+    - Handle key mismatch gracefully
+
+    Error handling:
+    - Critical error kalau decryption gagal
+    - Biasanya karena encryption key salah
+    - Raise specific ValueError buat upstream handling
+    - Log error tanpa expose sensitive data
+
+    Use cases:
+    - Legacy password migration
+    - Config data recovery
+    - Sensitive data access
+    - Development data recovery
+
+    Important:
+    - Decryption failure = CRITICAL security issue
+    - Biasanya encryption key mismatch
+    - Must investigate immediately
+    - Could indicate data tampering
+    """
     if not encrypted_password:
         return ""
 

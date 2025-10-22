@@ -1,4 +1,10 @@
 # app/jobs.py
+"""
+Modul ini berisi semua background job dan scheduler yang jalan otomatis.
+Fungsinya buat ngurusin rutinitas billing system yang harus jalan tiap hari/hari.
+Misalnya bikin invoice, suspend pelanggan, cek pembayaran, dll.
+Ini penting banget buat sistem yang jalan 24/7 tanpa perlu campur tangan admin.
+"""
 
 import logging
 import math
@@ -26,8 +32,30 @@ from .services import mikrotik_service, xendit_service
 logger = logging.getLogger("app.jobs")
 
 
-# Fungsi generate_single_invoice tetap sama, tidak perlu diubah
 async def generate_single_invoice(db, langganan: LanggananModel):
+    """
+    Fungsi ini buat generate invoice buat satu pelanggan aja.
+    Dipanggil sama scheduler ketika udah waktunya bikin invoice baru.
+
+    Proses yang dijalanin:
+    1. Ambil data pelanggan, paket layanan, dan harga
+    2. Hitung total harga (dasar + pajak)
+    3. Generate nomor invoice unik
+    4. Simpan ke database
+    5. Buat payment link di Xendit
+
+    Args:
+        db: Database session yang lagi aktif
+        langganan: Object LanggananModel yang mau dibikinin invoice
+
+    Returns:
+        None (hasilnya langsung disimpen ke database)
+
+    Note:
+        - Invoice number format: INV-YYYYMMDD-XXXXXX
+        - Auto create payment link via Xendit API
+        - Support prorate billing untuk pelanggan baru
+    """
     try:
         pelanggan = langganan.pelanggan
         paket = langganan.paket_layanan
@@ -122,6 +150,30 @@ async def generate_single_invoice(db, langganan: LanggananModel):
 
 
 async def job_generate_invoices():
+    """
+    Job scheduler yang jalan tiap hari buat bikin invoice otomatis.
+    Scheduler ini bakal jalan setiap jam 00:00 (sesuai konfigurasi).
+
+    Logic yang dijalanin:
+    1. Cari semua langganan aktif yang jatuh tempo 5 hari lagi
+    2. Proses secara bertahap (batching) biar nggak berat server
+    3. Buat invoice buat tiap pelanggan yang belum ada invoice-nya
+    4. Generate payment link via Xendit
+    5. Log hasil proses buat monitoring
+
+    Performance optimization:
+    - Batch processing (100 records per batch)
+    - Eager loading relasi buat minimize database queries
+    - Single query buat cek existing invoice
+
+    Returns:
+        None (hasilnya langsung di-log)
+
+    Integration:
+    - Xendit API buat payment gateway
+    - Database invoice generation
+    - Logger buat monitoring
+    """
     log_scheduler_event(logger, "job_generate_invoices", "started")
     target_due_date = date.today() + timedelta(days=5)
     total_invoices_created = 0
@@ -191,8 +243,29 @@ async def job_generate_invoices():
 
 async def job_suspend_services():
     """
-    Tugas untuk men-suspend layanan dan mengubah status invoice menjadi 'Kadaluarsa'.
-    Berjalan setiap hari untuk menonaktifkan pelanggan yang telat bayar.
+    Job scheduler buat suspend pelanggan yang telat bayar.
+    Jalan setiap hari buat cek siapa aja yang udah overdue.
+
+    Logic suspend:
+    1. Cari pelanggan yang telat bayar lebih dari 4 hari
+    2. Ubah status langganan jadi 'Suspended'
+    3. Ubah semua invoice belum bayar jadi 'Kadaluarsa'
+    4. Trigger update ke Mikrotik buat blokir internet
+    5. Log hasil proses
+
+    Aturan suspend:
+    - Jatuh tempo tgl 1 -> suspend tgl 5
+    - Artinya telat 4 hari baru disuspend
+    - Semua invoice belum bayar otomatis kadaluarsa
+
+    Integration:
+    - Mikrotik API buat suspend/blokir internet
+    - Database status updates
+    - Audit logging
+
+    Performance:
+    - Batch processing (50 records per batch)
+    - Transaction rollback kalau ada error
     """
     log_scheduler_event(logger, "job_suspend_services", "started")
     total_services_suspended = 0
@@ -281,6 +354,27 @@ async def job_suspend_services():
 
 
 async def job_send_payment_reminders():
+    """
+    Job scheduler buat kirim pengingat pembayaran ke pelanggan.
+    Jalan 3 hari sebelum jatuh tempo buat ngingetin pelanggan.
+
+    Yang dilakuin:
+    1. Cari pelanggan yang jatuh tempo 3 hari lagi
+    2. Siapkan data pelanggan buat notifikasi
+    3. (Placeholder) Kirim notifikasi via WhatsApp/Email
+    4. Log jumlah pengingat yang dikirim
+
+    Note: Saat ini masih placeholder, belum ada integrasi
+    dengan WhatsApp gateway atau email service.
+    Bisa ditambahi later dengan:
+    - WhatsApp Business API
+    - Email service (SendGrid, dll)
+    - SMS gateway
+
+    Performance:
+    - Batch processing (100 records per batch)
+    - Read-only operation (tidak ubah data)
+    """
     log_scheduler_event(logger, "job_send_payment_reminders", "started")
     total_reminders_sent = 0
     target_due_date = date.today() + timedelta(days=3)
@@ -337,7 +431,31 @@ async def job_send_payment_reminders():
 
 
 async def job_verify_payments():
-    """Job HANYA untuk rekonsiliasi pembayaran yang terlewat via Xendit."""
+    """
+    Job scheduler buat cek dan rekonsiliasi pembayaran yang mungkin terlewat.
+    Kadang ada pembayaran yang masuk tapi callback dari Xendit gagal diterima.
+
+    Tugasnya:
+    1. Cek pembayaran yang udah lunas di Xendit (3 hari terakhir)
+    2. Bandingin dengan status di database
+    3. Proses pembayaran yang belum tercatat di sistem
+    4. Update status invoice jadi 'Lunas'
+    5. Trigger aktifasi layanan kalau pelanggan sebelumnya suspend
+
+    Ini penting buat antisipasi:
+    - Webhook callback yang gagal
+    - Network issues saat pembayaran
+    - Payment gateway yang lagi ada masalah
+
+    Integration:
+    - Xendit API untuk cek status pembayaran
+    - Payment processing logic
+    - Mikrotik service buat re-activation
+
+    Performance:
+    - Eager loading semua relasi yang dibutuhkan
+    - Transaction safety dengan rollback
+    """
     log_scheduler_event(logger, "job_verify_payments", "started")
 
     async with SessionLocal() as db:
@@ -396,6 +514,32 @@ async def job_verify_payments():
 
 
 async def job_retry_mikrotik_syncs():
+    """
+    Job scheduler buat retry sync ke Mikrotik yang sebelumnya gagal.
+    Kadang network lagi bermasalah atau Mikrotik server lagi down.
+
+    Yang dikerjain:
+    1. Cari semua data teknis yang flag-nya 'sync_pending = true'
+    2. Coba sync ulang ke Mikrotik server
+    3. Kalau berhasil, reset flag jadi false
+    4. Kalau masih gagal, biarkan flag true buat coba lagi nanti
+
+    Kenapa perlu ini?
+    - Network intermittent yang bikin API call gagal
+    - Mikrotik server yang lagi restart/maintenance
+    - Rate limiting dari Mikrotik API
+    - Connection timeout
+
+    Error handling:
+    - Tetap coba semua item meski ada yang gagal
+    - Log error buat setiap item yang gagal
+    - Tidak rollback keseluruhan transaction
+
+    Integration:
+    - Mikrotik API via mikrotik_service
+    - Database flags buat tracking sync status
+    - Error logging buat monitoring
+    """
     log_scheduler_event(logger, "job_retry_mikrotik_syncs", "started")
     total_retried = 0
     async with SessionLocal() as db:

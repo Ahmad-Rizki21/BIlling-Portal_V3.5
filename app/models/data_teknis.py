@@ -1,4 +1,22 @@
-# File: app/models/data_teknis.py
+# ====================================================================
+# MODEL DATA TEKNIS - NETWORK CONNECTION DATA MANAGEMENT
+# ====================================================================
+# Model ini mendefinisikan tabel data_teknis untuk menyimpan semua informasi
+# teknis tentang koneksi internet FTTH pelanggan.
+#
+# Hubungan dengan tabel lain:
+# - pelanggan         : Customer yang punya data teknis ini (1-to-1)
+# - mikrotik_server   : Server yang handle koneksi pelanggan
+# - odp              : ODP (Optical Distribution Point) yang dipake
+# - trouble_tickets  : Laporan masalah yang berhubungan dengan data teknis
+#
+# Data yang disimpan:
+# - PPPoE credentials   : Username/password untuk koneksi internet
+# - IP address          : Alamat IP yang dipake pelanggan
+# - VLAN configuration  : Setting VLAN jaringan
+# - OLT/ONU info        : Data perangkat fiber optik
+# - Signal strength     : Kekuatan sinyal ONU
+# ====================================================================
 
 from __future__ import annotations
 from typing import TYPE_CHECKING
@@ -18,74 +36,94 @@ if TYPE_CHECKING:
 
 
 class DataTeknis(Base):
+    """
+    Model tabel DataTeknis - nyimpen semua data teknis koneksi internet pelanggan.
+    Ini tabel penting banget buat team teknisi manage jaringan FTTH.
+    """
     __tablename__ = "data_teknis"
 
-    # OPTIMIZED index strategy - Hanya index yang BENAR-BENAR PENTING
-    # Total: 12 indexes (dari 20+) untuk 70% lebih fast write operations
+    # ====================================================================
+    # DATABASE INDEXES - OPTIMIZED FOR NETWORK OPERATIONS
+    # ====================================================================
+    # Index strategy yang dioptimasi buat operasi jaringan dan sinkronisasi Mikrotik.
+    # Total: 12 indexes buat balance antara performance query dan speed write.
+    # Dari 20+ index jadi 12 aja biar write operations 70% lebih cepat.
     __table_args__ = (
-        # CORE indexes untuk query kritis yang sering digunakan
-        Index("idx_datateknis_sync_pending", "mikrotik_sync_pending"),  # Sync operations
-        Index("idx_datateknis_pelanggan_id", "pelanggan_id"),  # Foreign key lookup
-        Index("idx_datateknis_ip_pelanggan", "ip_pelanggan"),  # Network management
-        Index("idx_datateknis_password_pppoe", "password_pppoe"),  # PPPoE authentication
-        # COMPOSITE indexes untuk query pattern yang sering digunakan bersama
-        Index("idx_datateknis_customer_network", "pelanggan_id", "ip_pelanggan"),  # Customer network lookup
-        Index("idx_datateknis_mikrotik_vlan", "mikrotik_server_id", "id_vlan"),  # Server-VLAN mapping
-        Index("idx_datateknis_sync_status", "mikrotik_sync_pending", "pelanggan_id"),  # Sync status by customer
-        Index("idx_datateknis_odp_location", "odp_id", "port_odp"),  # ODP port management
-        # PERFORMANCE indexes untuk dashboard dan reporting
-        Index("idx_datateknis_pppoe_credentials", "id_pelanggan", "password_pppoe"),  # PPPoE credential validation
-        Index("idx_datateknis_olt_port", "olt", "pon"),  # OLT port utilization
-        Index("idx_datateknis_onu_status", "onu_power", "mikrotik_sync_pending"),  # ONU signal monitoring
-        # Index('idx_datateknis_customer_sync', 'pelanggan_id', 'mikrotik_sync_pending'),
-        # Index('idx_datateknis_server_sync', 'mikrotik_server_id', 'mikrotik_sync_pending'),
-        # Index('idx_datateknis_odp_sync', 'odp_id', 'mikrotik_sync_pending'),
-        # Index('idx_datateknis_pppoe_sync', 'id_pelanggan', 'mikrotik_sync_pending'),
-        # Index('idx_datateknis_vlan_sync', 'id_vlan', 'mikrotik_sync_pending'),
-        # Index('idx_datateknis_customer_lookup', 'pelanggan_id', 'id_pelanggan'),
-        # Index('idx_datateknis_network_lookup', 'mikrotik_server_id', 'ip_pelanggan'),
-        # Index('idx_datateknis_device_lookup', 'odp_id', 'port_odp'),
-        # Index('idx_datateknis_pppoe_lookup', 'id_pelanggan', 'password_pppoe'),
-        # Index('idx_datateknis_olt_search', 'olt', 'olt_custom'),
-        # Index('idx_datateknis_odc_search', 'otb', 'odc'),
-        # Index('idx_datateknis_device_search', 'sn', 'onu_power'),
+        # Index buat query CORE yang sering dipake team teknisi
+        Index("idx_datateknis_sync_pending", "mikrotik_sync_pending"),  # Cek mana yang perlu disync ke Mikrotik
+        Index("idx_datateknis_pelanggan_id", "pelanggan_id"),           # Lookup data teknis berdasarkan pelanggan
+        Index("idx_datateknis_ip_pelanggan", "ip_pelanggan"),           # Management IP address network
+        Index("idx_datateknis_password_pppoe", "password_pppoe"),       # Validasi login PPPoE
+
+        # Composite indexes buat query yang sering dipake barengan
+        Index("idx_datateknis_customer_network", "pelanggan_id", "ip_pelanggan"),  # Cek data lengkap pelanggan
+        Index("idx_datateknis_mikrotik_vlan", "mikrotik_server_id", "id_vlan"),    # Mapping server-VLAN
+        Index("idx_datateknis_sync_status", "mikrotik_sync_pending", "pelanggan_id"),  # Status sync per pelanggan
+        Index("idx_datateknis_odp_location", "odp_id", "port_odp"),                # Management port ODP
+
+        # Index buat PERFORMANCE monitoring dan dashboard
+        Index("idx_datateknis_pppoe_credentials", "id_pelanggan", "password_pppoe"),  # Validasi kredensial PPPoE
+        Index("idx_datateknis_olt_port", "olt", "pon"),                              # Monitoring pemakaian port OLT
+        Index("idx_datateknis_onu_status", "onu_power", "mikrotik_sync_pending"),    # Monitoring sinyal ONU
     )
 
+    # ====================================================================
+    # FIELD DEFINITIONS - DATA TEKNIS KONEKSI
+    # ====================================================================
+
+    # Primary Key - ID unik buat setiap record data teknis
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, index=True)
+
+    # Foreign Key ke Pelanggan (UNIQUE karena 1 pelanggan cuma punya 1 data teknis)
     pelanggan_id: Mapped[int] = mapped_column(ForeignKey("pelanggan.id"), unique=True, index=True)
-    id_vlan: Mapped[str | None] = mapped_column(String(191), nullable=True, index=True)
-    id_pelanggan: Mapped[str] = mapped_column(String(191), index=True)
-    password_pppoe: Mapped[str] = mapped_column(String(191), index=True)
-    ip_pelanggan: Mapped[str | None] = mapped_column(String(191), nullable=True, index=True)
-    profile_pppoe: Mapped[str | None] = mapped_column(String(191), nullable=True, index=True)
-    olt: Mapped[str | None] = mapped_column(String(191), nullable=True, index=True)
-    olt_custom: Mapped[str | None] = mapped_column(String(191), nullable=True, index=True)
-    pon: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
-    otb: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
-    odc: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
 
-    # DIHAPUS: Kolom 'odp' integer yang lama, karena akan digantikan oleh odp_id
-    # odp: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Data PPPoE (Point-to-Point Protocol over Ethernet) - Buat koneksi internet
+    id_pelanggan: Mapped[str] = mapped_column(String(191), index=True)           # Username PPPoE (biasanya format khusus)
+    password_pppoe: Mapped[str] = mapped_column(String(191), index=True)          # Password PPPoE untuk autentikasi
+    profile_pppoe: Mapped[str | None] = mapped_column(String(191), nullable=True, index=True)  # Profile kecepatan di Mikrotik
 
-    onu_power: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
-    sn: Mapped[str | None] = mapped_column(String(191), nullable=True, index=True)
-    speedtest_proof: Mapped[str | None] = mapped_column(String(191), nullable=True, index=True)
+    # Data Jaringan
+    ip_pelanggan: Mapped[str | None] = mapped_column(String(191), nullable=True, index=True)  # IP address yang diberikan ke pelanggan
+    id_vlan: Mapped[str | None] = mapped_column(String(191), nullable=True, index=True)       # VLAN ID untuk segmentasi jaringan
 
-    mikrotik_sync_pending = Column(Boolean, default=False, nullable=False, index=True)
+    # Data OLT (Optical Line Terminal) - Perangkat pusat fiber optik
+    olt: Mapped[str | None] = mapped_column(String(191), nullable=True, index=True)           # Nama/ID OLT yang dipake
+    olt_custom: Mapped[str | None] = mapped_column(String(191), nullable=True, index=True)    # Keterangan custom OLT
+    pon: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)               # Nomor port PON di OLT
 
-    mikrotik_server_id: Mapped[int | None] = mapped_column(ForeignKey("mikrotik_servers.id"), index=True)
+    # Data Distribusi (OTB/ODC)
+    otb: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)  # Optical Terminal Box number
+    odc: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)  # Optical Distribution Cabinet number
+
+    # Data ODP (Optical Distribution Point)
+    odp_id: Mapped[int | None] = mapped_column(ForeignKey("odp.id"), index=True)  # Foreign key ke tabel ODP
+    port_odp: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)  # Nomor port di ODP yang dipake
+
+    # Data ONU (Optical Network Unit) - Perangkat di rumah pelanggan
+    sn: Mapped[str | None] = mapped_column(String(191), nullable=True, index=True)     # Serial number ONU
+    onu_power: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)  # Kekuatan sinyal ONU (dalam dBm)
+
+    # Data Tambahan
+    speedtest_proof: Mapped[str | None] = mapped_column(String(191), nullable=True, index=True)  # Link bukti speedtest
+
+    # Flag Sinkronisasi Mikrotik - Penting banget buat otomasi
+    mikrotik_sync_pending = Column(Boolean, default=False, nullable=False, index=True)  # True kalau perlu disync ke Mikrotik
+
+    # Server Configuration
+    mikrotik_server_id: Mapped[int | None] = mapped_column(ForeignKey("mikrotik_servers.id"), index=True)  # ID Mikrotik server
+
+    # ====================================================================
+    # RELATIONSHIPS - HUBUNGAN TABEL
+    # ====================================================================
+
+    # Relasi ke Mikrotik Server - Server yang handle koneksi pelanggan ini
     mikrotik_server: Mapped["MikrotikServer"] = relationship("MikrotikServer", back_populates="data_teknis_records")
 
-    # Kolom foreign key untuk relasi ODP
-    odp_id: Mapped[int | None] = mapped_column(ForeignKey("odp.id"), index=True)
-
-    # ▼▼▼ INI BAGIAN YANG DIPERBAIKI ▼▼▼
-    # Relasi ke ODP. Gunakan kutip ganda yang konsisten.
+    # Relasi ke ODP - ODP yang dipake buat koneksi pelanggan
     odp: Mapped["ODP"] = relationship(back_populates="data_teknis")
 
-    port_odp: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
-
-    # Relasi ke Pelanggan
+    # Relasi ke Pelanggan - Customer yang punya data teknis ini (1-to-1 relationship)
     pelanggan: Mapped["Pelanggan"] = relationship(back_populates="data_teknis")
-    # Relasi ke Trouble Tickets
+
+    # Relasi ke Trouble Tickets - Laporan masalah yang terkait dengan data teknis ini
     trouble_tickets: Mapped[list["TroubleTicket"]] = relationship("TroubleTicket", back_populates="data_teknis")

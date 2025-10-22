@@ -1,4 +1,30 @@
 # app/websocket_manager.py
+"""
+WebSocket connection manager buat real-time notifications.
+Ini system yang handle real-time updates ke frontend untuk billing system.
+
+Features:
+- Real-time notifications (invoice, payment, status changes)
+- User-specific messaging
+- Role-based broadcasting
+- Connection health monitoring
+- Rate limiting & security
+- Performance optimization
+
+Use cases:
+- Invoice payment notifications
+- Service status updates
+- System alerts
+- Dashboard live updates
+- Admin notifications
+
+Security:
+- JWT token authentication
+- Rate limiting per IP
+- Single connection per user
+- Heartbeat monitoring
+- Graceful connection cleanup
+"""
 
 import asyncio
 import datetime
@@ -14,6 +40,31 @@ logger = logging.getLogger(__name__)
 
 
 class ConnectionManager:
+    """
+    Main WebSocket connection manager class.
+    Handle semua real-time connections buat billing system.
+
+    Features:
+    - Single connection per user (security)
+    - Performance metrics & monitoring
+    - Rate limiting protection
+    - Batch message processing
+    - Automatic heartbeat & cleanup
+    - Role-based message targeting
+
+    Architecture:
+    - Dict-based connection storage (user_id -> WebSocket)
+    - Metadata tracking buat performance
+    - Queue-based batch processing
+    - Async task management
+
+    Usage:
+        manager = ConnectionManager()
+        await manager.connect(websocket, user_id)
+        await manager.send_to_user(user_id, {"message": "Hello!"})
+        await manager.broadcast_to_roles(message, user_ids)
+    """
+
     def __init__(self):
         # Menyimpan koneksi aktif dengan key user_id
         self.active_connections: Dict[int, WebSocket] = {}
@@ -49,7 +100,32 @@ class ConnectionManager:
         }
 
     async def connect(self, websocket: WebSocket, user_id: int):
-        """Menerima koneksi WebSocket baru dan menyimpannya dengan metadata."""
+        """
+        Accept dan setup WebSocket connection baru.
+        Implement single connection policy buat security.
+
+        Args:
+            websocket: FastAPI WebSocket object
+            user_id: User ID yang mau connect
+
+        Security features:
+        - Single connection per user (kick existing connection)
+        - Graceful connection replacement
+        - Metadata tracking buat monitoring
+        - Auto-start heartbeat mechanism
+
+        Process flow:
+        1. Cek existing connection, kick kalau ada
+        2. Accept new WebSocket connection
+        3. Store connection dan metadata
+        4. Start heartbeat monitoring
+        5. Update metrics
+
+        Note:
+        - Existing connection bakal di-close gracefully
+        - Metadata dipake buat performance monitoring
+        - Heartbeat mulai otomatis
+        """
 
         # Handle multiple connections from same user - allow only one connection per user
         if user_id in self.active_connections:
@@ -85,7 +161,37 @@ class ConnectionManager:
             self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
 
     def is_rate_limited(self, client_ip: str) -> bool:
-        """Check if client IP is rate limited with enhanced protection."""
+        """
+        Rate limiting protection buat prevent connection spam.
+        Advanced rate limiting dengan auto-reset dan emergency protection.
+
+        Args:
+            client_ip: IP address client yang konek
+
+        Returns:
+            True kalau rate limited, False kalau boleh konek
+
+        Rate limiting rules:
+        - Max 30 connections per menit per IP
+        - Auto-reset setelah cooldown period
+        - Emergency protection untuk excessive attempts
+        - Sliding window implementation
+
+        Security features:
+        - Prevent brute force connection attacks
+        - Auto-recovery dari temporary blocks
+        - Emergency cooldown buat abusive IPs
+        - Track blocked attempts metrics
+
+        Example:
+            if manager.is_rate_limited("192.168.1.1"):
+                return {"error": "Too many connection attempts"}
+
+        Note:
+        - Rate limit reset otomatis setelah cooldown
+        - Emergency protection activate kalau excess attempts
+        - Metrics tracking buat monitoring abuse patterns
+        """
         current_time = time.time()
 
         # Clean old attempts
@@ -128,7 +234,30 @@ class ConnectionManager:
             logger.info(f"Rate limit manually cleared for IP {client_ip}")
 
     async def disconnect(self, user_id: int):
-        """Menghapus koneksi saat pengguna terputus dengan cleanup."""
+        """
+        Clean disconnect user dari WebSocket manager.
+        Cleanup semua metadata dan tracking data.
+
+        Args:
+            user_id: User ID yang mau disconnect
+
+        Cleanup tasks:
+        - Remove dari active connections
+        - Track connection duration metrics
+        - Clean up role assignments
+        - Remove connection metadata
+        - Update connection count
+
+        Performance tracking:
+        - Connection duration analysis
+        - Message delivery statistics
+        - User behavior patterns
+
+        Note:
+        - Graceful cleanup tanpa error
+        - Metrics preserved buat analysis
+        - Auto cleanup role assignments
+        """
         if user_id in self.active_connections:
             # Track connection duration
             if user_id in self.connection_metadata:
@@ -153,7 +282,46 @@ class ConnectionManager:
         return [user_id for user_id, roles in self.user_roles.items() if role in roles]
 
     async def send_to_user(self, user_id: int, message: dict):
-        """Send message to a specific user."""
+        """
+        Kirim message ke user spesifik via WebSocket.
+        Core messaging function buat individual notifications.
+
+        Args:
+            user_id: Target user ID
+            message: Message dictionary dengan data
+
+        Returns:
+            True kalau berhasil, False kalau gagal/user tidak ada
+
+        Message format:
+        {
+            "type": "notification|alert|update",
+            "message": "Human readable message",
+            "data": {"key": "value"},  // Optional
+            "timestamp": "ISO format"
+        }
+
+        Features:
+        - Auto timestamp addition
+        - Activity tracking
+        - Error handling & cleanup
+        - JSON serialization
+
+        Usage:
+            await manager.send_to_user(
+                user_id=123,
+                message={
+                    "type": "payment_received",
+                    "message": "Payment received for INV-001",
+                    "data": {"invoice_id": 1, "amount": 150000}
+                }
+            )
+
+        Error handling:
+        - Auto remove disconnected users
+        - Graceful fallback on errors
+        - Failed message tracking
+        """
         if user_id not in self.active_connections:
             logger.warning(f"User {user_id} is not connected")
             return False
@@ -185,7 +353,42 @@ class ConnectionManager:
             return False
 
     async def broadcast_to_roles(self, message: dict, user_ids: List[int]):
-        """Mengirim pesan ke daftar user_id tertentu dengan batch processing."""
+        """
+        Broadcast message ke multiple users dengan performance optimization.
+        Main function buat mass notifications.
+
+        Args:
+            message: Message dictionary
+            user_ids: List target user IDs
+
+        Performance features:
+        - Batch processing buat large broadcasts
+        - JSON validation & serialization
+        - Message format standardization
+        - Metrics tracking
+
+        Message processing:
+        1. Validate message format
+        2. Auto-add missing fields (timestamp, type)
+        3. JSON serialization & validation
+        4. Batch vs direct routing decision
+        5. Performance metrics update
+
+        Batch vs Direct:
+        - < 50 users: Direct broadcast (faster)
+        - > 50 users: Batch processing (more efficient)
+
+        Usage:
+            await manager.broadcast_to_roles(
+                message={"type": "system_alert", "message": "Maintenance in 5 mins"},
+                user_ids=[1, 2, 3, 4, 5]
+            )
+
+        Error handling:
+        - Fallback message on serialization errors
+        - Individual error tracking
+        - Graceful degradation
+        """
         if not user_ids:
             return
 
@@ -288,7 +491,33 @@ class ConnectionManager:
                 await asyncio.sleep(0.01)
 
     async def _heartbeat_loop(self):
-        """Maintain connection health with periodic ping/pong."""
+        """
+        Main heartbeat loop untuk connection health monitoring.
+        Jalan di background buat maintain connection stability.
+
+        Process:
+        1. Sleep setiap interval (30 detik)
+        2. Send ping ke semua active connections
+        3. Detect dan cleanup stale connections
+        4. Update connection metadata
+
+        Health checks:
+        - Connection timeout detection
+        - Ping/pong response monitoring
+        - Stale connection cleanup
+        - Error recovery
+
+        Auto-cleanup:
+        - No activity > 2x heartbeat interval = stale
+        - Failed ping = connection problem
+        - Auto remove stale connections
+        - Graceful connection cleanup
+
+        Performance:
+        - Low impact background task
+        - Non-blocking operation
+        - Efficient connection monitoring
+        """
         logger.info("Starting WebSocket heartbeat loop")
 
         while self.active_connections:
@@ -333,7 +562,38 @@ class ConnectionManager:
             await self.disconnect(user_id)
 
     def get_metrics(self) -> dict:
-        """Get current WebSocket performance metrics."""
+        """
+        Generate comprehensive WebSocket performance metrics.
+        Monitoring dashboard data buat system health.
+
+        Returns:
+            Dictionary dengan semua performance metrics
+
+        Metrics categories:
+        - Active connections: Current user count
+        - Connection stats: Total connections, success rate
+        - Performance: Response time, message delivery
+        - Health: Average connection duration, heartbeat status
+
+        Calculated metrics:
+        - Success rate: (sent / (sent + failed)) * 100
+        - Average duration: Total connection time / session count
+        - Response time: Average broadcast processing time
+
+        Dashboard usage:
+            metrics = manager.get_metrics()
+            return {
+                "active_users": metrics["active_connections"],
+                "success_rate": f"{metrics['success_rate']:.1f}%",
+                "avg_response": f"{metrics['avg_response_time_ms']}ms"
+            }
+
+        Performance monitoring:
+        - Real-time connection tracking
+        - Message delivery reliability
+        - System performance indicators
+        - User engagement metrics
+        """
         active_connections = len(self.active_connections)
 
         # Calculate average connection duration
@@ -360,7 +620,33 @@ class ConnectionManager:
         }
 
     async def cleanup(self):
-        """Cleanup resources on shutdown."""
+        """
+        Graceful shutdown buat WebSocket manager.
+        Cleanup semua resources saat aplikasi stop.
+
+        Process:
+        1. Cancel heartbeat task
+        2. Close semua active connections
+        3. Clear semua data structures
+        4. Log shutdown completion
+
+        Graceful shutdown:
+        - Notify clients tentang server shutdown
+        - Close connections dengan proper codes
+        - Cancel background tasks
+        - Memory cleanup
+
+        Usage in FastAPI shutdown event:
+            @app.on_event("shutdown")
+            async def shutdown():
+                await manager.cleanup()
+
+        Safety:
+        - Prevent resource leaks
+        - Proper task cancellation
+        - Client notification
+        - Complete cleanup
+        """
         if self._heartbeat_task:
             self._heartbeat_task.cancel()
             try:
@@ -381,5 +667,48 @@ class ConnectionManager:
         logger.info("WebSocket manager cleaned up")
 
 
-# Buat satu instance manager untuk digunakan di seluruh aplikasi
+# Global singleton instance - dipake di seluruh aplikasi
+# Ini penting buat maintain consistency dan prevent multiple connection managers
 manager = ConnectionManager()
+
+"""
+Cara pakai WebSocket manager:
+
+from app.websocket_manager import manager
+
+# Di WebSocket endpoint
+@router.websocket("/ws/{token}")
+async def websocket_endpoint(websocket: WebSocket, token: str):
+    # Authenticate user dulu
+    user = await get_user_from_token(token, db)
+    if not user:
+        await websocket.close(code=1008)
+        return
+
+    # Connect user
+    await manager.connect(websocket, user.id)
+
+    try:
+        while True:
+            # Handle WebSocket messages
+            data = await websocket.receive_text()
+            # Process client messages...
+    except WebSocketDisconnect:
+        await manager.disconnect(user.id)
+
+# Kirim notification dari background process
+await manager.send_to_user(
+    user_id=123,
+    message={
+        "type": "payment_received",
+        "message": "Payment confirmed for INV-001",
+        "data": {"invoice_id": 1, "amount": 150000}
+    }
+)
+
+# Broadcast ke multiple users
+await manager.broadcast_to_roles(
+    message={"type": "system_alert", "message": "Maintenance in 5 minutes"},
+    user_ids=[1, 2, 3, 4, 5]
+)
+"""

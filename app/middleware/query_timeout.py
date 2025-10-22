@@ -1,5 +1,38 @@
+# app/middleware/query_timeout.py
 """
-Query timeout middleware untuk mencegah long-running queries.
+Query Timeout Middleware - Proteksi database dari slow queries
+
+Middleware ini jaga database performance dengan timeout mechanism.
+Fungsi utamanya mencegah queries yang terlalu lama yang bisa bikin sistem hang.
+
+Problem yang Diatasi:
+- Slow queries yang lock database resources
+- Long-running transactions yang blocking operasi lain
+- API timeouts yang bikin user experience buruk
+- Database connection pool exhaustion
+
+Timeout Configuration:
+- Default query timeout: 30 detik
+- Slow query threshold: 5 detik (buat logging)
+- Different timeout per operation type
+
+How it works:
+1. Monitor semua request processing time
+2. Log slow requests buat performance analysis
+3. Timeout queries yang melebihi batas waktu
+4. Return 504 Gateway Timeout kalau query timeout
+5. Cleanup database connections dengan aman
+
+Security & Performance Benefits:
+- Prevent DoS attacks via slow queries
+- Protect database from resource exhaustion
+- Better error handling dan user feedback
+- Performance monitoring dan optimization insights
+
+Usage:
+- Middleware otomatis aktif buat semua endpoints
+- Decorator @with_query_timeout() buat specific functions
+- execute_with_timeout() buat manual query execution
 """
 
 import asyncio
@@ -21,7 +54,44 @@ SLOW_QUERY_THRESHOLD = 5.0  # Log queries slower than 5 seconds
 
 
 class QueryTimeoutMiddleware(BaseHTTPMiddleware):
-    """Middleware untuk monitor dan timeout query yang terlalu lama."""
+    """
+    Query Timeout Middleware Implementation - HTTP request monitoring
+
+    Middleware implementation buat monitor dan timeout HTTP requests
+    yang terlalu lama, termasuk database queries yang dijalankan dalam request.
+
+    Middleware Features:
+    - Request processing time monitoring
+    - Slow request logging dengan detail
+    - Timeout handling dengan proper cleanup
+    - Performance metrics collection
+
+    Configuration:
+    - timeout: Maximum waktu per request (default: 30 detik)
+    - slow_query_threshold: Threshold buat logging slow requests (5 detik)
+
+    Monitoring Strategy:
+    1. Start timer saat request masuk
+    2. Execute request dengan asyncio.wait_for()
+    3. Log warning kalau melebihi slow threshold
+    4. Return 504 kalau timeout terjadi
+    5. Cleanup resources dengan aman
+
+    Performance Monitoring:
+    - ⚠️ Slow requests (>5 detik) buat optimization insights
+    - 🚨 Timeout requests (>30 detik) buat critical issues
+    - ❌ Failed requests dengan execution time tracking
+    - Process time headers buat client-side monitoring
+
+    Error Handling:
+    - asyncio.TimeoutError -> 504 Gateway Timeout
+    - Other exceptions -> logging dan re-raise
+    - Graceful degradation buat system stability
+
+    Args:
+        app: FastAPI application instance
+        timeout: Timeout duration dalam detik
+    """
 
     def __init__(self, app, timeout: float = DEFAULT_QUERY_TIMEOUT):
         super().__init__(app)
@@ -59,19 +129,48 @@ async def execute_with_timeout(
     session: AsyncSession, query: Any, timeout: float = DEFAULT_QUERY_TIMEOUT, operation_name: str = "query"
 ) -> Any:
     """
-    Execute query dengan timeout monitoring.
+    Execute Database Query dengan Timeout Protection
+
+    Function buat execute SQLAlchemy query dengan timeout monitoring.
+    Ini mencegah slow queries yang bisa bikin database hang.
+
+    Query Execution Flow:
+    1. Start execution timer
+    2. Execute query dengan asyncio.wait_for(timeout)
+    3. Monitor execution time
+    4. Log slow queries buat performance analysis
+    5. Handle timeout dengan proper cleanup
+
+    Performance Monitoring:
+    - Slow query threshold: 5 detik (logging warning)
+    - Query timeout: 30 detik (exception)
+    - Detailed logging dengan operation name
+    - Execution time tracking
+
+    Error Handling:
+    - asyncio.TimeoutError -> HTTP 504 Gateway Timeout
+    - Automatic session cleanup saat timeout
+    - Graceful error propagation
+    - Comprehensive error logging
+
+    Use Cases:
+    - Complex SELECT queries
+    - Bulk operations
+    - Report generation queries
+    - Data export operations
 
     Args:
-        session: Database session
-        query: SQLAlchemy query to execute
-        timeout: Timeout in seconds
-        operation_name: Name for logging purposes
+        session: AsyncSession SQLAlchemy database session
+        query: SQLAlchemy query object yang mau diexecute
+        timeout: Maximum execution time dalam detik (default: 30)
+        operation_name: Descriptive name buat logging (default: "query")
 
     Returns:
-        Query result
+        Query result (scalar, scalars, atau result object)
 
     Raises:
-        asyncio.TimeoutError: If query exceeds timeout
+        asyncio.TimeoutError: Kalau query melebihi timeout
+        HTTPException: 504 Gateway Timeout saat timeout terjadi
     """
     start_time = time.time()
 

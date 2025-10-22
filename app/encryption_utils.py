@@ -1,3 +1,26 @@
+# app/encryption_utils.py
+"""
+Modul ini buat setup automatic encryption/decryption pake SQLAlchemy event listeners.
+Jadi kita nggak perlu manual encrypt/decrypt tiap kali save/load data.
+
+Cara kerja:
+- Event listeners bakal jalan otomatis saat ada operasi database
+- before_insert/before_update: encrypt data sebelum disimpan
+- load: decrypt data setelah diambil dari database
+
+Data yang dienkripsi otomatis:
+- Password user (login sistem)
+- Password PPPoE pelanggan (internet)
+- Nomor KTP pelanggan (data pribadi)
+- Password Mikrotik server (konfigurasi)
+
+Security benefits:
+- Transparent encryption - developer nggak perlu panggil manual
+- Consistent encryption across all database operations
+- Prevent human error (lupa encrypt)
+- Zero-impact ke existing code base
+"""
+
 from sqlalchemy import event
 from sqlalchemy.orm import Session
 
@@ -8,7 +31,19 @@ from .models.user import User
 
 # Import models inside functions to avoid circular imports
 def setup_datateknis_listeners():
-    """Setup event listeners for DataTeknis model after all models are loaded."""
+    """
+    Setup event listeners khusus buat model DataTeknis.
+    Model ini isi data teknis pelanggan termasuk password PPPoE.
+
+    Event yang di-setup:
+    - before_insert/before_update: encrypt password PPPoE
+    - load: decrypt password PPPoE saat dibaca
+
+    Note:
+    - Commented out karena lagi debugging atau perubahan logic
+    - Password PPPoE ini dipake buat login internet pelanggan
+    - Sensitif banget harus selalu terenkripsi di database
+    """
     from .models.data_teknis import DataTeknis
 
     # Enkripsi password PPPoE sebelum insert/update
@@ -26,7 +61,25 @@ def setup_datateknis_listeners():
 
 
 def setup_pelanggan_listeners():
-    """Setup event listeners for Pelanggan model."""
+    """
+    Setup event listeners buat model Pelanggan.
+    Fokusnya buat enkripsi nomor KTP pelanggan.
+
+    Yang diproteksi:
+    - Nomor KTP (data pribadi sensitif)
+    - Auto encrypt saat simpan data baru atau update
+    - Auto decrypt saat ambil data dari database
+
+    Privacy protection:
+    - KTP itu data pribadi yang sangat sensitif
+    - Harus dienkripsi di database compliance ke privacy laws
+    - Decrypt hanya saat dibaca di aplikasi
+
+    Error handling:
+    - Graceful fallback kalau gagal decrypt
+    - Log error buat debugging
+    - Biarkan nilai tetap terenkripsi kalau error
+    """
     from .models.pelanggan import Pelanggan
 
     @event.listens_for(Pelanggan, "before_insert")
@@ -47,7 +100,25 @@ def setup_pelanggan_listeners():
 
 
 def encrypt_sensitive_data():
-    """Setup event listeners untuk enkripsi data sensitif"""
+    """
+    Setup semua event listeners buat ENKRIPSI data sensitif.
+    Fungsi ini dipanggil sekali saat aplikasi startup.
+
+    Event yang di-setup:
+    - User password (login sistem admin/staff)
+    - Mikrotik server password (akses network device)
+    - DataTeknis password PPPoE (password internet pelanggan)
+    - Pelanggan nomor KTP (data pribadi)
+
+    Cara panggil:
+    from app.encryption_utils import encrypt_sensitive_data
+    encrypt_sensitive_data()
+
+    Note:
+    - Ini setup encryption ONLY (before_insert/before_update)
+    - Buat decrypt, panggil decrypt_sensitive_data()
+    - Must dipanggil sebelum operasi database dimulai
+    """
 
     # Enkripsi password user sebelum insert/update
     @event.listens_for(User, "before_insert")
@@ -68,7 +139,30 @@ def encrypt_sensitive_data():
 
 
 def decrypt_sensitive_data():
-    """Setup event listeners untuk dekripsi data sensitif saat diakses"""
+    """
+    Setup semua event listeners buat DEKRIPSI data sensitif.
+    Fungsi ini dipanggil sekali saat aplikasi startup.
+
+    Event yang di-setup:
+    - User password (auto decrypt saat login)
+    - Mikrotik server password (saat konek ke device)
+    - DataTeknis password PPPoE (saat dipake buat Mikrotik)
+    - Pelanggan nomor KTP (saat ditampilkan di UI)
+
+    Cara kerja:
+    - Event 'load' bakal trigger setiap kali object di-load dari DB
+    - Data otomatis terdecrypt di memory
+    - Tetap terenkripsi di database
+
+    Cara panggil:
+    from app.encryption_utils import decrypt_sensitive_data
+    decrypt_sensitive_data()
+
+    Performance:
+    - Decrypt hanya saat data dibaca, tidak saat query
+    - Ciphertext tetap di database
+    - Plaintext hanya di application memory
+    """
 
     # Dekripsi password user setelah select
     @event.listens_for(User, "load")

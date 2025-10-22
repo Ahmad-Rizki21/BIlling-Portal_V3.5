@@ -1,4 +1,43 @@
 # app/routers/permission.py
+"""
+Permission Management Router - CRUD operations untuk permission system
+
+Router ini handle semua permission management operations di sistem billing.
+Permission adalah hak akses granular yang bisa diassign ke role.
+
+Permission Structure:
+- Format: {action}_{resource}
+- Contoh: create_pelanggan, view_invoice, delete_user
+- Actions: create, view, edit, delete
+- Resources: menus, widgets, system features
+
+Permission Categories:
+1. Menu Permissions - Akses ke navigasi menu
+   - create_dashboard, view_billing, edit_network, dll
+2. Widget Permissions - Akses ke dashboard widgets
+   - view_widget_stats, view_widget_alerts, dll
+3. System Feature Permissions - Akses ke fitur sistem
+   - create_user, view_reports, manage_settings, dll
+
+Security Features:
+- Idempotent permission generation (no duplicates)
+- Automatic permission creation dari config
+- Database-driven permission checking
+- Comprehensive permission coverage
+
+Integration Points:
+- Role management system
+- Authorization decorators (@has_permission)
+- Frontend access control
+- Audit logging system
+
+Usage Flow:
+1. Generate permissions dari config
+2. Assign permissions ke roles
+3. Assign roles ke users
+4. Check permissions di protected endpoints
+"""
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -21,8 +60,45 @@ router = APIRouter(
 @router.post("/generate", response_model=List[PermissionSchema])
 async def generate_permissions(db: AsyncSession = Depends(get_db)):
     """
-    Membuat semua permission CRUD untuk menu DAN view untuk widget
-    jika belum ada di database.
+    Generate All System Permissions - Otomatis buat permission dari config
+
+    Function ini generate semua permissions yang dibutuhkan sistem berdasarkan
+    configuration dari settings.py. Ini一次性buat semua permission buat menus,
+    widgets, dan system features.
+
+    Generation Logic:
+    1. Menu Permissions: CRUD operations untuk setiap menu
+    2. Widget Permissions: View access untuk setiap dashboard widget
+    3. System Feature Permissions: CRUD untuk fitur sistem lainnya
+
+    Permission Patterns:
+    - Menus: {action}_{menu_name} (create_dashboard, edit_billing, dll)
+    - Widgets: view_widget_{widget_name} (view_widget_stats, dll)
+    - Features: {action}_{feature_name} (create_user, delete_role, dll)
+
+    Idempotent Operation:
+    - Cek existing permission sebelum create
+    - Hanya buat permission yang belum ada
+    - Safe buat dijalankan berulang kali
+    - Return list permission yang baru dibuat
+
+    Use Cases:
+    - Initial setup aplikasi baru
+    - Add new menu/widget/feature
+    - Permission system maintenance
+    - Development environment setup
+
+    Security Features:
+    - Comprehensive permission coverage
+    - Consistent naming conventions
+    - No duplicate permissions
+    - Atomic database operations
+
+    Returns:
+        List[PermissionSchema]: Permission yang baru dibuat (kosong kalau semua sudah ada)
+
+    Raises:
+        HTTPException 200: Kalau semua permission sudah ada
     """
     permissions_created = []
 
@@ -87,6 +163,38 @@ async def generate_permissions(db: AsyncSession = Depends(get_db)):
 
 @router.get("/", response_model=List[PermissionSchema])
 async def get_permissions(db: AsyncSession = Depends(get_db)):
-    """Mengambil semua permission yang ada."""
+    """
+    Get All Permissions - Retrieve complete permission list
+
+    Function ini mengambil semua permissions yang ada di database.
+    Biasanya dipake buat admin interface atau debugging.
+
+    Query Features:
+    - Return semua permissions tanpa pagination
+    - Sort by permission name (alphabetical)
+    - Efficient single query dengan proper ordering
+    - Include all permission categories
+
+    Return Format:
+    - List PermissionSchema dengan id dan name
+    - Sorted alphabetically by name
+    - Complete permission list
+    - Empty list kalau belum ada permissions
+
+    Use Cases:
+    - Admin permission management interface
+    - Role assignment form
+    - System debugging dan monitoring
+    - Permission audit dan review
+
+    Performance Notes:
+    - Single efficient query
+    - Proper database indexing
+    - Minimal memory footprint
+    - Fast response time
+
+    Returns:
+        List[PermissionSchema]: Complete list of all permissions
+    """
     result = await db.execute(select(PermissionModel).order_by(PermissionModel.name))
     return result.scalars().all()
