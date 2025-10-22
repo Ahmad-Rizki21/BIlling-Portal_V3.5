@@ -1,90 +1,135 @@
-# app/main.py
+# ====================================================================
+# MAIN APPLICATION - SISTEM BILLING FTTH
+# ====================================================================
+# File ini adalah pintu gerbang utama aplikasi billing sistem untuk
+# layanan internet Fiber To The Home (FTTH). Menggunakan FastAPI
+# sebagai backend framework.
+#
+# Fitur utama:
+# - RESTful API untuk manajemen pelanggan, billing, dan layanan
+# - WebSocket untuk notifikasi real-time
+# - Auto-generation invoice dan penjadwalan tugas
+# - Integrasi payment gateway (Xendit)
+# - Manajemen user dan permission
+# - Logging aktivitas sistem
+# ====================================================================
+
 import json
 import logging
 import os
 import time
 from datetime import datetime
 
+# Library untuk scheduling (auto-jobs)
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+
+# FastAPI core components
 from fastapi import FastAPI, Query, Request, WebSocket, WebSocketDisconnect, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+
+# JWT token handling
 from jose import JWTError, jwt
+
+# Database components
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+# Import modul-modul lokal
 from . import config
 from .auth import get_user_from_token
 from .config import settings
 from .database import AsyncSessionLocal, Base, engine, get_db, init_encryption
+
+# Import job-job terjadwal (auto-invoice, suspend, dll)
 from .jobs import (
-    job_generate_invoices,
-    job_retry_mikrotik_syncs,
-    job_send_payment_reminders,
-    job_suspend_services,
-    job_verify_payments,
+    job_generate_invoices,      # Auto generate invoice H-5 jatuh tempo
+    job_retry_mikrotik_syncs,   # Retry sync mikrotik yang gagal
+    job_send_payment_reminders, # Kirim reminder pembayaran
+    job_suspend_services,       # Suspend layanan telat bayar
+    job_verify_payments,        # Verifikasi pembayaran masuk
 )
+
+# Import untuk logging
 from .logging_config import setup_logging
+
+# Import models (database tables)
 from .models.activity_log import ActivityLog
 from .models.system_setting import SystemSetting as SettingModel
 from .models.user import User as UserModel
+
+# Import semua router (API endpoints)
 from .routers import (
-    activity_log,
-    auth,
-    calculator,
-    dashboard,
-    dashboard_pelanggan,
-    data_teknis,
-    harga_layanan,
-    inventory,
-    inventory_status,
-    inventory_type,
-    invoice,
-    langganan,
-    mikrotik_server,
-    notifications,
-    odp,
-    olt,
-    paket_layanan,
-    pelanggan,
-    permission,
-    report,
-    role,
-    trouble_ticket,
+    activity_log,      # Log aktivitas user
+    auth,              # Authentication & authorization
+    calculator,        # Kalkulator biaya
+    dashboard,         # Dashboard admin
+    dashboard_pelanggan, # Dashboard pelanggan
+    data_teknis,       # Data teknis koneksi
+    harga_layanan,     # Harga paket layanan
+    inventory,         # Manajemen inventory
+    inventory_status,  # Status inventory
+    inventory_type,    # Tipe inventory
+    invoice,           # Manajemen invoice/tagihan
+    langganan,         # Manajemen langganan pelanggan
+    mikrotik_server,   # Konfigurasi Mikrotik
+    notifications,     # Sistem notifikasi
+    odp,               # ODP (Optical Distribution Point)
+    olt,               # OLT (Optical Line Terminal)
+    paket_layanan,     # Paket-paket layanan
+    pelanggan,         # Data pelanggan
+    permission,        # Manajemen permission
+    report,            # Laporan-laporan
+    role,              # Role-based access control
+    trouble_ticket,    # Sistem trouble ticket
 )
-from .routers import settings as settings_router
+from .routers import settings as settings_router  # Pengaturan sistem
 from .routers import (
-    sk,
-    topology,
-    uploads,
-    user,
+    sk,                # Syarat & Ketentuan
+    topology,          # Topologi jaringan
+    uploads,           # Upload file管理
+    user,              # Manajemen user
 )
+
+# WebSocket manager untuk notifikasi real-time
 from .websocket_manager import manager
 
-# --- AKHIR TAMBAHAN IMPORT ---
 
+# ====================================================================
+# DATABASE INITIALIZATION
+# ====================================================================
 
-# Fungsi untuk membuat tabel di database saat aplikasi pertama kali dijalankan
 async def create_tables():
+    """
+    Buat semua tabel di database saat aplikasi pertama kali jalan.
+    Fungsi ini otomatis membuat tabel berdasarkan model yang sudah didefinisikan.
+    WARNING: Jangan uncomment drop_all() kecuali mau reset semua data!
+    """
     async with engine.begin() as conn:
-        # await conn.run_sync(Base.metadata.drop_all) # Hati-hati, ini akan menghapus semua tabel
-        await conn.run_sync(Base.metadata.create_all)
+        # await conn.run_sync(Base.metadata.drop_all)  # ⚠️ HATI-HATI: Hapus semua tabel!
+        await conn.run_sync(Base.metadata.create_all)  # Buat tabel jika belum ada
 
 
-# Inisialisasi aplikasi FastAPI
+# ====================================================================
+# FASTAPI APP INITIALIZATION
+# ====================================================================
+
+# Inisialisasi aplikasi FastAPI utama
 app = FastAPI(
     title="Billing System API",
-    description="API untuk sistem billing terintegrasi Xendit.",
+    description="API sistem billing FTTH terintegrasi dengan payment gateway Xendit",
     version="1.0.0",
+    docs_url="/docs",           # Swagger UI documentation
+    redoc_url="/redoc",         # ReDoc documentation
 )
 
-# Mount static files
+# Mount static files directory (buat file-file static kayak image, CSS, JS)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# Mount evidence files directory
+# Mount directory buat file evidence (bukti) upload
 evidence_dir = os.path.join(os.getcwd(), "static", "uploads", "evidence")
-os.makedirs(evidence_dir, exist_ok=True)
+os.makedirs(evidence_dir, exist_ok=True)  # Buat folder kalo belum ada
 app.mount("/static/uploads/evidence", StaticFiles(directory=evidence_dir), name="evidence")
 
 # Mount evidence files at /api path for frontend compatibility

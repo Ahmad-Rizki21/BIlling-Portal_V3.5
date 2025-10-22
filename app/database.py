@@ -1,3 +1,17 @@
+# ====================================================================
+# DATABASE CONFIGURATION & CONNECTION MANAGEMENT
+# ====================================================================
+# File ini mengatur semua konfigurasi database untuk sistem billing.
+# Menggunakan SQLAlchemy dengan async support untuk performa lebih baik.
+#
+# Fitur utama:
+# - Connection pooling yang optimal untuk production dan development
+# - Auto-retry untuk koneksi yang gagal
+# - Connection pool monitoring dan health check
+# - Enkripsi data sensitif (password, API keys)
+# - Optimized untuk dashboard query performance
+# ====================================================================
+
 import asyncio
 import logging
 import os
@@ -7,69 +21,89 @@ from dotenv import load_dotenv
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 
-# Setup logger
+# Setup logger buat monitoring database
 logger = logging.getLogger(__name__)
 
-# Memuat variabel environment dari file .env
+# Load environment variables dari file .env
+# Ini penting biar konfigurasi database aman dan flexible
 load_dotenv()
 
-# Ambil URL database dari environment
+# Ambil database URL dari environment variables
+# Format: mysql+aiomysql://user:password@host:port/database
 DATABASE_URL = os.getenv("DATABASE_URL", "")
 
-# Pastikan DATABASE_URL tidak kosong
+# Validasi DATABASE_URL - jangan biarkan kosong!
 if not DATABASE_URL:
     raise ValueError("DATABASE_URL tidak ditemukan di file .env")
 
-# --- SMART CONNECTION POOL CONFIGURATION ---
-# Deteksi environment untuk optimal pool sizing
+# ====================================================================
+# SMART CONNECTION POOL CONFIGURATION
+# ====================================================================
+# Connection pool sangat penting untuk performa database!
+# Pool bakalan nge-reuse koneksi yang udah ada biar nggak usah
+# bikin koneksi baru terus-menerus.
+
+# Deteksi environment (production/development) buat optimal pool sizing
 environment = os.getenv("ENVIRONMENT", "development")
 
-# Dynamic pool configuration berdasarkan environment
+# Dynamic pool configuration yang disesuaikan dengan environment
 if environment == "production":
-    # Production: Optimized untuk real-world usage
-    POOL_SIZE = 8  # Reduced dari 20 → 8 (memory efficient)
-    MAX_OVERFLOW = 12  # Reduced dari 30 → 12 (total max = 20)
-    POOL_TIMEOUT = 15  # Faster timeout untuk production
-    POOL_RECYCLE = 1800  # 30 menit (lebih sering recycle)
+    # Production environment - optimized untuk real-world usage
+    # Config ini dirancang untuk handle traffic tinggi dengan efisien
+    POOL_SIZE = 8       # Jumlah koneksi default di pool (dari 20 → 8 buat hemat memory)
+    MAX_OVERFLOW = 12   # Maks koneksi tambahan kalau pool penuh (total max = 20)
+    POOL_TIMEOUT = 15   # Timeout dapetin koneksi dari pool (15 detik)
+    POOL_RECYCLE = 1800 # Recycle koneksi setiap 30 menit (prevent stale connection)
 else:
-    # Development: Resources yang lebih kecil
-    POOL_SIZE = 5  # Development tidak butuh banyak connections
-    MAX_OVERFLOW = 10  # Total max = 15 connections
-    POOL_TIMEOUT = 10  # Quick timeout untuk development
-    POOL_RECYCLE = 900  # 15 menit (faster recycle)
+    # Development environment - resources yang lebih kecil
+    # Config ini cukup buat development tapi nggak boros resources
+    POOL_SIZE = 5       # Development nggak butuh banyak koneksi
+    MAX_OVERFLOW = 10   # Total maks = 15 koneksi
+    POOL_TIMEOUT = 10   # Quick timeout buat development (10 detik)
+    POOL_RECYCLE = 900  # Recycle setiap 15 menit (lebih sering)
 
-# Membuat engine database dengan SMART connection pool configuration
+# ====================================================================
+# DATABASE ENGINE CREATION
+# ====================================================================
+# Membuat async database engine dengan configuration yang optimal
+# Engine ini bakal dipake oleh seluruh aplikasi untuk komunikasi sama database
+
 engine = create_async_engine(
     DATABASE_URL,
-    echo=False,  # echo=False di production untuk log yang lebih bersih
-    pool_pre_ping=True,  # Cek koneksi sebelum digunakan
-    pool_size=POOL_SIZE,
-    max_overflow=MAX_OVERFLOW,
-    pool_timeout=POOL_TIMEOUT,
-    pool_recycle=POOL_RECYCLE,
+    echo=False,  # Log SQL query ke console (False di production biar log bersih)
+    pool_pre_ping=True,  # Cek koneksi sebelum dipake (prevent stale connection)
+    pool_size=POOL_SIZE,       # Pool size dari config di atas
+    max_overflow=MAX_OVERFLOW, # Max overflow dari config di atas
+    pool_timeout=POOL_TIMEOUT, # Timeout dari config di atas
+    pool_recycle=POOL_RECYCLE, # Recycle time dari config di atas
     connect_args={
-        "connect_timeout": 10,  # Connection timeout 10 detik
-        "charset": "utf8mb4",  # Unicode support
-        "sql_mode": "STRICT_TRANS_TABLES",  # Strict mode untuk data consistency
+        "connect_timeout": 10,       # Timeout koneksi 10 detik
+        "charset": "utf8mb4",       # Support Unicode/emoji
+        "sql_mode": "STRICT_TRANS_TABLES",  # Strict mode buat data consistency
     },
 )
 
-# Log pool configuration untuk monitoring
+# Log pool configuration buat monitoring dan debugging
 logger.info(f"🔗 Database Pool Configured - Environment: {environment}")
 logger.info(f"📊 Pool Settings: size={POOL_SIZE}, overflow={MAX_OVERFLOW}, total_capacity={POOL_SIZE + MAX_OVERFLOW}")
-# ------------------------------------------
 
-# Membuat session factory dengan konfigurasi OPTIMIZED untuk dashboard
+# ====================================================================
+# SESSION FACTORY CONFIGURATION
+# ====================================================================
+# Session factory buat bikin database session di setiap request
+# Config ini dioptimasi buat dashboard performance
+
 AsyncSessionLocal = sessionmaker(
     bind=engine,
-    class_=AsyncSession,
-    expire_on_commit=False,
-    autoflush=True,  # Auto flush untuk data consistency di dashboard
-    autocommit=False,  # Manual commit control
-    # future=True,  # Parameter ini tidak diperlukan untuk AsyncSession
+    class_=AsyncSession,        # Pake async session buat performa
+    expire_on_commit=False,     # Jangan expire objects pas commit (biar bisa dipake lagi)
+    autoflush=True,             # Auto flush untuk data consistency di dashboard
+    autocommit=False,           # Manual commit control (lebih safe)
+    # future=True,              # Not needed for AsyncSession
 )
 
 # Base class untuk semua model SQLAlchemy
+# Semua model table harus inherit dari Base ini
 Base = declarative_base()
 
 # Import dan inisialisasi enkripsi
