@@ -162,7 +162,7 @@
               <v-icon color="white">mdi-check-network</v-icon>
             </v-avatar>
             <div>
-              <div class="text-h5 font-weight-bold">{{ dataTeknisList.length }}</div>
+              <div class="text-h5 font-weight-bold">{{ statisticsData.totalPelanggan }}</div>
               <div class="text-caption text-medium-emphasis">Total Pelanggan</div>
             </div>
           </div>
@@ -183,7 +183,7 @@
               <v-icon color="white">mdi-signal</v-icon>
             </v-avatar>
             <div>
-              <div class="text-h5 font-weight-bold">{{ getSignalStats().good }}</div>
+              <div class="text-h5 font-weight-bold">{{ statisticsData.sinyalBaik }}</div>
               <div class="text-caption text-medium-emphasis">Sinyal Baik</div>
             </div>
           </div>
@@ -204,7 +204,7 @@
               <v-icon color="white">mdi-alert</v-icon>
             </v-avatar>
             <div>
-              <div class="text-h5 font-weight-bold">{{ getSignalStats().poor }}</div>
+              <div class="text-h5 font-weight-bold">{{ statisticsData.sinyalLemah }}</div>
               <div class="text-caption text-medium-emphasis">Sinyal Lemah</div>
             </div>
           </div>
@@ -225,7 +225,7 @@
               <v-icon color="white">mdi-router-network</v-icon>
             </v-avatar>
             <div>
-              <div class="text-h5 font-weight-bold">{{ getUniqueOLTCount() }}</div>
+              <div class="text-h5 font-weight-bold">{{ statisticsData.oltAktif }}</div>
               <div class="text-caption text-medium-emphasis">OLT Aktif</div>
             </div>
           </div>
@@ -1142,6 +1142,14 @@ const onuPowerRangeOptions = ref<any[]>([]);
 // --- State for Total Count ---
 const totalDataTeknisCount = ref(0);
 
+// --- State for Statistics ---
+const statisticsData = ref({
+  totalPelanggan: 0,
+  sinyalBaik: 0,
+  sinyalLemah: 0,
+  oltAktif: 0
+});
+
 const authStore = useAuthStore();
 
 // Ref untuk komponen file input
@@ -1303,6 +1311,7 @@ onMounted(() => {
   fetchPaketLayananForSelect();
   fetchOdpList();
   fetchFilterOptions();
+  // fetchStatisticsData() akan dipanggil setelah fetchDataTeknis() selesai
 });
 
 async function fetchDataTeknis(isLoadMore = false) {
@@ -1351,6 +1360,8 @@ async function fetchDataTeknis(isLoadMore = false) {
     } else {
       dataTeknisList.value = newData;
       totalDataTeknisCount.value = newTotalCount;
+      // Hitung ulang statistik setelah data baru di-load
+      calculateStatisticsFromExistingData();
     }
 
     // Cek apakah masih ada data untuk dimuat
@@ -1379,6 +1390,7 @@ function onItemsPerPageChange(newItemsPerPage: number) {
   itemsPerPage.value = newItemsPerPage;
   desktopPage.value = 1; // Reset ke halaman pertama saat mengubah items per page
   fetchDataTeknis();
+  // Statistik akan dihitung ulang otomatis di dalam fetchDataTeknis()
 }
 
 async function fetchOdpList() {
@@ -1397,6 +1409,7 @@ async function fetchOdpList() {
 
 const applyFilters = debounce(() => {
   fetchDataTeknis(false); // Panggil dengan `isLoadMore = false` untuk mereset
+  // Statistik akan dihitung ulang otomatis di dalam fetchDataTeknis()
 }, 500);
 
 watch([searchQuery, selectedOlt, selectedProfile, selectedVlan, selectedOnuPowerRange], () => {
@@ -1445,6 +1458,54 @@ async function fetchFilterOptions() {
     }));
   } catch (error) {
     console.error("Gagal mengambil data filter:", error);
+  }
+}
+
+
+// Fungsi untuk menghitung statistik dari data yang sudah ada
+function calculateStatisticsFromExistingData() {
+  try {
+    // Gunakan totalDataTeknisCount yang sudah diambil dari API utama
+    const total = totalDataTeknisCount.value || 0;
+
+    // Hitung statistik dari data yang sudah di-load (dataTeknisList)
+    const good = dataTeknisList.value.filter(item => item.onu_power > -24).length;
+    const poor = dataTeknisList.value.filter(item => item.onu_power <= -27).length;
+    const uniqueOLTs = new Set(dataTeknisList.value.map(item => item.olt));
+
+    // Untuk data yang belum di-load, gunakan estimasi berdasarkan proporsi
+    const loadedCount = dataTeknisList.value.length;
+    const remainingCount = Math.max(0, total - loadedCount);
+
+    if (loadedCount > 0) {
+      // Estimasi statistik untuk data yang belum di-load
+      const goodRatio = good / loadedCount;
+      const poorRatio = poor / loadedCount;
+
+      statisticsData.value = {
+        totalPelanggan: total,
+        sinyalBaik: Math.round(good + (remainingCount * goodRatio)),
+        sinyalLemah: Math.round(poor + (remainingCount * poorRatio)),
+        oltAktif: uniqueOLTs.size // Ini mungkin tidak akurat, tapi cukup untuk estimasi
+      };
+    } else {
+      // Jika tidak ada data yang di-load, gunakan 0
+      statisticsData.value = {
+        totalPelanggan: total,
+        sinyalBaik: 0,
+        sinyalLemah: 0,
+        oltAktif: 0
+      };
+    }
+  } catch (error) {
+    console.error("Gagal menghitung statistik dari data yang ada:", error);
+    // Fallback ke 0
+    statisticsData.value = {
+      totalPelanggan: 0,
+      sinyalBaik: 0,
+      sinyalLemah: 0,
+      oltAktif: 0
+    };
   }
 }
 
@@ -1618,7 +1679,7 @@ async function saveDataTeknis() {
       // Tangkap respons dari server setelah PATCH
       const response = await apiClient.patch(`/data_teknis/${editedItem.value.id}`, payloadToSend);
       updatedData = response.data;
-      
+
       // Cari index dari data lama di dalam array
       const index = dataTeknisList.value.findIndex(item => item.id === updatedData.id);
       if (index !== -1) {
@@ -1629,9 +1690,11 @@ async function saveDataTeknis() {
     } else {
       // Untuk "Tambah Data", panggil ulang fetchDataTeknis
       await apiClient.post('/data_teknis/', editedItem.value);
-      fetchDataTeknis(); 
+      fetchDataTeknis();
     }
-    
+
+    // Update statistik setelah operasi CRUD
+    calculateStatisticsFromExistingData();
     closeDialog();
   } catch (error: any) {
     console.error("Gagal saat menyimpan data teknis:", error);
@@ -1685,6 +1748,7 @@ async function confirmBulkDelete() {
     await Promise.all(deletePromises);
     showSnackbar(`${itemsToDelete.length} data teknis berhasil dihapus.`, 'success');
     fetchDataTeknis();
+    // Statistik akan dihitung ulang otomatis di dalam fetchDataTeknis()
     selectedDataTeknis.value = [];
   } catch (error) {
     console.error("Gagal melakukan hapus massal data teknis:", error);
@@ -1701,6 +1765,7 @@ async function confirmDelete() {
   try {
     await apiClient.delete(`/data_teknis/${itemToDeleteId.value}`);
     fetchDataTeknis();
+    // Statistik akan dihitung ulang otomatis di dalam fetchDataTeknis()
     closeDeleteDialog();
   } catch (error) {
     console.error("Gagal menghapus data teknis:", error);
@@ -1745,16 +1810,6 @@ function getOnuPowerStatus(power: number) {
   return 'Sinyal Baik';
 }
 
-function getSignalStats() {
-  const good = dataTeknisList.value.filter(item => item.onu_power > -24).length;
-  const poor = dataTeknisList.value.filter(item => item.onu_power <= -27).length;
-  return { good, poor };
-}
-
-function getUniqueOLTCount() {
-  const uniqueOLTs = new Set(dataTeknisList.value.map(item => item.olt));
-  return uniqueOLTs.size;
-}
 
 async function exportData() {
   exporting.value = true;
@@ -1820,6 +1875,7 @@ async function importData() {
     const message = response.data.message || 'Impor data teknis berhasil!';
     showSnackbar(message, 'success');
     fetchDataTeknis();
+    // Statistik akan dihitung ulang otomatis di dalam fetchDataTeknis()
     closeImportDialog();
     
   } catch (error: any) {
