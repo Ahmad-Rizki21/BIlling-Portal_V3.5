@@ -45,13 +45,27 @@ export default defineConfig({
                         if (id.includes('mapbox-gl') || id.includes('leaflet')) {
                             return 'maps';
                         }
-                        // Utility libraries
-                        if (id.includes('lodash-es') || id.includes('xlsx') || id.includes('html2canvas')) {
-                            return 'utils';
+                        // Utility libraries - optimized for dynamic imports
+                        if (id.includes('xlsx')) {
+                            return 'xlsx';
+                        }
+                        if (id.includes('html2canvas')) {
+                            return 'html2canvas';
+                        }
+                        if (id.includes('lodash-es')) {
+                            return 'lodash';
                         }
                         // Network graph libraries
                         if (id.includes('d3-force') || id.includes('v-network-graph')) {
                             return 'network';
+                        }
+                        // Material Design Icons
+                        if (id.includes('@mdi') || id.includes('materialdesignicons')) {
+                            return 'mdi';
+                        }
+                        // Date/time libraries
+                        if (id.includes('date-fns') || id.includes('dayjs') || id.includes('moment')) {
+                            return 'date';
                         }
                         // Other third-party libraries
                         return 'vendor';

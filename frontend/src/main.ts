@@ -13,6 +13,8 @@ import 'vuetify/dist/vuetify.min.css'
 import { createVuetify } from 'vuetify'
 import * as components from 'vuetify/components'
 import * as directives from 'vuetify/directives'
+// Optimasi: import selective components untuk tree shaking
+import * as vuetifyComponents from './plugins/vuetify'
 import '@mdi/font/css/materialdesignicons.css'
 import 'leaflet/dist/leaflet.css';
 
@@ -20,7 +22,10 @@ import { useAuthStore } from './stores/auth'
 
 // 2. Buat instance Vuetify dengan tema light dan dark yang kontras
 const vuetify = createVuetify({
-  components,
+  components: {
+    ...components,
+    ...vuetifyComponents
+  },
   directives,
   theme: {
     defaultTheme: 'light',
@@ -77,7 +82,3 @@ async function startup() {
 }
 
 startup()
-
-// NOTE: Double app mounting code di bawah ini telah dihapus untuk mencegah memory leak
-// dan warning Vue tentang multiple app instances
-// startup() function di atas sudah cukup untuk mounting aplikasi dengan benar

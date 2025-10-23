@@ -8229,3 +8229,7 @@ UnicodeDecodeError: 'utf-8' codec can't decode byte 0x89 in position 166: invali
 2025-10-23 10:55:04 | SERVICES....    | [91mERROR   [0m | get_api_connection   | Gagal mendapatkan koneksi dari pool ke Mikrotik Tambun (192.168.1.1:22): Service unavailable for 192.168.1.1:22 - circuit breaker open
 2025-10-23 11:29:38 | SERVICES....    | [91mERROR   [0m | _get_connection      | Failed to create connection to 192.168.1.1:22: [Errno 111] Connection refused
 2025-10-23 11:29:38 | SERVICES....    | [91mERROR   [0m | get_api_connection   | Gagal mendapatkan koneksi dari pool ke Mikrotik Tambun (192.168.1.1:22): [Errno 111] Connection refused
+2025-10-23 20:28:32 | SERVICES....    | [91mERROR   [0m | _get_connection      | Failed to create connection to 192.168.1.1:22: [Errno 111] Connection refused
+2025-10-23 20:28:32 | SERVICES....    | [91mERROR   [0m | get_api_connection   | Gagal mendapatkan koneksi dari pool ke Mikrotik Tambun (192.168.1.1:22): [Errno 111] Connection refused
+2025-10-23 20:28:33 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-23 20:28:33 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token

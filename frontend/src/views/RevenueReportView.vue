@@ -348,7 +348,7 @@
 import { ref, onMounted, computed} from 'vue';
 import { debounce } from 'lodash-es';
 import apiClient from '@/services/api';
-import * as XLSX from 'xlsx';
+// XLSX akan di-import secara dinamis saat fungsi export dipanggil
 
 // --- Interface Definition ---
 interface InvoiceReportItem {
@@ -452,6 +452,8 @@ async function exportToExcel() {
 
   exporting.value = true;
   try {
+    // Dynamic import XLSX hanya saat dibutuhkan
+    const XLSX = await import('xlsx');
     // Siapkan parameter filter tanpa paginasi
     const params = {
       start_date: toISODateString(startDate.value),

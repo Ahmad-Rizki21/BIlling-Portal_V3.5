@@ -640,7 +640,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue';
 import { useDisplay } from 'vuetify';
-import * as XLSX from 'xlsx';
+// XLSX akan di-import secara dinamis saat fungsi export dipanggil
 import apiClient from '@/services/api';
 
 // --- INTERFACES ---
@@ -857,6 +857,9 @@ function getStatusColor(statusName: string = '') {
 }
 
 async function exportToExcel() {
+  // Dynamic import XLSX hanya saat dibutuhkan
+  const XLSX = await import('xlsx');
+
   const dataToExport = filteredInventoryItems.value.map(item => ({
     'Serial Number': item.serial_number,
     'MAC Address': item.mac_address || '-',
@@ -869,7 +872,7 @@ async function exportToExcel() {
   const worksheet = XLSX.utils.json_to_sheet(dataToExport);
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, 'Daftar Inventaris');
-  
+
   // Auto-size columns
   const cols = Object.keys(dataToExport[0] || {}).map(key => ({ wch: Math.max(key.length, ...dataToExport.map(row => String(row[key as keyof typeof row] || '').length)) + 2 }));
   worksheet['!cols'] = cols;

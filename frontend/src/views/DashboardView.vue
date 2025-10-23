@@ -481,7 +481,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import { Chart } from 'vue-chartjs';
-import html2canvas from 'html2canvas';
+// html2canvas akan di-import secara dinamis saat fungsi capture dipanggil
 import {
   Chart as ChartJS,
   Title,
@@ -1029,23 +1029,30 @@ function getColorForStat(title: string) {
 }
 
 //Download gambar untuk Chart
-function downloadAsPNG(elementId: string, filename: string) {
+async function downloadAsPNG(elementId: string, filename: string) {
     const element = document.getElementById(elementId);
     if (!element) {
         console.error(`Elemen dengan ID '${elementId}' tidak ditemukan.`);
         return;
     }
 
-    html2canvas(element, {
-        useCORS: true, // Penting jika ada gambar atau elemen eksternal
-    }).then(canvas => {
-        const link = document.createElement('a');
-        link.download = filename;
-        link.href = canvas.toDataURL('image/png');
-        link.click();
-    }).catch(error => {
-        console.error("Gagal men-download gambar:", error);
-    });
+    try {
+        // Dynamic import html2canvas hanya saat dibutuhkan
+        const html2canvas = await import('html2canvas');
+
+        html2canvas.default(element, {
+            useCORS: true, // Penting jika ada gambar atau elemen eksternal
+        }).then(canvas => {
+            const link = document.createElement('a');
+            link.download = filename;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        }).catch(error => {
+            console.error("Gagal men-download gambar:", error);
+        });
+    } catch (error) {
+        console.error("Gagal memuat html2canvas:", error);
+    }
 }
 
 // onMounted tetap sama seperti sebelumnya

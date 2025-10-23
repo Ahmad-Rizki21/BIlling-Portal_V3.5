@@ -588,18 +588,36 @@ function fallbackBeep() {
 }
 
 async function refreshTokenAndReconnect() {
+  // Tambahkan limit untuk menghindari infinite refresh attempts
+  const maxRetries = 3;
+  const retryKey = 'ws_refresh_retries';
+  const currentRetries = parseInt(sessionStorage.getItem(retryKey) || '0');
+
+  if (currentRetries >= maxRetries) {
+    console.warn('[WebSocket] Max refresh retries reached, logging out...');
+    sessionStorage.removeItem(retryKey);
+    authStore.logout();
+    return;
+  }
+
+  sessionStorage.setItem(retryKey, (currentRetries + 1).toString());
+
   try {
     // console.log('[WebSocket] Attempting to refresh token...');
     const success = await authStore.refreshToken();
     if (success) {
+      // Reset retry counter on success
+      sessionStorage.removeItem(retryKey);
       // console.log('[WebSocket] Token refreshed, reconnecting...');
       connectWebSocket();
     } else {
       // console.log('[WebSocket] Token refresh failed, logging out...');
+      sessionStorage.removeItem(retryKey);
       authStore.logout();
     }
   } catch (error) {
     console.error('[WebSocket] Token refresh error:', error);
+    sessionStorage.removeItem(retryKey);
     authStore.logout();
   }
 }
@@ -640,11 +658,35 @@ function connectWebSocket() {
       }
     }, 30000);
 
+    // Optimasi: kurangi frequency dan tambahkan smart checking
+    let lastTokenCheck = 0;
+    const TOKEN_CHECK_INTERVAL = 120000; // 2 menit (sebelumnya 1 menit)
+    const TOKEN_CHECK_COOLDOWN = 30000; // 30 detik cooldown antar checks
+
     tokenCheckInterval = setInterval(async () => {
+      const now = Date.now();
+
+      // Jika terlalu sering cek, skip
+      if (now - lastTokenCheck < TOKEN_CHECK_COOLDOWN) {
+        return;
+      }
+
       if (socket && socket.readyState === WebSocket.OPEN) {
-        const isValid = await authStore.verifyToken();
-        if (!isValid) {
-          // console.log('[WebSocket] Token no longer valid, refreshing...');
+        try {
+          const isValid = await authStore.verifyToken();
+          lastTokenCheck = now;
+
+          if (!isValid) {
+            console.warn('[WebSocket] Token no longer valid, attempting refresh...');
+            if (tokenCheckInterval) {
+              clearInterval(tokenCheckInterval);
+              tokenCheckInterval = null;
+            }
+            await refreshTokenAndReconnect();
+          }
+        } catch (error) {
+          console.error('[WebSocket] Token check failed:', error);
+          // Jika token check gagal, anggap token invalid
           if (tokenCheckInterval) {
             clearInterval(tokenCheckInterval);
             tokenCheckInterval = null;
@@ -652,7 +694,7 @@ function connectWebSocket() {
           await refreshTokenAndReconnect();
         }
       }
-    }, 60000);
+    }, TOKEN_CHECK_INTERVAL);
   };
 
   socket.onmessage = (event) => {
@@ -781,9 +823,22 @@ function connectWebSocket() {
     if (pingInterval) clearInterval(pingInterval);
     if (tokenCheckInterval) clearInterval(tokenCheckInterval);
 
-    const shouldNotReconnect = [1000, 1001, 1005].includes(event.code) ||
+    const shouldNotReconnect = [1000, 1001, 1005, 1006, 1008].includes(event.code) ||
                                event.reason === "Connection replaced" ||
-                               event.reason === "Logout Pengguna";
+                               event.reason === "Logout Pengguna" ||
+                               event.reason?.includes("Invalid token") ||
+                               event.reason?.includes("Token decode failed");
+
+    // Special handling for 403 Forbidden (invalid token)
+    if (event.code === 1008 || event.reason?.includes("Invalid token") || event.reason?.includes("Token decode failed")) {
+      console.warn('[WebSocket] Token invalid, forcing logout...');
+      // Hapus token yang invalid
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('refresh_token');
+      authStore.logout();
+      router.push('/login');
+      return;
+    }
 
     if (authStore.isAuthenticated && !shouldNotReconnect) {
       if (event.code === 1008) {
