@@ -367,19 +367,11 @@
           :loading="loading"
           item-value="id"
           class="elevation-0"
-          :items-per-page="itemsPerPage"
-          :items-per-page-options="[
-            { title: '10', value: 10 },
-            { title: '15', value: 15 },
-            { title: '25', value: 25 },
-            { title: '50', value: 50 },
-            { title: '100', value: 100 }
-          ]"
-          :server-items-length="totalLanggananCount"
-          @update:page="onPageChange"
-          @update:items-per-page="onItemsPerPageChange"
+          :items-per-page="-1"
+          :server-items-length="-1"
           show-select
           return-object
+          hide-default-footer
         >
 
           <template v-slot:item.nomor="{ index }: { index: number }">
@@ -447,16 +439,51 @@
           </template>
         </v-data-table>
         
-        <!-- Footer with total count aligned with pagination controls -->
-        <v-card class="pa-2 mt-2">
-          <div class="d-flex align-center">
+        </div>
+
+      <!-- Custom Pagination Controls untuk Desktop -->
+      <div class="d-none d-md-block pa-2">
+        <v-card class="pa-3">
+          <div class="d-flex align-center justify-space-between">
+            <!-- Total Count -->
             <v-chip variant="outlined" color="primary" size="large">
               Total: {{ totalLanggananCount }} Langganan di server
             </v-chip>
-            <v-spacer></v-spacer>
+
+            <!-- Custom Pagination -->
+            <div class="d-flex align-center">
+              <v-select
+                v-model="itemsPerPage"
+                :items="[10, 15, 25, 50, 100]"
+                variant="outlined"
+                density="compact"
+                hide-details
+                style="width: 80px"
+                class="mr-3"
+                @update:model-value="onItemsPerPageChange"
+              ></v-select>
+
+              <span class="text-body-2 mr-3">
+                {{ (desktopPage - 1) * itemsPerPage + 1 }}-{{ Math.min(desktopPage * itemsPerPage, totalLanggananCount) }} of {{ totalLanggananCount }}
+              </span>
+
+              <v-btn
+                icon="mdi-chevron-left"
+                variant="text"
+                :disabled="desktopPage === 1"
+                @click="goToPreviousPage"
+                class="mr-1"
+              ></v-btn>
+
+              <v-btn
+                icon="mdi-chevron-right"
+                variant="text"
+                :disabled="desktopPage >= Math.ceil(totalLanggananCount / itemsPerPage)"
+                @click="goToNextPage"
+              ></v-btn>
+            </div>
           </div>
         </v-card>
-        
       </div>
     </v-card>
 
@@ -1231,16 +1258,30 @@ function loadMore() {
   }
 }
 
-// Pagination event handlers untuk desktop
-function onPageChange(page: number) {
-  desktopPage.value = page;
-  fetchLangganan(false, page);
-}
 
 function onItemsPerPageChange(itemsPerPageValue: number) {
   itemsPerPage.value = itemsPerPageValue;
   desktopPage.value = 1; // Reset ke halaman pertama saat items per page berubah
   fetchLangganan();
+}
+
+// Custom pagination functions
+function goToPreviousPage() {
+  if (desktopPage.value > 1) {
+    const newPage = desktopPage.value - 1;
+    desktopPage.value = newPage;
+    fetchLangganan(false, newPage);
+  }
+}
+
+async function goToNextPage() {
+  const maxPage = Math.ceil(totalLanggananCount.value / itemsPerPage.value);
+  if (desktopPage.value < maxPage) {
+    const newPage = desktopPage.value + 1;
+    desktopPage.value = newPage;
+    await nextTick();
+    fetchLangganan(false, newPage);
+  }
 }
 
 // Fungsi yang di-debounce untuk menerapkan filter

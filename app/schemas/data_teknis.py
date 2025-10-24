@@ -150,9 +150,9 @@ class DataTeknisBase(BaseModel):
         if len(v_str) > 100:
             raise ValueError("ID pelanggan terlalu panjang (maksimal 100 karakter)")
 
-        # Check for valid characters
-        if not re.match(r"^[a-zA-Z0-9\-_\.]+$", v_str):
-            raise ValueError("ID pelanggan hanya boleh mengandung huruf, angka, dash, underscore, dan titik")
+        # Check for valid characters (including spaces)
+        if not re.match(r"^[a-zA-Z0-9\-_\. ]+$", v_str):
+            raise ValueError("ID pelanggan hanya boleh mengandung huruf, angka, dash, underscore, titik, dan spasi")
 
         return v_str
 
@@ -499,9 +499,9 @@ class DataTeknisImport(BaseModel):
         if len(v_str) > 100:
             raise ValueError("ID pelanggan terlalu panjang (maksimal 100 karakter)")
 
-        # Check for valid characters
-        if not re.match(r"^[a-zA-Z0-9\-_\.]+$", v_str):
-            raise ValueError("ID pelanggan hanya boleh mengandung huruf, angka, dash, underscore, dan titik")
+        # Check for valid characters (including spaces)
+        if not re.match(r"^[a-zA-Z0-9\-_\. ]+$", v_str):
+            raise ValueError("ID pelanggan hanya boleh mengandung huruf, angka, dash, underscore, titik, dan spasi")
 
         return v_str
 

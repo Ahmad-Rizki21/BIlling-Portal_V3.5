@@ -250,10 +250,13 @@ async def read_all_data_teknis(
 async def get_available_olt(db: AsyncSession = Depends(get_db)):
     """
     Mengambil semua OLT/Mikrotik Server yang tersedia untuk filter dropdown.
+    Diubah untuk mengambil dari data_teknis.olt agar sesuai dengan data yang ada.
     """
     try:
-        # Ambil semua Mikrotik server yang aktif
-        query = select(MikrotikServerModel.name).where(MikrotikServerModel.is_active == True).order_by(MikrotikServerModel.name)
+        # Ambil semua OLT yang ada di data teknis (sesuai dengan data yang difilter)
+        query = select(DataTeknisModel.olt).where(
+            DataTeknisModel.olt.isnot(None)
+        ).distinct().order_by(DataTeknisModel.olt)
         result = await db.execute(query)
         olt_list = result.scalars().all()
 
@@ -270,7 +273,7 @@ async def get_available_olt(db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/available-profiles", response_model=List[str])
-async def get_available_profiles(db: AsyncSession = Depends(get_db)):
+async def get_all_available_profiles(db: AsyncSession = Depends(get_db)):
     """
     Mengambil semua Profile PPPoE yang tersedia untuk filter dropdown.
     """
@@ -316,6 +319,43 @@ async def get_available_vlans(db: AsyncSession = Depends(get_db)):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Gagal mengambil data VLAN: {str(e)}"
+        )
+
+
+@router.get("/debug-filter-data")
+async def debug_filter_data(db: AsyncSession = Depends(get_db)):
+    """
+    Endpoint untuk debugging data filter - menampilkan sample data OLT dan VLAN
+    """
+    try:
+        # Ambil sample data untuk debugging
+        query = select(
+            DataTeknisModel.olt,
+            DataTeknisModel.id_vlan,
+            func.count(DataTeknisModel.id).label('count')
+        ).where(
+            DataTeknisModel.olt.isnot(None)
+        ).group_by(
+            DataTeknisModel.olt,
+            DataTeknisModel.id_vlan
+        ).order_by(
+            DataTeknisModel.olt
+        ).limit(20)
+
+        result = await db.execute(query)
+        sample_data = result.all()
+
+        return {
+            "sample_olt_vlan_combinations": [
+                {"olt": row.olt, "vlan": row.id_vlan, "count": row.count}
+                for row in sample_data
+            ]
+        }
+    except Exception as e:
+        logger.error(f"Error debugging filter data: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Gagal mengambil data debug: {str(e)}"
         )
 
 

@@ -1038,7 +1038,7 @@ async def export_payment_links_excel(
     # FIX: Tambahkan .unique() untuk collection eager loading
     invoices = result.scalars().unique().all()
 
-    # Buat workbook dan worksheet
+    # Buat workbook dan worksheet pertama untuk Payment Links
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Payment Links Invoice"
@@ -1064,7 +1064,7 @@ async def export_payment_links_excel(
     for col_num, header in enumerate(headers, 1):
         cell = ws.cell(row=1, column=col_num, value=header)
         # Gunakan import langsung untuk styles
-        from openpyxl.styles import Font, PatternFill
+        from openpyxl.styles import Font, PatternFill, Alignment
 
         cell.font = Font(bold=True)
         cell.fill = PatternFill(start_color="CCCCCC", end_color="CCCCCC", fill_type="solid")
@@ -1108,6 +1108,166 @@ async def export_payment_links_excel(
                     pass
             adjusted_width = min(max_length + 2, 50)
             ws.column_dimensions[column_letter].width = adjusted_width
+
+    # Buat sheet kedua untuk Matrix Persentase Invoice
+    ws_matrix = wb.create_sheet("Matrix Persentase Invoice")
+
+    # Hitung statistik dari invoices yang sudah difilter
+    total_invoices = len(invoices)
+    if total_invoices > 0:
+        # Hitung berdasarkan status invoice
+        lunas_count = len([inv for inv in invoices if inv.status_invoice == 'Lunas'])
+        belum_dibayar_count = len([inv for inv in invoices if inv.status_invoice == 'Belum Dibayar'])
+        kadaluarsa_count = len([inv for inv in invoices if inv.status_invoice == 'Kadaluarsa'])
+
+        # Hitung persentase
+        lunas_percent = (lunas_count / total_invoices) * 100
+        belum_dibayar_percent = (belum_dibayar_count / total_invoices) * 100
+        kadaluarsa_percent = (kadaluarsa_count / total_invoices) * 100
+
+        # Format tanggal untuk header
+        start_date_str = start_date.strftime('%d/%m/%Y') if start_date else 'Awal'
+        end_date_str = end_date.strftime('%d/%m/%Y') if end_date else 'Sekarang'
+
+        # Styling untuk header matrix
+        header_font = Font(bold=True, size=14)
+        title_font = Font(bold=True, size=12)
+        data_font = Font(bold=False, size=11)
+        blue_fill = PatternFill(start_color="E6F3FF", end_color="E6F3FF", fill_type="solid")
+        green_fill = PatternFill(start_color="E8F5E8", end_color="E8F5E8", fill_type="solid")
+        yellow_fill = PatternFill(start_color="FFF9E6", end_color="FFF9E6", fill_type="solid")
+        red_fill = PatternFill(start_color="FFE6E6", end_color="FFE6E6", fill_type="solid")
+        gray_fill = PatternFill(start_color="F5F5F5", end_color="F5F5F5", fill_type="solid")
+
+        # Header Matrix
+        ws_matrix.merge_cells('A1:D1')
+        ws_matrix.cell(row=1, column=1, value="MATRIX LAPORAN PERSENTASE INVOICE")
+        ws_matrix.cell(row=1, column=1).font = header_font
+        ws_matrix.cell(row=1, column=1).alignment = Alignment(horizontal='center')
+
+        # Informasi Periode dan Total
+        ws_matrix.cell(row=2, column=1, value=f"Periode: {start_date_str} - {end_date_str}")
+        ws_matrix.cell(row=2, column=1).font = title_font
+        ws_matrix.merge_cells('A2:D2')
+
+        ws_matrix.cell(row=3, column=1, value=f"Total Invoice (Filter Aktif): {total_invoices}")
+        ws_matrix.cell(row=3, column=1).font = title_font
+        ws_matrix.merge_cells('A3:D3')
+
+        # Spasi
+        ws_matrix.cell(row=4, column=1, value="")
+
+        # Header Tabel
+        ws_matrix.cell(row=5, column=1, value="Status Invoice")
+        ws_matrix.cell(row=5, column=2, value="Jumlah")
+        ws_matrix.cell(row=5, column=3, value="Persentase")
+        ws_matrix.cell(row=5, column=4, value="Visual")
+
+        # Styling header tabel
+        for col in range(1, 5):
+            cell = ws_matrix.cell(row=5, column=col)
+            cell.font = title_font
+            cell.fill = gray_fill
+            cell.alignment = Alignment(horizontal='center')
+
+        # Data Total Invoice
+        ws_matrix.cell(row=6, column=1, value="Total Invoice")
+        ws_matrix.cell(row=6, column=2, value=total_invoices)
+        ws_matrix.cell(row=6, column=3, value="100.0%")
+        ws_matrix.cell(row=6, column=4, value="████████████████████")
+        for col in range(1, 5):
+            cell = ws_matrix.cell(row=6, column=col)
+            cell.font = data_font
+            cell.fill = blue_fill
+
+        # Data Invoice Lunas
+        ws_matrix.cell(row=7, column=1, value="Invoice Lunas")
+        ws_matrix.cell(row=7, column=2, value=lunas_count)
+        ws_matrix.cell(row=7, column=3, value=f"{lunas_percent:.1f}%")
+        # Visual bar chart dengan text blocks
+        bar_length = int(lunas_percent / 5)  # 1 block = 5%
+        ws_matrix.cell(row=7, column=4, value="█" * bar_length)
+        for col in range(1, 4):
+            cell = ws_matrix.cell(row=7, column=col)
+            cell.font = data_font
+            cell.fill = green_fill
+
+        # Data Invoice Belum Dibayar
+        ws_matrix.cell(row=8, column=1, value="Invoice Belum Dibayar")
+        ws_matrix.cell(row=8, column=2, value=belum_dibayar_count)
+        ws_matrix.cell(row=8, column=3, value=f"{belum_dibayar_percent:.1f}%")
+        bar_length = int(belum_dibayar_percent / 5)
+        ws_matrix.cell(row=8, column=4, value="█" * bar_length)
+        for col in range(1, 4):
+            cell = ws_matrix.cell(row=8, column=col)
+            cell.font = data_font
+            cell.fill = yellow_fill
+
+        # Data Invoice Kadaluarsa
+        ws_matrix.cell(row=9, column=1, value="Invoice Kadaluarsa")
+        ws_matrix.cell(row=9, column=2, value=kadaluarsa_count)
+        ws_matrix.cell(row=9, column=3, value=f"{kadaluarsa_percent:.1f}%")
+        bar_length = int(kadaluarsa_percent / 5)
+        ws_matrix.cell(row=9, column=4, value="█" * bar_length)
+        for col in range(1, 4):
+            cell = ws_matrix.cell(row=9, column=col)
+            cell.font = data_font
+            cell.fill = red_fill
+
+        # Spasi
+        ws_matrix.cell(row=10, column=1, value="")
+
+        # Insight/Kesimpulan
+        ws_matrix.cell(row=11, column=1, value="INSIGHT & KESIMPULAN")
+        ws_matrix.cell(row=11, column=1).font = title_font
+        ws_matrix.merge_cells('A11:D11')
+
+        # Analisis pembayaran
+        if lunas_percent >= 70:
+            payment_insight = f"Tingkat pembayaran sangat baik ({lunas_percent:.1f}% lunas)"
+        elif lunas_percent >= 50:
+            payment_insight = f"Tingkat pembayaran cukup baik ({lunas_percent:.1f}% lunas)"
+        else:
+            payment_insight = f"Tingkat pembayaran perlu ditingkatkan ({lunas_percent:.1f}% lunas)"
+
+        ws_matrix.cell(row=12, column=1, value=payment_insight)
+        ws_matrix.merge_cells('A12:D12')
+
+        # Rekomendasi tindakan
+        if kadaluarsa_percent > 20:
+            rekomendasi = "Perlu follow-up intensif untuk invoice kadaluarsa"
+        elif belum_dibayar_percent > 50:
+            rekomendasi = "Perlu reminder rutin untuk pembayaran"
+        else:
+            rekomendasi = "Status pembayaran dalam kondisi normal"
+
+        ws_matrix.cell(row=13, column=1, value=rekomendasi)
+        ws_matrix.merge_cells('A13:D13')
+
+        # Auto-adjust column width untuk sheet matrix
+        for column in ws_matrix.columns:
+            max_length = 0
+            first_cell = column[0] if column else None
+            if first_cell and hasattr(first_cell, "column") and first_cell.column is not None:
+                column_letter = get_column_letter(first_cell.column)
+                for cell in column:
+                    try:
+                        if len(str(cell.value)) > max_length:
+                            max_length = len(str(cell.value))
+                    except:
+                        pass
+                adjusted_width = min(max_length + 2, 50)
+                ws_matrix.column_dimensions[column_letter].width = adjusted_width
+
+    else:
+        # Jika tidak ada data, gunakan styling dasar
+        header_font = Font(bold=True, size=14)
+        ws_matrix.cell(row=1, column=1, value="MATRIX LAPORAN PERSENTASE INVOICE")
+        ws_matrix.cell(row=1, column=1).font = header_font
+        ws_matrix.merge_cells('A1:D1')
+
+        ws_matrix.cell(row=2, column=1, value="Tidak ada data invoice yang memenuhi filter")
+        ws_matrix.merge_cells('A2:D2')
 
     # Simpan workbook ke BytesIO
     buffer = BytesIO()

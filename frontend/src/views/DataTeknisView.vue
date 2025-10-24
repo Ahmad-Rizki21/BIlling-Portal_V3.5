@@ -69,7 +69,7 @@
         <v-select
           v-model="selectedOlt"
           :items="oltOptions"
-          label="Filter Mikrotik Server"
+          label="Filter OLT"
           variant="outlined"
           density="comfortable"
           hide-details
@@ -275,7 +275,7 @@
       <!-- PERUBAHAN DIMULAI DI SINI -->
 
       <!-- Tampilan Tabel untuk Desktop (Medium ke atas) -->
-      <div class="responsive-table-container d-none d-md-block">
+      <div class="d-none d-md-block">
         <v-data-table
           v-model="selectedDataTeknis"
           v-model:expanded="expanded"
@@ -284,21 +284,13 @@
           :loading="loading"
           item-value="id"
           class="elevation-0 modern-table"
-          :items-per-page="itemsPerPage"
-          :items-per-page-options="[
-            { title: '5', value: 5 },
-            { title: '10', value: 10 },
-            { title: '15', value: 15 },
-            { title: '25', value: 25 },
-            { title: '50', value: 50 }
-          ]"
-          :server-items-length="totalDataTeknisCount"
-          @update:page="onPageChange"
-          @update:items-per-page="onItemsPerPageChange"
+          :items-per-page="-1"
+          :server-items-length="-1"
           :loading-text="'Memuat data...'"
           show-select
           return-object
           show-expand
+          hide-default-footer
         >
           <template v-slot:loading>
             <div class="text-center pa-8">
@@ -306,6 +298,11 @@
               <div class="mt-4 text-h6">Memuat data...</div>
             </div>
           </template>
+
+          <template v-slot:item.nomor="{ index }">
+            {{ index + 1 }}
+          </template>
+
           <template v-slot:item.pelanggan_id="{ item }">
             <div class="d-flex align-center py-2" style="min-width: 250px;">
               <v-avatar :color="getAvatarColor(item.pelanggan_id)" size="40" class="me-3" :style="{ boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)' }">
@@ -451,14 +448,49 @@
             </div>
           </template>
         </v-data-table>
-        
-        <!-- Footer with total count aligned with pagination controls -->
-        <v-card class="pa-2 mt-2">
-          <div class="d-flex align-center">
+      </div>
+
+      <!-- Custom Pagination Controls untuk Desktop -->
+      <div class="d-none d-md-block pa-2">
+        <v-card class="pa-3">
+          <div class="d-flex align-center justify-space-between">
+            <!-- Total Count -->
             <v-chip variant="outlined" color="primary" size="large">
               Total: {{ totalDataTeknisCount }} Data Teknis di server
             </v-chip>
-            <v-spacer></v-spacer>
+
+            <!-- Custom Pagination -->
+            <div class="d-flex align-center">
+              <v-select
+                v-model="itemsPerPage"
+                :items="[5, 10, 15, 25, 50]"
+                variant="outlined"
+                density="compact"
+                hide-details
+                style="width: 80px"
+                class="mr-3"
+                @update:model-value="onItemsPerPageChange"
+              ></v-select>
+
+              <span class="text-body-2 mr-3">
+                {{ (desktopPage - 1) * itemsPerPage + 1 }}-{{ Math.min(desktopPage * itemsPerPage, totalDataTeknisCount) }} of {{ totalDataTeknisCount }}
+              </span>
+
+              <v-btn
+                icon="mdi-chevron-left"
+                variant="text"
+                :disabled="desktopPage === 1"
+                @click="goToPreviousPage"
+                class="mr-1"
+              ></v-btn>
+
+              <v-btn
+                icon="mdi-chevron-right"
+                variant="text"
+                :disabled="desktopPage >= Math.ceil(totalDataTeknisCount / itemsPerPage)"
+                @click="goToNextPage"
+              ></v-btn>
+            </div>
           </div>
         </v-card>
       </div>
@@ -1051,7 +1083,7 @@
 
 <script setup lang="ts">
 // --- SCRIPT ANDA TETAP SAMA, TIDAK ADA PERUBAHAN ---
-import { ref, onMounted, computed, watch } from 'vue';
+import { ref, onMounted, computed, watch, nextTick } from 'vue';
 import apiClient from '@/services/api';
 import { debounce } from 'lodash-es';
 import { useAuthStore } from '@/stores/auth';
@@ -1142,6 +1174,8 @@ const onuPowerRangeOptions = ref<any[]>([]);
 // --- State for Total Count ---
 const totalDataTeknisCount = ref(0);
 
+
+
 // --- State for Statistics ---
 const statisticsData = ref({
   totalPelanggan: 0,
@@ -1231,6 +1265,7 @@ const paginatedDataTeknis = computed(() => {
 
 // --- Table Headers ---
 const headers = [
+  { title: 'No', key: 'nomor', sortable: false, align: 'center' as const, width: '60px' },
   { title: 'Nama Pelanggan', key: 'pelanggan_id' },
   { title: 'IP Pelanggan', key: 'ip_pelanggan' },
   { title: 'OLT', key: 'olt' },
@@ -1314,13 +1349,15 @@ onMounted(() => {
   // fetchStatisticsData() akan dipanggil setelah fetchDataTeknis() selesai
 });
 
-async function fetchDataTeknis(isLoadMore = false) {
+async function fetchDataTeknis(isLoadMore = false, preservePage = false) {
   if (isLoadMore) {
     loadingMore.value = true;
   } else {
     loading.value = true;
-    mobilePage.value = 1; // Reset halaman saat filter baru
-    desktopPage.value = 1; // Reset halaman desktop juga
+    if (!preservePage) {
+      mobilePage.value = 1; // Reset halaman saat filter baru
+      desktopPage.value = 1; // Reset halaman desktop juga
+    }
     hasMoreData.value = true; // Reset status data
   }
 
@@ -1349,9 +1386,10 @@ async function fetchDataTeknis(isLoadMore = false) {
     // Gunakan page yang sesuai tergantung apakah sedang load more (mobile) atau tidak (desktop)
     const currentPage = isLoadMore ? mobilePage.value : desktopPage.value;
     const skip = (currentPage - 1) * itemsPerPage.value;
+
     params.append('skip', String(skip));
     params.append('limit', String(itemsPerPage.value));
-    
+
     const response = await apiClient.get(`/data_teknis/?${params.toString()}`);
     const { data: newData, total_count: newTotalCount } = response.data;
 
@@ -1359,10 +1397,12 @@ async function fetchDataTeknis(isLoadMore = false) {
       dataTeknisList.value.push(...newData);
     } else {
       dataTeknisList.value = newData;
-      totalDataTeknisCount.value = newTotalCount;
       // Hitung ulang statistik setelah data baru di-load
       calculateStatisticsFromExistingData();
     }
+
+    // Selalu update total count untuk pagination yang benar
+    totalDataTeknisCount.value = newTotalCount;
 
     // Cek apakah masih ada data untuk dimuat
     if (newData.length < itemsPerPage.value) {
@@ -1381,9 +1421,20 @@ function loadMore() {
 }
 
 // Pagination event handlers untuk desktop
-function onPageChange(page: number) {
-  desktopPage.value = page;
-  fetchDataTeknis();
+function goToPreviousPage() {
+  if (desktopPage.value > 1) {
+    desktopPage.value = desktopPage.value - 1;
+    fetchDataTeknis(false, true); // preserve current page
+  }
+}
+
+async function goToNextPage() {
+  const maxPage = Math.ceil(totalDataTeknisCount.value / itemsPerPage.value);
+  if (desktopPage.value < maxPage) {
+    desktopPage.value = desktopPage.value + 1;
+    await nextTick();
+    fetchDataTeknis(false, true); // preserve current page
+  }
 }
 
 function onItemsPerPageChange(newItemsPerPage: number) {

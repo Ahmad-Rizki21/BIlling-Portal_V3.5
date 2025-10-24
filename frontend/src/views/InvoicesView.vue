@@ -841,8 +841,8 @@ const getPendingCount = () => {
 };
 const getOverdueCount = () => {
   if (!invoices.value) return 0;
-  // Hitung berdasarkan status link pembayaran yang expired
-  return invoices.value.filter(inv => inv.payment_link_status === 'Expired').length;
+  // Hitung berdasarkan status invoice yang kadaluarsa
+  return invoices.value.filter(inv => inv.status_invoice === 'Kadaluarsa').length;
 };
 
 // --- Helper Functions --- (Menjadi lebih sederhana)

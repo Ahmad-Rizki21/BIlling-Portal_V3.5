@@ -282,22 +282,14 @@
           :loading="loading"
           item-value="id"
           class="elegant-table"
-          :items-per-page="itemsPerPage"
-          :items-per-page-options="[
-            { title: '5', value: 5 },
-            { title: '10', value: 10 },
-            { title: '15', value: 15 },
-            { title: '25', value: 25 },
-            { title: '50', value: 50 }
-          ]"
-          :server-items-length="totalPelangganCount"
-          @update:page="onPageChange"
-          @update:items-per-page="onItemsPerPageChange"
+          :items-per-page="-1"
+          :server-items-length="-1"
           hover
           show-select
           return-object
+          hide-default-footer
         >
-          
+
           <template v-slot:loading>
             <div class="d-flex justify-center align-center py-12">
               <div class="text-center">
@@ -306,7 +298,11 @@
               </div>
             </div>
           </template>
-          
+
+          <template v-slot:item.nomor="{ index }">
+            {{ index + 1 }}
+          </template>
+
           <template v-slot:item.nama="{ item }">
             <div class="customer-info">
               <div class="customer-name">{{ item.nama }}</div>
@@ -370,12 +366,49 @@
             </div>
           </template>
         </v-data-table>
-        <v-card class="pa-2 mt-2">
-          <div class="d-flex align-center">
+      </div>
+
+      <!-- Custom Pagination Controls untuk Desktop -->
+      <div class="d-none d-md-block pa-2">
+        <v-card class="pa-3">
+          <div class="d-flex align-center justify-space-between">
+            <!-- Total Count -->
             <v-chip variant="outlined" color="primary" size="large">
               Total: {{ totalPelangganCount }} pelanggan di server
             </v-chip>
-            <v-spacer></v-spacer>
+
+            <!-- Custom Pagination -->
+            <div class="d-flex align-center">
+              <v-select
+                v-model="itemsPerPage"
+                :items="[5, 10, 15, 25, 50]"
+                variant="outlined"
+                density="compact"
+                hide-details
+                style="width: 80px"
+                class="mr-3"
+                @update:model-value="onItemsPerPageChange"
+              ></v-select>
+
+              <span class="text-body-2 mr-3">
+                {{ (desktopPage - 1) * itemsPerPage + 1 }}-{{ Math.min(desktopPage * itemsPerPage, totalPelangganCount) }} of {{ totalPelangganCount }}
+              </span>
+
+              <v-btn
+                icon="mdi-chevron-left"
+                variant="text"
+                :disabled="desktopPage === 1"
+                @click="goToPreviousPage"
+                class="mr-1"
+              ></v-btn>
+
+              <v-btn
+                icon="mdi-chevron-right"
+                variant="text"
+                :disabled="desktopPage >= Math.ceil(totalPelangganCount / itemsPerPage)"
+                @click="goToNextPage"
+              ></v-btn>
+            </div>
           </div>
         </v-card>
       </div>
@@ -902,7 +935,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed, watch } from 'vue';
+import { ref, onMounted, computed, watch, nextTick } from 'vue';
 import apiClient from '@/services/api';
 import type { Pelanggan as BasePelanggan } from '@/interfaces/pelanggan';
 import { debounce } from 'lodash-es';
@@ -999,6 +1032,7 @@ const rules = {
 
 // --- TABLE HEADERS ---
 const headers = [
+  { title: 'No', key: 'nomor', sortable: false, align: 'center', width: '60px' },
   { title: 'Pelanggan', key: 'nama', sortable: true, minWidth: '160px' },
   { title: 'No. KTP', key: 'no_ktp', sortable: true },
   { title: 'Email', key: 'email', sortable: true },
@@ -1061,14 +1095,16 @@ async function confirmBulkDelete() {
   }
 }
 
-async function fetchPelanggan(isLoadMore = false) {
+async function fetchPelanggan(isLoadMore = false, preservePage = false) {
   if (isLoadMore) {
     loadingMore.value = true;
   } else {
     loading.value = true;
     // Reset pagination untuk kedua mode (mobile dan desktop) saat bukan load more
-    mobilePage.value = 1;
-    desktopPage.value = 1;
+    if (!preservePage) {
+      mobilePage.value = 1;
+      desktopPage.value = 1;
+    }
     hasMoreData.value = true;
   }
 
@@ -1134,16 +1170,28 @@ function loadMore() {
   fetchPelanggan(true);
 }
 
-// Pagination event handlers untuk desktop
-function onPageChange(page: number) {
-  desktopPage.value = page;
-  fetchPelanggan();
-}
 
 function onItemsPerPageChange(newItemsPerPage: number) {
   itemsPerPage.value = newItemsPerPage;
   desktopPage.value = 1; // Reset ke halaman pertama saat mengubah items per page
   fetchPelanggan();
+}
+
+// Custom pagination functions
+function goToPreviousPage() {
+  if (desktopPage.value > 1) {
+    desktopPage.value = desktopPage.value - 1;
+    fetchPelanggan(false, true); // preserve current page
+  }
+}
+
+async function goToNextPage() {
+  const maxPage = Math.ceil(totalPelangganCount.value / itemsPerPage.value);
+  if (desktopPage.value < maxPage) {
+    desktopPage.value = desktopPage.value + 1;
+    await nextTick();
+    fetchPelanggan(false, true); // preserve current page
+  }
 }
 
 const applyFilters = debounce(() => {
