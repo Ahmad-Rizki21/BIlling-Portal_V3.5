@@ -19,7 +19,7 @@
 # ====================================================================
 
 from datetime import datetime, timedelta, timezone
-from typing import List, Dict, Optional, Tuple, Any
+from typing import List, Dict, Optional, Tuple, Any, cast
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import and_, desc, func, update
@@ -56,7 +56,9 @@ def safe_float(value, default=0.0):
         return default
 
 def _parse_speed_from_profile(profile_name: str) -> int:
-    """Parse speed from PPPoE profile name"""
+    """
+    Parse speed from PPPoE profile name
+    """
     if not profile_name:
         return 10  # Default fallback
 
@@ -375,7 +377,8 @@ class TrafficMonitoringService:
                         logger.warning(f"No real-time rate data for {username}, using PPPoE profile: {data_teknis.profile_pppoe}")
 
                         # Ambil speed dari profile PPPoE yang sebenarnya
-                        package_speed = _parse_speed_from_profile(data_teknis.profile_pppoe)
+                        profile_name: str = cast(str, data_teknis.profile_pppoe or "Unknown")
+                        package_speed = _parse_speed_from_profile(profile_name)
                         logger.info(f"Parsed speed from profile '{data_teknis.profile_pppoe}': {package_speed} Mbps")
 
                         # Estimasi usage realistis (jarang full speed)

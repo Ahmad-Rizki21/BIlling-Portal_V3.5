@@ -40912,3 +40912,4 @@
 2025-10-27 09:08:51 | INFO     | 127.0.0.1:50698 - "GET /dashboard/sidebar-badges HTTP/1.1" 200
 2025-10-27 09:08:51 | INFO     | 127.0.0.1:50662 - "GET /roles/ HTTP/1.1" 200
 2025-10-27 09:08:51 | INFO     | 127.0.0.1:50710 - "GET /notifications/unread HTTP/1.1" 200
+2025-10-27 09:10:52 | INFO     | 127.0.0.1:53338 - "GET /users/me HTTP/1.1" 200
