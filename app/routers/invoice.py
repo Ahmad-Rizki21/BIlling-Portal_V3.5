@@ -1041,7 +1041,8 @@ async def export_payment_links_excel(
     # Buat workbook dan worksheet pertama untuk Payment Links
     wb = openpyxl.Workbook()
     ws = wb.active
-    ws.title = "Payment Links Invoice"
+    if ws is not None:
+        ws.title = "Payment Links Invoice"
 
     # Definisikan header
     headers = [
@@ -1060,86 +1061,91 @@ async def export_payment_links_excel(
         "Brand",
     ]
 
-    # Tambahkan header ke worksheet
-    for col_num, header in enumerate(headers, 1):
-        cell = ws.cell(row=1, column=col_num, value=header)
-        # Gunakan import langsung untuk styles
-        from openpyxl.styles import Font, PatternFill, Alignment
+    # Tambahkan header ke worksheet (dengan null check)
+    if ws is not None:
+        for col_num, header in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=col_num, value=header)
+            # Gunakan import langsung untuk styles
+            from openpyxl.styles import Font, PatternFill, Alignment
 
-        cell.font = Font(bold=True)
-        cell.fill = PatternFill(start_color="CCCCCC", end_color="CCCCCC", fill_type="solid")
+            if cell is not None:
+                cell.font = Font(bold=True)
+                cell.fill = PatternFill(start_color="CCCCCC", end_color="CCCCCC", fill_type="solid")
 
-    # Isi data
-    for row_num, invoice in enumerate(invoices, 2):
-        ws.cell(row=row_num, column=1, value=invoice.id)
-        ws.cell(row=row_num, column=2, value=invoice.invoice_number)
-        ws.cell(row=row_num, column=3, value=invoice.pelanggan.nama if invoice.pelanggan else "")
-        ws.cell(row=row_num, column=4, value=invoice.id_pelanggan)
-        ws.cell(row=row_num, column=5, value=invoice.pelanggan.alamat if invoice.pelanggan else "")
-        ws.cell(row=row_num, column=6, value=float(invoice.total_harga) if invoice.total_harga else 0)
-        ws.cell(row=row_num, column=7, value=invoice.status_invoice)
+    # Isi data (dengan null check)
+    if ws is not None:
+        for row_num, invoice in enumerate(invoices, 2):
+            ws.cell(row=row_num, column=1, value=invoice.id)
+            ws.cell(row=row_num, column=2, value=invoice.invoice_number)
+            ws.cell(row=row_num, column=3, value=invoice.pelanggan.nama if invoice.pelanggan else "")
+            ws.cell(row=row_num, column=4, value=invoice.id_pelanggan)
+            ws.cell(row=row_num, column=5, value=invoice.pelanggan.alamat if invoice.pelanggan else "")
+            ws.cell(row=row_num, column=6, value=float(invoice.total_harga) if invoice.total_harga else 0)
+            ws.cell(row=row_num, column=7, value=invoice.status_invoice)
 
-        # Handle SQLAlchemy Date untuk Excel export
-        invoice_date = invoice.tgl_invoice
-        due_date = invoice.tgl_jatuh_tempo
+            # Handle SQLAlchemy Date untuk Excel export
+            invoice_date = invoice.tgl_invoice
+            due_date = invoice.tgl_jatuh_tempo
 
-        ws.cell(row=row_num, column=8, value=safe_format_date(invoice_date, "%Y-%m-%d"))
-        ws.cell(row=row_num, column=9, value=safe_format_date(due_date, "%Y-%m-%d"))
+            ws.cell(row=row_num, column=8, value=safe_format_date(invoice_date, "%Y-%m-%d"))
+            ws.cell(row=row_num, column=9, value=safe_format_date(due_date, "%Y-%m-%d"))
 
-        ws.cell(row=row_num, column=10, value=invoice.payment_link)
-        ws.cell(row=row_num, column=11, value=invoice.email or "")
-        ws.cell(row=row_num, column=12, value=invoice.no_telp or "")
-        ws.cell(row=row_num, column=13, value=invoice.brand or "")
+            ws.cell(row=row_num, column=10, value=invoice.payment_link)
+            ws.cell(row=row_num, column=11, value=invoice.email or "")
+            ws.cell(row=row_num, column=12, value=invoice.no_telp or "")
+            ws.cell(row=row_num, column=13, value=invoice.brand or "")
 
-    # Auto-adjust column width
-    from openpyxl.utils import get_column_letter
+        # Auto-adjust column width (dengan null check)
+        from openpyxl.utils import get_column_letter
 
-    for column in ws.columns:
-        max_length = 0
-        # Handle column[0].column yang mungkin None
-        first_cell = column[0] if column else None
-        if first_cell and hasattr(first_cell, "column") and first_cell.column is not None:
-            column_letter = get_column_letter(first_cell.column)
-            for cell in column:
-                try:
-                    if len(str(cell.value)) > max_length:
-                        max_length = len(str(cell.value))
-                except:
-                    pass
-            adjusted_width = min(max_length + 2, 50)
-            ws.column_dimensions[column_letter].width = adjusted_width
+        if ws is not None:
+            for column in ws.columns:
+                max_length = 0
+                # Handle column[0].column yang mungkin None
+                first_cell = column[0] if column else None
+                if first_cell and hasattr(first_cell, "column") and first_cell.column is not None:
+                    column_letter = get_column_letter(first_cell.column)
+                    for cell in column:
+                        try:
+                            if len(str(cell.value)) > max_length:
+                                max_length = len(str(cell.value))
+                        except:
+                            pass
+                    adjusted_width = min(max_length + 2, 50)
+                    if ws is not None:
+                        ws.column_dimensions[column_letter].width = adjusted_width
 
     # Buat sheet kedua untuk Matrix Persentase Invoice
     ws_matrix = wb.create_sheet("Matrix Persentase Invoice")
+    if ws_matrix is not None:
+        # Hitung statistik dari invoices yang sudah difilter
+        total_invoices = len(invoices)
+        if total_invoices > 0:
+            # Hitung berdasarkan status invoice
+            lunas_count = len([inv for inv in invoices if inv.status_invoice == 'Lunas'])
+            belum_dibayar_count = len([inv for inv in invoices if inv.status_invoice == 'Belum Dibayar'])
+            kadaluarsa_count = len([inv for inv in invoices if inv.status_invoice == 'Kadaluarsa'])
 
-    # Hitung statistik dari invoices yang sudah difilter
-    total_invoices = len(invoices)
-    if total_invoices > 0:
-        # Hitung berdasarkan status invoice
-        lunas_count = len([inv for inv in invoices if inv.status_invoice == 'Lunas'])
-        belum_dibayar_count = len([inv for inv in invoices if inv.status_invoice == 'Belum Dibayar'])
-        kadaluarsa_count = len([inv for inv in invoices if inv.status_invoice == 'Kadaluarsa'])
+            # Hitung persentase
+            lunas_percent = (lunas_count / total_invoices) * 100
+            belum_dibayar_percent = (belum_dibayar_count / total_invoices) * 100
+            kadaluarsa_percent = (kadaluarsa_count / total_invoices) * 100
 
-        # Hitung persentase
-        lunas_percent = (lunas_count / total_invoices) * 100
-        belum_dibayar_percent = (belum_dibayar_count / total_invoices) * 100
-        kadaluarsa_percent = (kadaluarsa_count / total_invoices) * 100
+            # Format tanggal untuk header
+            start_date_str = start_date.strftime('%d/%m/%Y') if start_date else 'Awal'
+            end_date_str = end_date.strftime('%d/%m/%Y') if end_date else 'Sekarang'
 
-        # Format tanggal untuk header
-        start_date_str = start_date.strftime('%d/%m/%Y') if start_date else 'Awal'
-        end_date_str = end_date.strftime('%d/%m/%Y') if end_date else 'Sekarang'
+            # Styling untuk header matrix
+            header_font = Font(bold=True, size=14)
+            title_font = Font(bold=True, size=12)
+            data_font = Font(bold=False, size=11)
+            blue_fill = PatternFill(start_color="E6F3FF", end_color="E6F3FF", fill_type="solid")
+            green_fill = PatternFill(start_color="E8F5E8", end_color="E8F5E8", fill_type="solid")
+            yellow_fill = PatternFill(start_color="FFF9E6", end_color="FFF9E6", fill_type="solid")
+            red_fill = PatternFill(start_color="FFE6E6", end_color="FFE6E6", fill_type="solid")
+            gray_fill = PatternFill(start_color="F5F5F5", end_color="F5F5F5", fill_type="solid")
 
-        # Styling untuk header matrix
-        header_font = Font(bold=True, size=14)
-        title_font = Font(bold=True, size=12)
-        data_font = Font(bold=False, size=11)
-        blue_fill = PatternFill(start_color="E6F3FF", end_color="E6F3FF", fill_type="solid")
-        green_fill = PatternFill(start_color="E8F5E8", end_color="E8F5E8", fill_type="solid")
-        yellow_fill = PatternFill(start_color="FFF9E6", end_color="FFF9E6", fill_type="solid")
-        red_fill = PatternFill(start_color="FFE6E6", end_color="FFE6E6", fill_type="solid")
-        gray_fill = PatternFill(start_color="F5F5F5", end_color="F5F5F5", fill_type="solid")
-
-        # Header Matrix
+            # Header Matrix
         ws_matrix.merge_cells('A1:D1')
         ws_matrix.cell(row=1, column=1, value="MATRIX LAPORAN PERSENTASE INVOICE")
         ws_matrix.cell(row=1, column=1).font = header_font

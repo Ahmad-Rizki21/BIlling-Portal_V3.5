@@ -5,6 +5,16 @@ import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import 'mapbox-gl/dist/mapbox-gl.css';
 
+// Optimize font loading for better LCP
+const fontLink = document.createElement('link');
+fontLink.rel = 'stylesheet';
+fontLink.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap';
+fontLink.media = 'print';
+fontLink.onload = () => {
+    fontLink.media = 'all';
+};
+document.head.appendChild(fontLink);
+
 // 1. Impor semua yang dibutuhkan
 import App from './App.vue'
 import router from './router'
