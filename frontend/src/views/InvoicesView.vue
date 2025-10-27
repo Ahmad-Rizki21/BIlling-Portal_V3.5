@@ -77,7 +77,9 @@
               <v-icon color="primary">mdi-receipt-text</v-icon>
             </div>
             <div>
-              <div class="text-h6 font-weight-bold">{{ invoices.length }}</div>
+              <div class="text-h6 font-weight-bold">
+                {{ totalCount > invoices.length ? `${invoices.length}/${totalCount}` : invoices.length }}
+              </div>
               <div class="text-caption text-medium-emphasis">Total Invoice</div>
             </div>
           </div>
@@ -142,7 +144,20 @@
           density="comfortable"
           class="flex-grow-0 ms-md-4"
         ></v-switch>
-        <v-spacer></v-spacer> <v-btn
+        <v-select
+          v-model="selectedLimit"
+          :items="limitOptions"
+          item-title="title"
+          item-value="value"
+          label="Tampilkan"
+          variant="outlined"
+          density="comfortable"
+          hide-details
+          class="flex-grow-0"
+          style="min-width: 120px;"
+        ></v-select>
+
+        <v-btn
             variant="text"
             @click="resetFilters"
             class="text-none"
@@ -711,6 +726,14 @@ const startDate = ref<string | null>(null);
 const endDate = ref<string | null>(null);
 const statusOptions = ref(['Lunas', 'Belum Dibayar', 'Kadaluarsa']);
 const showPaidInvoices = ref(false);
+const selectedLimit = ref(100);
+const limitOptions = ref([
+  { title: '50 item', value: 50 },
+  { title: '100 item', value: 100 },
+  { title: '200 item', value: 200 },
+  { title: 'Semua', value: 1000 }
+]);
+const totalCount = ref(0);
 
 // const newInvoice = ref({
 //   pelanggan_id: null,
@@ -951,18 +974,42 @@ async function fetchInvoices() {
       if (!selectedStatus.value) {  // Jika tidak ada filter status spesifik
         params.append('status_invoice', 'Belum Dibayar');
       }
-      // Tambahkan limit untuk mencegah load terlalu banyak data
-      params.append('limit', '100');
+      // Gunakan limit yang dipilih oleh user
+      params.append('limit', selectedLimit.value.toString());
     }
 
     const response = await apiClient.get<Invoice[]>(`/invoices/?${params.toString()}`);
     invoices.value = response.data.sort((a, b) => b.id - a.id);
+
+    // Ambil total count dari header response atau dari data
+    if (response.headers['x-total-count']) {
+      totalCount.value = parseInt(response.headers['x-total-count']);
+    } else {
+      // Fallback: fetch total count jika tidak ada header
+      await fetchTotalCount();
+    }
 
       } catch (error) {
     console.error('Error fetching invoices:', error);
     showSnackbar('Gagal memuat data invoice. Silakan coba lagi.', 'error');
   } finally {
     loading.value = false;
+  }
+}
+
+// Fungsi untuk mendapatkan total count invoice
+async function fetchTotalCount() {
+  try {
+    const params = new URLSearchParams();
+    if (searchQuery.value) params.append('search', searchQuery.value);
+    if (selectedStatus.value) params.append('status_invoice', selectedStatus.value);
+    if (startDate.value) params.append('start_date', startDate.value);
+    if (endDate.value) params.append('end_date', endDate.value);
+
+    const response = await apiClient.get(`/invoices/count?${params.toString()}`);
+    totalCount.value = response.data || 0;
+  } catch (error) {
+    console.error('Error fetching total count:', error);
   }
 }
 
@@ -1010,7 +1057,7 @@ const applyFilters = debounce(() => {
   fetchInvoices();
 });
 
-watch([searchQuery, selectedStatus, startDate, endDate], () => {
+watch([searchQuery, selectedStatus, startDate, endDate, selectedLimit], () => {
   applyFilters();
 });
 

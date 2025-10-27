@@ -1280,3 +1280,52 @@ async def export_payment_links_excel(
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": "attachment; filename=payment_links_invoice.xlsx"},
     )
+
+
+# GET /invoices/count - Hitung total jumlah invoice
+# Buat ngambil total jumlah invoice di database dengan optional filter
+# Query parameters:
+# - status_invoice: filter berdasarkan status (Belum Dibayar, Lunas, Kadaluarsa)
+# - start_date: filter tanggal jatuh tempo mulai dari
+# - end_date: filter tanggal jatuh tempo sampai dengan
+# - search: cari berdasarkan nomor invoice, nama pelanggan, atau ID pelanggan
+# Response: integer (total count)
+# Use case: buat dashboard atau statistik
+# Performance: simple count query dengan filter yang sama seperti list endpoint
+@router.get("/count", response_model=int)
+async def get_invoice_count(
+    db: AsyncSession = Depends(get_db),
+    search: Optional[str] = None,
+    status_invoice: Optional[str] = None,
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+):
+    """
+    Menghitung total jumlah invoice dengan filter opsional.
+    """
+    count_query = select(func.count(InvoiceModel.id))
+
+    # Join dengan pelanggan untuk pencarian
+    count_query = count_query.join(InvoiceModel.pelanggan)
+
+    if search:
+        search_term = f"%{search}%"
+        count_query = count_query.where(
+            or_(
+                InvoiceModel.invoice_number.ilike(search_term),
+                PelangganModel.nama.ilike(search_term),
+                InvoiceModel.id_pelanggan.ilike(search_term),
+            )
+        )
+
+    if status_invoice:
+        count_query = count_query.where(InvoiceModel.status_invoice == status_invoice)
+
+    if start_date:
+        count_query = count_query.where(InvoiceModel.tgl_jatuh_tempo >= start_date)
+    if end_date:
+        count_query = count_query.where(InvoiceModel.tgl_jatuh_tempo <= end_date)
+
+    result = await db.execute(count_query)
+    total_count = result.scalar_one()
+    return total_count
