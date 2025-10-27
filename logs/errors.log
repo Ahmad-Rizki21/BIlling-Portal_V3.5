@@ -8233,3 +8233,101 @@ UnicodeDecodeError: 'utf-8' codec can't decode byte 0x89 in position 166: invali
 2025-10-23 20:28:32 | SERVICES....    | [91mERROR   [0m | get_api_connection   | Gagal mendapatkan koneksi dari pool ke Mikrotik Tambun (192.168.1.1:22): [Errno 111] Connection refused
 2025-10-23 20:28:33 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
 2025-10-23 20:28:33 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token
+2025-10-24 21:53:24 | SERVICES....    | [91mERROR   [0m | _get_connection      | Failed to create connection to 192.168.1.1:22: [Errno 111] Connection refused
+2025-10-24 21:53:24 | SERVICES....    | [91mERROR   [0m | get_api_connection   | Gagal mendapatkan koneksi dari pool ke Mikrotik Tambun (192.168.1.1:22): [Errno 111] Connection refused
+2025-10-24 22:03:40 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-24 22:03:40 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode successful but user not found. Expiry: 2025-10-24 23:53:22
+2025-10-24 22:24:40 | SERVICES....    | [91mERROR   [0m | _get_connection      | Failed to create connection to 192.168.1.1:22: [Errno 111] Connection refused
+2025-10-24 22:24:40 | SERVICES....    | [91mERROR   [0m | get_api_connection   | Gagal mendapatkan koneksi dari pool ke Mikrotik Tambun (192.168.1.1:22): [Errno 111] Connection refused
+2025-10-24 22:33:44 | SERVICES....    | [91mERROR   [0m | _get_connection      | Failed to create connection to 192.168.1.1:22: [Errno 111] Connection refused
+2025-10-24 22:33:44 | SERVICES....    | [91mERROR   [0m | _get_server_connection | Failed to get connection for server Tambun: [Errno 111] Connection refused
+2025-10-24 22:33:44 | SERVICES....    | [91mERROR   [0m | _collect_server_traffic | Failed to collect traffic from server Tambun: Failed to establish API connection
+2025-10-24 22:38:44 | SERVICES....    | [91mERROR   [0m | _get_connection      | Failed to create connection to 192.168.1.1:22: [Errno 111] Connection refused
+2025-10-24 22:38:44 | SERVICES....    | [91mERROR   [0m | _get_server_connection | Failed to get connection for server Tambun: [Errno 111] Connection refused
+2025-10-24 22:38:44 | SERVICES....    | [91mERROR   [0m | _collect_server_traffic | Failed to collect traffic from server Tambun: Failed to establish API connection
+2025-10-24 22:45:35 | SERVICES....    | [91mERROR   [0m | _get_connection      | Failed to create connection to 192.168.1.1:22: [Errno 111] Connection refused
+2025-10-24 22:45:35 | SERVICES....    | [91mERROR   [0m | _get_server_connection | Failed to get connection for server Tambun: [Errno 111] Connection refused
+2025-10-24 22:45:35 | SERVICES....    | [91mERROR   [0m | _collect_server_traffic | Failed to collect traffic from server Tambun: Failed to establish API connection
+2025-10-24 22:50:35 | SERVICES....    | [91mERROR   [0m | _get_connection      | Failed to create connection to 192.168.1.1:22: [Errno 111] Connection refused
+2025-10-24 22:50:35 | SERVICES....    | [91mERROR   [0m | _get_server_connection | Failed to get connection for server Tambun: [Errno 111] Connection refused
+2025-10-24 22:50:35 | SERVICES....    | [91mERROR   [0m | _collect_server_traffic | Failed to collect traffic from server Tambun: Failed to establish API connection
+2025-10-24 22:55:35 | SERVICES....    | [91mERROR   [0m | _get_connection      | Failed to create connection to 192.168.1.1:22: [Errno 111] Connection refused
+2025-10-24 22:55:35 | SERVICES....    | [91mERROR   [0m | _get_server_connection | Failed to get connection for server Tambun: [Errno 111] Connection refused
+2025-10-24 22:55:35 | SERVICES....    | [91mERROR   [0m | _collect_server_traffic | Failed to collect traffic from server Tambun: Failed to establish API connection
+2025-10-24 22:55:35 | JOBS_TRAFFIC    | [91mERROR   [0m | job_health_check_traffic_monitoring | ❌ No traffic data found! System may not be collecting data.
+2025-10-24 23:00:35 | SERVICES....    | [91mERROR   [0m | _get_connection      | Failed to create connection to 192.168.1.1:22: [Errno 111] Connection refused
+2025-10-24 23:00:35 | SERVICES....    | [91mERROR   [0m | _get_server_connection | Failed to get connection for server Tambun: [Errno 111] Connection refused
+2025-10-24 23:00:35 | SERVICES....    | [91mERROR   [0m | _collect_server_traffic | Failed to collect traffic from server Tambun: Failed to establish API connection
+2025-10-24 23:05:35 | SERVICES....    | [91mERROR   [0m | _get_connection      | Failed to create connection to 192.168.1.1:22: [Errno 111] Connection refused
+2025-10-24 23:05:35 | SERVICES....    | [91mERROR   [0m | _record_failure      | CIRCUIT BREAKER TRIPPED for 192.168.1.1:22!
+2025-10-24 23:05:35 | SERVICES....    | [91mERROR   [0m | _get_server_connection | Failed to get connection for server Tambun: [Errno 111] Connection refused
+2025-10-24 23:05:35 | SERVICES....    | [91mERROR   [0m | _collect_server_traffic | Failed to collect traffic from server Tambun: Failed to establish API connection
+2025-10-24 23:10:35 | SERVICES....    | [91mERROR   [0m | _get_connection      | Failed to create connection to 192.168.1.1:22: [Errno 111] Connection refused
+2025-10-24 23:10:35 | SERVICES....    | [91mERROR   [0m | _record_failure      | Circuit breaker for 192.168.1.1:22 re-tripped to OPEN
+2025-10-24 23:10:35 | SERVICES....    | [91mERROR   [0m | _get_server_connection | Failed to get connection for server Tambun: [Errno 111] Connection refused
+2025-10-24 23:10:35 | SERVICES....    | [91mERROR   [0m | _collect_server_traffic | Failed to collect traffic from server Tambun: Failed to establish API connection
+2025-10-24 23:10:35 | JOBS_TRAFFIC    | [91mERROR   [0m | job_health_check_traffic_monitoring | ❌ No traffic data found! System may not be collecting data.
+2025-10-24 23:15:35 | SERVICES....    | [91mERROR   [0m | _get_connection      | Failed to create connection to 192.168.1.1:22: [Errno 111] Connection refused
+2025-10-24 23:15:35 | SERVICES....    | [91mERROR   [0m | _record_failure      | Circuit breaker for 192.168.1.1:22 re-tripped to OPEN
+2025-10-24 23:15:35 | SERVICES....    | [91mERROR   [0m | _get_server_connection | Failed to get connection for server Tambun: [Errno 111] Connection refused
+2025-10-24 23:15:35 | SERVICES....    | [91mERROR   [0m | _collect_server_traffic | Failed to collect traffic from server Tambun: Failed to establish API connection
+2025-10-24 23:20:35 | SERVICES....    | [91mERROR   [0m | _get_connection      | Failed to create connection to 192.168.1.1:22: [Errno 111] Connection refused
+2025-10-24 23:20:35 | SERVICES....    | [91mERROR   [0m | _record_failure      | Circuit breaker for 192.168.1.1:22 re-tripped to OPEN
+2025-10-24 23:20:35 | SERVICES....    | [91mERROR   [0m | _get_server_connection | Failed to get connection for server Tambun: [Errno 111] Connection refused
+2025-10-24 23:20:35 | SERVICES....    | [91mERROR   [0m | _collect_server_traffic | Failed to collect traffic from server Tambun: Failed to establish API connection
+2025-10-24 23:25:35 | SERVICES....    | [91mERROR   [0m | _get_connection      | Failed to create connection to 192.168.1.1:22: [Errno 111] Connection refused
+2025-10-24 23:25:35 | SERVICES....    | [91mERROR   [0m | _record_failure      | Circuit breaker for 192.168.1.1:22 re-tripped to OPEN
+2025-10-24 23:25:35 | SERVICES....    | [91mERROR   [0m | _get_server_connection | Failed to get connection for server Tambun: [Errno 111] Connection refused
+2025-10-24 23:25:35 | SERVICES....    | [91mERROR   [0m | _collect_server_traffic | Failed to collect traffic from server Tambun: Failed to establish API connection
+2025-10-24 23:25:35 | JOBS_TRAFFIC    | [91mERROR   [0m | job_health_check_traffic_monitoring | ❌ No traffic data found! System may not be collecting data.
+2025-10-24 23:30:35 | SERVICES....    | [91mERROR   [0m | _get_connection      | Failed to create connection to 192.168.1.1:22: [Errno 111] Connection refused
+2025-10-24 23:30:35 | SERVICES....    | [91mERROR   [0m | _record_failure      | Circuit breaker for 192.168.1.1:22 re-tripped to OPEN
+2025-10-24 23:30:35 | SERVICES....    | [91mERROR   [0m | _get_server_connection | Failed to get connection for server Tambun: [Errno 111] Connection refused
+2025-10-24 23:30:35 | SERVICES....    | [91mERROR   [0m | _collect_server_traffic | Failed to collect traffic from server Tambun: Failed to establish API connection
+2025-10-24 23:35:35 | SERVICES....    | [91mERROR   [0m | _get_connection      | Failed to create connection to 192.168.1.1:22: [Errno 111] Connection refused
+2025-10-24 23:35:35 | SERVICES....    | [91mERROR   [0m | _record_failure      | Circuit breaker for 192.168.1.1:22 re-tripped to OPEN
+2025-10-24 23:35:35 | SERVICES....    | [91mERROR   [0m | _get_server_connection | Failed to get connection for server Tambun: [Errno 111] Connection refused
+2025-10-24 23:35:35 | SERVICES....    | [91mERROR   [0m | _collect_server_traffic | Failed to collect traffic from server Tambun: Failed to establish API connection
+2025-10-24 23:40:35 | SERVICES....    | [91mERROR   [0m | _get_connection      | Failed to create connection to 192.168.1.1:22: [Errno 111] Connection refused
+2025-10-24 23:40:35 | SERVICES....    | [91mERROR   [0m | _record_failure      | Circuit breaker for 192.168.1.1:22 re-tripped to OPEN
+2025-10-24 23:40:35 | SERVICES....    | [91mERROR   [0m | _get_server_connection | Failed to get connection for server Tambun: [Errno 111] Connection refused
+2025-10-24 23:40:35 | SERVICES....    | [91mERROR   [0m | _collect_server_traffic | Failed to collect traffic from server Tambun: Failed to establish API connection
+2025-10-24 23:40:35 | JOBS_TRAFFIC    | [91mERROR   [0m | job_health_check_traffic_monitoring | ❌ No traffic data found! System may not be collecting data.
+2025-10-24 23:45:35 | SERVICES....    | [91mERROR   [0m | _get_connection      | Failed to create connection to 192.168.1.1:22: [Errno 111] Connection refused
+2025-10-24 23:45:35 | SERVICES....    | [91mERROR   [0m | _record_failure      | Circuit breaker for 192.168.1.1:22 re-tripped to OPEN
+2025-10-24 23:45:35 | SERVICES....    | [91mERROR   [0m | _get_server_connection | Failed to get connection for server Tambun: [Errno 111] Connection refused
+2025-10-24 23:45:35 | SERVICES....    | [91mERROR   [0m | _collect_server_traffic | Failed to collect traffic from server Tambun: Failed to establish API connection
+2025-10-24 23:50:35 | SERVICES....    | [91mERROR   [0m | _get_connection      | Failed to create connection to 192.168.1.1:22: [Errno 111] Connection refused
+2025-10-24 23:50:35 | SERVICES....    | [91mERROR   [0m | _record_failure      | Circuit breaker for 192.168.1.1:22 re-tripped to OPEN
+2025-10-24 23:50:35 | SERVICES....    | [91mERROR   [0m | _get_server_connection | Failed to get connection for server Tambun: [Errno 111] Connection refused
+2025-10-24 23:50:35 | SERVICES....    | [91mERROR   [0m | _collect_server_traffic | Failed to collect traffic from server Tambun: Failed to establish API connection
+2025-10-24 23:55:35 | SERVICES....    | [91mERROR   [0m | _get_connection      | Failed to create connection to 192.168.1.1:22: [Errno 111] Connection refused
+2025-10-24 23:55:35 | SERVICES....    | [91mERROR   [0m | _record_failure      | Circuit breaker for 192.168.1.1:22 re-tripped to OPEN
+2025-10-24 23:55:35 | SERVICES....    | [91mERROR   [0m | _get_server_connection | Failed to get connection for server Tambun: [Errno 111] Connection refused
+2025-10-24 23:55:35 | SERVICES....    | [91mERROR   [0m | _collect_server_traffic | Failed to collect traffic from server Tambun: Failed to establish API connection
+2025-10-24 23:55:35 | JOBS_TRAFFIC    | [91mERROR   [0m | job_health_check_traffic_monitoring | ❌ No traffic data found! System may not be collecting data.
+2025-10-25 00:04:34 | SERVICES....    | [91mERROR   [0m | _get_connection      | Failed to create connection to 192.168.1.1:22: [Errno 111] Connection refused
+2025-10-25 00:04:34 | SERVICES....    | [91mERROR   [0m | _get_server_connection | Failed to get connection for server Tambun: [Errno 111] Connection refused
+2025-10-25 00:04:34 | SERVICES....    | [91mERROR   [0m | _collect_server_traffic | Failed to collect traffic from server Tambun: Failed to establish API connection
+2025-10-25 00:09:34 | SERVICES....    | [91mERROR   [0m | _get_connection      | Failed to create connection to 192.168.1.1:22: [Errno 111] Connection refused
+2025-10-25 00:09:34 | SERVICES....    | [91mERROR   [0m | _get_server_connection | Failed to get connection for server Tambun: [Errno 111] Connection refused
+2025-10-25 00:09:34 | SERVICES....    | [91mERROR   [0m | _collect_server_traffic | Failed to collect traffic from server Tambun: Failed to establish API connection
+2025-10-25 00:18:41 | SERVICES....    | [91mERROR   [0m | _collect_server_traffic | Failed to connect to server Tambun: [Errno 111] Connection refused
+2025-10-25 00:24:46 | SERVICES....    | [91mERROR   [0m | _collect_server_traffic | Failed to connect to server Tambun: [Errno 111] Connection refused
+2025-10-25 00:29:46 | SERVICES....    | [91mERROR   [0m | _collect_server_traffic | Failed to connect to server Tambun: [Errno 111] Connection refused
+2025-10-25 00:34:46 | SERVICES....    | [91mERROR   [0m | _collect_server_traffic | Failed to connect to server Tambun: [Errno 111] Connection refused
+2025-10-25 00:34:46 | JOBS_TRAFFIC    | [91mERROR   [0m | job_health_check_traffic_monitoring | ❌ No traffic data found! System may not be collecting data.
+2025-10-25 00:43:27 | SERVICES....    | [91mERROR   [0m | _collect_server_traffic | Failed to connect to server Tambun: [Errno 111] Connection refused
+2025-10-25 00:48:27 | SERVICES....    | [91mERROR   [0m | _collect_server_traffic | Failed to connect to server Tambun: [Errno 111] Connection refused
+2025-10-25 00:53:27 | SERVICES....    | [91mERROR   [0m | _collect_server_traffic | Failed to connect to server Tambun: [Errno 111] Connection refused
+2025-10-25 00:53:27 | JOBS_TRAFFIC    | [91mERROR   [0m | job_health_check_traffic_monitoring | ❌ No traffic data found! System may not be collecting data.
+2025-10-25 09:15:16 | SERVICES....    | [91mERROR   [0m | _get_connection      | Failed to create connection to 192.168.1.1:22: [Errno 111] Connection refused
+2025-10-25 09:15:16 | SERVICES....    | [91mERROR   [0m | get_api_connection   | Gagal mendapatkan koneksi dari pool ke Mikrotik Tambun (192.168.1.1:22): [Errno 111] Connection refused
+2025-10-25 09:15:18 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-25 09:15:18 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token
+2025-10-25 09:49:29 | SERVICES....    | [91mERROR   [0m | _get_connection      | Failed to create connection to 192.168.1.1:22: [Errno 111] Connection refused
+2025-10-25 09:49:29 | SERVICES....    | [91mERROR   [0m | get_api_connection   | Gagal mendapatkan koneksi dari pool ke Mikrotik Tambun (192.168.1.1:22): [Errno 111] Connection refused
+2025-10-27 09:08:42 | SERVICES....    | [91mERROR   [0m | _get_connection      | Failed to create connection to 192.168.1.1:22: [Errno 111] Connection refused
+2025-10-27 09:08:42 | SERVICES....    | [91mERROR   [0m | get_api_connection   | Gagal mendapatkan koneksi dari pool ke Mikrotik Tambun (192.168.1.1:22): [Errno 111] Connection refused
+2025-10-27 09:08:44 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Invalid token provided - Token preview: eyJhbGciOiJIUzI1NiIs...
+2025-10-27 09:08:44 | WEBSOCKET       | [91mERROR   [0m | websocket_notifications | [main.py] Token decode failed: Invalid token

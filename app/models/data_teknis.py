@@ -33,6 +33,7 @@ if TYPE_CHECKING:
     from .mikrotik_server import MikrotikServer
     from .odp import ODP
     from .trouble_ticket import TroubleTicket
+    from .traffic_history import TrafficHistory
 
 
 class DataTeknis(Base):
@@ -127,3 +128,6 @@ class DataTeknis(Base):
 
     # Relasi ke Trouble Tickets - Laporan masalah yang terkait dengan data teknis ini
     trouble_tickets: Mapped[list["TroubleTicket"]] = relationship("TroubleTicket", back_populates="data_teknis")
+
+    # Relasi ke Traffic History - Data monitoring bandwidth penggunaan
+    traffic_history: Mapped[list["TrafficHistory"]] = relationship("TrafficHistory", back_populates="data_teknis")

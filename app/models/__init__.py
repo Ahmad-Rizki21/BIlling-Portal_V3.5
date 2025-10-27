@@ -18,3 +18,4 @@ from .inventory_item import InventoryItem
 from .inventory_item_type import InventoryItemType
 from .inventory_status import InventoryStatus
 from .trouble_ticket import TroubleTicket, TicketHistory, ActionTaken, TicketStatus, TicketPriority, TicketCategory
+from .traffic_history import TrafficHistory

@@ -89,6 +89,7 @@ class Settings(BaseSettings):
     SYSTEM_FEATURES: List[str] = [
         "settings",    # Akses ke pengaturan sistem
         "uploads",     # Akses ke upload file
+        "traffic_monitoring",  # Akses ke traffic monitoring dashboard
     ]
 
     # ====================================================================

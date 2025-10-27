@@ -32,6 +32,7 @@ if TYPE_CHECKING:
     from .data_teknis import DataTeknis
     from .olt import OLT
     from .pelanggan import Pelanggan
+    from .traffic_history import TrafficHistory
 
 
 class MikrotikServer(Base):
@@ -106,3 +107,6 @@ class MikrotikServer(Base):
     # Relasi ke Pelanggan - Customer yang menggunakan server ini
     # Satu server bisa dipake oleh banyak pelanggan
     pelanggan: Mapped[list["Pelanggan"]] = relationship("Pelanggan", back_populates="mikrotik_server")
+
+    # Relasi ke Traffic History - Data monitoring traffic dari server ini
+    traffic_history: Mapped[list["TrafficHistory"]] = relationship("TrafficHistory", back_populates="mikrotik_server")

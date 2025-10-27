@@ -60,6 +60,15 @@ const router = createRouter({
           component: () => import('../views/DataTeknisView.vue')
         },
         {
+          path: 'traffic-monitoring',
+          name: 'traffic-monitoring',
+          component: () => import('../views/TrafficMonitoringView.vue'),
+          meta: {
+            requiresAuth: true,
+            permissions: ['view_traffic_monitoring']
+          }
+        },
+        {
           path: 'invoices',
           name: 'invoices',
           component: () => import('../views/InvoicesView.vue')

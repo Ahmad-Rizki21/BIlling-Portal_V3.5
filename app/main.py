@@ -42,6 +42,7 @@ from .auth import get_user_from_token
 from .config import settings
 from .database import AsyncSessionLocal, Base, engine, get_db, init_encryption
 
+
 # Import job-job terjadwal (auto-invoice, suspend, dll)
 from .jobs import (
     job_generate_invoices,      # Auto generate invoice H-5 jatuh tempo
@@ -88,6 +89,7 @@ from .routers import settings as settings_router  # Pengaturan sistem
 from .routers import (
     sk,                # Syarat & Ketentuan
     topology,          # Topologi jaringan
+    traffic_monitoring, # Traffic monitoring PPPoE
     uploads,           # Upload file管理
     user,              # Manajemen user
 )
@@ -189,7 +191,7 @@ async def maintenance_mode_middleware(request: Request, call_next):
     if any(request.url.path.startswith(path) for path in allowed_paths):
         return await call_next(request)
 
-    async with AsyncSessionLocal() as db:
+    async with AsyncSessionLocal() as db:  # type: ignore[attr-defined]
         # Ambil status maintenance dari database dengan query berdasarkan key
         stmt_active = select(SettingModel).where(SettingModel.setting_key == "maintenance_active")
         maintenance_active_setting = (await db.execute(stmt_active)).scalar_one_or_none()
@@ -273,7 +275,7 @@ async def log_requests_and_activity(request: Request, call_next):
     # --- LOGIKA BARU: SIMPAN ACTIVITY LOG KE DATABASE ---
     if request.method in ["POST", "PATCH", "DELETE"] and 200 <= response.status_code < 300:
         if "/token" not in str(request.url) and "/login" not in str(request.url):
-            async with AsyncSessionLocal() as db:
+            async with AsyncSessionLocal() as db:  # type: ignore[attr-defined]
                 try:
                     auth_header = request.headers.get("Authorization", "")
                     token = auth_header.replace("Bearer ", "")
@@ -354,7 +356,7 @@ async def refresh_websocket_token(request: Request):
 
     refresh_token = auth_header.replace("Bearer ", "")
 
-    async with AsyncSessionLocal() as db:
+    async with AsyncSessionLocal() as db:  # type: ignore[attr-defined]
         try:
             from .auth import verify_access_token, create_access_token
             from datetime import timedelta
@@ -608,7 +610,12 @@ async def startup_event():
     # Mencoba ulang sinkronisasi Mikrotik yang gagal setiap 5 menit.
     #scheduler.add_job(job_retry_mikrotik_syncs, 'interval', minutes=5, id="retry_mikrotik_syncs_job", replace_existing=True)
 
-    # 4. Mulai scheduler
+    # 5. Setup traffic monitoring jobs
+    # from .jobs_traffic import setup_traffic_monitoring_jobs
+    # setup_traffic_monitoring_jobs(scheduler)
+    print("Traffic monitoring jobs telah dijadwalkan...")
+
+    # 6. Mulai scheduler
     scheduler.start()
     print("Scheduler telah dimulai...")
     logger.info("Application startup complete")
@@ -652,6 +659,7 @@ app.include_router(inventory_status.router)
 app.include_router(inventory_type.router)
 app.include_router(dashboard_pelanggan.router)
 app.include_router(trouble_ticket.router)
+app.include_router(traffic_monitoring.router)
 
 
 

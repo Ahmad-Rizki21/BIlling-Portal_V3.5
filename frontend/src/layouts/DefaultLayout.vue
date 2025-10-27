@@ -914,6 +914,7 @@ const menuGroups = ref([
   ]},
   { title: 'NETWORK MANAGEMENT', items: [
     { title: 'Mikrotik Servers', icon: 'mdi-server', value: 'mikrotik', to: '/mikrotik', permission: 'view_mikrotik_servers' },
+    { title: 'Traffic Monitoring', icon: 'mdi-chart-line', value: 'traffic-monitoring', to: '/traffic-monitoring', permission: 'view_traffic_monitoring' },
     { title: 'OLT Management', icon: 'mdi-router-network', value: 'olt', to: '/network-management/olt', permission: 'view_olt' },
     { title: 'ODP Management', icon: 'mdi-sitemap', value: 'odp', to: '/odp-management', permission: 'view_odp_management' },
     { title: 'Manajemen Inventaris', icon: 'mdi-archive-outline', value: 'inventory', to: '/inventory', permission: 'view_inventory' }

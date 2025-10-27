@@ -5,7 +5,7 @@
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "skipLibCheck": true,
-    
+
     /* Bundler mode */
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
@@ -13,17 +13,15 @@
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "preserve",
-    
+
     /* Linting */
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
     "noImplicitAny": false,  // Allow implicit any types for flexibility
-    "ignoreDeprecations": "5.0",  // Ignore deprecation warnings for baseUrl
 
-
-    /* Path Alias Configuration */
+    /* Path Alias Configuration - @/ mapped to src/ */
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"]
