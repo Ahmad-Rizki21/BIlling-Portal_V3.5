@@ -121,8 +121,13 @@ class Settings(BaseSettings):
 
     # API keys dari Xendit untuk masing-masing brand
     # Dapatkan dari dashboard Xendit kamu
-    XENDIT_API_KEY_JAKINET: str = "default_api_key_jakinet"
-    XENDIT_API_KEY_JELANTIK: str = "default_api_key_jelantik"
+    #
+    # Brand & Account Configuration:
+    # - ajn-01 (JAKINET) -> JAKINET API key (ARTACOMINDO account di Xendit)
+    # - ajn-02 (JELANTIK) -> JELANTIK API key (murni JELANTIK account)
+    # - ajn-03 (JELANTIK NAGRAK) -> JAKINET API key (pesan masuk ke Jakinet/ARTACOMINDO)
+    XENDIT_API_KEY_JAKINET: str = "xnd_development_sUcGnffFboAxjvHU1zhbNFrqkFm6vb11kQCinNq8069epNtrT3xWownlvwN9Lam0"  # ARTACOMINDO account
+    XENDIT_API_KEY_JELANTIK: str = "xnd_development_RJWrICPkupWykS3MGtbTL9xvuiT1SV6SASPkX1KSBN1dCzE69hr4F8brdITg84"  # JELANTIK account
 
     # URL endpoint API Xendit buat create invoice
     XENDIT_API_URL: str = "https://api.xendit.co/v2/invoices"
@@ -138,8 +143,12 @@ class Settings(BaseSettings):
     @property
     def XENDIT_API_KEYS(self) -> dict:
         return {
-            "JAKINET": self.XENDIT_API_KEY_JAKINET,
-            "JELANTIK": self.XENDIT_API_KEY_JELANTIK,
+            "JAKINET": self.XENDIT_API_KEY_JAKINET,        # ARTACOMINDO account (ajn-01, ajn-03)
+            "JELANTIK": self.XENDIT_API_KEY_JELANTIK,      # JELANTIK account (ajn-02)
+            # Support keys untuk brand code yang ada di database
+            "ajn-01": self.XENDIT_API_KEY_JAKINET,         # JAKINET -> ARTACOMINDO account
+            "ajn-02": self.XENDIT_API_KEY_JELANTIK,        # JELANTIK -> JELANTIK account
+            "ajn-03": self.XENDIT_API_KEY_JAKINET,         # JELANTIK NAGRAK -> ARTACOMINDO account
         }
 
     @property

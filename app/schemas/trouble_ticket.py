@@ -101,7 +101,7 @@ class TroubleTicketCreate(BaseModel):
 
     class Config:
         from_attributes = True
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "pelanggan_id": 1,
                 "data_teknis_id": 1,
@@ -215,7 +215,7 @@ class TroubleTicketWithRelations(TroubleTicket):
     assigned_user: Optional[User] = None
 
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "id": 1,
                 "ticket_number": "TT-20250116-12345",
@@ -347,7 +347,7 @@ class TicketStatusUpdate(BaseModel):
 
     class Config:
         from_attributes = True
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "status": "in_progress",
                 "notes": "Sedang dalam perjalanan ke lokasi pelanggan",
@@ -546,7 +546,7 @@ class TicketAssignment(BaseModel):
 
     class Config:
         from_attributes = True
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "assigned_to": 2,
                 "notes": "Silakan dicek koneksi internet pelanggan"

@@ -204,7 +204,7 @@ class PelangganCreate(BaseModel):
         # Allow extra validation
         validate_assignment = True
         # Ensure JSON schema generation
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "no_ktp": "1234567890123456",
                 "nama": "John Doe",
@@ -563,7 +563,7 @@ class PelangganImport(BaseModel):
         # Allow extra validation
         validate_assignment = True
         # Ensure JSON schema generation
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "no_ktp": "1234567890123456",
                 "nama": "John Doe",

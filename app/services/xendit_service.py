@@ -116,6 +116,29 @@ async def create_xendit_invoice(
     if not api_key:
         raise ValueError(f"Kunci API Xendit untuk '{target_key_name}' tidak ditemukan.")
 
+    # Brands Configuration:
+    # - ajn-01 (JAKINET) -> JAKINET API key (ARTACOMINDO account)
+    # - ajn-02 (JELANTIK) -> JELANTIK API key (murni JELANTIK account)
+    # - ajn-03 (JELANTIK NAGRAK) -> JAKINET API key (pesan masuk ke Jakinet)
+
+    if target_key_name == "ajn-01":  # JAKINET -> Pakai JAKINET API key (ARTACOMINDO account)
+        jakinet_key = settings.XENDIT_API_KEYS.get("JAKINET")
+        if jakinet_key:
+            logger.info(f"📱 Using JAKINET API key (ARTACOMINDO account) for {pelanggan.nama} (JAKINET - ajn-01)")
+            api_key = jakinet_key
+
+    elif target_key_name == "ajn-02":  # JELANTIK -> Pakai JELANTIK API key (murni)
+        jelantik_key = settings.XENDIT_API_KEYS.get("JELANTIK")
+        if jelantik_key:
+            logger.info(f"📱 Using JELANTIK API key for {pelanggan.nama} (JELANTIK - ajn-02)")
+            api_key = jelantik_key
+
+    elif target_key_name == "ajn-03":  # JELANTIK NAGRAK -> Pakai JAKINET API key (pesan ke Jakinet)
+        jakinet_key = settings.XENDIT_API_KEYS.get("JAKINET")
+        if jakinet_key:
+            logger.info(f"📱 Using JAKINET API key (ARTACOMINDO account) for {pelanggan.nama} (JELANTIK NAGRAK - ajn-03)")
+            api_key = jakinet_key
+
     encoded_key = base64.b64encode(f"{api_key}:".encode("utf-8")).decode("utf-8")
     headers = {
         "Content-Type": "application/json",
@@ -147,10 +170,30 @@ async def create_xendit_invoice(
         "customer": {
             "given_names": pelanggan.nama,
             "email": pelanggan.email,
-            "mobile_number": no_telp_xendit if no_telp_xendit else pelanggan.no_telp,
+            "mobile_number": no_telp_xendit if no_telp_xendit else f"+62{pelanggan.no_telp.lstrip('0')}" if pelanggan.no_telp else None,
         },
         "currency": "IDR",
         "with_short_url": True,
+        "should_send_email": True,  # Force enable email
+        "should_send_whatsapp": True, # Force enable WhatsApp
+
+        # TAMBAHKAN ALTERNATIVE WHATSAPP CONFIGURATIONS
+        "customer_notification_method": "whatsapp",
+        "preferred_notification_channel": "whatsapp",
+
+        # TAMBAHKAN WHATSAPP CONFIGURATION
+        "notification_channels": ["whatsapp", "email"],
+        "force_notification_channels": True,
+        "send_whatsapp": True,
+        "whatsapp_enabled": True,
+
+        # TAMBAHKAN BUSINESS DETAILS
+        "business_profile": {
+            "business_name": "Artacomindo Jejaring Nusa",
+            "business_address": "Indonesia",
+            "business_contact": "+628986937819",
+            "business_industry": "Telecommunications"
+        },
         "items": [
             {
                 "name": f"Biaya berlangganan internet up to {paket.kecepatan} Mbps",
@@ -172,7 +215,7 @@ async def create_xendit_invoice(
     nama_user = pelanggan.nama.replace(" ", "")
     lokasi_singkat = pelanggan.alamat.split(" ")[0] if pelanggan.alamat else "Lokasi"
 
-    # ▼▼▼ PERBAIKAN DI SINI ▼▼▼
+    
     # Langsung format tanggal jatuh tempo dari invoice tanpa menambahkan bulan
     bulan_tahun = invoice.tgl_jatuh_tempo.strftime("%B-%Y")  # type: ignore
 
@@ -188,6 +231,18 @@ async def create_xendit_invoice(
             response.raise_for_status()
             result = response.json()
             logger.info(f"Respons dari Xendit: {json.dumps(result, indent=2)}")
+
+            # DEBUG: Log WhatsApp status specifically
+            if result.get("should_send_whatsapp") or result.get("customer_notification_preference"):
+                logger.info(f"📱 WhatsApp Notification Status:")
+                logger.info(f"   should_send_whatsapp: {result.get('should_send_whatsapp', 'Not in response')}")
+                logger.info(f"   notification_preference: {result.get('customer_notification_preference', 'Not in response')}")
+                logger.info(f"   customer_mobile: {result.get('customer', {}).get('mobile_number', 'Not in response')}")
+
+                # Check for WhatsApp specific fields
+                if "whatsapp" in result:
+                    logger.info(f"   whatsapp_details: {result['whatsapp']}")
+
             return result
         except httpx.HTTPStatusError as e:
             logger.error(f"Error saat membuat invoice Xendit. Payload: {json.dumps(payload, indent=2)}")

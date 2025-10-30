@@ -22,7 +22,7 @@ from ..models.role import Role as RoleModel
 from ..websocket_manager import manager
 
 # Import has_permission function
-from ..auth import has_permission
+from ..auth import has_permission, get_current_active_user
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -45,6 +45,7 @@ from ..services import mikrotik_service
 from ..config import settings
 from ..services import xendit_service, mikrotik_service
 from ..services.payment_callback_service import check_duplicate_callback, log_callback_processing
+from ..services.rate_limiter import create_invoice_with_rate_limit, InvoicePriority
 
 # Import our logging utilities
 from ..logging_utils import sanitize_log_data
@@ -780,9 +781,22 @@ async def generate_manual_invoice(invoice_data: InvoiceGenerate, db: AsyncSessio
 
         no_telp_xendit = no_telp_bersih if no_telp_bersih else None
 
-        # Kirim deskripsi yang sudah dinamis ke Xendit
-        xendit_response = await xendit_service.create_xendit_invoice(
-            db_invoice, pelanggan, paket, deskripsi_xendit, pajak, no_telp_xendit or ""
+        # Kirim deskripsi yang sudah dinamis ke Xendit dengan rate limiting
+        # Determine priority based on customer type
+        priority = InvoicePriority.NORMAL
+        if hasattr(pelanggan, 'is_vip') and getattr(pelanggan, 'is_vip', False):
+            priority = InvoicePriority.HIGH
+        elif hasattr(pelanggan, 'tipe') and getattr(pelanggan, 'tipe', '') == 'bulk':
+            priority = InvoicePriority.LOW
+
+        xendit_response = await create_invoice_with_rate_limit(
+            invoice=db_invoice,
+            pelanggan=pelanggan,
+            paket=paket,
+            deskripsi_xendit=deskripsi_xendit,
+            pajak=pajak,
+            no_telp_xendit=no_telp_xendit or "",
+            priority=priority
         )
 
         db_invoice.payment_link = xendit_response.get("short_url", xendit_response.get("invoice_url"))
@@ -853,7 +867,27 @@ async def mark_invoice_as_paid(invoice_id: int, payload: MarkAsPaidRequest, db: 
 
     logger.info(f"Invoice {invoice.invoice_number} ditandai lunas secara manual via {payload.metode_pembayaran}")
 
-    return invoice
+
+@router.get("/missing-payment-links", response_model=List[InvoiceSchema])
+async def get_invoices_missing_payment_links(
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user),
+    _: None = Depends(has_permission("view_invoices")),
+):
+    """
+    Get semua invoice yang tidak memiliki payment link dari Xendit.
+    Ini berguna untuk finance team agar bisa retry pembuatan payment link.
+    """
+    stmt = select(InvoiceModel).where(
+        InvoiceModel.payment_link.is_(None),
+        InvoiceModel.status_invoice == "Belum Dibayar"
+    ).order_by(InvoiceModel.tgl_invoice.desc())
+
+    result = await db.execute(stmt)
+    invoices = result.scalars().unique().all()
+
+    logger.info(f"Found {len(invoices)} invoices missing payment links")
+    return invoices
 
 
 # DELETE /invoices/{invoice_id} - Hapus invoice
@@ -1335,3 +1369,108 @@ async def get_invoice_count(
     result = await db.execute(count_query)
     total_count = result.scalar_one()
     return total_count
+
+
+# ====================================================================
+# MONITORING & FIX ENDPOINTS - PRODUCTION RELIABILITY
+# ====================================================================
+
+@router.get("/generation-status")
+async def get_invoice_generation_status(
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user)
+):
+    """Simple dashboard untuk monitor invoice generation"""
+
+    today = date.today()
+
+    # Total invoice hari ini
+    total_today = await db.execute(
+        select(func.count(InvoiceModel.id))
+        .where(InvoiceModel.tgl_invoice == today)
+    )
+
+    # Invoice dengan payment link
+    with_payment_link = await db.execute(
+        select(func.count(InvoiceModel.id))
+        .where(
+            InvoiceModel.tgl_invoice == today,
+            InvoiceModel.payment_link.isnot(None)
+        )
+    )
+
+    total = total_today.scalar()
+    success = with_payment_link.scalar()
+    failed = total - success
+
+    return {
+        "date": today.isoformat(),
+        "total_invoices": total,
+        "successful_payments": success,
+        "failed_payments": failed,
+        "success_rate": round((success / total * 100) if total > 0 else 0, 1),
+        "status": "HEALTHY" if failed == 0 else "NEEDS_ATTENTION" if failed <= 3 else "CRITICAL"
+    }
+
+
+@router.post("/fix-missing-payment-links")
+async def fix_missing_payment_links(
+    limit: int = 20,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user)
+):
+    """Fix invoices yang tidak punya payment link"""
+
+    from ..services.rate_limiter import create_invoice_with_rate_limit
+
+    # Cari invoice tanpa payment link
+    invoices_to_fix = await db.execute(
+        select(InvoiceModel)
+        .where(InvoiceModel.payment_link.is_(None))
+        .order_by(InvoiceModel.created_at.desc())
+        .limit(limit)
+        .options(
+            selectinload(InvoiceModel.pelanggan).selectinload(PelangganModel.harga_layanan),
+            selectinload(InvoiceModel.pelanggan).selectinload(PelangganModel.langganan).selectinload(LanggananModel.paket_layanan),
+        )
+    )
+
+    fixed_count = 0
+    failed_count = 0
+
+    for invoice in invoices_to_fix.scalars().all():
+        try:
+            pelanggan = invoice.pelanggan
+            if not pelanggan or not pelanggan.langganan:
+                continue
+
+            paket = pelanggan.langganan[0].paket_layanan
+
+            # Generate payment link
+            xendit_response = await create_invoice_with_rate_limit(
+                invoice=invoice,
+                pelanggan=pelanggan,
+                paket=paket,
+                deskripsi_xendit=f"Invoice Payment - {invoice.invoice_number}",
+                pajak=float(invoice.total_harga) - float(paket.harga) if paket else 0,
+                no_telp_xendit=f"+62{pelanggan.no_telp.lstrip('0')}" if pelanggan.no_telp else ""
+            )
+
+            # Update invoice
+            invoice.payment_link = xendit_response.get("short_url", xendit_response.get("invoice_url"))
+            invoice.xendit_id = xendit_response.get("id")
+            invoice.xendit_external_id = xendit_response.get("external_id")
+
+            fixed_count += 1
+
+        except Exception as e:
+            failed_count += 1
+            logger.error(f"Failed to fix invoice {invoice.invoice_number}: {e}")
+
+    await db.commit()
+
+    return {
+        "message": f"Fixed {fixed_count} invoices, {failed_count} failed",
+        "fixed_count": fixed_count,
+        "failed_count": failed_count
+    }

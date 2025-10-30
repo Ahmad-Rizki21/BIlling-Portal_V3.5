@@ -91,8 +91,10 @@ from .routers import (
     topology,          # Topologi jaringan
     traffic_monitoring, # Traffic monitoring PPPoE
     uploads,           # Upload file管理
-    user,              # Manajemen user
 )
+from .routers import rate_limiter_monitor  # Rate limiter monitoring
+from .routers import whatsapp_optin  # WhatsApp opt-in management
+from .routers import user  # User management
 
 # WebSocket manager untuk notifikasi real-time
 from .websocket_manager import manager
@@ -660,6 +662,8 @@ app.include_router(inventory_type.router)
 app.include_router(dashboard_pelanggan.router)
 app.include_router(trouble_ticket.router)
 app.include_router(traffic_monitoring.router)
+app.include_router(rate_limiter_monitor.router)
+app.include_router(whatsapp_optin.router)
 
 
 
