@@ -1,42 +1,44 @@
 <template>
-  <v-container fluid class="pa-0">
+  <v-container fluid class="pa-4 pa-md-6">
     <!-- Header Section with Gradient Background -->
-    <div class="header-section">
-      <v-container class="pa-6">
-        <div class="d-flex align-center">
+    <div class="header-card mb-4 mb-md-6">
+      <div class="header-section">
+        <div class="header-content">
           <div class="d-flex align-center">
-            <v-avatar class="me-4 elevation-4" color="gradient" size="56">
-              <v-icon color="white" size="28">mdi-tag-multiple</v-icon>
-            </v-avatar>
-            <div>
-              <h1 class="text-h4 font-weight-bold text-white mb-1">Brand & Paket Layanan</h1>
-              <p class="header-subtitle mb-0">
-                Kelola brand provider dan paket yang ditawarkan dengan mudah
-              </p>
+            <div class="d-flex align-center">
+              <v-avatar class="me-4 elevation-4" color="gradient" size="56">
+                <v-icon color="white" size="28">mdi-tag-multiple</v-icon>
+              </v-avatar>
+              <div>
+                <h1 class="text-h4 font-weight-bold text-white mb-1">Brand & Paket Layanan</h1>
+                <p class="header-subtitle mb-0">
+                  Kelola brand provider dan paket yang ditawarkan dengan mudah
+                </p>
+              </div>
             </div>
+            <v-spacer></v-spacer>
+            <v-btn
+              color="white"
+              size="large"
+              elevation="4"
+              @click="openBrandDialog()"
+              prepend-icon="mdi-plus-circle"
+              class="text-none font-weight-bold px-6"
+              variant="elevated"
+            >
+              <span class="text-primary">Tambah Brand</span>
+            </v-btn>
           </div>
-          <v-spacer></v-spacer>
-          <v-btn 
-            color="white" 
-            size="large"
-            elevation="4"
-            @click="openBrandDialog()"
-            prepend-icon="mdi-plus-circle"
-            class="text-none font-weight-bold px-6"
-            variant="elevated"
-          >
-            <span class="text-teal">Tambah Brand</span>
-          </v-btn>
         </div>
-      </v-container>
+      </div>
     </div>
 
-    <v-container class="pa-6">
+    <div class="content-section">
       <!-- Brand Provider Card -->
-      <v-card elevation="8" class="rounded-xl mb-8 overflow-hidden brand-provider-card">
+        <v-card elevation="8" class="rounded-xl mb-6 overflow-hidden brand-provider-card">
         <div class="card-header">
-          <v-card-title class="d-flex align-center pa-6">
-            <v-icon color="teal" size="24" class="me-3">mdi-domain</v-icon>
+          <v-card-title class="d-flex align-center pa-4 pa-sm-6">
+            <v-icon color="primary" size="24" class="me-3">mdi-domain</v-icon>
             <span class="text-h6 font-weight-bold">Daftar Brand Provider</span>
             <v-spacer></v-spacer>
             <v-chip
@@ -77,7 +79,7 @@
 
           <template v-slot:item.brand="{ item }">
             <div class="d-flex align-center">
-              <v-avatar size="32" color="teal" class="me-3">
+              <v-avatar size="32" color="primary" class="me-3">
                 <span class="text-caption font-weight-bold">
                   {{ item.brand.substring(0, 2).toUpperCase() }}
                 </span>
@@ -129,18 +131,20 @@
           </template>
         </v-data-table>
       </v-card>
+      </div>
 
       <!-- Package Details Section -->
       <v-expand-transition>
         <div v-if="selectedBrand">
-          <v-card elevation="8" class="rounded-xl overflow-hidden package-details-card">
+          <div class="content-wrapper">
+            <v-card elevation="8" class="rounded-xl overflow-hidden package-details-card">
             <div class="package-header">
               <v-card-title class="d-flex align-center pa-6">
                 <v-icon color="white" size="24" class="me-3">mdi-package-variant</v-icon>
                 <div>
                   <span class="text-h6 font-weight-bold text-white">Paket Layanan untuk</span>
                   <v-chip color="white" class="ms-3 elevation-2" size="large">
-                    <v-avatar start color="teal" size="24">
+                    <v-avatar start color="primary" size="24">
                       <span class="text-caption font-weight-bold text-white">
                         {{ selectedBrand.brand.substring(0, 2).toUpperCase() }}
                       </span>
@@ -157,7 +161,7 @@
                   class="text-none font-weight-bold px-4"
                   elevation="4"
                 >
-                  <span class="text-teal">Tambah Paket</span>
+                  <span class="text-primary">Tambah Paket</span>
                 </v-btn>
               </v-card-title>
             </div>
@@ -176,7 +180,7 @@
 
               <template v-slot:item.nama_paket="{ item }">
                 <div class="d-flex align-center">
-                  <v-icon color="teal" class="me-2">mdi-wifi</v-icon>
+                  <v-icon color="primary" class="me-2">mdi-wifi</v-icon>
                   <span class="font-weight-medium">{{ item.nama_paket }}</span>
                 </div>
               </template>
@@ -233,14 +237,16 @@
               </template>
             </v-data-table>
           </v-card>
+          </div>
         </div>
       </v-expand-transition>
 
       <!-- Empty State for Brand Selection -->
-      <v-card 
-        v-if="!selectedBrand && brands.length > 0" 
-        elevation="4" 
-        class="rounded-xl pa-8 text-center mt-8 empty-state-card"
+      <div class="content-wrapper">
+        <v-card
+          v-if="!selectedBrand && brands.length > 0"
+          elevation="4"
+          class="rounded-xl pa-8 text-center mt-8 empty-state-card"
       >
         <v-icon size="80" color="grey-lighten-1" class="mb-4">mdi-mouse-left-click</v-icon>
         <div class="text-h6 text-medium-emphasis mb-2">Pilih Brand untuk Melihat Paket</div>
@@ -248,8 +254,8 @@
           Klik salah satu brand di tabel atas untuk melihat paket layanan yang tersedia
         </div>
       </v-card>
-    </v-container>
-    
+    </div>
+
     <HargaLayananDialog v-model="dialogBrand" :edited-item="editedBrand" @save="saveBrand" />
     <PaketLayananDialog v-model="dialogPackage" :edited-item="editedPackage" :brand-id="selectedBrand?.id_brand" @save="savePackage" />
   </v-container>
@@ -441,9 +447,41 @@ function openDeletePackageDialog(item: PaketLayanan) {
 <style scoped>
 /* ========== LIGHT MODE STYLES ========== */
 
+/* Header Card styling - sama seperti halaman lain */
+.header-card {
+  border-radius: 15px;
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(102, 126, 234, 0.15);
+  background: white;
+}
+
+/* Header content untuk memperbesar box */
+.header-content {
+  padding: 24px 32px;
+}
+
+/* Content section - sama seperti halaman lain */
+.content-section {
+  width: 100%;
+}
+
+.content-wrapper {
+  margin: 0;
+  width: 100%;
+}
+
+/* Maximize card width */
+.brand-provider-card {
+  width: 100%;
+}
+
+.brand-provider-card :deep(.v-card-text) {
+  padding: 0 !important;
+}
+
 /* Header styling */
 .header-section {
-  background: linear-gradient(135deg, #00695c 0%, #00897b 50%, #26a69a 100%);
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   position: relative;
   overflow: hidden;
 }
@@ -504,6 +542,22 @@ function openDeletePackageDialog(item: PaketLayanan) {
 }
 
 /* Table styling - Light Mode */
+.brand-table :deep(.v-data-table__td) {
+  padding: 12px 6px !important;
+}
+
+.brand-table :deep(.v-data-table__th) {
+  padding: 12px 6px !important;
+}
+
+.brand-table :deep(.v-data-table__wrapper) {
+  padding: 0 !important;
+}
+
+.brand-table :deep(.v-data-table__table) {
+  width: 100% !important;
+}
+
 .brand-table :deep(tbody tr) {
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   background: rgb(var(--v-theme-surface));

@@ -1,212 +1,209 @@
 <template>
-  <v-container fluid class="pa-0">
+  <v-container fluid class="pa-4 pa-md-6">
     <!-- Modern Header with Gradient Background -->
-    <div class="header-section">
-      <v-container class="pa-6">
-        <div class="d-flex align-center">
-          <div class="header-icon-wrapper me-4">
-            <v-avatar class="header-avatar" color="transparent" size="56">
-              <v-icon color="white" size="28">mdi-shield-key</v-icon>
+    <div class="header-card mb-4 mb-md-6">
+      <div class="header-section">
+        <div class="header-content">
+          <div class="d-flex align-center">
+            <v-avatar class="me-4 elevation-4" color="primary" size="80">
+              <v-icon color="white" size="40">mdi-shield-key</v-icon>
             </v-avatar>
+            <div>
+              <h1 class="text-h4 font-weight-bold text-white mb-2">Permissions Management</h1>
+              <p class="header-subtitle mb-0">
+                Kelola semua hak akses sistem dengan mudah dan aman
+              </p>
+            </div>
+            <v-spacer></v-spacer>
+            <v-btn 
+              color="primary" 
+              variant="elevated"
+              size="large"
+              elevation="2"
+              @click="generatePermissions"
+              :loading="generating"
+              prepend-icon="mdi-auto-fix"
+              class="text-none font-weight-bold rounded-lg"
+              :class="{ 'generate-btn--loading': generating }"
+            >
+              <span>Auto Generate Permissions</span>
+            </v-btn>
           </div>
-          <div class="flex-grow-1">
-            <h1 class="header-title text-white mb-1">Permissions Management</h1>
-            <p class="header-subtitle text-white mb-0 opacity-90">Kelola semua hak akses sistem dengan mudah dan aman</p>
-          </div>
-          <v-btn 
-            color="white" 
-            variant="elevated"
-            size="large"
-            elevation="0"
-            @click="generatePermissions"
-            :loading="generating"
-            prepend-icon="mdi-auto-fix"
-            class="text-none font-weight-bold generate-btn"
-            :class="{ 'generate-btn--loading': generating }"
-          >
-            <span class="text-purple">Auto Generate Permissions</span>
-          </v-btn>
         </div>
-      </v-container>
+      </div>
     </div>
 
-    <!-- Main Content Area -->
-    <v-container class="pa-6">
-      <!-- Stats Cards -->
-      <div class="stats-section mb-6">
-        <v-row>
-          <v-col cols="12" sm="6" md="3">
-            <v-card class="stats-card stats-card--purple" elevation="0">
-              <v-card-text class="pa-4">
-                <div class="d-flex align-center">
-                  <div class="stats-icon me-3">
-                    <v-icon color="purple" size="24">mdi-shield-check</v-icon>
-                  </div>
-                  <div>
-                    <div class="text-h5 font-weight-bold text-purple">{{ permissions.length }}</div>
-                    <div class="text-caption text-medium-emphasis">Total Permissions</div>
-                  </div>
-                </div>
-              </v-card-text>
-            </v-card>
-          </v-col>
-          <v-col cols="12" sm="6" md="3">
-            <v-card class="stats-card stats-card--success" elevation="0">
-              <v-card-text class="pa-4">
-                <div class="d-flex align-center">
-                  <div class="stats-icon me-3">
-                    <v-icon color="success" size="24">mdi-plus-circle</v-icon>
-                  </div>
-                  <div>
-                    <div class="text-h5 font-weight-bold text-success">{{ createPermissions }}</div>
-                    <div class="text-caption text-medium-emphasis">Create Permissions</div>
-                  </div>
-                </div>
-              </v-card-text>
-            </v-card>
-          </v-col>
-          <v-col cols="12" sm="6" md="3">
-            <v-card class="stats-card stats-card--info" elevation="0">
-              <v-card-text class="pa-4">
-                <div class="d-flex align-center">
-                  <div class="stats-icon me-3">
-                    <v-icon color="info" size="24">mdi-eye</v-icon>
-                  </div>
-                  <div>
-                    <div class="text-h5 font-weight-bold text-info">{{ viewPermissions }}</div>
-                    <div class="text-caption text-medium-emphasis">View Permissions</div>
-                  </div>
-                </div>
-              </v-card-text>
-            </v-card>
-          </v-col>
-          <v-col cols="12" sm="6" md="3">
-            <v-card class="stats-card stats-card--error" elevation="0">
-              <v-card-text class="pa-4">
-                <div class="d-flex align-center">
-                  <div class="stats-icon me-3">
-                    <v-icon color="error" size="24">mdi-delete</v-icon>
-                  </div>
-                  <div>
-                    <div class="text-h5 font-weight-bold text-error">{{ deletePermissions }}</div>
-                    <div class="text-caption text-medium-emphasis">Delete Permissions</div>
-                  </div>
-                </div>
-              </v-card-text>
-            </v-card>
-          </v-col>
-        </v-row>
-      </div>
-
-      <!-- Enhanced Permissions Table -->
-      <v-card class="permissions-table-card" elevation="0">
-        <div class="table-header">
-          <v-card-title class="d-flex align-center pa-6">
-            <div class="d-flex align-center flex-grow-1">
-              <v-icon color="purple" size="24" class="me-3">mdi-format-list-bulleted</v-icon>
-              <span class="text-h6 font-weight-bold">Daftar Hak Akses</span>
-            </div>
-            <div class="d-flex align-center gap-3">
-              <v-text-field
-                v-model="search"
-                prepend-inner-icon="mdi-magnify"
-                label="Cari permissions..."
-                variant="outlined"
-                density="compact"
-                hide-details
-                class="search-field"
-                clearable
-              />
-              <v-chip 
-                :color="permissions.length > 0 ? 'purple' : 'grey'" 
-                variant="tonal" 
-                size="small"
-                class="permissions-counter"
-              >
-                <v-icon start size="16">mdi-counter</v-icon>
-                {{ filteredPermissions.length }} permissions
-              </v-chip>
-            </div>
-          </v-card-title>
-        </div>
-
-        <v-divider />
-
-        <v-data-table
-          :headers="headers"
-          :items="filteredPermissions"
-          :loading="loading"
-          :search="search"
-          item-value="id"
-          items-per-page="20"
-          class="permissions-table"
-          loading-text="Memuat permissions..."
-          no-data-text="Tidak ada permissions ditemukan"
-        >
-          <template v-slot:loading>
-            <SkeletonLoader type="table" :rows="5" />
-          </template>
-
-          <template v-slot:item.id="{ item }">
-            <div class="id-cell">
-              <v-chip size="small" variant="outlined" color="grey-darken-1">
-                #{{ item.id }}
-              </v-chip>
-            </div>
-          </template>
-
-          <template v-slot:item.name="{ item }">
-            <div class="permission-name-cell">
-              <v-chip 
-                :color="getActionColor(item.name)" 
-                variant="flat"
-                size="default"
-                class="permission-chip"
-              >
-                <v-icon 
-                  :icon="getActionIcon(item.name)" 
-                  size="16" 
-                  start
-                />
-                {{ formatPermissionName(item.name) }}
-              </v-chip>
-            </div>
-          </template>
-
-          <template v-slot:item.actions="{ item }">
-            <div class="actions-cell">
-              <v-tooltip :text="`View details for ${formatPermissionName(item.name)}`">
-                <template v-slot:activator="{ props }">
-                  <v-btn
-                    v-bind="props"
-                    icon="mdi-information-outline"
-                    size="small"
-                    variant="text"
-                    color="info"
-                    @click="viewPermissionDetails(item)"
-                  />
-                </template>
-              </v-tooltip>
-            </div>
-          </template>
-
-          <template v-slot:bottom>
-            <div class="table-footer">
-              <v-divider />
-              <div class="d-flex justify-center pa-4">
-                <v-pagination
-                  v-model="page"
-                  :length="Math.ceil(filteredPermissions.length / itemsPerPage)"
-                  :total-visible="5"
-                  color="purple"
-                  rounded
-                />
+    <!-- Stats Cards -->
+    <v-row class="mb-6">
+      <v-col cols="12" sm="6" md="3">
+        <v-card class="stats-card stats-card--purple" elevation="0">
+          <v-card-text class="pa-4">
+            <div class="d-flex align-center">
+              <div class="stats-icon me-3">
+                <v-icon color="purple" size="24">mdi-shield-check</v-icon>
+              </div>
+              <div>
+                <div class="text-h5 font-weight-bold text-purple">{{ permissions.length }}</div>
+                <div class="text-caption text-medium-emphasis">Total Permissions</div>
               </div>
             </div>
-          </template>
-        </v-data-table>
-      </v-card>
-    </v-container>
+          </v-card-text>
+        </v-card>
+      </v-col>
+      <v-col cols="12" sm="6" md="3">
+        <v-card class="stats-card stats-card--success" elevation="0">
+          <v-card-text class="pa-4">
+            <div class="d-flex align-center">
+              <div class="stats-icon me-3">
+                <v-icon color="success" size="24">mdi-plus-circle</v-icon>
+              </div>
+              <div>
+                <div class="text-h5 font-weight-bold text-success">{{ createPermissions }}</div>
+                <div class="text-caption text-medium-emphasis">Create Permissions</div>
+              </div>
+            </div>
+          </v-card-text>
+        </v-card>
+      </v-col>
+      <v-col cols="12" sm="6" md="3">
+        <v-card class="stats-card stats-card--info" elevation="0">
+          <v-card-text class="pa-4">
+            <div class="d-flex align-center">
+              <div class="stats-icon me-3">
+                <v-icon color="info" size="24">mdi-eye</v-icon>
+              </div>
+              <div>
+                <div class="text-h5 font-weight-bold text-info">{{ viewPermissions }}</div>
+                <div class="text-caption text-medium-emphasis">View Permissions</div>
+              </div>
+            </div>
+          </v-card-text>
+        </v-card>
+      </v-col>
+      <v-col cols="12" sm="6" md="3">
+        <v-card class="stats-card stats-card--error" elevation="0">
+          <v-card-text class="pa-4">
+            <div class="d-flex align-center">
+              <div class="stats-icon me-3">
+                <v-icon color="error" size="24">mdi-delete</v-icon>
+              </div>
+              <div>
+                <div class="text-h5 font-weight-bold text-error">{{ deletePermissions }}</div>
+                <div class="text-caption text-medium-emphasis">Delete Permissions</div>
+              </div>
+            </div>
+          </v-card-text>
+        </v-card>
+      </v-col>
+    </v-row>
+
+    <!-- Enhanced Permissions Table -->
+    <v-card class="permissions-table-card" elevation="0">
+      <div class="table-header">
+        <v-card-title class="d-flex align-center pa-6">
+          <div class="d-flex align-center flex-grow-1">
+            <v-icon color="purple" size="24" class="me-3">mdi-format-list-bulleted</v-icon>
+            <span class="text-h6 font-weight-bold">Daftar Hak Akses</span>
+          </div>
+          <div class="d-flex align-center gap-3">
+            <v-text-field
+              v-model="search"
+              prepend-inner-icon="mdi-magnify"
+              label="Cari permissions..."
+              variant="outlined"
+              density="compact"
+              hide-details
+              class="search-field"
+              clearable
+            />
+            <v-chip
+              :color="permissions.length > 0 ? 'purple' : 'grey'"
+              variant="tonal"
+              size="small"
+              class="permissions-counter"
+            >
+              <v-icon start size="16">mdi-counter</v-icon>
+              {{ filteredPermissions.length }} permissions
+            </v-chip>
+          </div>
+        </v-card-title>
+      </div>
+      <v-divider />
+
+      <v-data-table
+        :headers="headers"
+        :items="filteredPermissions"
+        :loading="loading"
+        :search="search"
+        item-value="id"
+        items-per-page="20"
+        class="permissions-table"
+        loading-text="Memuat permissions..."
+        no-data-text="Tidak ada permissions ditemukan"
+      >
+        <template v-slot:loading>
+          <SkeletonLoader type="table" :rows="5" />
+        </template>
+
+        <template v-slot:item.id="{ item }">
+          <div class="id-cell">
+            <v-chip size="small" variant="outlined" color="grey-darken-1">
+              #{{ item.id }}
+            </v-chip>
+          </div>
+        </template>
+
+        <template v-slot:item.name="{ item }">
+          <div class="permission-name-cell">
+            <v-chip
+              :color="getActionColor(item.name)"
+              variant="flat"
+              size="default"
+              class="permission-chip"
+            >
+              <v-icon
+                :icon="getActionIcon(item.name)"
+                size="16"
+                start
+              />
+              {{ formatPermissionName(item.name) }}
+            </v-chip>
+          </div>
+        </template>
+
+        <template v-slot:item.actions="{ item }">
+          <div class="actions-cell">
+            <v-tooltip :text="`View details for ${formatPermissionName(item.name)}`">
+              <template v-slot:activator="{ props }">
+                <v-btn
+                  v-bind="props"
+                  icon="mdi-information-outline"
+                  size="small"
+                  variant="text"
+                  color="info"
+                  @click="viewPermissionDetails(item)"
+                />
+              </template>
+            </v-tooltip>
+          </div>
+        </template>
+
+        <template v-slot:bottom>
+          <div class="table-footer">
+            <v-divider />
+            <div class="d-flex justify-center pa-4">
+              <v-pagination
+                v-model="page"
+                :length="Math.ceil(filteredPermissions.length / itemsPerPage)"
+                :total-visible="5"
+                color="purple"
+                rounded
+              />
+            </div>
+          </div>
+        </template>
+      </v-data-table>
+    </v-card>
     
     <!-- Enhanced Snackbar -->
     <v-snackbar 
@@ -346,9 +343,21 @@ function showSnackbar(text: string, color: string) {
 </script>
 
 <style scoped>
-/* Header Gradient */
+/* Header Card styling - sama seperti halaman lain */
+.header-card {
+  border-radius: 15px;
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(102, 126, 234, 0.15);
+  background: white;
+}
+
+/* Header content for memperbesar box */
+.header-content {
+  padding: 24px 32px;
+}
+
 .header-section {
-  background: linear-gradient(135deg, #7C3AED 0%, #A855F7 50%, #C084FC 100%);
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   position: relative;
   overflow: hidden;
 }
@@ -357,33 +366,24 @@ function showSnackbar(text: string, color: string) {
   content: '';
   position: absolute;
   top: 0;
-  left: 0;
   right: 0;
-  bottom: 0;
-  background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grid" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M 10 0 L 0 0 0 10" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/></pattern></defs><rect width="100" height="100" fill="url(%23grid)" /></svg>');
-  opacity: 0.3;
+  width: 50%;
+  height: 100%;
+  background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="25" cy="25" r="1" fill="white" opacity="0.1"/><circle cx="75" cy="75" r="1" fill="white" opacity="0.1"/><circle cx="50" cy="10" r="1" fill="white" opacity="0.05"/><circle cx="10" cy="50" r="1" fill="white" opacity="0.05"/><circle cx="90" cy="30" r="1" fill="white" opacity="0.05"/></pattern></defs><rect width="100" height="100" fill="url(%23grain)"/></svg>');
 }
 
-.header-icon-wrapper {
-  position: relative;
-  z-index: 1;
-}
-
-.header-avatar {
-  background: rgba(255, 255, 255, 0.2);
-  backdrop-filter: blur(10px);
-  border: 2px solid rgba(255, 255, 255, 0.3);
-}
-
-.header-title {
-  font-size: 2rem;
-  font-weight: 700;
-  letter-spacing: -0.02em;
+/* Header text styling */
+.header-section h1 {
+  color: white !important;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
 .header-subtitle {
+  color: rgba(255, 255, 255, 0.9) !important;
   font-size: 1.1rem;
   font-weight: 400;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  opacity: 0.95;
 }
 
 .generate-btn {

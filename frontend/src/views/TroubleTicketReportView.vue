@@ -16,8 +16,7 @@
           </div>
           <div class="header-text">
             <h1 class="page-title">
-              <span class="title-gradient">Trouble Ticket</span>
-              <span class="title-normal">Reports</span>
+              <span class="title-solid">Trouble Ticket Reports</span>
             </h1>
             <p class="page-subtitle">
               <v-icon size="18" class="me-2">mdi-chart-line</v-icon>
@@ -27,28 +26,32 @@
         </div>
         <div class="header-actions">
           <v-btn
-            variant="outlined"
             prepend-icon="mdi-refresh"
             @click="refreshAllData"
             :loading="loading"
             size="large"
-            class="refresh-btn"
+            class="modern-btn refresh-btn-modern"
             color="primary"
+            variant="outlined"
+            elevation="2"
+            rounded="pill"
           >
-            Refresh
+            <span class="btn-text">Refresh Data</span>
           </v-btn>
           <v-btn
-            color="primary"
             prepend-icon="mdi-download"
             @click="exportReport"
             :disabled="loading || exporting"
             :loading="exporting"
             size="large"
-            class="export-btn"
+            class="modern-btn export-btn-modern"
+            color="success"
             variant="flat"
             elevation="4"
+            rounded="pill"
           >
-            Export Report
+            <v-icon end class="ms-1">mdi-file-export</v-icon>
+            <span class="btn-text">Export Report</span>
           </v-btn>
         </div>
       </div>
@@ -267,11 +270,15 @@
                 <p class="loading-text">Loading monthly trends...</p>
               </div>
               <div v-else-if="monthlyTrends.length > 0" class="trends-chart">
-                <canvas ref="trendsChart" height="120"></canvas>
+                <Line
+                  :data="trendsChartData"
+                  :options="trendsChartOptions"
+                  height="120"
+                />
               </div>
               <div v-else class="empty-state">
                 <div class="empty-state-icon">
-                  <v-icon size="64" color="grey-lighten-1">mdi-chart-line</v-icon>
+                  <v-icon size="64" color="primary-lighten-1">mdi-chart-line</v-icon>
                 </div>
                 <p class="empty-state-title">No Trend Data Available</p>
                 <p class="empty-state-text">Data will appear here once tickets are created</p>
@@ -304,11 +311,15 @@
                 <p class="loading-text">Loading category data...</p>
               </div>
               <div v-else-if="categoryPerformance.length > 0" class="category-chart">
-                <canvas ref="categoryChart" height="200"></canvas>
+                <Pie
+                  :data="categoryChartData"
+                  :options="categoryChartOptions"
+                  height="200"
+                />
               </div>
               <div v-else class="empty-state">
                 <div class="empty-state-icon">
-                  <v-icon size="64" color="grey-lighten-1">mdi-chart-pie</v-icon>
+                  <v-icon size="64" color="primary-lighten-1">mdi-chart-pie</v-icon>
                 </div>
                 <p class="empty-state-title">No Category Data</p>
                 <p class="empty-state-text">Data will appear once categorized</p>
@@ -595,7 +606,7 @@
           </div>
           <div v-else class="empty-state">
             <div class="empty-state-icon">
-              <v-icon size="64" color="grey-lighten-1">mdi-clock-alert-outline</v-icon>
+              <v-icon size="64" color="warning-lighten-1">mdi-clock-alert-outline</v-icon>
             </div>
             <p class="empty-state-title">No Downtime Data Available</p>
             <p class="empty-state-text">Downtime information will appear here when available</p>
@@ -731,11 +742,11 @@
                     <span class="customer-name-text">{{ item.customer_name }}</span>
                   </div>
                   <div class="customer-detail-row">
-                    <v-icon size="14" color="grey" class="me-1">mdi-phone</v-icon>
+                    <v-icon size="14" color="primary-lighten-1" class="me-1">mdi-phone</v-icon>
                     <span class="customer-detail-text">{{ item.customer_phone }}</span>
                   </div>
                   <div class="customer-detail-row">
-                    <v-icon size="14" color="grey" class="me-1">mdi-map-marker</v-icon>
+                    <v-icon size="14" color="primary-lighten-1" class="me-1">mdi-map-marker</v-icon>
                     <span class="customer-detail-text">{{ item.customer_address.substring(0, 50) }}{{ item.customer_address.length > 50 ? '...' : '' }}</span>
                   </div>
                 </div>
@@ -756,7 +767,7 @@
                       {{ item.id_pelanggan }}
                     </v-chip>
                   </div>
-                  <div class="tech-detail-row">
+                  <div classs="tech-detail-row">
                     <span class="tech-label">ONU:</span>
                     <v-chip size="x-small" variant="tonal" color="success" class="tech-chip">
                       {{ item.onu_power }} dBm
@@ -823,7 +834,7 @@
                     <v-icon size="16" color="success" class="me-1">mdi-account-check</v-icon>
                     <span class="assigned-user-text">{{ item.assigned_to }}</span>
                   </div>
-                  <v-chip size="x-small" variant="outlined" color="grey" class="action-count-chip">
+                  <v-chip size="x-small" variant="outlined" color="primary" class="action-count-chip">
                     {{ item.latest_actions.length }} actions
                   </v-chip>
                 </div>
@@ -832,7 +843,7 @@
           </div>
           <div v-else class="empty-state">
             <div class="empty-state-icon">
-              <v-icon size="64" color="grey-lighten-1">mdi-ticket-outline</v-icon>
+              <v-icon size="64" color="primary-lighten-1">mdi-ticket-outline</v-icon>
             </div>
             <p class="empty-state-title">No Ticket Details Available</p>
             <p class="empty-state-text">Click the button below to load ticket information</p>
@@ -840,9 +851,10 @@
               variant="outlined"
               prepend-icon="mdi-refresh"
               @click="loadTicketDetails"
-              class="mt-4"
+              class="mt-4 load-tickets-btn"
               color="primary"
               size="large"
+              elevation="2"
             >
               Load Tickets
             </v-btn>
@@ -889,7 +901,7 @@
                 {{ format.description }}
               </v-list-item-subtitle>
               <template v-slot:append>
-                <v-icon color="grey">mdi-chevron-right</v-icon>
+                <v-icon color="primary-lighten-1">mdi-chevron-right</v-icon>
               </template>
             </v-list-item>
           </v-list>
@@ -924,7 +936,7 @@
             @click="closeExportDialog"
             :disabled="exporting"
             size="large"
-            color="grey"
+            color="primary"
           >
             Cancel
           </v-btn>
@@ -935,8 +947,36 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, nextTick, watch } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import apiClient from '@/services/api'
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  ArcElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler
+} from 'chart.js'
+import { Line, Pie } from 'vue-chartjs'
+
+// Register Chart.js components
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  ArcElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler
+)
 
 // Types
 interface Statistics {
@@ -1088,9 +1128,130 @@ const dateRange = reactive({
   to: ''
 })
 
-// Chart refs
-const trendsChart = ref<HTMLCanvasElement | null>(null)
-const categoryChart = ref<HTMLCanvasElement | null>(null)
+
+// Chart data properties
+const trendsChartData = ref({
+  labels: [] as string[],
+  datasets: [
+    {
+      label: 'Tickets Created',
+      data: [] as number[],
+      borderColor: 'rgb(59, 130, 246)',
+      backgroundColor: 'rgba(59, 130, 246, 0.1)',
+      tension: 0.4,
+      fill: true
+    },
+    {
+      label: 'Tickets Resolved',
+      data: [] as number[],
+      borderColor: 'rgb(34, 197, 94)',
+      backgroundColor: 'rgba(34, 197, 94, 0.1)',
+      tension: 0.4,
+      fill: true
+    }
+  ]
+})
+
+const categoryChartData = ref({
+  labels: [] as string[],
+  datasets: [
+    {
+      label: 'Tickets by Category',
+      data: [] as number[],
+      backgroundColor: [
+        '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6',
+        '#EC4899', '#14B8A6', '#F97316', '#06B6D4', '#84CC16'
+      ],
+      borderWidth: 2,
+      borderColor: '#ffffff'
+    }
+  ]
+})
+
+// Chart options
+const trendsChartOptions = ref({
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: {
+      position: 'top' as const,
+      labels: {
+        usePointStyle: true,
+        padding: 20
+      }
+    },
+    tooltip: {
+      mode: 'index' as const,
+      intersect: false,
+      backgroundColor: 'rgba(0, 0, 0, 0.8)',
+      titleColor: '#ffffff',
+      bodyColor: '#ffffff',
+      borderColor: 'rgba(255, 255, 255, 0.1)',
+      borderWidth: 1
+    }
+  },
+  scales: {
+    x: {
+      display: true,
+      grid: {
+        display: false
+      }
+    },
+    y: {
+      display: true,
+      beginAtZero: true,
+      ticks: {
+        stepSize: 1
+      }
+    }
+  }
+})
+
+const categoryChartOptions = ref({
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: {
+      position: 'right' as const,
+      labels: {
+        usePointStyle: true,
+        padding: 15,
+        generateLabels: function(chart: any) {
+          const data = chart.data
+          if (data.labels.length && data.datasets.length) {
+            const dataset = data.datasets[0]
+            const total = dataset.data.reduce((a: number, b: number) => a + b, 0)
+            return data.labels.map((label: string, i: number) => {
+              const value = dataset.data[i]
+              const percentage = ((value / total) * 100).toFixed(1)
+              return {
+                text: `${label} (${percentage}%)`,
+                fillStyle: dataset.backgroundColor[i],
+                hidden: false,
+                index: i
+              }
+            })
+          }
+          return []
+        }
+      }
+    },
+    tooltip: {
+      backgroundColor: 'rgba(0, 0, 0, 0.8)',
+      titleColor: '#ffffff',
+      bodyColor: '#ffffff',
+      borderColor: 'rgba(255, 255, 255, 0.1)',
+      borderWidth: 1,
+      callbacks: {
+        label: function(context: any) {
+          const total = context.dataset.data.reduce((a: number, b: number) => a + b, 0)
+          const percentage = ((context.parsed / total) * 100).toFixed(1)
+          return `${context.label}: ${context.parsed} (${percentage}%)`
+        }
+      }
+    }
+  }
+})
 
 // Table headers
 const categoryHeaders = [
@@ -1211,38 +1372,7 @@ const showNotification = (message: string, type: 'success' | 'error' | 'info' | 
   }, 5000)
 }
 
-// Chart rendering methods
-const renderTrendsChart = () => {
-  if (!trendsChart.value) return
-  const ctx = trendsChart.value.getContext('2d')
-  if (!ctx) return
-
-  const canvas = trendsChart.value
-  const width = canvas.width
-  const height = canvas.height
-
-  ctx.clearRect(0, 0, width, height)
-  ctx.fillStyle = '#666'
-  ctx.font = '14px Arial'
-  ctx.textAlign = 'center'
-  ctx.fillText('Chart rendering would use Chart.js library', width / 2, height / 2)
-}
-
-const renderCategoryChart = () => {
-  if (!categoryChart.value) return
-  const ctx = categoryChart.value.getContext('2d')
-  if (!ctx) return
-
-  const canvas = categoryChart.value
-  const width = canvas.width
-  const height = canvas.height
-
-  ctx.clearRect(0, 0, width, height)
-  ctx.fillStyle = '#666'
-  ctx.font = '14px Arial'
-  ctx.textAlign = 'center'
-  ctx.fillText('Pie chart would use Chart.js library', width / 2, height / 2)
-}
+// Chart rendering is now handled by vue-chartjs components
 
 // Methods
 const loadStatistics = async () => {
@@ -1262,14 +1392,24 @@ const loadMonthlyTrends = async () => {
     if (dateRange.to) params.date_to = dateRange.to
 
     const response = await apiClient.get('/trouble-tickets/reports/monthly-trends', { params })
-    monthlyTrends.value = response.data.trends
+    monthlyTrends.value = response.data.trends || []
 
-    await nextTick()
-    if (trendsChart.value) {
-      renderTrendsChart()
+    // Update chart data
+    if (monthlyTrends.value.length > 0) {
+      const sortedTrends = [...monthlyTrends.value].sort((a, b) =>
+        new Date(a.month).getTime() - new Date(b.month).getTime()
+      )
+
+      trendsChartData.value.labels = sortedTrends.map(item => {
+        const date = new Date(item.month)
+        return date.toLocaleDateString('id-ID', { month: 'short', year: 'numeric' })
+      })
+      trendsChartData.value.datasets[0].data = sortedTrends.map(item => item.statistics.total)
+      trendsChartData.value.datasets[1].data = sortedTrends.map(item => item.statistics.resolved)
     }
   } catch (error) {
     console.error('Failed to load monthly trends:', error)
+    monthlyTrends.value = []
   } finally {
     loadingMonthly.value = false
   }
@@ -1285,9 +1425,10 @@ const loadCategoryPerformance = async () => {
     const response = await apiClient.get('/trouble-tickets/reports/category-performance', { params })
     categoryPerformance.value = response.data.category_performance || []
 
-    await nextTick()
-    if (categoryChart.value) {
-      renderCategoryChart()
+    // Update chart data
+    if (categoryPerformance.value.length > 0) {
+      categoryChartData.value.labels = categoryPerformance.value.map(item => item.category)
+      categoryChartData.value.datasets[0].data = categoryPerformance.value.map(item => item.total_tickets)
     }
   } catch (error: any) {
     console.error('Failed to load category performance:', error)
@@ -1453,10 +1594,10 @@ const getStatusColor = (status: string) => {
     'pending_customer': 'orange',
     'pending_vendor': 'amber',
     'resolved': 'success',
-    'closed': 'grey',
+    'closed': 'blue-grey',
     'cancelled': 'error'
   }
-  return colors[status] || 'grey'
+  return colors[status] || 'blue-grey'
 }
 
 const getPriorityColor = (priority: string) => {
@@ -1466,7 +1607,7 @@ const getPriorityColor = (priority: string) => {
     'high': 'error',
     'critical': 'deep-purple'
   }
-  return colors[priority] || 'grey'
+  return colors[priority] || 'blue-grey'
 }
 
 const getDowntimeColor = (minutes: number | null | undefined) => {
@@ -2662,13 +2803,32 @@ onMounted(() => {
   background-clip: text;
 }
 
+.title-gradient-modern {
+  background: linear-gradient(135deg,
+    #667eea 0%,
+    #764ba2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.title-accent {
+  color: #FF6B6B;
+  font-weight: 700;
+}
+
+.title-solid {
+  color: #667eea;
+  font-weight: 700;
+}
+
 .title-normal {
   color: rgb(var(--v-theme-on-surface));
 }
 
 .page-subtitle {
   font-size: 1.05rem;
-  color: rgba(var(--v-theme-on-surface), 0.7);
+  color: rgba(var(--v-theme-on-surface), 0.9);
   margin: 0;
   font-weight: 500;
   display: flex;
@@ -2686,7 +2846,8 @@ onMounted(() => {
 }
 
 .refresh-btn:hover {
-  transform: rotate(180deg);
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(var(--v-theme-primary), 0.3);
 }
 
 .export-btn {
@@ -2694,9 +2855,69 @@ onMounted(() => {
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+.load-tickets-btn {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.load-tickets-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(var(--v-theme-primary), 0.4);
+}
+
 .export-btn:hover {
   transform: translateY(-2px);
   box-shadow: 0 6px 20px rgba(var(--v-theme-primary), 0.4);
+}
+
+/* Modern Button Styling */
+.modern-btn {
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  text-transform: none;
+  font-weight: 600;
+}
+
+.modern-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.1),
+    transparent
+  );
+  transition: left 0.5s;
+}
+
+.modern-btn:hover::before {
+  left: 100%;
+}
+
+.modern-btn:hover {
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 8px 25px rgba(var(--v-theme-primary), 0.3);
+}
+
+.modern-btn:active {
+  transform: translateY(0) scale(0.98);
+}
+
+.refresh-btn-modern:hover {
+  box-shadow: 0 8px 25px rgba(var(--v-theme-primary), 0.3);
+}
+
+.export-btn-modern:hover {
+  box-shadow: 0 8px 25px rgba(var(--v-theme-success), 0.3);
+}
+
+.btn-text {
+  position: relative;
+  z-index: 1;
 }
 
 /* ===== ENHANCED DATE FILTER ===== */
@@ -2745,7 +2966,7 @@ onMounted(() => {
 
 .filter-subtitle {
   font-size: 0.875rem;
-  color: rgba(var(--v-theme-on-surface), 0.6);
+  color: rgba(var(--v-theme-on-surface), 0.85);
   margin: 4px 0 0 0;
 }
 
@@ -2808,7 +3029,7 @@ onMounted(() => {
 
 .section-subtitle {
   font-size: 0.95rem;
-  color: rgba(var(--v-theme-on-surface), 0.6);
+  color: rgba(var(--v-theme-on-surface), 0.85);
   margin: 4px 0 0 0;
 }
 
@@ -2927,7 +3148,7 @@ onMounted(() => {
 .metric-label {
   font-size: 0.875rem;
   font-weight: 600;
-  color: rgba(var(--v-theme-on-surface), 0.7);
+  color: rgba(var(--v-theme-on-surface), 0.9);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   margin-bottom: 12px;
@@ -2961,13 +3182,14 @@ onMounted(() => {
 
 .metric-footer {
   padding: 12px 28px;
-  background: rgba(var(--v-theme-surface-variant), 0.3);
-  border-top: 1px solid rgba(var(--v-theme-outline), 0.08);
+  /* PERUBAHAN: Mengganti background abu-abu dengan warna outline yang sangat halus */
+  background: rgba(var(--v-theme-outline), 0.05);
+  border-top: 1px solid rgba(var(--v-theme-outline), 0.1);
   display: flex;
   align-items: center;
   gap: 6px;
   font-size: 0.75rem;
-  color: rgba(var(--v-theme-on-surface), 0.6);
+  color: rgba(var(--v-theme-on-surface), 0.85);
 }
 
 /* ===== ENHANCED CHARTS ===== */
@@ -2998,7 +3220,8 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   padding: 24px 28px !important;
-  background: rgba(var(--v-theme-surface-variant), 0.3);
+  /* PERUBAHAN: Menghapus background abu-abu */
+  /* background: rgba(var(--v-theme-surface-variant), 0.3); */
 }
 
 .chart-title-wrapper {
@@ -3016,7 +3239,7 @@ onMounted(() => {
 
 .chart-subtitle {
   font-size: 0.875rem;
-  color: rgba(var(--v-theme-on-surface), 0.6);
+  color: rgba(var(--v-theme-on-surface), 0.8);
   margin: 4px 0 0 0;
 }
 
@@ -3054,7 +3277,8 @@ onMounted(() => {
   width: 96px;
   height: 96px;
   border-radius: 50%;
-  background: rgba(var(--v-theme-surface-variant), 0.5);
+  /* PERUBAHAN: Mengganti background abu-abu dengan warna outline yang sangat halus */
+  background: rgba(var(--v-theme-outline), 0.05);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3064,13 +3288,13 @@ onMounted(() => {
 .empty-state-title {
   font-size: 1.125rem;
   font-weight: 600;
-  color: rgba(var(--v-theme-on-surface), 0.7);
+  color: rgb(var(--v-theme-on-surface));
   margin: 0;
 }
 
 .empty-state-text {
   font-size: 0.875rem;
-  color: rgba(var(--v-theme-on-surface), 0.5);
+  color: rgba(var(--v-theme-on-surface), 0.8);
   margin: 0;
 }
 
@@ -3095,7 +3319,8 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   padding: 24px 28px !important;
-  background: rgba(var(--v-theme-surface-variant), 0.3);
+  /* PERUBAHAN: Menghapus background abu-abu */
+  /* background: rgba(var(--v-theme-surface-variant), 0.3); */
 }
 
 .table-title-wrapper {
@@ -3187,7 +3412,8 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   padding: 24px 28px !important;
-  background: rgba(var(--v-theme-surface-variant), 0.3);
+  /* PERUBAHAN: Menghapus background abu-abu */
+  /* background: rgba(var(--v-theme-surface-variant), 0.3); */
 }
 
 .downtime-title-wrapper {
@@ -3205,7 +3431,7 @@ onMounted(() => {
 
 .downtime-subtitle {
   font-size: 0.875rem;
-  color: rgba(var(--v-theme-on-surface), 0.6);
+  color: rgba(var(--v-theme-on-surface), 0.85);
   margin: 4px 0 0 0;
 }
 
@@ -3230,13 +3456,15 @@ onMounted(() => {
 }
 
 .downtime-metric-card {
-  background: rgba(var(--v-theme-surface-variant), 0.3);
+  /* PERUBAHAN: Mengganti background abu-abu dengan warna outline yang sangat halus */
+  background: rgba(var(--v-theme-outline), 0.04);
   border-radius: 16px;
   padding: 24px;
   display: flex;
   align-items: center;
   gap: 16px;
-  border: 1px solid rgba(var(--v-theme-outline), 0.08);
+  /* PERUBAHAN: Mempertegas border agar tetap terlihat */
+  border: 1px solid rgba(var(--v-theme-outline), 0.12);
   transition: all 0.3s ease;
 }
 
@@ -3285,7 +3513,7 @@ onMounted(() => {
 
 .downtime-metric-label {
   font-size: 0.875rem;
-  color: rgba(var(--v-theme-on-surface), 0.7);
+  color: rgba(var(--v-theme-on-surface), 0.9);
   font-weight: 500;
 }
 
@@ -3319,7 +3547,8 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   padding: 24px 28px !important;
-  background: rgba(var(--v-theme-surface-variant), 0.3);
+  /* PERUBAHAN: Menghapus background abu-abu */
+  /* background: rgba(var(--v-theme-surface-variant), 0.3); */
 }
 
 .ticket-details-title-wrapper {
@@ -3349,11 +3578,13 @@ onMounted(() => {
 }
 
 .ticket-filters-card {
-  background: rgba(var(--v-theme-surface-variant), 0.3);
+  /* PERUBAHAN: Mengganti background abu-abu dengan warna outline yang sangat halus */
+  background: rgba(var(--v-theme-outline), 0.04);
   border-radius: 16px;
   padding: 24px;
   margin-bottom: 24px;
-  border: 1px solid rgba(var(--v-theme-outline), 0.08);
+  /* PERUBAHAN: Mempertegas border agar tetap terlihat */
+  border: 1px solid rgba(var(--v-theme-outline), 0.12);
 }
 
 .search-field, .filter-select {
@@ -3393,7 +3624,7 @@ onMounted(() => {
 
 .customer-detail-text {
   font-size: 0.8rem;
-  color: rgba(var(--v-theme-on-surface), 0.7);
+  color: rgba(var(--v-theme-on-surface), 0.9);
 }
 
 .technical-info-cell {
@@ -3409,7 +3640,7 @@ onMounted(() => {
 
 .tech-label {
   font-weight: 600;
-  color: rgba(var(--v-theme-on-surface), 0.7);
+  color: rgba(var(--v-theme-on-surface), 0.9);
   font-size: 0.75rem;
   min-width: 28px;
 }
@@ -3432,7 +3663,7 @@ onMounted(() => {
 
 .problem-description-text {
   font-size: 0.85rem;
-  color: rgba(var(--v-theme-on-surface), 0.7);
+  color: rgba(var(--v-theme-on-surface), 0.9);
   margin-bottom: 8px;
   line-height: 1.4;
 }
@@ -3464,7 +3695,7 @@ onMounted(() => {
 
 .downtime-minutes {
   font-size: 0.75rem;
-  color: rgba(var(--v-theme-on-surface), 0.6);
+  color: rgba(var(--v-theme-on-surface), 0.85);
 }
 
 .assignment-cell {
@@ -3532,13 +3763,13 @@ onMounted(() => {
 
 .export-dialog-subtitle {
   font-size: 0.95rem;
-  color: rgba(var(--v-theme-on-surface), 0.6);
+  color: rgba(var(--v-theme-on-surface), 0.85);
   margin: 4px 0 0 0;
 }
 
 .export-description {
   font-size: 1rem;
-  color: rgba(var(--v-theme-on-surface), 0.7);
+  color: rgba(var(--v-theme-on-surface), 0.9);
   margin-bottom: 24px;
 }
 
@@ -3602,7 +3833,7 @@ onMounted(() => {
 
 .export-format-description {
   font-size: 0.875rem;
-  color: rgba(var(--v-theme-on-surface), 0.6);
+  color: rgba(var(--v-theme-on-surface), 0.85);
   line-height: 1.4;
 }
 
@@ -3617,7 +3848,8 @@ onMounted(() => {
 }
 
 .export-dialog-actions {
-  background: rgba(var(--v-theme-surface-variant), 0.3);
+  /* PERUBAHAN: Mengganti background abu-abu dengan warna outline yang sangat halus */
+  background: rgba(var(--v-theme-outline), 0.05);
 }
 
 /* ===== RESPONSIVE DESIGN ===== */

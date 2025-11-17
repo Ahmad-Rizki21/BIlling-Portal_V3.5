@@ -312,6 +312,61 @@
         <v-list density="compact" class="bg-transparent">
           <v-list-item class="px-0">
             <template v-slot:prepend>
+              <v-icon size="18" class="me-3 text-medium-emphasis">mdi-phone</v-icon>
+            </template>
+            <v-list-item-title class="text-body-2">No. Telepon</v-list-item-title>
+            <template v-slot:append>
+              <span class="text-body-2">{{ getPelangganPhone(item.pelanggan_id) }}</span>
+            </template>
+          </v-list-item>
+          <v-list-item class="px-0" v-if="(item.status === 'Aktif' || item.status === 'Berhenti')">
+            <template v-slot:prepend>
+              <v-icon size="18" class="me-3 text-medium-emphasis">mdi-wifi-router</v-icon>
+            </template>
+            <v-list-item-title class="text-body-2">Status Modem</v-list-item-title>
+            <template v-slot:append>
+              <v-chip
+                size="x-small"
+                :color="getModemStatusColor(item.status_modem, item.status)"
+                class="font-weight-bold"
+                label
+              >
+                {{ formatModemStatus(item.status_modem, item.status) }}
+              </v-chip>
+            </template>
+          </v-list-item>
+          <v-list-item class="px-0" v-if="item.status === 'Suspended'">
+            <template v-slot:prepend>
+              <v-icon size="18" class="me-3 text-medium-emphasis">mdi-whatsapp</v-icon>
+            </template>
+            <v-list-item-title class="text-body-2">Status WhatsApp</v-list-item-title>
+            <template v-slot:append>
+              <div class="text-right">
+                <v-chip
+                  size="x-small"
+                  :color="item.whatsapp_status ? 'success' : 'warning'"
+                  class="font-weight-bold mb-1"
+                  label
+                >
+                  {{ item.whatsapp_status ? 'Sudah Dikirim' : 'Belum Dikirim' }}
+                </v-chip>
+                <div v-if="item.last_whatsapp_sent" class="text-caption text-medium-emphasis">
+                  {{ formatDate(item.last_whatsapp_sent, true) }}
+                </div>
+              </div>
+            </template>
+          </v-list-item>
+          <v-list-item class="px-0" v-if="item.status === 'Berhenti' && item.alasan_berhenti">
+            <template v-slot:prepend>
+              <v-icon size="18" class="me-3 text-medium-emphasis">mdi-information-outline</v-icon>
+            </template>
+            <v-list-item-title class="text-body-2">Alasan Berhenti</v-list-item-title>
+            <template v-slot:append>
+              <span class="text-body-2 text-medium-emphasis text-right">{{ formatAlasanBerhenti(item.alasan_berhenti, item.status) }}</span>
+            </template>
+          </v-list-item>
+          <v-list-item class="px-0">
+            <template v-slot:prepend>
               <v-icon size="18" class="me-3 text-medium-emphasis">mdi-cash</v-icon>
             </template>
             <v-list-item-title class="text-body-2">Harga</v-list-item-title>
@@ -333,8 +388,22 @@
         <v-divider class="mt-2"></v-divider>
 
         <div class="d-flex gap-2 mt-3">
-          <v-btn size="small" variant="tonal" color="primary" @click="openDialog(item)" class="flex-grow-1">
+          <v-btn size="small" variant="tonal" color="primary" @click="navigateToEdit(item)" class="flex-grow-1">
             <v-icon start size="16">mdi-pencil</v-icon> Edit
+          </v-btn>
+          <v-btn size="small" variant="tonal" color="info" @click="openPelangganView(item)" class="flex-grow-1">
+            <v-icon start size="16">mdi-eye</v-icon> View
+          </v-btn>
+          <v-btn
+            v-if="item.status === 'Suspended'"
+            size="small"
+            variant="tonal"
+            :color="item.whatsapp_status ? 'success' : 'warning'"
+            @click="sendWhatsApp(item)"
+            class="flex-grow-1"
+          >
+            <v-icon start size="16">mdi-whatsapp</v-icon>
+            {{ item.whatsapp_status ? 'Chat Lagi' : 'WhatsApp' }}
           </v-btn>
           <v-btn size="small" variant="tonal" color="error" @click="openDeleteDialog(item)" class="flex-grow-1">
             <v-icon start size="16">mdi-delete</v-icon> Hapus
@@ -392,6 +461,12 @@
             </div>
           </template>
 
+          <template v-slot:item.pelanggan.no_tlp="{ item }: { item: Langganan }">
+            <div class="text-body-2">
+              {{ getPelangganPhone(item.pelanggan_id) }}
+            </div>
+          </template>
+
           <template v-slot:item.paket_layanan_id="{ item }: { item: Langganan }">
             <div class="font-weight-medium">{{ getPaketName(item.paket_layanan_id) }}</div>
           </template>
@@ -425,15 +500,62 @@
               {{ item.status }}
             </v-chip>
           </template>
-          
+
+          <template v-slot:item.status_modem="{ item }: { item: Langganan }">
+            <v-chip
+              size="small"
+              :color="getModemStatusColor(item.status_modem, item.status)"
+              class="font-weight-bold"
+              label
+            >
+              {{ formatModemStatus(item.status_modem, item.status) }}
+            </v-chip>
+          </template>
+
+          <template v-slot:item.alasan_berhenti="{ item }: { item: Langganan }">
+            <div class="text-body-2" style="max-width: 200px; white-space: normal;">
+              {{ formatAlasanBerhenti(item.alasan_berhenti, item.status) }}
+            </div>
+          </template>
+
           <template v-slot:item.tgl_jatuh_tempo="{ item }: { item: Langganan }">
               {{ formatDate(item.tgl_jatuh_tempo) }}
           </template>
 
+          <template v-slot:item.whatsapp_status="{ item }: { item: Langganan }">
+            <div v-if="item.status === 'Suspended'" class="text-center">
+              <v-chip
+                size="x-small"
+                :color="item.whatsapp_status ? 'success' : 'warning'"
+                class="font-weight-bold mb-1"
+                label
+              >
+                {{ item.whatsapp_status ? 'Sudah' : 'Belum' }}
+              </v-chip>
+              <div v-if="item.last_whatsapp_sent" class="text-caption text-medium-emphasis">
+                {{ formatDate(item.last_whatsapp_sent, true) }}
+              </div>
+            </div>
+            <span v-else class="text-medium-emphasis text-body-2">-</span>
+          </template>
+
           <template v-slot:item.actions="{ item }: { item: Langganan }">
             <div class="d-flex justify-center ga-2">
-              <v-btn size="small" variant="tonal" color="primary" @click="openDialog(item)">
+              <v-btn size="small" variant="tonal" color="primary" @click="navigateToEdit(item)">
                 <v-icon start size="16">mdi-pencil</v-icon> Edit
+              </v-btn>
+              <v-btn size="small" variant="tonal" color="info" @click="openPelangganView(item)">
+                <v-icon start size="16">mdi-eye</v-icon> View
+              </v-btn>
+              <v-btn
+                v-if="item.status === 'Suspended'"
+                size="small"
+                variant="tonal"
+                :color="item.whatsapp_status ? 'success' : 'warning'"
+                @click="sendWhatsApp(item)"
+              >
+                <v-icon start size="16">mdi-whatsapp</v-icon>
+                {{ item.whatsapp_status ? 'Chat Lagi' : 'WhatsApp' }}
               </v-btn>
               <v-btn size="small" variant="tonal" color="error" @click="openDeleteDialog(item)">
                 <v-icon start size="16">mdi-delete</v-icon> Hapus
@@ -541,26 +663,31 @@
               class="mb-4"
             >
               <template v-slot:item="{ props, item }">
-                <v-list-item v-bind="props" class="px-4">
-                  <template v-slot:prepend>
-                    <v-avatar color="primary" size="32">
-                      <v-icon color="white" size="16">mdi-account</v-icon>
-                    </v-avatar>
-                  </template>
-                  <v-list-item-title class="font-weight-medium">
-                    {{ item.raw.nama }}
-                    <v-chip
-                      v-if="!isPelangganExisting(item.raw.id)"
-                      size="x-small"
-                      color="success"
-                      variant="elevated"
-                      class="ms-2"
-                    >
-                      NEW USER
-                    </v-chip>
-                  </v-list-item-title>
-                </v-list-item>
-              </template>
+  <v-list-item v-bind="props" class="px-4">
+    <template v-slot:prepend>
+      <v-avatar color="primary" size="32">
+        <v-icon color="white" size="16">mdi-account</v-icon>
+      </v-avatar>
+    </template>
+    <!-- Hilangkan title default dan ganti dengan custom -->
+    <template v-slot:title>
+      <div class="font-weight-medium d-flex align-center">
+        <span class="flex-grow-1">{{ item.raw.nama }}</span>
+        <!-- Mode Tambah: Semua pelanggan adalah USER BARU -->
+        <!-- Mode Edit: Tampilkan chip hanya untuk pelanggan benar-benar baru -->
+        <v-chip
+          v-if="editedIndex === -1 || isPelangganBaru(item.raw.id)"
+          size="x-small"
+          color="success"
+          variant="elevated"
+          class="ms-2 flex-shrink-0"
+        >
+          USER BARU
+        </v-chip>
+      </div>
+    </template>
+  </v-list-item>
+</template>
             </v-autocomplete>
         </div>
 
@@ -742,6 +869,51 @@
               ></v-text-field>
             </v-col>
           </v-row>
+
+          <!-- Status Modem Section - Muncul untuk Aktif dan Berhenti -->
+          <v-expand-transition>
+            <div v-if="editedItem.status === 'Aktif' || editedItem.status === 'Berhenti'" class="mt-4">
+              <label class="input-label">
+                Status Modem
+                <span class="text-caption text-medium-emphasis ms-2">
+                  {{ editedItem.status === 'Aktif' ? '(Wajib diisi)' : '(Wajib diisi)' }}
+                </span>
+              </label>
+              <v-select
+                v-model="editedItem.status_modem"
+                :items="getStatusModemOptions(editedItem.status)"
+                item-title="title"
+                item-value="value"
+                variant="outlined"
+                prepend-inner-icon="mdi-wifi-router"
+                density="comfortable"
+                hide-details="auto"
+                class="status-modem-field"
+              ></v-select>
+            </div>
+          </v-expand-transition>
+
+          <!-- Alasan Berhenti Section - Hanya muncul jika status = Berhenti -->
+          <v-expand-transition>
+            <div v-if="editedItem.status === 'Berhenti'" class="mt-4">
+              <label class="input-label">
+                Alasan Berhenti
+                <span class="text-caption text-medium-emphasis ms-2">(Opsional)</span>
+              </label>
+              <v-textarea
+                v-model="editedItem.alasan_berhenti"
+                label="Tuliskan alasan pelanggan berhenti berlangganan..."
+                variant="outlined"
+                prepend-inner-icon="mdi-text-box-outline"
+                rows="3"
+                auto-grow
+                density="comfortable"
+                hide-details="auto"
+                class="alasan-field"
+                placeholder="Contoh: Pindah rumah, tidak puas dengan layanan, alasan ekonomi, dll."
+              ></v-textarea>
+            </div>
+          </v-expand-transition>
         </div>
       </v-form>
     </v-card-text>
@@ -851,17 +1023,343 @@
       </v-card>
     </v-dialog>
 
+    <!-- Modal View Pelanggan -->
+    <v-dialog v-model="pelangganViewDialog" max-width="900px" scrollable>
+      <v-card>
+        <v-card-title class="d-flex align-center pa-4 bg-primary text-white">
+          <v-icon class="me-3">mdi-account-details</v-icon>
+          Detail Pelanggan & Statistik Pembayaran
+        </v-card-title>
+
+        <v-card-text class="pa-4" v-if="selectedPelanggan">
+          <!-- Customer Information Section -->
+          <div class="mb-6">
+            <h3 class="text-h6 font-weight-bold mb-3 d-flex align-center">
+              <v-icon class="me-2" color="primary">mdi-account-circle</v-icon>
+              Informasi Pelanggan
+            </h3>
+            <v-row>
+              <v-col cols="12" md="6">
+                <v-list density="compact">
+                  <v-list-item>
+                    <template v-slot:prepend>
+                      <v-icon size="20" class="me-3 text-medium-emphasis">mdi-account</v-icon>
+                    </template>
+                    <v-list-item-title class="font-weight-bold">Nama</v-list-item-title>
+                    <v-list-item-subtitle>{{ selectedPelanggan.pelanggan?.nama || 'N/A' }}</v-list-item-subtitle>
+                  </v-list-item>
+                  <v-list-item>
+                    <template v-slot:prepend>
+                      <v-icon size="20" class="me-3 text-medium-emphasis">mdi-phone</v-icon>
+                    </template>
+                    <v-list-item-title class="font-weight-bold">No. Telepon</v-list-item-title>
+                    <v-list-item-subtitle>{{ selectedPelanggan.pelanggan?.no_telp || 'N/A' }}</v-list-item-subtitle>
+                  </v-list-item>
+                  <v-list-item>
+                    <template v-slot:prepend>
+                      <v-icon size="20" class="me-3 text-medium-emphasis">mdi-map-marker</v-icon>
+                    </template>
+                    <v-list-item-title class="font-weight-bold">Alamat</v-list-item-title>
+                    <v-list-item-subtitle>{{ selectedPelanggan.pelanggan?.alamat || 'N/A' }}</v-list-item-subtitle>
+                  </v-list-item>
+                </v-list>
+              </v-col>
+              <v-col cols="12" md="6">
+                <v-list density="compact">
+                  <v-list-item>
+                    <template v-slot:prepend>
+                      <v-icon size="20" class="me-3 text-medium-emphasis">mdi-identifier</v-icon>
+                    </template>
+                    <v-list-item-title class="font-weight-bold">ID Pelanggan</v-list-item-title>
+                    <v-list-item-subtitle>
+                      <div class="d-flex align-center">
+                        <span>{{ selectedPelanggan.pelanggan_id }}</span>
+                        <v-chip
+                          v-if="dataTeknisInfo && dataTeknisInfo.id_pelanggan"
+                          size="x-small"
+                          color="primary"
+                          class="ms-2"
+                          label
+                        >
+                          {{ dataTeknisInfo.id_pelanggan }}
+                        </v-chip>
+                      </div>
+                      <div v-if="dataTeknisInfo && dataTeknisInfo.id_pelanggan" class="text-caption text-medium-emphasis mt-1">
+                        ID Pelanggan (Data Teknis)
+                      </div>
+                    </v-list-item-subtitle>
+                  </v-list-item>
+                                    <v-list-item>
+                    <template v-slot:prepend>
+                      <v-icon size="20" class="me-3 text-medium-emphasis">mdi-cash</v-icon>
+                    </template>
+                    <v-list-item-title class="font-weight-bold">Harga/Bulan</v-list-item-title>
+                    <v-list-item-subtitle>{{ formatCurrency(selectedPelanggan.harga_final) }}</v-list-item-subtitle>
+                  </v-list-item>
+                </v-list>
+              </v-col>
+            </v-row>
+          </div>
+
+          <v-divider class="my-4"></v-divider>
+
+          <!-- Subscription Information -->
+          <div class="mb-6">
+            <h3 class="text-h6 font-weight-bold mb-3 d-flex align-center">
+              <v-icon class="me-2" color="primary">mdi-package</v-icon>
+              Informasi Langganan
+            </h3>
+            <v-row>
+              <v-col cols="12" md="6">
+                <v-list density="compact">
+                  <v-list-item>
+                    <template v-slot:prepend>
+                      <v-icon size="20" class="me-3 text-medium-emphasis">mdi-package-variant</v-icon>
+                    </template>
+                    <v-list-item-title class="font-weight-bold">Paket Layanan</v-list-item-title>
+                    <v-list-item-subtitle>{{ getPaketName(selectedPelanggan.paket_layanan_id) }}</v-list-item-subtitle>
+                  </v-list-item>
+                  <v-list-item>
+                    <template v-slot:prepend>
+                      <v-icon size="20" class="me-3 text-medium-emphasis">mdi-credit-card</v-icon>
+                    </template>
+                    <v-list-item-title class="font-weight-bold">Metode Pembayaran</v-list-item-title>
+                    <v-list-item-subtitle>{{ selectedPelanggan.metode_pembayaran }}</v-list-item-subtitle>
+                  </v-list-item>
+                </v-list>
+              </v-col>
+              <v-col cols="12" md="6">
+                <v-list density="compact">
+                  <v-list-item>
+                    <template v-slot:prepend>
+                      <v-icon size="20" class="me-3 text-medium-emphasis">mdi-calendar</v-icon>
+                    </template>
+                    <v-list-item-title class="font-weight-bold">Tanggal Mulai</v-list-item-title>
+                    <v-list-item-subtitle>{{ formatDate(selectedPelanggan.tgl_mulai_langganan) }}</v-list-item-subtitle>
+                  </v-list-item>
+                  <v-list-item>
+                    <template v-slot:prepend>
+                      <v-icon size="20" class="me-3 text-medium-emphasis">mdi-calendar-alert</v-icon>
+                    </template>
+                    <v-list-item-title class="font-weight-bold">Jatuh Tempo</v-list-item-title>
+                    <v-list-item-subtitle>{{ formatDate(selectedPelanggan.tgl_jatuh_tempo) }}</v-list-item-subtitle>
+                  </v-list-item>
+                </v-list>
+              </v-col>
+            </v-row>
+          </div>
+
+          <v-divider class="my-4"></v-divider>
+
+          <!-- Data Teknis Information -->
+          <div class="mb-6" v-if="dataTeknisInfo">
+            <h3 class="text-h6 font-weight-bold mb-3 d-flex align-center">
+              <v-icon class="me-2" color="primary">mdi-network-outline</v-icon>
+              Data Teknis
+            </h3>
+            <v-row>
+              <v-col cols="12" md="6">
+                <v-list density="compact">
+                  <v-list-item v-if="dataTeknisInfo.ip_pelanggan">
+                    <template v-slot:prepend>
+                      <v-icon size="20" class="me-3 text-medium-emphasis">mdi-ip-network</v-icon>
+                    </template>
+                    <v-list-item-title class="font-weight-bold">IP Address</v-list-item-title>
+                    <v-list-item-subtitle>{{ dataTeknisInfo.ip_pelanggan }}</v-list-item-subtitle>
+                  </v-list-item>
+                  <v-list-item v-if="dataTeknisInfo.profile_pppoe">
+                    <template v-slot:prepend>
+                      <v-icon size="20" class="me-3 text-medium-emphasis">mdi-speedometer</v-icon>
+                    </template>
+                    <v-list-item-title class="font-weight-bold">Profile PPPoE</v-list-item-title>
+                    <v-list-item-subtitle>{{ dataTeknisInfo.profile_pppoe }}</v-list-item-subtitle>
+                  </v-list-item>
+                </v-list>
+              </v-col>
+              <v-col cols="12" md="6">
+                <v-list density="compact">
+                  <v-list-item v-if="dataTeknisInfo.olt">
+                    <template v-slot:prepend>
+                      <v-icon size="20" class="me-3 text-medium-emphasis">mdi-server</v-icon>
+                    </template>
+                    <v-list-item-title class="font-weight-bold">OLT</v-list-item-title>
+                    <v-list-item-subtitle>{{ dataTeknisInfo.olt }}</v-list-item-subtitle>
+                  </v-list-item>
+                  <v-list-item v-if="dataTeknisInfo.pon !== null && dataTeknisInfo.pon !== undefined">
+                    <template v-slot:prepend>
+                      <v-icon size="20" class="me-3 text-medium-emphasis">mdi-ethernet</v-icon>
+                    </template>
+                    <v-list-item-title class="font-weight-bold">PON Port</v-list-item-title>
+                    <v-list-item-subtitle>{{ dataTeknisInfo.pon }}</v-list-item-subtitle>
+                  </v-list-item>
+                  <v-list-item v-if="dataTeknisInfo.sn">
+                    <template v-slot:prepend>
+                      <v-icon size="20" class="me-3 text-medium-emphasis">mdi-serial-number</v-icon>
+                    </template>
+                    <v-list-item-title class="font-weight-bold">Serial Number ONU</v-list-item-title>
+                    <v-list-item-subtitle>{{ dataTeknisInfo.sn }}</v-list-item-subtitle>
+                  </v-list-item>
+                </v-list>
+              </v-col>
+            </v-row>
+          </div>
+
+          <v-divider class="my-4"></v-divider>
+
+          <!-- Payment Statistics -->
+          <div class="mb-6">
+            <h3 class="text-h6 font-weight-bold mb-3 d-flex align-center">
+              <v-icon class="me-2" color="primary">mdi-chart-pie</v-icon>
+              Statistik Pembayaran
+            </h3>
+            <v-row>
+              <v-col cols="12" md="4">
+                <v-card class="pa-3" variant="tonal" color="success">
+                  <div class="d-flex align-center">
+                    <v-icon size="32" color="success" class="me-3">mdi-check-circle</v-icon>
+                    <div>
+                      <div class="text-h5 font-weight-bold text-success">{{ paymentStats.onTimeCount }}</div>
+                      <div class="text-body-2">Pembayaran Tepat Waktu</div>
+                    </div>
+                  </div>
+                  <div class="mt-2">
+                    <v-progress-linear
+                      :model-value="paymentStats.totalInvoices > 0 ? (paymentStats.onTimeCount / paymentStats.totalInvoices) * 100 : 0"
+                      color="success"
+                      height="6"
+                      rounded
+                    ></v-progress-linear>
+                  </div>
+                </v-card>
+              </v-col>
+              <v-col cols="12" md="4">
+                <v-card class="pa-3" variant="tonal" color="warning">
+                  <div class="d-flex align-center">
+                    <v-icon size="32" color="warning" class="me-3">mdi-clock-alert</v-icon>
+                    <div>
+                      <div class="text-h5 font-weight-bold text-warning">{{ paymentStats.lateCount }}</div>
+                      <div class="text-body-2">Pembayaran Terlambat</div>
+                    </div>
+                  </div>
+                  <div class="mt-2">
+                    <v-progress-linear
+                      :model-value="paymentStats.totalInvoices > 0 ? (paymentStats.lateCount / paymentStats.totalInvoices) * 100 : 0"
+                      color="warning"
+                      height="6"
+                      rounded
+                    ></v-progress-linear>
+                  </div>
+                </v-card>
+              </v-col>
+              <v-col cols="12" md="4">
+                <v-card class="pa-3" variant="tonal" color="info">
+                  <div class="d-flex align-center">
+                    <v-icon size="32" color="info" class="me-3">mdi-receipt</v-icon>
+                    <div>
+                      <div class="text-h5 font-weight-bold text-info">{{ paymentStats.totalInvoices }}</div>
+                      <div class="text-body-2">Total Invoice</div>
+                    </div>
+                  </div>
+                </v-card>
+              </v-col>
+            </v-row>
+          </div>
+
+          <v-divider class="my-4"></v-divider>
+
+          <!-- Payment History -->
+          <div>
+            <h3 class="text-h6 font-weight-bold mb-3 d-flex align-center">
+              <v-icon class="me-2" color="primary">mdi-history</v-icon>
+              Riwayat Pembayaran
+            </h3>
+            <div v-if="paymentHistory.length === 0" class="text-center pa-4 text-medium-emphasis">
+              <v-icon size="48" class="mb-2">mdi-receipt-outline</v-icon>
+              <div>Belum ada riwayat pembayaran</div>
+            </div>
+            <v-data-table
+              v-else
+              :headers="paymentHeaders"
+              :items="paymentHistory"
+              density="compact"
+              hide-default-footer
+              class="elevation-1"
+            >
+              <template v-slot:item.tanggal_bayar="{ item }">
+                {{ formatDate(item.tanggal_bayar) }}
+              </template>
+              <template v-slot:item.status_pembayaran="{ item }">
+                <v-chip
+                  :color="item.status_pembayaran === 'Lunas' ? 'success' : 'warning'"
+                  size="small"
+                  label
+                >
+                  {{ item.status_pembayaran }}
+                </v-chip>
+              </template>
+              <template v-slot:item.terlambat="{ item }">
+                <v-chip
+                  v-if="item.terlambat > 0"
+                  color="error"
+                  size="small"
+                  variant="tonal"
+                >
+                  {{ item.terlambat }} hari
+                </v-chip>
+                <v-chip
+                  v-else
+                  color="success"
+                  size="small"
+                  variant="tonal"
+                >
+                  <v-icon start size="12">mdi-check</v-icon>
+                  Tepat waktu
+                </v-chip>
+              </template>
+            </v-data-table>
+          </div>
+        </v-card-text>
+
+        <v-card-actions class="pa-4">
+          <v-spacer></v-spacer>
+          <v-btn color="primary" variant="elevated" @click="pelangganViewDialog = false">
+            Tutup
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- Snackbar -->
+    <v-snackbar
+      v-model="snackbar.show"
+      :color="snackbar.color"
+      :timeout="4000"
+      location="top right"
+      class="enhanced-snackbar"
+    >
+      <div class="d-flex align-center">
+        <v-icon class="mr-2">
+          {{ snackbar.color === 'success' ? 'mdi-check-circle' :
+             snackbar.color === 'error' ? 'mdi-alert-circle' : 'mdi-information' }}
+        </v-icon>
+        {{ snackbar.text }}
+      </div>
+    </v-snackbar>
   </v-container>
 </template>
 
 <script setup lang="ts">
 // import { ref, onMounted, computed, watch } from 'vue';
 import { ref, onMounted, onUnmounted, computed, watch, nextTick } from 'vue';
+import { useRouter } from 'vue-router';
 import apiClient from '@/services/api';
 import { useDisplay } from 'vuetify';
 import { debounce } from 'lodash-es';
 import SkeletonLoader from '@/components/SkeletonLoader.vue';
 
+
+// --- Router ---
+const router = useRouter();
 
 // --- Responsive State ---
 const { mobile } = useDisplay();
@@ -887,13 +1385,18 @@ interface Langganan {
   metode_pembayaran: string;
   harga_awal: number | null;
   harga_final: number;
-  tgl_mulai_langganan?: string | null; 
+  tgl_mulai_langganan?: string | null;
+  alasan_berhenti?: string | null;
+  status_modem?: string | null;
+  whatsapp_status?: string | null;
+  last_whatsapp_sent?: string | null;
 }
 
 interface PelangganData {
   id: number;
   nama: string;
   alamat: string;
+  no_telp?: string;
 }
 
 interface PelangganSelectItem {
@@ -901,6 +1404,7 @@ interface PelangganSelectItem {
   nama: string;
   id_brand: string;
   alamat?: string; // Optional karena mungkin tidak ada di semua API calls
+  no_telp?: string; // Nomor telepon pelanggan
 }
 
 interface PaketLayananSelectItem {
@@ -926,9 +1430,30 @@ const dialog = ref(false);
 const dialogDelete = ref(false);
 const editedIndex = ref(-1);
 const formValid = ref(false);
+const snackbar = ref({ show: false, text: '', color: 'success' as 'success' | 'error' | 'warning' });
 
 const selectedLangganan = ref<Langganan[]>([]);
 const dialogBulkDelete = ref(false);
+
+// Pelanggan View Modal Data
+const pelangganViewDialog = ref(false);
+const selectedPelanggan = ref<Langganan | null>(null);
+const dataTeknisInfo = ref<any>(null);
+const paymentHistory = ref<any[]>([]);
+const paymentStats = ref({
+  onTimeCount: 0,
+  lateCount: 0,
+  totalInvoices: 0
+});
+
+
+const paymentHeaders = [
+  { title: 'No. Invoice', key: 'id', sortable: false },
+  { title: 'Tanggal Bayar', key: 'tanggal_bayar', sortable: false },
+  { title: 'Jumlah', key: 'jumlah', sortable: false },
+  { title: 'Status', key: 'status_pembayaran', sortable: false },
+  { title: 'Keterlambatan', key: 'terlambat', sortable: false }
+];
 
 const dialogImport = ref(false);
 const importing = ref(false);
@@ -976,6 +1501,8 @@ const defaultItem: Partial<Langganan> = {
   metode_pembayaran: 'Otomatis',
   harga_awal: 0,
   tgl_mulai_langganan: null,
+  alasan_berhenti: null,
+  status_modem: 'Terpasang',
 };
 const editedItem = ref({ ...defaultItem });
 const itemToDelete = ref<Langganan | null>(null);
@@ -988,20 +1515,87 @@ const rules = {
   required: (value: any) => !!value || 'Field ini wajib diisi',
 };
 
-// --- Headers ---
-const headers = [
-  { title: 'No', key: 'nomor', sortable: false, width: '5%' }, // Beri lebar sangat kecil
+// --- Dynamic Headers based on Filter ---
+const baseHeaders = [
+  { title: 'No', key: 'nomor', sortable: false, width: '3%' }, // Beri lebar sangat kecil
   // ATUR LEBAR NAMA DAN ALAMAT SECARA EKSPLISIT
-  { title: 'Nama Pelanggan', key: 'pelanggan.nama', sortable: true, width: '15%' }, 
-  { title: 'Alamat', key: 'pelanggan.alamat', sortable: false, width: '15%' },
-  // Beri juga lebar pada kolom lain agar lebih seimbang
-  { title: 'Paket Layanan', key: 'paket_layanan_id', width: '15%' },
-  { title: 'Metode Bayar', key: 'metode_pembayaran', align: 'center', width: '15%' },
-  { title: 'Harga', key: 'harga_final', align: 'end' },
-  { title: 'Status', key: 'status', align: 'center', width: '20%' },
-  { title: 'Jatuh Tempo', key: 'tgl_jatuh_tempo', align: 'center', width: '20%' },
-  { title: 'Actions', key: 'actions', sortable: false, align: 'center', width: '20%' },
-] as const;
+  { title: 'Nama Pelanggan', key: 'pelanggan.nama', sortable: true, width: '13%' },
+  { title: 'Alamat', key: 'pelanggan.alamat', sortable: false, width: '10%' },
+  { title: 'No. Telepon', key: 'pelanggan.no_telp', sortable: false, width: '9%' },
+  { title: 'Paket Layanan', key: 'paket_layanan_id', width: '11%' },
+  { title: 'Metode Bayar', key: 'metode_pembayaran', align: 'center', width: '9%' },
+  { title: 'Harga', key: 'harga_final', align: 'end', width: '7%' },
+  { title: 'Status', key: 'status', align: 'center', width: '8%' },
+  { title: 'Jatuh Tempo', key: 'tgl_jatuh_tempo', align: 'center', width: '8%' },
+  { title: 'Actions', key: 'actions', sortable: false, align: 'center', width: '18%' },
+];
+
+// Alasan Berhenti header yang akan ditambahkan saat filter = "Berhenti"
+const alasanBerhentiHeader = {
+  title: 'Alasan Berhenti',
+  key: 'alasan_berhenti',
+  sortable: false,
+  width: '12%'
+};
+
+// Status Modem header yang akan ditambahkan saat filter bukan "Suspended"
+const statusModemHeader = {
+  title: 'Status Modem',
+  key: 'status_modem',
+  sortable: false,
+  width: '10%',
+  align: 'center'
+};
+
+// Status WhatsApp header yang akan ditambahkan saat filter = "Suspended"
+const whatsappStatusHeader = {
+  title: 'Status WhatsApp',
+  key: 'whatsapp_status',
+  sortable: false,
+  width: '8%',
+  align: 'center'
+};
+
+// Computed headers yang dinamis berdasarkan filter
+const headers = computed(() => {
+  let newHeaders: any[] = [...baseHeaders];
+  const statusIndex = baseHeaders.findIndex(h => h.key === 'status');
+
+  // Logic untuk menambahkan kolom berdasarkan filter
+  let columnsAdded = 0;
+
+  // Tambahkan Status Modem untuk filter "Aktif" atau "Berhenti"
+  if (selectedStatus.value === 'Aktif' || selectedStatus.value === 'Berhenti') {
+    newHeaders.splice(statusIndex + 1 + columnsAdded, 0, statusModemHeader);
+    columnsAdded++;
+  }
+
+  // Tambahkan Status WhatsApp hanya untuk filter "Suspended"
+  if (selectedStatus.value === 'Suspended') {
+    newHeaders.splice(statusIndex + 1 + columnsAdded, 0, whatsappStatusHeader);
+    columnsAdded++;
+  }
+
+  // Tambahkan Alasan Berhenti hanya untuk filter "Berhenti"
+  if (selectedStatus.value === 'Berhenti') {
+    newHeaders.splice(statusIndex + 1 + columnsAdded, 0, alasanBerhentiHeader);
+    columnsAdded++;
+  }
+
+  // Adjust width kolom lain untuk balance
+  return newHeaders.map((header: any) => {
+    if (header.key === 'actions') {
+      return { ...header, width: columnsAdded > 0 ? '8%' : '10%' };
+    }
+    if (header.key === 'harga_final') {
+      return { ...header, width: columnsAdded > 0 ? '7%' : '8%' };
+    }
+    if (header.key === 'tgl_jatuh_tempo') {
+      return { ...header, width: columnsAdded > 1 ? '8%' : '10%' };
+    }
+    return header;
+  });
+});
 
 // --- Computed Properties ---
 const formTitle = computed(() => (editedIndex.value === -1 ? 'Tambah Langganan Baru' : 'Edit Langganan'));
@@ -1023,13 +1617,23 @@ onUnmounted(() => {
   window.removeEventListener('new-notification', handleNewNotification);
 });
 
+
 const dropdownPelangganSource = computed(() => {
-  // Jika dialog dibuka oleh notifikasi, gunakan daftar sementara (yang hanya berisi 1 pelanggan)
   if (notificationPelangganList.value) {
     return notificationPelangganList.value;
   }
-  // Jika tidak, gunakan daftar normal yang sudah difilter
-  return eligiblePelangganForSelect.value;
+
+  // Saat mode Edit, tampilkan semua pelanggan agar pilihan yang ada tidak hilang
+  if (isEditMode.value) {
+    return pelangganSelectList.value;
+  }
+
+  // Saat mode Tambah: HANYA tampilkan pelanggan yang benar-benar baru (belum pernah ada langganan)
+  const newPelangganOnly = pelangganSelectList.value.filter(pelanggan =>
+    isPelangganBaru(pelanggan.id)
+  );
+
+  return newPelangganOnly;
 });
 
 watch(() => editedItem.value.pelanggan_id, async (newPelangganId) => {
@@ -1239,6 +1843,9 @@ async function fetchLangganan(isLoadMore = false, explicitPage: number | null = 
     } else {
       langgananList.value = filteredData;
       totalLanggananCount.value = newTotalCount;
+
+      // Update cache pelanggan baru ketika data berubah (bukan loadMore)
+      updatePelangganBaruCache();
     }
 
     if (langgananList.value.length >= newTotalCount) {
@@ -1391,18 +1998,7 @@ function resetFilters() {
 }
 // ============================================
 
-const eligiblePelangganForSelect = computed(() => {
-  // Saat mode Edit, tampilkan semua pelanggan agar pilihan yang ada tidak hilang
-  if (isEditMode.value) {
-    return pelangganSelectList.value;
-  }
-  
-  // Saat mode Tambah, filter pelanggan yang belum memiliki langganan
-  const subscribedPelangganIds = new Set(langgananList.value.map(l => l.pelanggan_id));
-  const uniquePelanggan = pelangganSelectList.value.filter(p => !subscribedPelangganIds.has(p.id));
-  
-  return uniquePelanggan;
-});
+// eligiblePelangganForSelect sudah tidak digunakan lagi, digantikan oleh dropdownPelangganSource
 
 async function fetchPelangganForSelect() {
   try {
@@ -1412,6 +2008,9 @@ async function fetchPelangganForSelect() {
 
     if (response.data && Array.isArray(response.data.data)) {
       pelangganSelectList.value = response.data.data;
+
+      // Background: Update cache untuk semua pelanggan
+      updatePelangganBaruCache();
     } else {
       console.error("Struktur data pelanggan dari API tidak sesuai. Properti 'data' tidak ditemukan atau bukan array:", response.data);
       pelangganSelectList.value = [];
@@ -1419,6 +2018,44 @@ async function fetchPelangganForSelect() {
   } catch (error) {
     console.error("Gagal mengambil data pelanggan untuk select:", error);
     pelangganSelectList.value = [];
+  }
+}
+
+// Fungsi untuk mengupdate cache pelanggan baru secara asynchronous
+async function updatePelangganBaruCache() {
+  // Clear cache lama
+  pelangganBaruCache.clear();
+
+  try {
+    // Load semua langganan tanpa pagination untuk checking yang akurat
+    const response = await apiClient.get('/langganan/?limit=10000');
+    const allLangganan = response.data.data || response.data;
+
+    if (Array.isArray(allLangganan)) {
+      // Buat Set dari semua pelanggan_id yang sudah ada langganan
+      const existingPelangganIds = new Set(allLangganan.map((l: any) => l.pelanggan_id));
+
+      // Update cache untuk semua pelanggan
+      pelangganSelectList.value.forEach(pelanggan => {
+        const isNew = !existingPelangganIds.has(pelanggan.id);
+        pelangganBaruCache.set(pelanggan.id, isNew);
+      });
+    } else {
+      // Fallback: gunakan data dari current page
+      const existingPelangganIds = new Set(langgananList.value.map(l => l.pelanggan_id));
+      pelangganSelectList.value.forEach(pelanggan => {
+        const isNew = !existingPelangganIds.has(pelanggan.id);
+        pelangganBaruCache.set(pelanggan.id, isNew);
+      });
+    }
+  } catch (error) {
+    console.warn('Gagal mengupdate cache pelanggan baru, menggunakan fallback:', error);
+    // Fallback: gunakan data dari current page
+    const existingPelangganIds = new Set(langgananList.value.map(l => l.pelanggan_id));
+    pelangganSelectList.value.forEach(pelanggan => {
+      const isNew = !existingPelangganIds.has(pelanggan.id);
+      pelangganBaruCache.set(pelanggan.id, isNew);
+    });
   }
 }
 
@@ -1439,6 +2076,10 @@ function openDialog(item?: Langganan) {
   editedIndex.value = item ? langgananList.value.findIndex(l => l.id === item.id) : -1;
   editedItem.value = item ? { ...item } : { ...defaultItem };
   dialog.value = true;
+}
+
+function navigateToEdit(item: Langganan) {
+  router.push(`/langganan/${item.id}/edit`);
 }
 
 function closeDialog() {
@@ -1478,17 +2119,22 @@ async function saveLangganan() {
         status: editedItem.value.status,
         metode_pembayaran: editedItem.value.metode_pembayaran,
         tgl_jatuh_tempo: editedItem.value.tgl_jatuh_tempo,
-        harga_awal: editedItem.value.harga_awal
+        harga_awal: editedItem.value.harga_awal,
+        alasan_berhenti: editedItem.value.alasan_berhenti || null,
+        status_modem: editedItem.value.status_modem || null
       };
       await apiClient.patch(`/langganan/${editedItem.value.id}`, updatePayload);
+      showSnackbar('Data langganan berhasil diperbarui', 'success');
     } else {
       // Saat membuat baru, kirim payload yang sudah kita siapkan
       await apiClient.post('/langganan/', dataToSave);
+      showSnackbar('Data langganan berhasil ditambahkan', 'success');
     }
     fetchLangganan();
     closeDialog();
-  } catch (error) { 
+  } catch (error) {
     console.error("Gagal menyimpan data langganan:", error);
+    showSnackbar('Gagal menyimpan data langganan', 'error');
   } finally {
     saving.value = false;
   }
@@ -1518,14 +2164,37 @@ async function confirmDelete() {
   }
 }
 
-function isPelangganExisting(pelangganId: number): boolean {
-  // Cari apakah pelanggan sudah pernah memiliki langganan sebelumnya
-  // yang sudah disimpan (memiliki ID dan bukan item yang sedang diedit)
-  return langgananList.value.some(l =>
-    l.pelanggan_id === pelangganId &&
-    l.id !== editedItem.value.id // Exclude current editing item
-  );
+// function isPelangganExisting(pelangganId: number): boolean {
+//   // Cari apakah pelanggan sudah pernah memiliki langganan sebelumnya
+//   // yang sudah disimpan (memiliki ID dan bukan item yang sedang diedit)
+//   return langgananList.value.some(l =>
+//     l.pelanggan_id === pelangganId &&
+//     l.id !== editedItem.value.id // Exclude current editing item
+//   );
+// }
+
+// Cache untuk hasil pengecekan pelanggan
+const pelangganBaruCache = new Map<number, boolean>();
+
+// Fungsi: Cek apakah pelanggan benar-benar baru (belum pernah ada invoice/langganan sama sekali)
+function isPelangganBaru(pelangganId: number): boolean {
+  if (!pelangganId) return false;
+
+  // Cek cache dulu
+  if (pelangganBaruCache.has(pelangganId)) {
+    return pelangganBaruCache.get(pelangganId)!;
+  }
+
+  // Cek di langgananList yang sudah dimuat (current page)
+  const hasLanggananSebelumnya = langgananList.value.some(l => l.pelanggan_id === pelangganId);
+
+  // Cache hasilnya
+  pelangganBaruCache.set(pelangganId, !hasLanggananSebelumnya);
+
+  // Jika belum pernah ada langganan sama sekali, ini adalah pelanggan benar-benar baru
+  return !hasLanggananSebelumnya;
 }
+
 
 // --- Helper Methods ---
 function getPelangganName(pelangganId: number | undefined): string {
@@ -1562,6 +2231,28 @@ function getPelangganAlamat(pelangganId: number | undefined): string {
   return 'Alamat tidak tersedia';
 }
 
+function getPelangganPhone(pelangganId: number | undefined): string {
+  if (!pelangganId) return 'N/A';
+
+  // Prioritaskan data dari backend yang sudah ter-load di langgananList
+  if (Array.isArray(langgananList.value)) {
+    const langganan = langgananList.value.find(l => l.pelanggan_id === pelangganId);
+    if (langganan?.pelanggan?.no_telp) {
+      return langganan.pelanggan.no_telp;
+    }
+  }
+
+  // Fallback: Cari dari pelangganSelectList jika tidak ada di backend
+  if (Array.isArray(pelangganSelectList.value)) {
+    const pelanggan = pelangganSelectList.value.find(p => p.id === pelangganId);
+    if (pelanggan?.no_telp) {
+      return pelanggan.no_telp;
+    }
+  }
+
+  return 'N/A';
+}
+
 function getPaketName(paketId: number | undefined): string {
     if (!paketId) return 'N/A';
     // Check if paketLayananSelectList.value is an array before calling .find()
@@ -1591,13 +2282,31 @@ function formatCurrency(value: number | null | undefined): string {
   }).format(value);
 }
 
-function formatDate(dateString: string | Date | null | undefined): string {
+function formatDate(dateString: string | Date | null | undefined, includeTime: boolean = false): string {
   if (!dateString) return 'N/A';
   const date = new Date(dateString);
   if (isNaN(date.getTime())) return 'Invalid Date';
-  return date.toLocaleDateString('id-ID', {
-    year: 'numeric', month: 'long', day: 'numeric'
-  });
+
+  if (includeTime) {
+    // Format dengan timezone WIB
+    const options: Intl.DateTimeFormatOptions = {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: 'Asia/Jakarta'
+    };
+
+    const formattedDate = date.toLocaleString('id-ID', options);
+
+    // Ganti koma dengan "pukul" dan tambahkan WIB
+    return formattedDate.replace(/,/g, ' pukul') + ' WIB';
+  } else {
+    return date.toLocaleDateString('id-ID', {
+      year: 'numeric', month: 'long', day: 'numeric'
+    });
+  }
 }
 
 
@@ -1666,6 +2375,259 @@ async function importFromCsv() {
     importing.value = false;
   }
 }
+
+function formatAlasanBerhenti(alasan: string | null | undefined, status: string): string {
+  if (status !== 'Berhenti') return '-';
+  return alasan || 'Tidak ada alasan';
+}
+
+function formatModemStatus(statusModem: string | null | undefined, langgananStatus: string): string {
+  // Jika status langganan Suspended, tampilkan "-"
+  if (langgananStatus === 'Suspended') return '-';
+
+  // Jika status langganan Aktif atau Berhenti
+  if (statusModem) return statusModem;
+
+  // Default logic berdasarkan status langganan
+  if (langgananStatus === 'Aktif') return 'Terpasang';
+  if (langgananStatus === 'Berhenti') return 'Diambil';
+
+  return '-';
+}
+
+function getModemStatusColor(statusModem: string | null | undefined, langgananStatus: string): string {
+  const modemStatus = formatModemStatus(statusModem, langgananStatus);
+
+  switch (modemStatus) {
+    case 'Terpasang': return 'success';
+    case 'Diambil': return 'warning';
+    case 'Rusak': return 'error';
+    case 'Replacement': return 'info';
+    default: return 'grey';
+  }
+}
+
+function getStatusModemOptions(langgananStatus: string): Array<{title: string, value: string}> {
+  if (langgananStatus === 'Aktif') {
+    return [
+      { title: '✅ Terpasang', value: 'Terpasang' },
+      { title: '🔄 Replacement', value: 'Replacement' },
+      { title: '❌ Rusak', value: 'Rusak' }
+    ];
+  } else if (langgananStatus === 'Berhenti') {
+    return [
+      { title: '✅ Diambil', value: 'Diambil' },
+      { title: '❌ Hilang', value: 'Hilang' },
+      { title: '💥 Rusak', value: 'Rusak' }
+    ];
+  }
+  return [];
+}
+
+// --- WhatsApp Functions ---
+async function sendWhatsApp(item: Langganan) {
+  const phoneNumber = getPelangganPhone(item.pelanggan_id);
+
+  if (phoneNumber === 'N/A' || !phoneNumber) {
+    // Tampilkan alert bahwa nomor telepon tidak tersedia
+    alert('Nomor telepon pelanggan tidak tersedia');
+    return;
+  }
+
+  // Format nomor telepon untuk WhatsApp
+  const formattedPhone = phoneNumber.replace(/^0/, '62').replace(/[-\s]/g, '');
+
+  // Format tanggal jatuh tempo
+  const jatuhTempo = item.tgl_jatuh_tempo ?
+    new Date(item.tgl_jatuh_tempo).toLocaleDateString('id-ID', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
+    }) : 'N/A';
+
+  // Ambil ID Pelanggan dari Data Teknis
+  let idPelanggan = item.id; // fallback ke langganan_id
+  try {
+    const dataTeknisResponse = await apiClient.get(`/data_teknis/by-pelanggan/${item.pelanggan_id}`);
+    if (dataTeknisResponse.data && dataTeknisResponse.data.length > 0) {
+      // Cari yang cocok dengan langganan ini
+      const dataTeknis = dataTeknisResponse.data.find((dt: any) =>
+        dt.nama_pelanggan === item.pelanggan?.nama ||
+        dt.no_telp === item.pelanggan?.no_telp
+      );
+      if (dataTeknis && dataTeknis.id_pelanggan) {
+        idPelanggan = dataTeknis.id_pelanggan;
+      }
+    }
+  } catch (error) {
+    console.warn('Gagal mengambil ID Pelanggan dari Data Teknis, menggunakan fallback:', error);
+  }
+
+  // Buat pesan WhatsApp (sesuai template yang diminta)
+  const message = `Halo ${item.pelanggan?.nama || 'Pelanggan'},
+
+Kami dari tim support Artacom. Langganan internet Anda dengan nomor ${idPelanggan} saat ini dalam status SUSPENDED.
+
+Mohon segera melakukan pembayaran untuk mengaktifkan kembali layanan internet Anda.
+
+Total tagihan: Rp ${item.harga_awal?.toLocaleString('id-ID') || '0'}
+Jatuh tempo: ${jatuhTempo}
+
+Terima kasih atas perhatian Anda.`;
+
+  // Encode pesan untuk URL
+  const encodedMessage = encodeURIComponent(message);
+
+  // Buka WhatsApp dengan nomor dan pesan
+  const whatsappUrl = `https://wa.me/${formattedPhone}?text=${encodedMessage}`;
+  window.open(whatsappUrl, '_blank');
+
+  // Update status WhatsApp di database
+  try {
+    const response = await apiClient.patch(`/langganan/${item.id}`, {
+      whatsapp_status: 'sent',
+      last_whatsapp_sent: new Date().toISOString()
+    });
+
+    if (response.data) {
+      // Update data di frontend
+      const index = langgananList.value.findIndex(l => l.id === item.id);
+      if (index !== -1) {
+        langgananList.value[index] = {
+          ...langgananList.value[index],
+          whatsapp_status: 'sent',
+          last_whatsapp_sent: new Date().toISOString()
+        };
+      }
+    }
+
+    console.log('WhatsApp status updated successfully');
+
+  } catch (error: any) {
+    console.error('Error updating WhatsApp status:', error);
+
+    // Fallback: tetap update status di frontend
+    const index = langgananList.value.findIndex(l => l.id === item.id);
+    if (index !== -1) {
+      langgananList.value[index] = {
+        ...langgananList.value[index],
+        whatsapp_status: 'sent',
+        last_whatsapp_sent: new Date().toISOString()
+      };
+    }
+  }
+}
+
+// Function to open Pelanggan View Modal
+async function openPelangganView(item: Langganan) {
+  selectedPelanggan.value = item;
+  pelangganViewDialog.value = true;
+
+  // Fetch data teknis to get ID Pelanggan from Data Teknis
+  try {
+    const response = await apiClient.get(`/data_teknis/by-pelanggan/${item.pelanggan_id}`);
+    if (response.data && response.data.length > 0) {
+      dataTeknisInfo.value = response.data[0]; // Ambil data teknis pertama
+    } else {
+      dataTeknisInfo.value = null;
+    }
+  } catch (error) {
+    console.warn('Data teknis not found:', error);
+    dataTeknisInfo.value = null;
+  }
+
+  try {
+    // Use existing search parameter to find invoices by pelanggan name/id
+    // Non-disruptive approach - no API changes needed
+    const customerName = getPelangganName(item.pelanggan_id);
+    const customerId = item.pelanggan_id.toString();
+
+    // Try both name and ID in search to maximize results
+    const searchTerms = [customerName, customerId];
+    let allInvoices: any[] = [];
+
+    for (const searchTerm of searchTerms) {
+      try {
+        const response = await apiClient.get(`/invoices?search=${encodeURIComponent(searchTerm)}`);
+        if (response.data && Array.isArray(response.data)) {
+          // Filter results to ensure they belong to this customer
+          const customerInvoices = response.data.filter((invoice: any) =>
+            invoice.pelanggan_id === item.pelanggan_id ||
+            invoice.id_pelanggan === customerId ||
+            invoice.no_telp === getPelangganPhone(item.pelanggan_id)
+          );
+          allInvoices.push(...customerInvoices);
+        }
+      } catch (searchError) {
+        console.warn(`Search with term "${searchTerm}" failed:`, searchError);
+      }
+    }
+
+    // Remove duplicates by ID
+    const uniqueInvoices = allInvoices.filter((invoice, index, self) =>
+      index === self.findIndex((inv) => inv.id === invoice.id)
+    );
+
+    if (uniqueInvoices.length > 0) {
+      paymentHistory.value = uniqueInvoices.map((invoice: any) => {
+        // Calculate keterlambatan (days late)
+        let terlambat = 0;
+        if (invoice.paid_at && invoice.tgl_jatuh_tempo) {
+          const payDate = new Date(invoice.paid_at);
+          const dueDate = new Date(invoice.tgl_jatuh_tempo);
+          terlambat = Math.ceil((payDate.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
+        }
+
+        return {
+          id: invoice.invoice_number || `INV-${invoice.id}`,
+          tanggal_bayar: invoice.paid_at || invoice.tgl_jatuh_tempo,
+          jumlah: invoice.total_harga || 0,
+          status_pembayaran: invoice.status_invoice || (invoice.paid_at ? 'Lunas' : 'Menunggu'),
+          terlambat: Math.max(0, terlambat)
+        };
+      });
+
+      // Calculate payment statistics
+      const totalInvoices = uniqueInvoices.length;
+      const latePayments = uniqueInvoices.filter((invoice: any) => {
+        if (!invoice.paid_at) return false;
+        const payDate = new Date(invoice.paid_at);
+        const dueDate = new Date(invoice.tgl_jatuh_tempo);
+        return payDate > dueDate;
+      }).length;
+
+      paymentStats.value = {
+        totalInvoices,
+        lateCount: latePayments,
+        onTimeCount: totalInvoices - latePayments
+      };
+    } else {
+      // No invoices found
+      paymentHistory.value = [];
+      paymentStats.value = {
+        totalInvoices: 0,
+        lateCount: 0,
+        onTimeCount: 0
+      };
+    }
+
+  } catch (error) {
+    console.error('Error fetching payment history:', error);
+    paymentHistory.value = [];
+    paymentStats.value = {
+      totalInvoices: 0,
+      lateCount: 0,
+      onTimeCount: 0
+    };
+  }
+}
+
+// --- HELPER FUNCTIONS ---
+function showSnackbar(text: string, color: 'success' | 'error' | 'warning') {
+  snackbar.value = { show: true, text, color };
+}
+
+// getPelangganName function sudah ada di line 2206, gunakan yang sudah ada
 </script>
 
 <style scoped>
@@ -1702,14 +2664,14 @@ async function importFromCsv() {
 }
 
 .header-title {
-  font-size: 1.75rem;
+  font-size: 2rem;
   font-weight: 800;
   line-height: 1.2;
   margin-bottom: 4px;
 }
 
 .header-subtitle {
-  font-size: 0.95rem;
+  font-size: 1.05rem;
   opacity: 0.85;
   line-height: 1.3;
 }
@@ -2467,8 +3429,8 @@ async function importFromCsv() {
 }
 
 .header-title {
-  font-size: 1.25rem;
-  font-weight: 600;
+  font-size: 2rem !important;
+  font-weight: 800 !important;
   margin-bottom: 4px;
   line-height: 1.2;
 }
@@ -2522,11 +3484,11 @@ async function importFromCsv() {
   }
   
   .header-title {
-    font-size: 1.1rem;
+    font-size: 1.8rem !important;
   }
   
   .header-subtitle {
-    font-size: 0.85rem;
+    font-size: 1rem !important;
   }
   
   .modal-content {
@@ -3144,6 +4106,16 @@ async function importFromCsv() {
    ============================================ */
 
 @media (max-width: 768px) {
+  /* Fix header title size for mobile */
+  .header-card .header-title {
+    font-size: 1.8rem !important;
+    font-weight: 800 !important;
+  }
+
+  .header-card .header-subtitle {
+    font-size: 1rem !important;
+  }
+
   .header-actions {
     flex-direction: column;
     width: 100%;

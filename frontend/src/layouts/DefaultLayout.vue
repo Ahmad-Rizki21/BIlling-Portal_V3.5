@@ -1,11 +1,12 @@
 <template>
- <v-app class="modern-app">
+  <v-app class="modern-app">
+    <!-- Maintenance Banner -->
     <v-system-bar 
-     v-if="settingsStore.maintenanceMode.isActive"
+      v-if="settingsStore.maintenanceMode.isActive"
       color="warning" 
       window 
-      class="maintenance-banner" 
-      >
+      class="maintenance-banner"
+    >
       <v-icon class="me-2">mdi-alert</v-icon>
       <span>{{ settingsStore.maintenanceMode.message }}</span>
     </v-system-bar>
@@ -16,28 +17,38 @@
       :rail="rail && !isMobile"
       :temporary="isMobile"
       :permanent="!isMobile"
-      class="modern-drawer"
-      :width="isMobile ? '280' : '280'"
+      class="modern-drawer elevation-3"
+      :width="isMobile ? '300' : '300'"
       :key="forceRender"
     >
-      <v-list-item class="sidebar-header" :class="{'px-0': rail && !isMobile}" :ripple="false">
-        <div class="header-flex-container">
-          <img v-if="!rail || isMobile" :src="logoSrc" alt="Jelantik Logo" class="sidebar-logo-full"/>
-          
-          <v-icon v-if="rail && !isMobile" color="primary" size="large">mdi-alpha-j</v-icon>
-
-          <div v-if="!rail || isMobile" class="sidebar-title-wrapper">
-            <h1 class="sidebar-title">Artacom Ftth</h1>
-            <span class="sidebar-subtitle">PORTAL CUSTOMER V3</span>
+      <!-- Header Section -->
+      <div class="sidebar-header-modern" :class="{'rail-mode': rail && !isMobile}">
+        <div class="header-content">
+          <!-- Logo -->
+          <div class="logo-wrapper" @click="handleLogoClick">
+            <img
+              v-if="!rail || isMobile"
+              :src="logoSrc"
+              alt="Jelantik Logo"
+              class="sidebar-logo"
+            />
+            <v-avatar v-else color="primary" size="40">
+              <span class="text-h6 font-weight-bold">J</span>
+            </v-avatar>
           </div>
 
-          <v-spacer v-if="!rail || isMobile"></v-spacer>
+          <!-- Title -->
+          <div v-if="!rail || isMobile" class="title-wrapper">
+            <h1 class="app-title">Artacom Ftth</h1>
+            <p class="app-subtitle">Portal Customer V3</p>
+          </div>
 
+          <!-- Toggle Button -->
           <v-btn
             v-if="!isMobile"
-            icon="mdi-chevron-left"
             variant="text"
             size="small"
+            class="toggle-btn"
             @click.stop="rail = !rail"
           ></v-btn>
           
@@ -46,91 +57,117 @@
             icon="mdi-close"
             variant="text"
             size="small"
+            class="close-btn"
             @click.stop="drawer = false"
           ></v-btn>
         </div>
-      </v-list-item>
+      </div>
 
-      <v-divider></v-divider>
+      <v-divider class="my-2"></v-divider>
 
-      <div class="navigation-wrapper" :key="'nav-wrapper-' + forceRender">
-        <v-list nav class="navigation-menu" :key="menuKey">
-          <template v-for="group in filteredMenuGroups" :key="group.title + '-' + menuKey + '-' + forceRender">
-            <v-list-subheader v-if="!rail || isMobile" class="menu-subheader" :key="'subheader-' + group.title + '-' + forceRender">{{ group.title }}</v-list-subheader>
+      <!-- Navigation Menu -->
+      <div class="navigation-container" :key="'nav-wrapper-' + forceRender">
+        <v-list nav class="navigation-list" :key="menuKey">
+          <template v-for="group in filteredMenuGroups" :key="group.title + '-' + menuKey">
+            <!-- Group Header -->
+            <div 
+              v-if="!rail || isMobile" 
+              class="menu-group-header"
+              :key="'header-' + group.title"
+            >
+              <span class="group-title">{{ group.title }}</span>
+              <v-divider class="group-divider"></v-divider>
+            </div>
 
-            <template v-for="item in group.items" :key="item.title + '-' + item.value + '-' + forceRender">
+            <!-- Menu Items -->
+            <template v-for="item in group.items" :key="item.value + '-' + forceRender">
+              <!-- Item with Children (Expandable) -->
               <v-list-group
                 v-if="'children' in item"
                 :value="item.value"
-                :key="'group-' + item.value + '-' + forceRender"
+                :key="'group-' + item.value"
+                class="menu-group"
               >
                 <template v-slot:activator="{ props }">
                   <v-list-item
                     v-bind="props"
                     :prepend-icon="item.icon"
-                    :title="item.title"
-                    class="nav-item"
-                    :key="'activator-' + item.value + '-' + forceRender"
-                  ></v-list-item>
+                    class="menu-item parent-item"
+                    :key="'activator-' + item.value"
+                  >
+                    <v-list-item-title class="item-title">
+                      {{ item.title }}
+                    </v-list-item-title>
+                  </v-list-item>
                 </template>
 
+                <!-- Sub Items -->
                 <v-list-item
                   v-for="subItem in item.children"
-                  :key="subItem.title + '-' + subItem.to + '-' + forceRender"
+                  :key="subItem.value + '-sub'"
                   :title="subItem.title"
                   :to="subItem.to"
                   :prepend-icon="subItem.icon"
-                  class="nav-sub-item"
-                ></v-list-item>
+                  class="menu-item sub-item"
+                >
+                </v-list-item>
               </v-list-group>
 
+              <!-- Single Item -->
               <v-list-item
                 v-else
                 :prepend-icon="item.icon"
-                :title="item.title"
                 :value="item.value"
                 :to="item.to"
-                class="nav-item"
-                :key="'item-' + item.value + '-' + forceRender"
+                class="menu-item single-item"
+                :key="'item-' + item.value"
               >
+                <v-list-item-title class="item-title">
+                  {{ item.title }}
+                </v-list-item-title>
+
+                <!-- Badges -->
                 <template v-slot:append>
-                  <v-tooltip location="end">
-                    <template v-slot:activator="{ props }">
-                      <v-badge
-                        v-if="item.value === 'langganan' && suspendedCount > 0"
-                        color="error"
-                        :content="suspendedCount"
-                        inline
-                        v-bind="props"
-                      ></v-badge>
-                    </template>
-                    <span>{{ suspendedCount }} langganan berstatus "Suspended"</span>
-                  </v-tooltip>
-                  <v-tooltip location="end">
-                    <template v-slot:activator="{ props }">
-                      <v-badge
-                        v-if="item.value === 'langganan' && stoppedCount > 0"
-                        color="grey"
-                        :content="stoppedCount"
-                        inline
-                        class="ms-2"
-                        v-bind="props"
-                      ></v-badge>
-                    </template>
-                    <span>{{ stoppedCount }} langganan berstatus "Berhenti"</span>
-                  </v-tooltip>
-                  <v-tooltip location="end">
-                    <template v-slot:activator="{ props }">
-                      <v-badge
-                        v-if="item.value === 'invoices' && unpaidInvoiceCount > 0"
-                        color="warning"
-                        :content="unpaidInvoiceCount"
-                        inline
-                        v-bind="props"
-                      ></v-badge>
-                    </template>
-                    <span>{{ unpaidInvoiceCount }} invoice belum dibayar</span>
-                  </v-tooltip>
+                  <div class="badges-wrapper">
+                    <v-tooltip location="top" v-if="item.value === 'langganan' && suspendedCount > 0">
+                      <template v-slot:activator="{ props }">
+                        <v-badge
+                          color="error"
+                          :content="suspendedCount"
+                          inline
+                          v-bind="props"
+                          class="badge-item"
+                        ></v-badge>
+                      </template>
+                      <span>{{ suspendedCount }} langganan berstatus "Suspended"</span>
+                    </v-tooltip>
+
+                    <v-tooltip location="top" v-if="item.value === 'langganan' && stoppedCount > 0">
+                      <template v-slot:activator="{ props }">
+                        <v-badge
+                          color="grey"
+                          :content="stoppedCount"
+                          inline
+                          v-bind="props"
+                          class="badge-item ms-1"
+                        ></v-badge>
+                      </template>
+                      <span>{{ stoppedCount }} langganan berstatus "Berhenti"</span>
+                    </v-tooltip>
+
+                    <v-tooltip location="top" v-if="item.value === 'invoices' && unpaidInvoiceCount > 0">
+                      <template v-slot:activator="{ props }">
+                        <v-badge
+                          color="warning"
+                          :content="unpaidInvoiceCount"
+                          inline
+                          v-bind="props"
+                          class="badge-item"
+                        ></v-badge>
+                      </template>
+                      <span>{{ unpaidInvoiceCount }} invoice belum dibayar</span>
+                    </v-tooltip>
+                  </div>
                 </template>
               </v-list-item>
             </template>
@@ -138,18 +175,20 @@
         </v-list>
       </div>
 
+      <!-- Logout Section -->
       <template v-slot:append>
-        <div class="logout-section pa-4">
+        <div class="logout-container">
+          <v-divider class="mb-1"></v-divider>
           <v-btn
             :block="!rail || isMobile"
-            variant="tonal"
-            color="grey-darken-1"
+            variant="flat"
+            color="error"
             class="logout-btn"
             :icon="rail && !isMobile"
             @click="handleLogout"
           >
-            <v-icon v-if="rail && !isMobile">mdi-logout</v-icon>
-            <span v-if="!rail || isMobile" class="d-flex align-center"><v-icon left>mdi-logout</v-icon>Logout</span>
+            <v-icon :start="!rail || isMobile">mdi-logout</v-icon>
+            <span v-if="!rail || isMobile">Logout</span>
           </v-btn>
         </div>
       </template>
@@ -161,75 +200,124 @@
         icon="mdi-menu"
         variant="text"
         @click.stop="toggleDrawer"
+        class="menu-toggle"
       ></v-btn>
+
+      <v-toolbar-title class="app-bar-title" v-if="!isMobile">
+        <span class="text-h6 font-weight-medium">{{ currentPageTitle }}</span>
+      </v-toolbar-title>
+
       <v-spacer></v-spacer>
-      
-      <v-btn icon variant="text" @click="toggleTheme" class="header-action-btn theme-toggle-btn">
-        <v-icon>{{ theme.global.current.value.dark ? 'mdi-weather-sunny' : 'mdi-weather-night' }}</v-icon>
+
+      <!-- Theme Toggle -->
+      <v-btn 
+        icon 
+        variant="text" 
+        @click="toggleTheme" 
+        class="header-icon-btn"
+      >
+        <v-icon>
+          {{ theme.global.current.value.dark ? 'mdi-white-balance-sunny' : 'mdi-moon-waning-crescent' }}
+        </v-icon>
       </v-btn>
 
-      <v-menu offset-y>
+      <!-- Notifications -->
+      <v-menu offset-y max-width="400">
         <template v-slot:activator="{ props }">
-          <v-btn icon variant="text" class="header-action-btn" v-bind="props">
-            <v-badge :content="notifications.length" color="error" :model-value="notifications.length > 0">
+          <v-btn 
+            icon 
+            variant="text" 
+            class="header-icon-btn" 
+            v-bind="props"
+          >
+            <v-badge 
+              :content="notifications.length" 
+              color="error" 
+              :model-value="notifications.length > 0"
+              overlap
+            >
               <v-icon>mdi-bell-outline</v-icon>
             </v-badge>
           </v-btn>
         </template>
-        <v-list class="pa-0" :width="isMobile ? '90vw' : '300'">
-          <v-list-item class="font-weight-bold bg-grey-lighten-4">
-              Notifikasi
-              <template v-slot:append v-if="notifications.length > 0">
-                  <v-btn variant="text" size="small" @click="markAllAsRead">Bersihkan</v-btn>
-              </template>
-          </v-list-item>
-          <v-divider></v-divider>
-          <div v-if="notifications.length === 0" class="text-center text-medium-emphasis pa-4">
-              Tidak ada notifikasi baru.
-          </div>
-          <template v-else>
-            <v-list-item
-              v-for="(notif, index) in notifications"
-              :key="index"
-              class="py-2 notification-item"
-              @click="handleNotificationClick(notif)"
+
+        <!-- Modern Notification Card -->
+        <div class="modern-notification-container">
+          <div class="notification-header-section">
+            <div class="d-flex align-center">
+              <v-icon class="me-3" color="primary" size="24">mdi-bell-ring</v-icon>
+              <div>
+                <div class="notification-main-title">Notifikasi</div>
+                <div class="notification-subtitle text-caption">
+                  {{ notifications.length }} {{ notifications.length === 0 ? 'Tidak ada notifikasi baru' : 'notifikasi baru' }}
+                </div>
+              </div>
+            </div>
+            <v-btn
+              v-if="notifications.length > 0"
+              variant="text"
+              size="small"
+              color="primary"
+              @click="markAllAsRead"
+              class="text-none"
             >
-              <template v-slot:prepend>
-                <v-avatar :color="getNotificationColor(notif.type)" size="32" class="me-3">
-                    <v-icon size="18">{{ getNotificationIcon(notif.type) }}</v-icon>
-                </v-avatar>
-              </template>
+              <v-icon size="16" class="me-1">mdi-check-all</v-icon>
+              Baca semua
+            </v-btn>
+          </div>
 
-              <div v-if="notif.type === 'new_payment'" class="notification-content">
-                <v-list-item-title class="font-weight-medium text-body-2">Pembayaran Diterima</v-list-item-title>
-                <v-list-item-subtitle class="text-caption">
-                  <strong>{{ notif.data?.invoice_number || 'N/A' }}</strong> dari <strong>{{ notif.data?.pelanggan_nama || 'N/A' }}</strong> telah lunas.
-                </v-list-item-subtitle>
-              </div>
+          <v-divider class="notification-divider"></v-divider>
 
-              <div v-else-if="notif.type === 'new_customer_for_noc'" class="notification-content">
-                <v-list-item-title class="font-weight-medium text-body-2">Pelanggan Baru</v-list-item-title>
-                <v-list-item-subtitle class="text-caption">
-                  <strong>{{ notif.data?.pelanggan_nama || 'N/A' }}</strong> perlu dibuatkan Data Teknis.
-                </v-list-item-subtitle>
+          <div class="notification-list-section">
+            <!-- Empty State -->
+            <div v-if="notifications.length === 0" class="empty-notification-state">
+              <div class="empty-notification-icon">
+                <v-icon size="64" color="grey-lighten-2">mdi-bell-off-outline</v-icon>
+                <v-icon size="64" color="grey-lighten-3" class="icon-background">mdi-bell</v-icon>
               </div>
+              <div class="empty-notification-text">
+                <div class="empty-title">Tenang</div>
+                <div class="empty-subtitle">Tidak ada notifikasi baru untuk Anda</div>
+              </div>
+            </div>
 
-              <div v-else-if="notif.type === 'new_technical_data'" class="notification-content">
-                <v-list-item-title class="font-weight-medium text-body-2">Data Teknis Baru</v-list-item-title>
-                <v-list-item-subtitle class="text-caption">
-                  Data teknis untuk <strong>{{ notif.data?.pelanggan_nama || 'N/A' }}</strong> telah ditambahkan.
-                </v-list-item-subtitle>
-              </div>
+            <!-- Notification Items -->
+            <div v-else class="notification-items-container">
+              <div
+                v-for="(notif, index) in notifications"
+                :key="index"
+                class="modern-notification-item"
+                @click="handleNotificationClick(notif)"
+                :class="{ 'notification-item-unread': !notif.read }"
+              >
+                <div class="notification-content">
+                  <div class="notification-avatar-container">
+                    <div class="notification-avatar" :class="`avatar-${getNotificationColor(notif.type)}`">
+                      <v-icon size="20" color="white">
+                        {{ getNotificationIcon(notif.type) }}
+                      </v-icon>
+                    </div>
+                    <div v-if="!notif.read" class="notification-dot"></div>
+                  </div>
 
-              <div v-else class="notification-content">
-                <v-list-item-title class="font-weight-medium text-body-2">Notifikasi</v-list-item-title>
-                <v-list-item-subtitle class="text-caption">
-                  {{ notif.message || 'Anda memiliki notifikasi baru' }}
-                </v-list-item-subtitle>
+                  <div class="notification-message">
+                    <div class="notification-type">
+                      <span class="notification-label" :class="`label-${getNotificationColor(notif.type)}`">
+                        {{ getNotificationTitle(notif.type) }}
+                      </span>
+                      <span class="notification-time">
+                        {{ formatNotificationTime(notif.created_at) }}
+                      </span>
+                    </div>
+                    <div class="notification-description">
+                      {{ getNotificationMessage(notif) }}
+                    </div>
+                  </div>
+                </div>
               </div>
-            </v-list-item>
-          </template>
-        </v-list>
+            </div>
+          </div>
+        </div>
       </v-menu>
     </v-app-bar>
 
@@ -237,8 +325,8 @@
     <v-main class="modern-main" :class="{ 'with-bottom-nav': isMobile }">
       <router-view></router-view>
     </v-main>
-    
-    <!-- Bottom Navigation (Mobile Only) -->
+
+    <!-- Bottom Navigation (Mobile) -->
     <v-bottom-navigation
       v-if="isMobile"
       v-model="activeBottomNav"
@@ -246,14 +334,15 @@
       grow
       elevation="8"
       height="65"
+      bg-color="surface"
     >
       <v-btn value="dashboard" @click="navigateTo('/dashboard')">
-        <v-icon>mdi-home-variant</v-icon>
+        <v-icon>mdi-view-dashboard</v-icon>
         <span>Dashboard</span>
       </v-btn>
 
       <v-btn value="pelanggan" @click="navigateTo('/pelanggan')">
-        <v-icon>mdi-account-group-outline</v-icon>
+        <v-icon>mdi-account-group</v-icon>
         <span>Pelanggan</span>
       </v-btn>
 
@@ -264,9 +353,9 @@
           color="error"
           overlap
         >
-          <v-icon>mdi-wifi-star</v-icon>
+          <v-icon>mdi-wifi</v-icon>
         </v-badge>
-        <v-icon v-else>mdi-wifi-star</v-icon>
+        <v-icon v-else>mdi-wifi</v-icon>
         <span>Langganan</span>
       </v-btn>
 
@@ -277,9 +366,9 @@
           color="warning"
           overlap
         >
-          <v-icon>mdi-ticket-confirmation-outline</v-icon>
+          <v-icon>mdi-ticket</v-icon>
         </v-badge>
-        <v-icon v-else>mdi-ticket-confirmation-outline</v-icon>
+        <v-icon v-else>mdi-ticket</v-icon>
         <span>Tickets</span>
       </v-btn>
 
@@ -290,34 +379,35 @@
           color="orange"
           overlap
         >
-          <v-icon>mdi-file-document-outline</v-icon>
+          <v-icon>mdi-file-document</v-icon>
         </v-badge>
-        <v-icon v-else>mdi-file-document-outline</v-icon>
+        <v-icon v-else>mdi-file-document</v-icon>
         <span>Invoice</span>
       </v-btn>
     </v-bottom-navigation>
 
-    <!-- Footer (Desktop Only) -->
+    <!-- Footer (Desktop) -->
     <v-footer 
       v-if="!isMobile"
       app 
-      height="69px" 
-      class="d-flex align-center justify-center text-medium-emphasis footer-responsive" 
-      style="border-top: 1px solid rgba(0,0,0,0.08);"
+      class="modern-footer"
     >
       <div class="footer-content">
-        &copy; {{ new Date().getFullYear() }} <strong>Artacom Billing System</strong>. All Rights Design Reserved by 
-        <a 
-          href="https://www.instagram.com/amad.dyk/" 
-          target="_blank" 
-          rel="noopener noreferrer"
-          class="text-decoration-none text-primary"
-        >
-          amad.dyk
-        </a>
+        <span class="text-body-2">
+          &copy; {{ new Date().getFullYear() }} 
+          <strong>Artacom Billing System</strong>. 
+          All Rights Reserved. Designed by 
+          <a 
+            href="https://www.instagram.com/amad.dyk/" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            class="footer-link"
+          >
+            amad.dyk
+          </a>
+        </span>
       </div>
     </v-footer>
-
   </v-app>
 </template>
 
@@ -329,7 +419,8 @@ import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useSettingsStore } from '@/stores/settings'
 import apiClient from '@/services/api';
-import logo from '@/assets/Jelantik 1.svg';
+import logoLight from '@/assets/images/Jelantik-Light.webp';
+import logoDark from '@/assets/images/Jelantik-Dark.webp';
 
 // --- State ---
 const theme = useTheme();
@@ -340,16 +431,7 @@ const router = useRouter();
 const route = useRoute();
 const activeBottomNav = ref('dashboard');
 
-// PERBAIKAN: Inisialisasi notifications dengan validasi lebih baik
 const notifications = ref<any[]>([]);
-// PERBAIKAN: Tambahkan watcher untuk memastikan notifications tetap array
-watch(notifications, (newVal) => {
-  if (!newVal || !Array.isArray(newVal)) {
-    console.warn('[State] notifications bukan array, reset ke array kosong');
-    notifications.value = [];
-  }
-}, { deep: true });
-
 const suspendedCount = ref(0);
 const unpaidInvoiceCount = ref(0);
 const stoppedCount = ref(0);
@@ -357,12 +439,57 @@ const openTicketsCount = ref(0);
 const userCount = ref(0);
 const roleCount = ref(0);
 const authStore = useAuthStore();
+const settingsStore = useSettingsStore();
 let socket: WebSocket | null = null;
 
-// Use ref with watcher for better reactivity with Proxy objects
 const userPermissions = ref<string[]>([]);
+const forceRender = ref(0);
 
-// Watch authStore.user for changes and update permissions reactively
+const isMobile = computed(() => mobile.value);
+const logoSrc = computed(() => {
+  return theme.global.current.value.dark ? logoDark : logoLight;
+});
+
+// Computed untuk judul halaman saat ini
+const currentPageTitle = computed(() => {
+  const path = route.path;
+  const titles: Record<string, string> = {
+    '/dashboard': 'Dashboard',
+    '/dashboard-pelanggan': 'Dashboard Pelanggan',
+    '/pelanggan': 'Data Pelanggan',
+    '/langganan': 'Langganan',
+    '/data-teknis': 'Data Teknis',
+    '/harga-layanan': 'Brand & Paket',
+    '/kalkulator': 'Simulasi Harga',
+    '/syarat-ketentuan': 'Syarat & Ketentuan',
+    '/trouble-tickets': 'Trouble Tickets',
+    '/trouble-tickets/reports': 'Ticket Reports',
+    '/invoices': 'Invoices',
+    '/reports/revenue': 'Laporan Pendapatan',
+    '/mikrotik': 'Mikrotik Servers',
+    '/traffic-monitoring': 'Traffic Monitoring',
+    '/network-management/olt': 'OLT Management',
+    '/odp-management': 'ODP Management',
+    '/inventory': 'Manajemen Inventaris',
+    '/users': 'Users',
+    '/roles': 'Roles',
+    '/permissions': 'Permissions',
+    '/activity-logs': 'Activity Log',
+    '/management/sk': 'Kelola S&K',
+    '/management/settings': 'Pengaturan',
+  };
+  return titles[path] || 'Artacom FTTH';
+});
+
+// Watch notifications
+watch(notifications, (newVal) => {
+  if (!newVal || !Array.isArray(newVal)) {
+    console.warn('[State] notifications bukan array, reset ke array kosong');
+    notifications.value = [];
+  }
+}, { deep: true });
+
+// Watch authStore.user
 watch(
   () => authStore.user,
   (newUser) => {
@@ -384,7 +511,6 @@ watch(
   { deep: true, immediate: true }
 );
 
-// Additional watch for role specifically
 watch(
   () => authStore.user?.role,
   (newRole) => {
@@ -399,30 +525,15 @@ watch(
   { deep: true, immediate: true }
 );
 
-// Force re-render trigger
-const forceRender = ref(0);
-
-// Manual function to trigger menu refresh
 function refreshMenu() {
   forceRender.value++;
-
-  // Force next tick to ensure DOM updates
-  nextTick(() => {
-    // DOM updated
-  });
+  nextTick(() => {});
 }
 
-// Watch permissions array specifically
 watch(userPermissions, () => {
   refreshMenu();
 }, { deep: true });
 
-// Computed untuk mobile detection
-const isMobile = computed(() => mobile.value);
-const logoSrc = computed(() => theme.global.current.value.dark ? logo : logo);
-const settingsStore = useSettingsStore();
-
-// Watch route changes untuk update bottom nav
 watch(() => route.path, (newPath) => {
   updateActiveBottomNav(newPath);
 });
@@ -445,7 +556,6 @@ function navigateTo(path: string) {
   router.push(path);
 }
 
-// Toggle drawer function untuk mobile/desktop
 function toggleDrawer() {
   if (isMobile.value) {
     drawer.value = !drawer.value;
@@ -453,6 +563,356 @@ function toggleDrawer() {
     rail.value = !rail.value;
   }
 }
+
+// Menu Groups dengan deskripsi
+const menuGroups = ref([
+  { 
+    title: 'DASHBOARD', 
+    items: [
+      { 
+        title: 'Dashboard', 
+        icon: 'mdi-view-dashboard-outline', 
+        value: 'dashboard-group',
+        description: 'Ringkasan sistem & statistik',
+        permission: 'view_dashboard',
+        children: [
+          { 
+            title: 'Dashboard Admin', 
+            icon: 'mdi-shield-crown-outline', 
+            to: '/dashboard', 
+            permission: 'view_dashboard',
+            description: 'Panel kontrol administrator',
+            value: 'dashboard-admin'
+          },
+          { 
+            title: 'Dashboard Jakinet', 
+            icon: 'mdi-account-supervisor-outline', 
+            to: '/dashboard-pelanggan', 
+            permission: 'view_dashboard_pelanggan',
+            description: 'Portal pelanggan Jakinet',
+            value: 'dashboard-jakinet'
+          }
+        ]
+      },
+    ] 
+  },
+  
+  { 
+    title: 'FTTH', 
+    items: [
+      { 
+        title: 'Data Pelanggan', 
+        icon: 'mdi-account-group-outline', 
+        value: 'pelanggan', 
+        to: '/pelanggan', 
+        permission: 'view_pelanggan',
+        description: 'Kelola data pelanggan'
+      },
+      { 
+        title: 'Langganan', 
+        icon: 'mdi-wifi-star', 
+        value: 'langganan', 
+        to: '/langganan', 
+        badge: suspendedCount, 
+        badgeColor: 'orange', 
+        permission: 'view_langganan',
+        description: 'Status & paket langganan'
+      },
+      { 
+        title: 'Data Teknis', 
+        icon: 'mdi-lan-connect', 
+        value: 'teknis', 
+        to: '/data-teknis', 
+        permission: 'view_data_teknis',
+        description: 'Konfigurasi teknis jaringan'
+      },
+      { 
+        title: 'Brand & Paket', 
+        icon: 'mdi-package-variant', 
+        value: 'harga', 
+        to: '/harga-layanan', 
+        permission: 'view_brand_&_paket',
+        description: 'Daftar paket & harga layanan'
+      },
+    ]
+  },
+
+  { 
+    title: 'BILLING', 
+    items: [
+      { 
+        title: 'Invoices', 
+        icon: 'mdi-receipt-text-outline', 
+        value: 'invoices', 
+        to: '/invoices', 
+        badge: 0, 
+        badgeColor: 'grey-darken-1', 
+        permission: 'view_invoices',
+        description: 'Tagihan & pembayaran'
+      },
+      { 
+        title: 'Laporan Pendapatan', 
+        icon: 'mdi-chart-line', 
+        value: 'revenue-report', 
+        to: '/reports/revenue', 
+        permission: 'view_reports_revenue',
+        description: 'Analisis pendapatan'
+      }
+    ]
+  },
+
+  { 
+    title: 'LAINNYA', 
+    items: [
+      { 
+        title: 'Simulasi Harga', 
+        icon: 'mdi-calculator-variant-outline', 
+        value: 'kalkulator', 
+        to: '/kalkulator', 
+        permission: 'view_simulasi_harga',
+        description: 'Hitung estimasi biaya'
+      },
+      { 
+        title: 'S&K', 
+        icon: 'mdi-file-document-outline', 
+        value: 'sk', 
+        to: '/syarat-ketentuan', 
+        permission: null,
+        description: 'Syarat & ketentuan layanan'
+      }
+    ]
+  },
+
+  { 
+    title: 'SUPPORT', 
+    items: [
+      { 
+        title: 'Trouble Tickets', 
+        icon: 'mdi-lifebuoy', 
+        value: 'trouble-tickets', 
+        to: '/trouble-tickets', 
+        permission: 'view_trouble_tickets',
+        description: 'Kelola tiket gangguan'
+      },
+      { 
+        title: 'Ticket Reports', 
+        icon: 'mdi-chart-box-outline', 
+        value: 'trouble-ticket-reports', 
+        to: '/trouble-tickets/reports', 
+        permission: 'view_trouble_tickets',
+        description: 'Laporan tiket support'
+      },
+    ]
+  },
+
+
+  { 
+    title: 'NETWORK MANAGEMENT', 
+    items: [
+      { 
+        title: 'Mikrotik Servers', 
+        icon: 'mdi-server-network', 
+        value: 'mikrotik', 
+        to: '/mikrotik', 
+        permission: 'view_mikrotik_servers',
+        description: 'Kelola server Mikrotik'
+      },
+      { 
+        title: 'Traffic Monitoring', 
+        icon: 'mdi-chart-timeline-variant', 
+        value: 'traffic-monitoring', 
+        to: '/traffic-monitoring', 
+        permission: 'view_traffic_monitoring',
+        description: 'Monitor trafik jaringan'
+      },
+      { 
+        title: 'OLT Management', 
+        icon: 'mdi-router-network', 
+        value: 'olt', 
+        to: '/network-management/olt', 
+        permission: 'view_olt',
+        description: 'Kelola perangkat OLT'
+      },
+      { 
+        title: 'ODP Management', 
+        icon: 'mdi-sitemap-outline', 
+        value: 'odp', 
+        to: '/odp-management', 
+        permission: 'view_odp_management',
+        description: 'Kelola titik distribusi optik'
+      },
+      { 
+        title: 'Manajemen Inventaris', 
+        icon: 'mdi-archive-outline', 
+        value: 'inventory', 
+        to: '/inventory', 
+        permission: 'view_inventory',
+        description: 'Stok perangkat & material'
+      }
+    ]
+  },
+
+  { 
+    title: 'MANAGEMENT', 
+    items: [
+      { 
+        title: 'Users', 
+        icon: 'mdi-account-cog-outline', 
+        value: 'users', 
+        to: '/users', 
+        badge: userCount, 
+        badgeColor: 'primary', 
+        permission: 'view_users',
+        description: 'Kelola pengguna sistem'
+      },
+      { 
+        title: 'Roles', 
+        icon: 'mdi-shield-account-outline', 
+        value: 'roles', 
+        to: '/roles', 
+        badge: roleCount, 
+        badgeColor: 'primary', 
+        permission: 'view_roles',
+        description: 'Atur peran & akses'
+      },
+      { 
+        title: 'Permissions', 
+        icon: 'mdi-shield-key-outline', 
+        value: 'permissions', 
+        to: '/permissions', 
+        permission: 'view_permissions',
+        description: 'Hak akses sistem'
+      },
+      { 
+        title: 'Activity Log', 
+        icon: 'mdi-history', 
+        value: 'activity-logs', 
+        to: '/activity-logs', 
+        permission: 'view_activity_log',
+        description: 'Riwayat aktivitas pengguna'
+      },
+      { 
+        title: 'Kelola S&K', 
+        icon: 'mdi-file-edit-outline', 
+        value: 'sk-management', 
+        to: '/management/sk', 
+        permission: 'manage_sk',
+        description: 'Edit syarat & ketentuan'
+      },
+      { 
+        title: 'Pengaturan', 
+        icon: 'mdi-cog-outline', 
+        value: 'settings', 
+        to: '/management/settings', 
+        permission: 'manage_settings',
+        description: 'Konfigurasi sistem'
+      }
+    ]
+  },
+]);
+
+const menuKey = computed(() => {
+  return JSON.stringify(userPermissions.value) + '-' + forceRender.value + '-' + Date.now();
+});
+
+const filteredMenuGroups = computed(() => {
+  if (userPermissions.value.includes('*')) {
+    return menuGroups.value;
+  }
+
+  const filtered = menuGroups.value.map(group => {
+    const allowedItems = group.items.filter(item => {
+      const hasPermission = !item.permission || userPermissions.value.includes(item.permission);
+      return hasPermission;
+    });
+
+    return {
+      ...group,
+      items: allowedItems
+    };
+  }).filter(group => group.items.length > 0);
+
+  return filtered;
+});
+
+// Notification helpers
+function getNotificationTitle(type: string) {
+  const titles: Record<string, string> = {
+    'new_payment': 'Pembayaran Diterima',
+    'new_customer_for_noc': 'Pelanggan Baru',
+    'new_customer': 'Pelanggan Baru',
+    'new_technical_data': 'Data Teknis Baru'
+  };
+  return titles[type] || 'Notifikasi';
+}
+
+function getNotificationMessage(notif: any) {
+  switch (notif.type) {
+    case 'new_payment':
+      return `${notif.data?.invoice_number || 'N/A'} dari ${notif.data?.pelanggan_nama || 'N/A'} telah lunas`;
+    case 'new_customer_for_noc':
+    case 'new_customer':
+      return `${notif.data?.pelanggan_nama || 'N/A'} perlu dibuatkan Data Teknis`;
+    case 'new_technical_data':
+      return `Data teknis untuk ${notif.data?.pelanggan_nama || 'N/A'} telah ditambahkan`;
+    default:
+      return notif.message || 'Anda memiliki notifikasi baru';
+  }
+}
+
+function getNotificationIcon(type: string) {
+  const icons: Record<string, string> = {
+    'new_payment': 'mdi-cash-check',
+    'new_customer_for_noc': 'mdi-account-plus',
+    'new_customer': 'mdi-account-plus',
+    'new_technical_data': 'mdi-lan-connect'
+  };
+  return icons[type] || 'mdi-bell';
+}
+
+function getNotificationColor(type: string) {
+  const colors: Record<string, string> = {
+    'new_payment': 'success',
+    'new_customer_for_noc': 'info',
+    'new_customer': 'info',
+    'new_technical_data': 'primary'
+  };
+  return colors[type] || 'grey';
+}
+
+function formatNotificationTime(dateString?: string): string {
+  if (!dateString) return 'Baru saja';
+
+  try {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) {
+      return 'Baru saja';
+    } else if (diffMins < 60) {
+      return `${diffMins} menit yang lalu`;
+    } else if (diffHours < 24) {
+      return `${diffHours} jam yang lalu`;
+    } else if (diffDays < 7) {
+      return `${diffDays} hari yang lalu`;
+    } else {
+      return date.toLocaleDateString('id-ID', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric'
+      });
+    }
+  } catch (error) {
+    return 'Baru saja';
+  }
+}
+
+// Semua fungsi lainnya tetap sama seperti kode asli
+// (fetchSidebarBadges, connectWebSocket, disconnectWebSocket, dll.)
 
 async function fetchSidebarBadges() {
   try {
@@ -491,29 +951,18 @@ function playSound(type: string) {
 
     if (audioFile) {
       const audio = new Audio(audioFile);
-
       audio.addEventListener('error', (e) => {
         console.error(`[Audio] Failed to load audio (${audioFile}):`, e);
         fallbackBeep();
       });
 
-      audio.addEventListener('ended', () => {
-        // Audio finished playing
-      });
-
       const playPromise = audio.play();
       if (playPromise !== undefined) {
-        playPromise.then(() => {
-          // Playback successful
-        }).catch(error => {
+        playPromise.catch(error => {
           console.warn(`[Audio] Failed to play audio (${audioFile}):`, error);
           fallbackBeep();
         });
-      } else {
-        fallbackBeep();
       }
-    } else {
-      fallbackBeep();
     }
   } catch (error) {
     console.error('[Audio] Failed to create/play audio:', error);
@@ -523,8 +972,6 @@ function playSound(type: string) {
 
 function fallbackBeep() {
   try {
-    // console.log('[Audio] Fallback beep activated');
-
     const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
     if (AudioContext) {
       const context = new AudioContext();
@@ -541,54 +988,13 @@ function fallbackBeep() {
 
       oscillator.start(context.currentTime);
       oscillator.stop(context.currentTime + 0.5);
-
-      // console.log('[Audio] Fallback beep played using AudioContext');
-      return;
     }
   } catch (error) {
     console.warn('[Audio] AudioContext fallback failed:', error);
   }
-
-  try {
-    const context = new (window.AudioContext || (window as any).webkitAudioContext)();
-    const oscillator = context.createOscillator();
-    const gainNode = context.createGain();
-
-    oscillator.connect(gainNode);
-    gainNode.connect(context.destination);
-
-    oscillator.frequency.value = 1000;
-    oscillator.type = 'square';
-    gainNode.gain.setValueAtTime(0.3, context.currentTime);
-    gainNode.gain.exponentialRampToValueAtTime(0.01, context.currentTime + 0.3);
-
-    oscillator.start(context.currentTime);
-    oscillator.stop(context.currentTime + 0.3);
-
-    // console.log('[Audio] Fallback beep played (square wave)');
-  } catch (fallbackError) {
-    console.warn('[Audio] All fallback methods failed:', fallbackError);
-    
-    try {
-      let originalTitle = document.title;
-      let flashInterval: NodeJS.Timeout | null = setInterval(() => {
-        document.title = document.title === originalTitle ? "🔔 NOTIFIKASI BARU!" : originalTitle;
-      }, 500);
-
-      setTimeout(() => {
-        clearInterval(flashInterval);
-        document.title = originalTitle;
-      }, 3000);
-      
-      // console.log('[Audio] Visual notification shown (Title flash)');
-    } catch (visualError) {
-      console.error('[Audio] All audio/visual methods failed:', visualError);
-    }
-  }
 }
 
 async function refreshTokenAndReconnect() {
-  // Tambahkan limit untuk menghindari infinite refresh attempts
   const maxRetries = 3;
   const retryKey = 'ws_refresh_retries';
   const currentRetries = parseInt(sessionStorage.getItem(retryKey) || '0');
@@ -603,15 +1009,11 @@ async function refreshTokenAndReconnect() {
   sessionStorage.setItem(retryKey, (currentRetries + 1).toString());
 
   try {
-    // console.log('[WebSocket] Attempting to refresh token...');
     const success = await authStore.refreshToken();
     if (success) {
-      // Reset retry counter on success
       sessionStorage.removeItem(retryKey);
-      // console.log('[WebSocket] Token refreshed, reconnecting...');
       connectWebSocket();
     } else {
-      // console.log('[WebSocket] Token refresh failed, logging out...');
       sessionStorage.removeItem(retryKey);
       authStore.logout();
     }
@@ -643,12 +1045,9 @@ function connectWebSocket() {
       wsUrl = `${wsProtocol}//${wsHost}/ws/notifications?token=${token}`; 
   }
 
-  // console.log(`[WebSocket] Mencoba terhubung ke ${wsUrl}`);
   socket = new WebSocket(wsUrl);
 
   socket.onopen = () => {
-    // console.log('[WebSocket] Koneksi berhasil dibuat.');
-
     if (pingInterval) clearInterval(pingInterval);
     if (tokenCheckInterval) clearInterval(tokenCheckInterval);
 
@@ -658,15 +1057,13 @@ function connectWebSocket() {
       }
     }, 30000);
 
-    // Optimasi: kurangi frequency dan tambahkan smart checking
     let lastTokenCheck = 0;
-    const TOKEN_CHECK_INTERVAL = 120000; // 2 menit (sebelumnya 1 menit)
-    const TOKEN_CHECK_COOLDOWN = 30000; // 30 detik cooldown antar checks
+    const TOKEN_CHECK_INTERVAL = 120000;
+    const TOKEN_CHECK_COOLDOWN = 30000;
 
     tokenCheckInterval = setInterval(async () => {
       const now = Date.now();
 
-      // Jika terlalu sering cek, skip
       if (now - lastTokenCheck < TOKEN_CHECK_COOLDOWN) {
         return;
       }
@@ -686,7 +1083,6 @@ function connectWebSocket() {
           }
         } catch (error) {
           console.error('[WebSocket] Token check failed:', error);
-          // Jika token check gagal, anggap token invalid
           if (tokenCheckInterval) {
             clearInterval(tokenCheckInterval);
             tokenCheckInterval = null;
@@ -714,7 +1110,6 @@ function connectWebSocket() {
           data = JSON.parse(event.data);
         } catch (parseError) {
           console.error('[WebSocket] Gagal parse JSON:', parseError);
-          console.error('[WebSocket] Raw data:', event.data);
           return;
         }
       } else {
@@ -736,20 +1131,17 @@ function connectWebSocket() {
       }
       
       if (data.action && data.action.includes('/auth/')) {
-        // console.log('[WebSocket] Skipping auth-related notification:', data.action);
         return;
       }
 
       if (!data.id) {
         data.id = Date.now() + Math.floor(Math.random() * 10000);
-        // console.log('[WebSocket] Generated ID for notification:', data.id);
       }
 
       const validTypes = ['new_payment', 'new_technical_data', 'new_customer_for_noc', 'new_customer'];
 
       if (data.type === 'new_customer') {
         data.type = 'new_customer_for_noc';
-        // console.log('[WebSocket] Normalized notification type from new_customer to new_customer_for_noc');
       }
       
       if (validTypes.includes(data.type)) {
@@ -778,15 +1170,12 @@ function connectWebSocket() {
         }
         
         if (data.type === 'new_payment' && !data.data.invoice_number) {
-          // console.log('[WebSocket] Skipping new_payment notification without invoice_number');
           return;
         }
         if ((data.type === 'new_customer_for_noc' || data.type === 'new_customer') && !data.data.pelanggan_nama) {
-          // console.log('[WebSocket] Skipping new_customer notification without pelanggan_nama');
           return;
         }
         if (data.type === 'new_technical_data' && !data.data.pelanggan_nama) {
-          // console.log('[WebSocket] Skipping new_technical_data notification without pelanggan_nama');
           return;
         }
 
@@ -795,8 +1184,6 @@ function connectWebSocket() {
         if (notifications.value.length > 20) {
           notifications.value = notifications.value.slice(0, 20);
         }
-
-        // console.log('[WebSocket] Notification added to list:', data.type, data.message);
         
         playSound(data.type);
         
@@ -807,7 +1194,6 @@ function connectWebSocket() {
       
     } catch (error) {
       console.error('[WebSocket] Gagal mem-parse pesan:', error);
-      console.error('[WebSocket] Raw message:', event.data);
     }
   };
 
@@ -829,10 +1215,8 @@ function connectWebSocket() {
                                event.reason?.includes("Invalid token") ||
                                event.reason?.includes("Token decode failed");
 
-    // Special handling for 403 Forbidden (invalid token)
     if (event.code === 1008 || event.reason?.includes("Invalid token") || event.reason?.includes("Token decode failed")) {
       console.warn('[WebSocket] Token invalid, forcing logout...');
-      // Hapus token yang invalid
       localStorage.removeItem('access_token');
       localStorage.removeItem('refresh_token');
       authStore.logout();
@@ -842,20 +1226,15 @@ function connectWebSocket() {
 
     if (authStore.isAuthenticated && !shouldNotReconnect) {
       if (event.code === 1008) {
-        // console.log('[WebSocket] Connection closed due to token policy, attempting refresh...');
         reconnectTimeout = setTimeout(refreshTokenAndReconnect, 1000);
       } else {
-        // console.log('[WebSocket] Menjadwalkan reconnect dalam 5 detik...');
         reconnectTimeout = setTimeout(connectWebSocket, 5000);
       }
-    } else if (shouldNotReconnect) {
-      // console.log(`[WebSocket] Tidak reconnect karena penutupan normal: ${event.reason || event.code}`);
     }
   };
 }
 
 function disconnectWebSocket() {
-  // console.log('[WebSocket] Memutuskan koneksi secara manual...');
   if (reconnectTimeout) {
     clearTimeout(reconnectTimeout);
     reconnectTimeout = null;
@@ -880,79 +1259,114 @@ function disconnectWebSocket() {
   }
 }
 
-const menuGroups = ref([
-    { title: 'DASHBOARD', items: [
-      { 
-        title: 'Dashboard', 
-        icon: 'mdi-home-variant', 
-        value: 'dashboard-group', 
-        permission: 'view_dashboard',
-        children: [
-          { title: 'Dashboard Admin', icon: 'mdi-home-variant', to: '/dashboard', permission: 'view_dashboard' },
-          { title: 'Dashboard Jakinet', icon: 'mdi-account-group', to: '/dashboard-pelanggan', permission: 'view_dashboard_pelanggan' }
-        ]
-      },
-    ] },
-  
-  { title: 'FTTH', items: [
-      { title: 'Data Pelanggan', icon: 'mdi-account-group-outline', value: 'pelanggan', to: '/pelanggan', permission: 'view_pelanggan' },
-      { title: 'Langganan', icon: 'mdi-wifi-star', value: 'langganan', to: '/langganan', badge: suspendedCount, badgeColor: 'orange', permission: 'view_langganan' },
-      { title: 'Data Teknis', icon: 'mdi-database-cog-outline', value: 'teknis', to: '/data-teknis', permission: 'view_data_teknis' },
-      { title: 'Brand & Paket', icon: 'mdi-tag-multiple-outline', value: 'harga', to: '/harga-layanan', permission: 'view_brand_&_paket' },
-  ]},
-  { title: 'LAINNYA', items: [
-    { title: 'Simulasi Harga', icon: 'mdi-calculator', value: 'kalkulator', to: '/kalkulator', permission: 'view_simulasi_harga' },
-    { title: 'S&K', icon: 'mdi-file-document-outline', value: 'sk', to: '/syarat-ketentuan', permission: null }
-  ]},
-  { title: 'SUPPORT', items: [
-    { title: 'Trouble Tickets', icon: 'mdi-ticket-confirmation-outline', value: 'trouble-tickets', to: '/trouble-tickets', permission: 'view_trouble_tickets' },
-    { title: 'Ticket Reports', icon: 'mdi-chart-box-outline', value: 'trouble-ticket-reports', to: '/trouble-tickets/reports', permission: 'view_trouble_tickets' },
-  ]},
-  { title: 'BILLING', items: [
-    { title: 'Invoices', icon: 'mdi-file-document-outline', value: 'invoices', to: '/invoices', badge: 0, badgeColor: 'grey-darken-1', permission: 'view_invoices' },
-    { title: 'Laporan Pendapatan', icon: 'mdi-chart-line', value: 'revenue-report', to: '/reports/revenue', permission: 'view_reports_revenue' }
-  ]},
-  { title: 'NETWORK MANAGEMENT', items: [
-    { title: 'Mikrotik Servers', icon: 'mdi-server', value: 'mikrotik', to: '/mikrotik', permission: 'view_mikrotik_servers' },
-    { title: 'Traffic Monitoring', icon: 'mdi-chart-line', value: 'traffic-monitoring', to: '/traffic-monitoring', permission: 'view_traffic_monitoring' },
-    { title: 'OLT Management', icon: 'mdi-router-network', value: 'olt', to: '/network-management/olt', permission: 'view_olt' },
-    { title: 'ODP Management', icon: 'mdi-sitemap', value: 'odp', to: '/odp-management', permission: 'view_odp_management' },
-    { title: 'Manajemen Inventaris', icon: 'mdi-archive-outline', value: 'inventory', to: '/inventory', permission: 'view_inventory' }
-  ]},
-  { title: 'MANAGEMENT', items: [
-      { title: 'Users', icon: 'mdi-account-cog-outline', value: 'users', to: '/users', badge: userCount, badgeColor: 'primary', permission: 'view_users' },
-      { title: 'Roles', icon: 'mdi-shield-account-outline', value: 'roles', to: '/roles', badge: roleCount, badgeColor: 'primary', permission: 'view_roles' },
-      { title: 'Permissions', icon: 'mdi-shield-key-outline', value: 'permissions', to: '/permissions', permission: 'view_permissions' },
-      { title: 'Activity Log', icon: 'mdi-history', value: 'activity-logs', to: '/activity-logs', permission: 'view_activity_log' },
-      { title: 'Kelola S&K', icon: 'mdi-file-edit-outline', value: 'sk-management', to: '/management/sk', permission: 'manage_sk' },
-      { title: 'Pengaturan', icon: 'mdi-cog-outline', value: 'settings', to: '/management/settings', permission: 'manage_settings' }
-  ]},
-]);
+async function fetchUnreadNotifications() {
+  try {
+    const response = await apiClient.get('/notifications/unread'); 
+    const validTypes = ['new_payment', 'new_technical_data', 'new_customer_for_noc', 'new_customer'];
+    const filteredNotifications = response.data.notifications.filter((notif: any) => {
+      if (notif.action && notif.action.includes('/auth/')) {
+        return false;
+      }
+      
+      if (!validTypes.includes(notif.type)) {
+        return false;
+      }
+      
+      if (notif.type === 'new_payment' && !notif.data?.invoice_number) {
+        return false;
+      }
+      if ((notif.type === 'new_customer_for_noc' || notif.type === 'new_customer') && !notif.data?.pelanggan_nama) {
+        return false;
+      }
+      if (notif.type === 'new_technical_data' && !notif.data?.pelanggan_nama) {
+        return false;
+      }
+      
+      return true;
+    });
+    
+    notifications.value = filteredNotifications.slice(0, 20);
+  } catch (error) {
+    console.error("Gagal mengambil notifikasi yang belum dibaca:", error);
+  }
+}
 
-// Key untuk memaksa re-render menu ketika permissions berubah
-const menuKey = computed(() => {
-  return JSON.stringify(userPermissions.value) + '-' + forceRender.value + '-' + Date.now();
-});
-
-const filteredMenuGroups = computed(() => {
-  if (userPermissions.value.includes('*')) {
-    return menuGroups.value;
+async function handleNotificationClick(notification: any) {
+  if (!notification || !notification.id) {
+    console.error("[Notification] Invalid notification object");
+    return;
   }
 
-  const filtered = menuGroups.value.map(group => {
-    const allowedItems = group.items.filter(item => {
-      const hasPermission = !item.permission || userPermissions.value.includes(item.permission);
-      return hasPermission;
-    });
+  const notificationId = notification.id;
 
-    return {
-      ...group,
-      items: allowedItems
-    };
-  }).filter(group => group.items.length > 0);
+  try {
+    await apiClient.post(`/notifications/${notificationId}/mark-as-read`);
 
-  return filtered;
-});
+    if (notifications.value && Array.isArray(notifications.value)) {
+      notifications.value = notifications.value.filter(n => n.id !== notificationId);
+    }
+
+    if (notification.type === 'new_technical_data') {
+      router.push('/langganan');
+    } else if (notification.type === 'new_customer_for_noc' || notification.type === 'new_customer') {
+      router.push('/data-teknis');
+    } else if (notification.type === 'new_payment') {
+      router.push('/invoices');
+    }
+
+  } catch (error) {
+    console.error("[Notification] Gagal menandai notifikasi sebagai sudah dibaca:", error);
+  }
+}
+
+async function markAllAsRead() {
+  try {
+    await apiClient.post('/notifications/mark-all-as-read'); 
+    notifications.value = [];
+  } catch (error) {
+    console.error("[Notification] Gagal membersihkan notifikasi:", error);
+  }
+}
+
+async function fetchRoleCount() {
+  try {
+    const response = await apiClient.get('/roles/');
+    roleCount.value = response.data.length;
+  } catch (error) {
+    console.error("Gagal mengambil jumlah roles:", error);
+  }
+}
+
+async function fetchUserCount() {
+  try {
+    const response = await apiClient.get('/users/');
+    userCount.value = response.data.length;
+  } catch (error) {
+    console.error("Gagal mengambil jumlah users:", error);
+  }
+}
+
+function handleLogout() {
+  disconnectWebSocket();
+  authStore.logout();
+  router.push('/login');
+}
+
+function toggleTheme() {
+  const newTheme = theme.global.current.value.dark ? 'light' : 'dark';
+  theme.change(newTheme);
+  localStorage.setItem('theme', newTheme);
+}
+
+function handleLogoClick() {
+  // Navigasi ke dashboard atau refresh halaman saat logo diklik
+  if (route.path !== '/dashboard') {
+    router.push('/dashboard');
+  } else {
+    // Refresh halaman dengan cara yang elegan
+    forceRender.value += 1;
+  }
+}
 
 onMounted(async () => {
   const savedTheme = localStorage.getItem('theme');
@@ -965,16 +1379,13 @@ onMounted(async () => {
     rail.value = false;
   }
 
-  // Update active bottom nav based on current route
   updateActiveBottomNav(route.path);
 
   const enableAudioContext = () => {
-    // console.log('User interaction detected. Audio playback is now enabled for this session.');
     document.removeEventListener('click', enableAudioContext);
   };
   document.addEventListener('click', enableAudioContext);
 
-  // Check if user is already authenticated
   if (authStore.isAuthenticated && authStore.user) {
     const role = authStore.user.role;
     if (role) {
@@ -983,14 +1394,12 @@ onMounted(async () => {
       } else {
         userPermissions.value = role.permissions?.map((p: any) => p.name) || [];
       }
-      // Force menu refresh after initial permissions set
       setTimeout(() => refreshMenu(), 50);
     }
   }
 
   const userIsValid = await authStore.verifyToken();
 
-  // Force menu refresh after verification
   setTimeout(() => {
     refreshMenu();
   }, 100);
@@ -1031,292 +1440,48 @@ onMounted(async () => {
   }
 });
 
+
 onUnmounted(() => {
   disconnectWebSocket();
 });
-
-function toggleTheme() {
-  const newTheme = theme.global.current.value.dark ? 'light' : 'dark';
-  theme.change(newTheme);
-  localStorage.setItem('theme', newTheme);
-}
-
-async function fetchUnreadNotifications() {
-  try {
-    const response = await apiClient.get('/notifications/unread'); 
-    const validTypes = ['new_payment', 'new_technical_data', 'new_customer_for_noc', 'new_customer'];
-    const filteredNotifications = response.data.notifications.filter((notif: any) => {
-      if (notif.action && notif.action.includes('/auth/')) {
-        return false;
-      }
-      
-      if (!validTypes.includes(notif.type)) {
-        return false;
-      }
-      
-      if (notif.type === 'new_payment' && !notif.data?.invoice_number) {
-        return false;
-      }
-      if ((notif.type === 'new_customer_for_noc' || notif.type === 'new_customer') && !notif.data?.pelanggan_nama) {
-        return false;
-      }
-      if (notif.type === 'new_technical_data' && !notif.data?.pelanggan_nama) {
-        return false;
-      }
-      
-      return true;
-    });
-    
-    notifications.value = filteredNotifications.slice(0, 20);
-  } catch (error) {
-    console.error("Gagal mengambil notifikasi yang belum dibaca:", error);
-  }
-}
-
-function getNotificationIcon(type: string) {
-  switch (type) {
-    case 'new_payment': return 'mdi-cash-check';
-    case 'new_customer_for_noc': return 'mdi-account-plus-outline';
-    case 'new_technical_data': return 'mdi-lan-connect';
-    default: return 'mdi-bell-outline';
-  }
-}
-
-function getNotificationColor(type: string) {
-  switch (type) {
-    case 'new_payment': return 'success';
-    case 'new_customer_for_noc': return 'info';
-    case 'new_technical_data': return 'cyan';
-    default: return 'grey';
-  }
-}
-
-async function handleNotificationClick(notification: any) {
-  // console.log('[Notification] handleNotificationClick called with:', notification);
-
-  if (!notification) {
-    console.error("[Notification] Invalid notification object: null or undefined");
-    alert("Notifikasi tidak valid. Silakan refresh halaman.");
-    return;
-  }
-
-  if (typeof notification !== 'object') {
-    console.error("[Notification] Invalid notification object type:", typeof notification, notification);
-    alert("Notifikasi tidak valid. Silakan refresh halaman.");
-    return;
-  }
-
-  if (!notification.hasOwnProperty('id')) {
-    console.error("[Notification] Notification object missing 'id' property:", notification);
-    alert("Notifikasi tidak valid (missing ID). Silakan refresh halaman.");
-    return;
-  }
-
-  const notificationId = notification.id;
-  if (notificationId === undefined || notificationId === null || notificationId === '') {
-    console.error("[Notification] Invalid notification ID:", notificationId);
-    alert("Notifikasi tidak valid (invalid ID). Silakan refresh halaman.");
-    return;
-  }
-  
-  if (!notification.hasOwnProperty('type')) {
-    console.warn("[Notification] Notification object missing 'type' property:", notification);
-    notification.type = 'unknown';
-  }
-
-  if (notification.type === 'unknown') {
-    console.warn("[Notification] Skipping unknown notification type:", notification);
-    if (notifications.value && Array.isArray(notifications.value)) {
-      notifications.value = notifications.value.filter(n => n.id !== notificationId);
-    }
-    return;
-  }
-
-  // console.log('[Notification] Processing notification click for ID:', notificationId);
-
-  try {
-    if (!apiClient) {
-      throw new Error("API client not initialized");
-    }
-
-    // console.log(`[Notification] Calling API to mark notification ${notificationId} as read`);
-
-    await apiClient.post(`/notifications/${notificationId}/mark-as-read`);
-    // console.log(`[Notification] API response for marking ${notificationId} as read:`);
-
-    if (notifications.value && Array.isArray(notifications.value)) {
-      // console.log(`[Notification] Removing notification ${notificationId} from frontend list`);
-      notifications.value = notifications.value.filter(n => {
-        const match = n.id !== notificationId;
-        // console.log(`[Notification] Filter check - comparing ${n.id} !== ${notificationId} = ${match}`);
-        return match;
-      });
-      // console.log(`[Notification] Updated notifications list length: ${notifications.value.length}`);
-    } else {
-      console.warn("[Notification] notifications.value bukan array:", notifications.value);
-      notifications.value = [];
-    }
-
-    // console.log(`[Notification] Redirecting based on type: ${notification.type}`);
-    
-    if (notification.type === 'unknown') {
-      // console.log("[Notification] No redirect for unknown notification type");
-      return;
-    }
-
-    if (notification.type === 'new_technical_data') {
-      // console.log("[Notification] Redirecting to /langganan");
-      router.push('/langganan');
-    } else if (notification.type === 'new_customer_for_noc' || notification.type === 'new_customer') {
-      // console.log("[Notification] Redirecting to /data-teknis");
-      router.push('/data-teknis');
-    } else if (notification.type === 'new_payment') {
-      // console.log("[Notification] Redirecting to /invoices");
-      router.push('/invoices');
-    } else {
-      console.warn("[Notification] Unknown notification type, redirecting to home:", notification.type);
-      router.push('/');
-    }
-
-  } catch (error) {
-    console.error("[Notification] Gagal menandai notifikasi sebagai sudah dibaca:", error);
-    
-    if (error instanceof Error) {
-      const errorMessage = error.message.toLowerCase();
-      if (errorMessage.includes('404') || errorMessage.includes('not found')) {
-        console.warn("[Notification] Notifikasi tidak ditemukan di server, hapus dari daftar lokal");
-        if (notifications.value && Array.isArray(notifications.value)) {
-          notifications.value = notifications.value.filter(n => n.id !== notificationId);
-        }
-        if (notification.type === 'new_technical_data') {
-          router.push('/langganan');
-        } else if (notification.type === 'new_customer_for_noc' || notification.type === 'new_customer') {
-          router.push('/data-teknis');
-        } else if (notification.type === 'new_payment') {
-          router.push('/invoices');
-        } else {
-          router.push('/');
-        }
-      } else {
-        alert(`Gagal menandai notifikasi sebagai sudah dibaca: ${error.message}`);
-      }
-    } else {
-      alert("Gagal menandai notifikasi sebagai sudah dibaca. Silakan coba lagi.");
-    }
-  }
-}
-
-async function markAllAsRead() {
-  try {
-    if (!apiClient) {
-      throw new Error("API client not initialized");
-    }
-    
-    const response = await apiClient.post('/notifications/mark-all-as-read'); 
-    
-    if (response && response.status === 200) {
-      if (notifications.value && Array.isArray(notifications.value)) {
-        notifications.value = [];
-      } else {
-        console.warn("[Notification] notifications.value bukan array, inisialisasi ulang...");
-        notifications.value = [];
-      }
-      
-      // console.log("[Notification] Semua notifikasi telah ditandai sebagai sudah dibaca");
-    } else {
-      throw new Error(`Unexpected response status: ${response.status}`);
-    }
-    
-  } catch (error) {
-    console.error("[Notification] Gagal membersihkan notifikasi:", error);
-    
-    if (error instanceof Error) {
-      alert(`Gagal membersihkan notifikasi: ${error.message}`);
-    } else {
-      alert("Gagal membersihkan notifikasi. Silakan coba lagi.");
-    }
-    
-    console.warn("[Notification] Fallback ke penghapusan lokal...");
-    if (notifications.value && Array.isArray(notifications.value)) {
-      notifications.value = [];
-    } else {
-      notifications.value = [];
-    }
-  }
-}
-
-async function fetchRoleCount() {
-  try {
-    const response = await apiClient.get('/roles/');
-    roleCount.value = response.data.length;
-  } catch (error) {
-    console.error("Gagal mengambil jumlah roles:", error);
-  }
-}
-
-async function fetchUserCount() {
-  try {
-    const response = await apiClient.get('/users/');
-    userCount.value = response.data.length;
-  } catch (error) {
-    console.error("Gagal mengambil jumlah users:", error);
-  }
-}
-
-function handleLogout() {
-  disconnectWebSocket();
-  authStore.logout();
-  router.push('/login');
-}
 </script>
 
 <style scoped>
-/* LIGHT THEME */
+/* ==================== MODERN DESIGN SYSTEM ==================== */
+
+:root {
+  --sidebar-width: 300px;
+  --sidebar-rail-width: 70px;
+  --header-height: 70px;
+  --footer-height: 60px;
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --transition-speed: 0.3s;
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.12);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.16);
+}
+
+/* ==================== BASE STYLES ==================== */
+
 .modern-app {
   background-color: rgb(var(--v-theme-background));
-  transition: background-color 0.3s ease;
+  transition: background-color var(--transition-speed) ease;
 }
 
-.notification-content {
-  cursor: pointer;
-}
-
-.nav-sub-item {
-  border-radius: 10px;
-  margin-bottom: 4px;
-  color: rgba(var(--v-theme-on-surface), 0.8);
-  min-height: 44px;
-  transition: all 0.3s ease;
-  padding-left: 16px !important;
-  margin-left: -8px;
-}
-
-.nav-sub-item .v-list-item-title {
-  font-size: 0.9rem;
-  font-weight: 500;
-}
-
-.nav-sub-item:not(.v-list-item--active):hover {
-  background-color: rgba(var(--v-theme-primary), 0.1);
-  color: rgb(var(--v-theme-primary));
-  transform: translateX(2px);
-}
-
-.v-list-group .v-list-item {
-  padding-inline-start: 16px !important;
-}
-
-.nav-sub-item.v-list-item {
-  padding-inline-start: 16px !important;
-  margin-inline-start: 0 !important;
-}
+/* ==================== SIDEBAR STYLES ==================== */
 
 .modern-drawer {
-  border-right: none;
+  border-right: none !important;
   background: rgb(var(--v-theme-surface));
-  box-shadow: 0 0 20px rgba(0, 0, 0, 0.08);
-  overflow: hidden !important;
-  transition: all 0.3s ease;
+  box-shadow: var(--shadow-md);
+  transition: all var(--transition-speed) cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .modern-drawer :deep(.v-navigation-drawer__content) {
@@ -1326,194 +1491,791 @@ function handleLogout() {
   height: 100%;
 }
 
-.notification-item .v-list-item-subtitle {
-  white-space: normal !important;
-  line-height: 1.4;
-  -webkit-line-clamp: 2; 
-  line-clamp: 2;
-  -webkit-box-orient: vertical;
-  display: -webkit-box;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.notification-item.v-list-item {
-  min-height: 60px !important;
-  height: auto !important;
+/* Sidebar Header - PERBAIKAN SEJAJAR DENGAN HEADER */
+.sidebar-header-modern {
+  height: var(--header-height) !important;
+  min-height: var(--header-height) !important;
+  padding: 0 var(--spacing-md);
+  border-bottom: 1px solid rgba(var(--v-border-color), 0.12);
+  background: linear-gradient(135deg,
+    rgba(var(--v-theme-primary), 0.05) 0%,
+    rgba(var(--v-theme-secondary), 0.05) 100%
+  );
+  transition: all var(--transition-speed) ease;
+  display: flex;
   align-items: center;
 }
 
-.sidebar-header {
-  height: 65px;
-  padding: 0 11.5px !important;
-  border-bottom: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
-  flex-shrink: 0;
-  transition: border-color 0.3s ease;
+.sidebar-header-modern.rail-mode {
+  padding: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
-.header-flex-container {
+/* Header Content - PERBAIKAN SPACING */
+.header-content {
   display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+
+/* Logo Wrapper */
+.logo-wrapper {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  border-radius: var(--radius-md);
+  transition: all var(--transition-speed) ease;
+  cursor: pointer;
+}
+
+.logo-wrapper:hover {
+  background-color: rgba(var(--v-theme-primary), 0.1);
+  transform: scale(1.02);
+}
+
+.sidebar-logo {
+  height: 56px;
+  width: auto;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+  transition: all var(--transition-speed) ease;
+  border-radius: var(--radius-sm);
+}
+
+.v-theme--dark .sidebar-logo {
+  filter: drop-shadow(0 2px 4px rgba(255, 255, 255, 0.1)) brightness(1.1);
+}
+
+/* Title Wrapper - PERBAIKAN */
+.title-wrapper {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.app-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: rgb(var(--v-theme-on-surface));
+  line-height: 1.2;
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.app-subtitle {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: rgba(var(--v-theme-on-surface), 0.6);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin: 0;
+  line-height: 1.2;
+}
+
+.toggle-btn,
+.close-btn {
+  flex-shrink: 0;
+  opacity: 0.7;
+  transition: all var(--transition-speed) ease;
+  margin-left: auto;
+}
+
+.toggle-btn:hover,
+.close-btn:hover {
+  opacity: 1;
+  background-color: rgba(var(--v-theme-primary), 0.1);
+}
+
+/* Navigation Container */
+.navigation-container {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: var(--spacing-md) 0;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(var(--v-theme-on-surface), 0.2) transparent;
+}
+
+.navigation-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+.navigation-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.navigation-container::-webkit-scrollbar-thumb {
+  background-color: rgba(var(--v-theme-on-surface), 0.2);
+  border-radius: 3px;
+}
+
+.navigation-container::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(var(--v-theme-on-surface), 0.3);
+}
+
+.navigation-list {
+  padding: 0 var(--spacing-md);
+}
+
+/* Menu Group Header */
+.menu-group-header {
+  margin: var(--spacing-lg) 0 var(--spacing-sm) 0;
+  padding: 0 var(--spacing-sm);
+}
+
+.menu-group-header:first-child {
+  margin-top: 0;
+}
+
+.group-title {
+  font-size: 0.7rem;
+  font-weight: 900;
+  color: rgba(var(--v-theme-on-surface), 0.6);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  display: block;
+  margin-bottom: var(--spacing-xs);
+  margin-left: 12px;
+  margin-top: 8px;
+}
+
+.group-divider {
+  opacity: 0.12;
+}
+
+/* Menu Items - KEMBALI KE STYLE ORIGINAL */
+.menu-item {
+  border-radius: var(--radius-md);
+  margin-bottom: var(--spacing-xs);
+  min-height: 48px;
+  transition: all var(--transition-speed) cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.menu-item :deep(.v-list-item__prepend) {
+  margin-inline-end: 16px !important;
+  width: 24px;
+  display: flex;
+  justify-content: center;
+}
+
+.menu-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  width: 3px;
+  background: linear-gradient(135deg, 
+    rgb(var(--v-theme-primary)) 0%, 
+    rgb(var(--v-theme-secondary)) 100%
+  );
+  transform: scaleY(0);
+  transition: transform var(--transition-speed) cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.menu-item:hover::before {
+  transform: scaleY(1);
+}
+
+.menu-item:not(.v-list-item--active):hover {
+  background-color: rgba(var(--v-theme-primary), 0.08);
+  transform: translateX(4px);
+}
+
+.menu-item.v-list-item--active {
+  background: linear-gradient(135deg,
+    rgb(var(--v-theme-primary)) 0%,
+    rgba(var(--v-theme-primary), 0.8) 25%,
+    rgba(var(--v-theme-secondary), 0.9) 50%,
+    rgba(var(--v-theme-primary), 0.7) 75%,
+    rgb(var(--v-theme-primary)) 100%
+  );
+  color: white !important;
+  font-weight: 700;
+  box-shadow:
+    0 8px 24px rgba(var(--v-theme-primary), 0.5),
+    0 4px 12px rgba(var(--v-theme-primary), 0.3),
+    inset 0 2px 4px rgba(255, 255, 255, 0.3),
+    inset 0 -1px 2px rgba(0, 0, 0, 0.1),
+    inset 0 0 0 2px rgba(255, 255, 255, 0.4);
+  border: 3px solid rgba(255, 255, 255, 0.3);
+  border-radius: 12px;
+  position: relative;
+  overflow: hidden;
+  transform: translateY(-2px);
+  margin: 2px 4px;
+}
+
+
+.menu-item.v-list-item--active::before {
+  transform: scaleY(1);
+  background: linear-gradient(135deg,
+    rgb(var(--v-theme-primary)) 0%,
+    rgb(var(--v-theme-secondary)) 100%
+  );
+  box-shadow: 0 0 8px rgba(var(--v-theme-primary), 0.5);
+}
+
+/* Add strong pulse effect for active menu */
+.menu-item.v-list-item--active {
+  animation: activePulse 2s ease-in-out infinite;
+}
+
+
+/* Strong pulse animation */
+@keyframes activePulse {
+  0%, 100% {
+    box-shadow:
+      0 8px 24px rgba(var(--v-theme-primary), 0.5),
+      0 4px 12px rgba(var(--v-theme-primary), 0.3),
+      inset 0 2px 4px rgba(255, 255, 255, 0.3),
+      inset 0 -1px 2px rgba(0, 0, 0, 0.1),
+      inset 0 0 0 2px rgba(255, 255, 255, 0.4);
+    transform: translateY(-2px) scale(1);
+  }
+  50% {
+    box-shadow:
+      0 12px 32px rgba(var(--v-theme-primary), 0.7),
+      0 6px 16px rgba(var(--v-theme-primary), 0.4),
+      inset 0 2px 4px rgba(255, 255, 255, 0.4),
+      inset 0 -1px 2px rgba(0, 0, 0, 0.1),
+      inset 0 0 0 3px rgba(255, 255, 255, 0.5);
+    transform: translateY(-3px) scale(1.01);
+  }
+}
+
+.item-title {
+  font-size: 0.9375rem;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.item-description {
+  font-size: 0.75rem;
+  color: rgba(var(--v-theme-on-surface), 0.5);
+  line-height: 1.3;
+  margin-top: 2px;
+  white-space: normal;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+/* Sub Items */
+.sub-item {
+  padding-left: calc(var(--spacing-lg) * 3 + var(--spacing-md) + var(--spacing-lg)) !important;
+  min-height: 44px;
+}
+
+.sub-item-description {
+  font-size: 0.6875rem;
+  color: rgba(var(--v-theme-on-surface), 0.5);
+  line-height: 1.3;
+  margin-top: 2px;
+}
+
+/* Menu Group */
+.menu-group :deep(.v-list-group__items) {
+  --indent-padding: 0px;
+}
+
+/* Badges */
+.badges-wrapper {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.badge-item :deep(.v-badge__badge) {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+}
+
+/* PERBAIKAN RAIL MODE - FIX ICON TIDAK TERLIHAT */
+.v-navigation-drawer--rail .navigation-list {
+  padding: 0 var(--spacing-xs);
+}
+
+.v-navigation-drawer--rail .menu-group-header {
+  display: none;
+}
+
+.v-navigation-drawer--rail .menu-item {
+  justify-content: center;
+  padding: 0 30px !important;
+  margin-left: 10px;
+}
+
+.v-navigation-drawer--rail .menu-item :deep(.v-list-item__prepend) {
+  margin-inline-end: 0 !important;
+}
+
+.v-navigation-drawer--rail .menu-item :deep(.v-list-item__content) {
+  display: none;
+}
+
+.v-navigation-drawer--rail .menu-item :deep(.v-list-item__append) {
+  display: none;
+}
+
+.v-navigation-drawer--rail .v-list-group__items {
+  display: none;
+}
+
+/* Pastikan icon terlihat di rail mode */
+.v-navigation-drawer--rail .menu-item :deep(.v-icon) {
+  opacity: 1 !important;
+  font-size: 18px !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+}
+
+/* Logout Section */
+.logout-container {
+  padding: 4px;
+  background: rgba(var(--v-theme-surface), 0.5);
+  backdrop-filter: blur(10px);
+}
+
+.logout-btn {
+  border-radius: 12px !important;
+  font-weight: 600;
+  display: flex !important;
+  min-height: 40px;
+  margin: 0;
+  padding: 0 16px !important;
+}
+
+.logout-btn:hover {
+  box-shadow: 0 8px 20px rgba(239, 68, 68, 0.3);
+  transform: translateY(-2px);
+}
+
+/* Logout button di rail mode */
+.v-navigation-drawer--rail .logout-container {
+  padding: 2px;
+}
+
+.v-navigation-drawer--rail .logout-btn {
+  min-width: 40px;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: 8px;
+  margin: 0;
+}
+
+/* Center avatar J in rail mode */
+.v-navigation-drawer--rail .logo-wrapper {
+  display: flex;
+  justify-content: center;
   align-items: center;
   width: 100%;
 }
 
-.sidebar-logo-full {
-  height: 45px;
-  margin-right: 12px;
-  flex-shrink: 0;
-  filter: brightness(1);
-  transition: filter 0.3s ease;
+.v-navigation-drawer--rail .logo-wrapper .v-avatar {
+  margin: 0 auto;
 }
 
-.v-theme--dark .sidebar-logo-full {
-  filter: brightness(1.2) contrast(1.1);
-}
-
-.sidebar-title-wrapper {
-  overflow: hidden;
-  white-space: nowrap;
-}
-
-.sidebar-title {
-  font-size: 1.3rem;
-  font-weight: 700;
-  color: rgb(var(--v-theme-on-surface));
-  line-height: 1.2;
-  margin-bottom: 2px;
-  transition: color 0.3s ease;
-}
-
-.sidebar-subtitle {
-  font-size: 0.75rem;
-  font-weight: 500;
-  color: rgba(var(--v-theme-on-surface), 0.7);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  transition: color 0.3s ease;
-}
-
-.navigation-wrapper {
-  flex: 2;
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding: 8px 0;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-
-.navigation-wrapper::-webkit-scrollbar {
-  display: none;
-}
-
-.navigation-menu {
-  padding: 0 16px;
-}
-
-.menu-subheader {
-  font-size: 0.7rem;
-  font-weight: 700;
-  color: rgba(var(--v-theme-on-surface), 0.6) !important;
-  text-transform: uppercase;
-  letter-spacing: 0.8px;
-  margin-top: 20px;
-  margin-bottom: 8px;
-  padding: 0 16px;
-  transition: color 0.3s ease;
-}
-
-.nav-item {
-  border-radius: 10px;
-  margin-bottom: 4px;
-  color: rgba(var(--v-theme-on-surface), 0.8);
-  min-height: 44px;
-  transition: all 0.3s ease;
-}
-
-.nav-item .v-list-item-title {
-  font-size: 0.9rem;
-  font-weight: 500;
-}
-
-.nav-item:not(.v-list-item--active):hover {
-  background-color: rgba(var(--v-theme-primary), 0.1);
-  color: rgb(var(--v-theme-primary));
-  transform: translateX(2px);
-}
-
-.v-list-item--active {
-  background: linear-gradient(135deg, rgb(var(--v-theme-primary)) 0%, rgb(var(--v-theme-secondary)) 100%);
-  color: white !important;
-  box-shadow: 0 4px 12px rgba(var(--v-theme-primary), 0.3);
-}
-
-.v-list-item--active .v-list-item-title {
-  font-weight: 600;
-}
-
-.badge-chip {
-  font-size: 0.7rem;
-  height: 20px;
-  font-weight: 600;
-  border-radius: 10px;
-}
-
-.v-list-item--active .badge-chip {
-  color: white !important;
-}
-
-.logout-section {
-  flex-shrink: 0;
-  border-top: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
-  background: rgba(var(--v-theme-surface), 0.5);
-  transition: all 0.3s ease;
-}
-
-.logout-btn {
-  border-radius: 10px;
-  font-weight: 500;
-  text-transform: none;
-  letter-spacing: normal;
-  transition: all 0.3s ease;
-}
-
-.logout-btn:hover {
-  background-color: #ef4444 !important;
-  color: white !important;
-}
+/* ==================== APP BAR STYLES ==================== */
 
 .modern-app-bar {
   background: rgb(var(--v-theme-surface)) !important;
-  border-bottom: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-  transition: all 0.3s ease;
+  border-bottom: 1px solid rgba(var(--v-border-color), 0.12);
+  box-shadow: var(--shadow-sm);
+  backdrop-filter: blur(10px);
+  transition: all var(--transition-speed) ease;
+  height: var(--header-height) !important;
+  min-height: var(--header-height) !important;
 }
 
-.header-action-btn {
-  color: rgba(var(--v-theme-on-surface), 0.8);
-  transition: all 0.3s ease;
+.modern-app-bar :deep(.v-toolbar__content) {
+  height: var(--header-height) !important;
+  min-height: var(--header-height) !important;
 }
 
-.header-action-btn:hover {
+.menu-toggle {
+  transition: all var(--transition-speed) ease;
+  height: 40px !important;
+  width: 40px !important;
+  margin-top: 15px;
+  margin-bottom: 13px;
+}
+
+.menu-toggle:hover {
   background-color: rgba(var(--v-theme-primary), 0.1);
-  color: rgb(var(--v-theme-primary));
+  transform: scale(1.05);
 }
 
-.theme-toggle-btn:hover {
-  background-color: rgba(var(--v-theme-warning), 0.1) !important;
-  color: rgb(var(--v-theme-warning)) !important;
+.app-bar-title {
+  color: rgb(var(--v-theme-on-surface));
+  font-weight: 900;
 }
+
+.header-icon-btn {
+  transition: all var(--transition-speed) ease;
+  height: 40px !important;
+  width: 40px !important;
+  margin-top: 8px;
+  margin-bottom: 8px;
+}
+
+.header-icon-btn:hover {
+  background-color: rgba(var(--v-theme-primary), 0.1);
+  transform: scale(1.05);
+}
+
+
+/* ==================== MODERN NOTIFICATION STYLES ==================== */
+
+.modern-notification-container {
+  width: 420px;
+  background: rgb(var(--v-theme-surface));
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+  border: 1px solid rgba(var(--v-border-color), 0.1);
+  overflow: hidden;
+}
+
+.notification-header-section {
+  padding: 20px;
+  background: linear-gradient(135deg,
+    rgba(var(--v-theme-primary), 0.08) 0%,
+    rgba(var(--v-theme-secondary), 0.04) 100%
+  );
+  border-bottom: 1px solid rgba(var(--v-border-color), 0.1);
+}
+
+.notification-main-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: rgb(var(--v-theme-on-surface));
+  line-height: 1.3;
+}
+
+.notification-subtitle {
+  color: rgba(var(--v-theme-on-surface), 0.6);
+  font-size: 0.8125rem;
+  line-height: 1.3;
+}
+
+.notification-divider {
+  margin: 0;
+  border-color: rgba(var(--v-border-color), 0.1) !important;
+}
+
+.notification-list-section {
+  max-height: 480px;
+  overflow-y: auto;
+}
+
+/* Empty State */
+.empty-notification-state {
+  padding: 48px 24px;
+  text-align: center;
+  background: linear-gradient(135deg,
+    rgba(var(--v-theme-primary), 0.02) 0%,
+    rgba(var(--v-theme-secondary), 0.01) 100%
+  );
+}
+
+.empty-notification-icon {
+  position: relative;
+  display: inline-block;
+  margin-bottom: 20px;
+}
+
+.icon-background {
+  position: absolute;
+  top: 0;
+  left: 0;
+  opacity: 0.1;
+}
+
+.empty-notification-text {
+  color: rgba(var(--v-theme-on-surface), 0.5);
+}
+
+.empty-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: rgb(var(--v-theme-on-surface));
+  margin-bottom: 8px;
+}
+
+.empty-subtitle {
+  font-size: 0.9375rem;
+  color: rgba(var(--v-theme-on-surface), 0.6);
+  line-height: 1.4;
+}
+
+/* Notification Items */
+.notification-items-container {
+  padding: 8px;
+}
+
+.modern-notification-item {
+  background: rgb(var(--v-theme-surface));
+  border-radius: 12px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: all var(--transition-speed) cubic-bezier(0.4, 0, 0.2, 1);
+  border: 1px solid transparent;
+  position: relative;
+  overflow: hidden;
+}
+
+.modern-notification-item:hover {
+  background: rgba(var(--v-theme-primary), 0.03);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.modern-notification-item.notification-item-unread {
+  background: rgba(var(--v-theme-primary), 0.02);
+  border-left: 3px solid rgb(var(--v-theme-primary));
+}
+
+.modern-notification-item.notification-item-unread::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg,
+    transparent 0%,
+    rgba(var(--v-theme-primary), 0.1) 50%,
+    transparent 100%
+  );
+  opacity: 0.6;
+}
+
+.notification-content {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px;
+}
+
+.notification-avatar-container {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.notification-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.notification-dot {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 12px;
+  height: 12px;
+  background: rgb(var(--v-theme-primary));
+  border-radius: 50%;
+  border: 2px solid rgb(var(--v-theme-surface));
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* Avatar Colors */
+.avatar-success {
+  background: linear-gradient(135deg, #4CAF50, #45a049) !important;
+}
+
+.avatar-info {
+  background: linear-gradient(135deg, #2196F3, #1E88E5) !important;
+}
+
+.avatar-primary {
+  background: linear-gradient(135deg, #1976D2, #1565C0) !important;
+}
+
+.avatar-warning {
+  background: linear-gradient(135deg, #FF9800, #F57C00) !important;
+}
+
+.avatar-error {
+  background: linear-gradient(135deg, #F44336, #D32F2F) !important;
+}
+
+.notification-message {
+  flex: 1;
+  min-width: 0;
+}
+
+.notification-type {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.notification-label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 6px;
+  line-height: 1.2;
+}
+
+.label-success {
+  background: rgba(76, 175, 80, 0.1);
+  color: #2E7D32;
+  border: 1px solid rgba(76, 175, 80, 0.2);
+}
+
+.label-info {
+  background: rgba(33, 150, 243, 0.1);
+  color: #1565C0;
+  border: 1px solid rgba(33, 150, 243, 0.2);
+}
+
+.label-primary {
+  background: rgba(25, 118, 210, 0.1);
+  color: #1976D2;
+  border: 1px solid rgba(25, 118, 210, 0.2);
+}
+
+.notification-time {
+  font-size: 0.75rem;
+  color: rgba(var(--v-theme-on-surface), 0.5);
+  font-weight: 500;
+}
+
+.notification-description {
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: rgba(var(--v-theme-on-surface), 0.8);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Scrollbar Styling */
+.notification-list-section::-webkit-scrollbar {
+  width: 6px;
+}
+
+.notification-list-section::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.notification-list-section::-webkit-scrollbar-thumb {
+  background: rgba(var(--v-theme-on-surface), 0.2);
+  border-radius: 3px;
+}
+
+.notification-list-section::-webkit-scrollbar-thumb:hover {
+  background: rgba(var(--v-theme-on-surface), 0.3);
+}
+
+/* Animations */
+.modern-notification-item {
+  animation: slideInFromRight 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.modern-notification-item:nth-child(even) {
+  animation-delay: 0.05s;
+}
+
+.modern-notification-item:nth-child(3n) {
+  animation-delay: 0.1s;
+}
+
+@keyframes slideInFromRight {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Hover Effects */
+.modern-notification-item:hover .notification-avatar {
+  transform: scale(1.05);
+  transition: transform var(--transition-speed) ease;
+}
+
+.modern-notification-item:hover .notification-dot {
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+   0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(1.1);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Dark Theme Adjustments */
+.v-theme--dark .modern-notification-container {
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.v-theme--dark .notification-header-section {
+  background: linear-gradient(135deg,
+    rgba(var(--v-theme-primary), 0.15) 0%,
+    rgba(var(--v-theme-secondary), 0.08) 100%
+  );
+}
+
+.v-theme--dark .notification-dot {
+  border-color: rgba(var(--v-theme-surface), 0.8);
+}
+
+/* ==================== MAIN CONTENT ==================== */
 
 .modern-main {
   background-color: rgb(var(--v-theme-background));
-  transition: background-color 0.3s ease;
+  transition: background-color var(--transition-speed) ease;
 }
 
-/* Add padding bottom for mobile to accommodate bottom nav */
 .modern-main.with-bottom-nav {
   padding-bottom: 65px !important;
 }
 
-/* Bottom Navigation Styles */
+/* ==================== BOTTOM NAVIGATION (MOBILE) ==================== */
+
 .mobile-bottom-nav {
   position: fixed !important;
   bottom: 0;
@@ -1521,23 +2283,26 @@ function handleLogout() {
   right: 0;
   z-index: 1000;
   background: rgb(var(--v-theme-surface)) !important;
-  border-top: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
-  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+  border-top: 1px solid rgba(var(--v-border-color), 0.12);
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(10px);
 }
 
 .mobile-bottom-nav :deep(.v-btn) {
   height: 65px !important;
   flex-direction: column;
-  gap: 4px;
-  font-size: 0.7rem;
-  font-weight: 500;
+  gap: var(--spacing-xs);
+  font-size: 0.6875rem;
+  font-weight: 600;
   text-transform: none;
-  letter-spacing: normal;
+  letter-spacing: 0.02em;
+  transition: all var(--transition-speed) ease;
 }
 
 .mobile-bottom-nav :deep(.v-btn .v-icon) {
   font-size: 24px;
   margin-bottom: 2px;
+  transition: all var(--transition-speed) ease;
 }
 
 .mobile-bottom-nav :deep(.v-btn--active) {
@@ -1545,170 +2310,254 @@ function handleLogout() {
 }
 
 .mobile-bottom-nav :deep(.v-btn--active .v-icon) {
-  color: rgb(var(--v-theme-primary)) !important;
+  transform: scale(1.1);
 }
 
 .mobile-bottom-nav :deep(.v-badge__badge) {
-  font-size: 0.65rem;
+  font-size: 0.625rem;
   min-width: 18px;
   height: 18px;
   padding: 0 4px;
 }
 
-.maintenance-banner {
-  height: 50px !important; 
-  font-size: 2rem !important; 
-  font-weight: 600;
-  justify-content: center; 
+/* ==================== FOOTER ==================== */
+
+.modern-footer {
+  height: var(--footer-height);
+  border-top: 1px solid rgba(var(--v-border-color), 0.12);
+  background: rgb(var(--v-theme-surface));
+  backdrop-filter: blur(10px);
+  transition: all 0.3s ease;
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.05);
 }
 
-.footer-responsive {
-  padding: 0 1rem;
+/* Footer positioning - responsive terhadap sidebar */
+.v-navigation-drawer--not-rail ~ .v-main .modern-footer {
+  left: 300px !important;
+  width: calc(100% - 300px) !important;
+}
+
+.v-navigation-drawer--rail ~ .v-main .modern-footer {
+  left: 80px !important;
+  width: calc(100% - 80px) !important;
+}
+
+.v-navigation-drawer--temporary ~ .v-main .modern-footer {
+  left: 0 !important;
+  width: 100% !important;
 }
 
 .footer-content {
   text-align: center;
-  font-size: 0.85rem;
-  line-height: 1.4;
+  color: rgba(var(--v-theme-on-surface), 0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  font-size: 14px;
+  padding: 8px 16px;
+  height: 100%;
 }
 
-/* DARK THEME SPECIFIC STYLES */
+.footer-content .text-body-2 {
+  font-size: 14px !important;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.footer-link {
+  color: rgb(var(--v-theme-primary));
+  text-decoration: none;
+  font-weight: 600;
+  transition: all var(--transition-speed) ease;
+}
+
+.footer-link:hover {
+  color: rgb(var(--v-theme-secondary));
+  text-decoration: underline;
+}
+
+/* Additional footer enhancements */
+.v-theme--dark .modern-footer {
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.2);
+}
+
+/* ==================== MAINTENANCE BANNER ==================== */
+
+.maintenance-banner {
+  height: 48px !important;
+  font-size: 0.875rem !important;
+  font-weight: 600;
+  justify-content: center;
+  box-shadow: var(--shadow-sm);
+}
+
+/* ==================== DARK THEME ==================== */
+
 .v-theme--dark .modern-app {
-  background-color: #0f172a;
+  background-color: #0a0e1a;
 }
 
 .v-theme--dark .modern-drawer {
-  background: #1e293b;
-  box-shadow: 0 0 20px rgba(0, 0, 0, 0.3);
+  background: #151b2d;
+  box-shadow: 0 0 24px rgba(0, 0, 0, 0.4);
 }
 
-.v-theme--dark .sidebar-header {
-  border-bottom: 1px solid #334155;
+.v-theme--dark .sidebar-header-modern {
+  background: linear-gradient(135deg, 
+    rgba(var(--v-theme-primary), 0.08) 0%, 
+    rgba(var(--v-theme-secondary), 0.08) 100%
+  );
+  border-bottom-color: rgba(255, 255, 255, 0.08);
 }
 
 .v-theme--dark .modern-app-bar {
-  background: #1e293b !important;
-  border-bottom: 1px solid #334155;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  background: #151b2d !important;
+  border-bottom-color: rgba(255, 255, 255, 0.08);
 }
 
-.v-theme--dark .logout-section {
-  background: #0f1629;
-  border-top: 1px solid #334155;
-}
-
-.v-theme--dark .nav-item:not(.v-list-item--active):hover {
-  background-color: rgba(129, 140, 248, 0.15);
+.v-theme--dark .logout-container {
+  background: rgba(10, 14, 26, 0.5);
 }
 
 .v-theme--dark .mobile-bottom-nav {
-  background: #1e293b !important;
-  border-top: 1px solid #334155;
-  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.3);
+  background: #151b2d !important;
+  border-top-color: rgba(255, 255, 255, 0.08);
 }
 
-/* Mobile responsiveness */
-@media (max-width: 768px) {
+.v-theme--dark .modern-footer {
+  background: #151b2d;
+  border-top-color: rgba(255, 255, 255, 0.08);
+}
+
+/* ==================== RESPONSIVE DESIGN ==================== */
+
+@media (max-width: 960px) {
   .modern-drawer {
     width: 280px !important;
   }
-  
-  .sidebar-title {
-    font-size: 1.15rem;
-  }
-  
-  .sidebar-subtitle {
-    font-size: 0.7rem;
-  }
-  
-  .nav-item {
-    min-height: 48px;
-  }
-  
-  .nav-item .v-list-item-title {
-    font-size: 0.9rem;
-  }
-  
-  .menu-subheader {
-    font-size: 0.68rem;
-  }
-  
-  .footer-content {
-    font-size: 0.8rem;
+
+  .v-navigation-drawer--not-rail ~ .v-main .modern-footer {
+    left: 280px !important;
+    width: calc(100% - 280px) !important;
   }
 }
 
-@media (max-width: 480px) {
+@media (max-width: 600px) {
+  .modern-drawer {
+    width: 280px !important;
+  }
+
+  .v-navigation-drawer--not-rail ~ .v-main .modern-footer {
+    left: 280px !important;
+    width: calc(100% - 280px) !important;
+  }
+
+  /* Footer tidak perlu positioning khusus di mobile karena sidebar temporary */
+  
+  .sidebar-logo {
+    height: 50px;
+  }
+  
+  .app-title {
+    font-size: 1.125rem;
+  }
+  
+  .app-subtitle {
+    font-size: 0.6875rem;
+  }
+  
+  .menu-item {
+    min-height: 44px;
+  }
+  
+  .item-title {
+    font-size: 0.875rem;
+  }
+  
+  .item-description {
+    font-size: 0.6875rem;
+  }
+}
+
+@media (max-width: 400px) {
   .modern-drawer {
     width: 260px !important;
   }
   
-  .sidebar-logo-full {
-    height: 40px;
+  .sidebar-logo {
+    height: 46px;
   }
   
-  .sidebar-title {
-    font-size: 1.1rem;
-  }
-  
-  .sidebar-subtitle {
-    font-size: 0.65rem;
-  }
-  
-  .nav-item .v-list-item-title {
-    font-size: 0.85rem;
-  }
-  
-  .menu-subheader {
-    font-size: 0.65rem;
-  }
-  
-  .footer-content {
-    font-size: 0.75rem;
-    padding: 0.5rem 0;
-  }
-
-  .mobile-bottom-nav :deep(.v-btn) {
-    font-size: 0.65rem;
-  }
-
-  .mobile-bottom-nav :deep(.v-btn .v-icon) {
-    font-size: 22px;
-  }
-}
-
-@media (max-width: 360px) {
-  .modern-drawer {
-    width: 240px !important;
-  }
-  
-  .sidebar-logo-full {
-    height: 35px;
-  }
-  
-  .sidebar-title {
+  .app-title {
     font-size: 1rem;
   }
   
-  .sidebar-subtitle {
-    font-size: 0.6rem;
+  .app-subtitle {
+    font-size: 0.625rem;
   }
   
-  .nav-item .v-list-item-title {
-    font-size: 0.8rem;
-  }
-  
-  .footer-content {
-    font-size: 0.7rem;
-  }
-
   .mobile-bottom-nav :deep(.v-btn) {
-    font-size: 0.6rem;
+    font-size: 0.625rem;
     gap: 2px;
   }
-
+  
   .mobile-bottom-nav :deep(.v-btn .v-icon) {
     font-size: 20px;
+  }
+}
+
+/* ==================== ANIMATIONS ==================== */
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.menu-item {
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.notification-item {
+  animation: fadeIn 0.3s ease-out;
+}
+
+/* ==================== ACCESSIBILITY ==================== */
+
+.menu-item:focus-visible,
+.header-icon-btn:focus-visible,
+.logout-btn:focus-visible {
+  outline: 2px solid rgb(var(--v-theme-primary));
+  outline-offset: 2px;
+}
+
+/* ==================== PRINT STYLES ==================== */
+
+@media print {
+  .modern-drawer,
+  .modern-app-bar,
+  .mobile-bottom-nav,
+  .modern-footer {
+    display: none !important;
+  }
+  
+  .modern-main {
+    padding: 0 !important;
   }
 }
 </style>

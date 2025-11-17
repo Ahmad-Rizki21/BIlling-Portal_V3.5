@@ -1,37 +1,55 @@
 <template>
-  <v-container fluid class="modern-container">
-    <!-- Header Section -->
-    <div class="page-header">
-      <div class="header-content">
-        <h1 class="page-title">Manajemen S&K dan Catatan Rilis</h1>
-        <p class="page-subtitle">Kelola syarat & ketentuan dan rilis update sistem</p>
+  <v-container fluid class="pa-4 pa-md-6">
+    <!-- Modern Header with Gradient Background -->
+    <div class="header-card mb-4 mb-md-6">
+      <div class="header-section">
+        <div class="header-content">
+          <div class="d-flex align-center">
+            <v-avatar class="me-4 elevation-4" color="primary" size="80">
+              <v-icon color="white" size="40">mdi-file-document-multiple-outline</v-icon>
+            </v-avatar>
+            <div>
+              <h1 class="text-h4 font-weight-bold text-white mb-2">Manajemen S&K dan Catatan Rilis</h1>
+              <p class="header-subtitle mb-0">
+                Kelola syarat & ketentuan dan rilis update sistem
+              </p>
+            </div>
+            <v-spacer></v-spacer>
+            <v-btn
+              color="primary"
+              variant="elevated"
+              size="large"
+              elevation="2"
+              @click="openDialog()"
+              prepend-icon="mdi-plus"
+              class="text-none font-weight-bold rounded-lg"
+            >
+              <span>Tambah Konten</span>
+            </v-btn>
+          </div>
+        </div>
       </div>
-      <v-btn 
-        color="primary" 
-        class="add-btn"
-        size="large"
-        @click="openDialog()"
-        :class="{ 'btn-mobile': isMobile }"
-      >
-        <v-icon left>mdi-plus</v-icon>
-        <span v-if="!isMobile">Tambah Konten</span>
-      </v-btn>
     </div>
 
     <!-- Main Content Card -->
     <v-card class="content-card" elevation="0">
-      <v-card-title class="card-header">
-        <v-icon class="header-icon" color="primary">mdi-file-document-multiple-outline</v-icon>
-        Daftar Konten
-        <v-spacer></v-spacer>
-        <v-chip 
-          class="items-count-chip" 
-          size="small" 
-          variant="tonal"
-        >
-          {{ skItems.length }} item
-        </v-chip>
-      </v-card-title>
+      <div class="table-header">
+        <v-card-title class="d-flex align-center pa-6">
+          <div class="d-flex align-center flex-grow-1">
+            <v-icon color="purple" size="24" class="me-3">mdi-format-list-bulleted</v-icon>
+            <span class="text-h6 font-weight-bold">Daftar Konten</span>
+          </div>
+          <v-chip
+            :color="skItems.length > 0 ? 'purple' : 'grey'"
+            variant="tonal"
+            size="small"
+            class="items-counter"
+          >
+            <v-icon start size="16">mdi-counter</v-icon>
+            {{ skItems.length }} item
+          </v-chip>
+        </v-card-title>
+      </div>
 
       <!-- Desktop Table View -->
       <div v-if="!isMobile" class="table-container">
@@ -512,49 +530,66 @@ onMounted(fetchSK);
   transition: all 0.3s ease;
 }
 
-/* ===== PAGE HEADER ===== */
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 2rem;
-  gap: 1rem;
+/* Header Card styling - sama seperti halaman lain */
+.header-card {
+  border-radius: 15px;
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(102, 126, 234, 0.15);
+  background: white;
 }
 
+/* Header content untuk memperbesar box */
 .header-content {
-  flex: 1;
+  padding: 24px 32px;
 }
 
-.page-title {
-  font-size: 2rem;
-  font-weight: 700;
-  color: rgb(var(--v-theme-on-background));
-  margin-bottom: 0.5rem;
-  line-height: 1.2;
-  transition: color 0.3s ease;
+.header-section {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  position: relative;
+  overflow: hidden;
 }
 
-.page-subtitle {
-  color: rgba(var(--v-theme-on-background), 0.7);
-  font-size: 1rem;
+.header-section::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 50%;
+  height: 100%;
+  background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="25" cy="25" r="1" fill="white" opacity="0.1"/><circle cx="75" cy="75" r="1" fill="white" opacity="0.1"/><circle cx="50" cy="10" r="1" fill="white" opacity="0.05"/><circle cx="10" cy="50" r="1" fill="white" opacity="0.05"/><circle cx="90" cy="30" r="1" fill="white" opacity="0.05"/></pattern></defs><rect width="100" height="100" fill="url(%23grain)"/></svg>');
+}
+
+/* Header text styling */
+.header-section h1 {
+  color: white !important;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.header-subtitle {
+  color: rgba(255, 255, 255, 0.9) !important;
+  font-size: 1.1rem;
   font-weight: 400;
-  margin: 0;
-  transition: color 0.3s ease;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  opacity: 0.95;
 }
 
-.add-btn {
-  border-radius: 12px;
-  text-transform: none;
-  font-weight: 600;
-  letter-spacing: normal;
-  box-shadow: 0 4px 12px rgba(var(--v-theme-primary), 0.3);
-  transition: all 0.3s ease;
+/* Dark mode specific adjustments */
+.v-theme--dark .header-card {
+  background: linear-gradient(135deg, rgb(var(--v-theme-primary)) 0%, rgb(var(--v-theme-secondary)) 100%);
 }
 
-.add-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(var(--v-theme-primary), 0.4);
+/* Header section background pattern - sama seperti menu lainnya */
+.header-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 50%;
+  height: 100%;
+  background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="25" cy="25" r="1" fill="white" opacity="0.1"/><circle cx="75" cy="75" r="1" fill="white" opacity="0.1"/><circle cx="50" cy="10" r="1" fill="white" opacity="0.05"/><circle cx="10" cy="50" r="1" fill="white" opacity="0.05"/><circle cx="90" cy="30" r="1" fill="white" opacity="0.05"/></pattern></defs><rect width="100" height="100" fill="url(%23grain)"/></svg>');
+  pointer-events: none;
 }
+
 
 /* ===== CONTENT CARD ===== */
 .content-card {
@@ -566,22 +601,18 @@ onMounted(fetchSK);
   overflow: hidden;
 }
 
-.card-header {
-  background: rgba(var(--v-theme-primary), 0.05);
-  padding: 1.5rem;
-  font-size: 1.1rem;
+/* Table Header */
+.table-header {
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+}
+
+.table-header .v-card-title {
+  background: transparent;
+}
+
+.items-counter {
   font-weight: 600;
-  color: rgb(var(--v-theme-on-surface));
-  border-bottom: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
-  transition: all 0.3s ease;
-}
-
-.header-icon {
-  margin-right: 0.75rem;
-}
-
-.items-count-chip {
-  font-weight: 500;
+  letter-spacing: 0.02em;
 }
 
 /* ===== TABLE STYLES ===== */
@@ -895,23 +926,16 @@ onMounted(fetchSK);
     padding: 1rem;
   }
   
-  .page-header {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 1.5rem;
+  .header-content {
+    padding: 20px;
   }
-  
-  .page-title {
-    font-size: 1.75rem;
+
+  .header-section h1 {
+    font-size: 1.5rem !important;
   }
-  
-  .page-subtitle {
-    font-size: 0.9rem;
-  }
-  
-  .btn-mobile {
-    width: 100%;
-    justify-content: center;
+
+  .header-subtitle {
+    font-size: 0.95rem;
   }
   
   .mobile-card-header {
@@ -957,11 +981,11 @@ onMounted(fetchSK);
     padding: 0.75rem;
   }
   
-  .page-title {
-    font-size: 1.5rem;
+  .header-section h1 {
+    font-size: 1.25rem !important;
   }
-  
-  .page-subtitle {
+
+  .header-subtitle {
     font-size: 0.85rem;
   }
   
@@ -987,12 +1011,12 @@ onMounted(fetchSK);
     padding: 0.5rem;
   }
   
-  .page-header {
-    margin-bottom: 1.5rem;
+  .header-content {
+    padding: 16px;
   }
-  
-  .page-title {
-    font-size: 1.25rem;
+
+  .header-section h1 {
+    font-size: 1.25rem !important;
   }
   
   .mobile-card-content {
@@ -1103,8 +1127,7 @@ onMounted(fetchSK);
 
 /* ===== PRINT STYLES ===== */
 @media print {
-  .page-header,
-  .action-buttons,
+  .header-card,
   .mobile-actions,
   .dialog-actions {
     display: none !important;

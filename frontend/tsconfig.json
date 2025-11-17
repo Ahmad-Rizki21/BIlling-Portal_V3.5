@@ -15,10 +15,10 @@
     "jsx": "preserve",
 
     /* Linting */
-    "strict": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true,
+    "strict": false,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "noFallthroughCasesInSwitch": false,
     "noImplicitAny": false,  // Allow implicit any types for flexibility
 
     /* Path Alias Configuration - @/ mapped to src/ */

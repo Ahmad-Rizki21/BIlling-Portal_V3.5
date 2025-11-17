@@ -29,9 +29,11 @@
             :disabled="loading"
             variant="flat"
             size="large"
-            class="action-btn"
-            elevation="2"
+            class="action-btn modern-btn"
+            elevation="4"
+            rounded="pill"
           >
+            <v-icon end class="ms-1">mdi-arrow-right</v-icon>
             <span class="btn-text">Manage Actions</span>
           </v-btn>
           <v-btn
@@ -39,9 +41,10 @@
             prepend-icon="mdi-refresh"
             @click="refreshData"
             :loading="loading"
-            variant="outlined"
+            variant="tonal"
             size="large"
-            class="refresh-btn"
+            class="refresh-btn modern-btn"
+            rounded="pill"
           >
             <span class="btn-text">Refresh</span>
           </v-btn>
@@ -622,6 +625,33 @@ onUnmounted(() => {
   display: inline;
 }
 
+/* Modern Button Styling - Same as TroubleTicketView */
+.modern-btn {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.modern-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.6s;
+}
+
+.modern-btn:hover::before {
+  left: 100%;
+}
+
+.modern-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(var(--v-theme-shadow), 0.2);
+}
+
 /* ========================================
    LOADING & ERROR STATES
    ======================================== */
@@ -985,6 +1015,158 @@ onUnmounted(() => {
 .detail-card:nth-child(1) { animation-delay: 0.1s; }
 .detail-card:nth-child(2) { animation-delay: 0.2s; }
 .detail-card:nth-child(3) { animation-delay: 0.3s; }
+
+/* Light Mode Specific Overrides */
+.v-theme--light .trouble-ticket-detail-container {
+  background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%);
+}
+
+.v-theme--light .detail-card,
+.v-theme--light .error-card {
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.08);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+}
+
+.v-theme--light .card-title {
+  background: #f8fafc;
+  color: #1e293b;
+}
+
+.v-theme--light .detail-label {
+  color: #374151 !important; /* Dark grey for better contrast */
+}
+
+.v-theme--light .page-title {
+  color: #1e293b;
+}
+
+.v-theme--light .page-subtitle {
+  color: #64748b !important;
+}
+
+.v-theme--light .loading-text,
+.v-theme--light .error-message {
+  color: #64748b !important;
+}
+
+.v-theme--light .ticket-title,
+.v-theme--light .customer-name,
+.v-theme--light .user-name,
+.v-theme--light .timeline-title,
+.v-theme--light .badge-value,
+.v-theme--light .date-main {
+  color: #1e293b !important;
+}
+
+.v-theme--light .ticket-description,
+.v-theme--light .customer-address,
+.v-theme--light .timeline-text,
+.v-theme--light .badge-label,
+.v-theme--light .date-time {
+  color: #64748b !important;
+}
+
+.v-theme--light .title-content {
+  background: #f1f5f9;
+  border-left-color: #0284c7;
+}
+
+.v-theme--light .date-info {
+  background: #f1f5f9;
+}
+
+.v-theme--light .assigned-user {
+  background: rgba(34, 197, 94, 0.1);
+}
+
+.v-theme--light .customer-header {
+  background: rgba(14, 165, 233, 0.08);
+}
+
+.v-theme--light .detail-badge {
+  background: #f1f5f9;
+}
+
+.v-theme--light .detail-badge:hover {
+  background: #e2e8f0;
+}
+
+/* Dark Mode Specific Overrides */
+.v-theme--dark .trouble-ticket-detail-container {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+}
+
+.v-theme--dark .detail-card,
+.v-theme--dark .error-card {
+  background: #1e293b;
+  border-color: rgba(var(--v-theme-outline), 0.2);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+}
+
+.v-theme--dark .card-title {
+  background: #0f172a;
+  color: #f1f5f9;
+}
+
+.v-theme--dark .detail-label {
+  color: #94a3b8 !important; /* Light grey for dark theme */
+}
+
+.v-theme--dark .page-title {
+  color: #f1f5f9;
+}
+
+.v-theme--dark .page-subtitle {
+  color: #94a3b8 !important;
+}
+
+.v-theme--dark .loading-text,
+.v-theme--dark .error-message {
+  color: #94a3b8 !important;
+}
+
+.v-theme--dark .ticket-title,
+.v-theme--dark .customer-name,
+.v-theme--dark .user-name,
+.v-theme--dark .timeline-title,
+.v-theme--dark .badge-value,
+.v-theme--dark .date-main {
+  color: #f1f5f9 !important;
+}
+
+.v-theme--dark .ticket-description,
+.v-theme--dark .customer-address,
+.v-theme--dark .timeline-text,
+.v-theme--dark .badge-label,
+.v-theme--dark .date-time {
+  color: #94a3b8 !important;
+}
+
+.v-theme--dark .title-content {
+  background: #334155;
+  border-left-color: #60a5fa;
+}
+
+.v-theme--dark .date-info {
+  background: #334155;
+}
+
+.v-theme--dark .assigned-user {
+  background: rgba(34, 197, 94, 0.15);
+}
+
+.v-theme--dark .customer-header {
+  background: rgba(14, 165, 233, 0.12);
+}
+
+.v-theme--dark .detail-badge {
+  background: #334155;
+}
+
+.v-theme--dark .detail-badge:hover {
+  background: #475569;
+}
 
 @keyframes fadeInUp {
   from {

@@ -1,20 +1,17 @@
 <template>
-  <v-container fluid class="activity-log-container pa-4 pa-md-6">
-    <!-- Header Section -->
-    <div class="header-section d-flex flex-column flex-sm-row align-start align-sm-center mb-6 mb-md-8">
-      <div class="header-content d-flex align-center mb-4 mb-sm-0">
-        <div class="header-avatar-wrapper">
-          <v-avatar class="header-avatar me-4" size="56" color="transparent">
-            <div class="avatar-gradient-bg">
-              <v-icon color="white" size="32">mdi-history</v-icon>
-            </div>
-          </v-avatar>
-        </div>
-        <div class="header-text">
-          <h1 class="header-title text-h4 text-sm-h3 font-weight-bold mb-1">Log Aktivitas</h1>
-          <p class="header-subtitle text-subtitle-1 text-body-2 text-medium-emphasis mb-0">
-            Melacak semua perubahan data penting dalam sistem
-          </p>
+  <v-container fluid class="pa-4 pa-md-6">
+    <div class="header-card mb-4 mb-md-6">
+      <div class="d-flex flex-column align-center gap-4">
+        <div class="d-flex align-center header-info">
+          <div class="header-avatar-wrapper">
+            <v-avatar class="header-avatar" color="transparent" size="50">
+              <v-icon color="white" size="28">mdi-history</v-icon>
+            </v-avatar>
+          </div>
+          <div class="ml-4">
+            <h1 class="header-title">Log Aktivitas</h1>
+            <p class="header-subtitle">Melacak semua perubahan data penting dalam sistem</p>
+          </div>
         </div>
       </div>
     </div>
@@ -22,31 +19,29 @@
     <!-- Activity Logs Card -->
     <v-card class="activity-card" elevation="0" rounded="xl">
       <!-- Card Header -->
-      <div class="card-header pa-4 pa-md-6">
-        <div class="d-flex align-center justify-space-between">
-          <div class="d-flex align-center">
-            <div class="header-icon-wrapper me-3">
-              <v-icon color="primary" size="26">mdi-format-list-bulleted-square</v-icon>
-            </div>
+      <div class="table-header">
+        <v-card-title class="d-flex align-center pa-6">
+          <div class="d-flex align-center flex-grow-1">
+            <v-icon color="purple" size="24" class="me-3">mdi-format-list-bulleted</v-icon>
             <div>
-              <h2 class="card-title text-h6 font-weight-bold mb-0">Riwayat Aktivitas Pengguna</h2>
-              <p class="card-subtitle text-caption text-medium-emphasis mb-0">
+              <h2 class="text-h6 font-weight-bold mb-0">Riwayat Aktivitas Pengguna</h2>
+              <p class="text-caption text-medium-emphasis mb-0">
                 {{ totalLogs }} total aktivitas tercatat
               </p>
             </div>
           </div>
-          
+
           <!-- Refresh Button -->
-          <v-btn 
-            icon="mdi-refresh" 
-            variant="text" 
-            size="small" 
-            color="primary"
+          <v-btn
+            icon="mdi-refresh"
+            variant="text"
+            size="small"
+            color="purple"
             :loading="loading"
             @click="refreshData"
             class="refresh-btn"
           ></v-btn>
-        </div>
+        </v-card-title>
       </div>
 
       <v-divider class="card-divider"></v-divider>
@@ -323,53 +318,50 @@ function formatTime(timestamp: string): string {
 </script>
 
 <style scoped>
-/* Container */
-.activity-log-container {
-  background-color: transparent;
-  min-height: calc(100vh - 120px);
+/* Header Card - Mobile Optimized with Fixed Positioning */
+.header-card {
+  background: linear-gradient(135deg, rgb(var(--v-theme-primary)) 0%, rgb(var(--v-theme-secondary)) 100%);
+  border-radius: 20px;
+  padding: 24px;
+  color: rgb(var(--v-theme-on-primary));
+  box-shadow: 0 8px 32px rgba(var(--v-theme-primary), 0.25);
+  position: relative;
 }
 
-/* Header Section */
-.header-section {
-  margin-bottom: 2rem;
+.header-card .d-flex.flex-column {
+  align-items: stretch !important; /* Changed from align-center to stretch */
 }
 
-.header-content {
-  flex: 1;
+.header-info {
+  width: 100%;
+  justify-content: flex-start;
+  margin-bottom: 0; /* Reset margin */
 }
 
 .header-avatar-wrapper {
-  position: relative;
-}
-
-.header-avatar {
-  position: relative;
-  box-shadow: 0 8px 24px rgba(var(--v-theme-primary), 0.15);
-  transition: all 0.3s ease;
-}
-
-.avatar-gradient-bg {
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(135deg, rgb(var(--v-theme-primary)) 0%, rgb(var(--v-theme-secondary)) 100%);
+  background: rgba(255, 255, 255, 0.15);
   border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  flex-shrink: 0;
 }
 
 .header-title {
-  color: rgb(var(--v-theme-on-surface));
-  background: linear-gradient(135deg, rgb(var(--v-theme-primary)), rgb(var(--v-theme-secondary)));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  transition: all 0.3s ease;
+  font-size: 1.75rem;
+  font-weight: 800;
+  line-height: 1.2;
+  margin-bottom: 4px;
+  color: white !important;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
 .header-subtitle {
-  color: rgba(var(--v-theme-on-surface), 0.7);
-  font-weight: 500;
+  font-size: 0.95rem;
+  opacity: 0.85;
+  line-height: 1.3;
+  color: rgba(255, 255, 255, 0.9) !important;
+  font-weight: 400;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
 /* Activity Card */
@@ -388,36 +380,16 @@ function formatTime(timestamp: string): string {
   backdrop-filter: blur(20px);
 }
 
-/* Card Header */
-.card-header {
-  background: rgba(var(--v-theme-surface-variant), 0.3);
-  border-bottom: 1px solid rgba(var(--v-border-color), 0.12);
+/* Table Header */
+.table-header {
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
 }
 
-.v-theme--dark .card-header {
-  background: rgba(var(--v-theme-surface-variant), 0.1);
-  border-bottom: 1px solid rgba(var(--v-border-color), 0.2);
+.table-header .v-card-title {
+  background: transparent;
 }
 
-.header-icon-wrapper {
-  width: 40px;
-  height: 40px;
-  background: rgba(var(--v-theme-primary), 0.1);
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.3s ease;
-}
 
-.card-title {
-  color: rgb(var(--v-theme-on-surface));
-  font-size: 1.125rem;
-}
-
-.card-subtitle {
-  color: rgba(var(--v-theme-on-surface), 0.6);
-}
 
 .refresh-btn {
   color: rgba(var(--v-theme-primary), 0.8);
@@ -676,26 +648,37 @@ function formatTime(timestamp: string): string {
 }
 
 /* Responsive Design */
+@media (max-width: 960px) {
+  .header-title {
+    font-size: 1.5rem;
+  }
+
+  .header-subtitle {
+    font-size: 0.95rem;
+  }
+}
+
 @media (max-width: 768px) {
   .activity-log-container {
     padding: 1rem !important;
   }
-  
-  .header-section {
+
+  .header-card {
+    padding: 20px;
     margin-bottom: 1.5rem;
   }
-  
+
   .header-avatar {
     width: 48px !important;
     height: 48px !important;
     margin-right: 12px !important;
   }
-  
+
   .header-title {
     font-size: 1.5rem !important;
   }
   
-  .card-header {
+  .table-header .v-card-title {
     padding: 1rem !important;
   }
   
@@ -813,7 +796,6 @@ function formatTime(timestamp: string): string {
 }
 
 /* Dark mode specific adjustments */
-.v-theme--dark .header-icon-wrapper,
 .v-theme--dark .dialog-icon-wrapper {
   background: rgba(var(--v-theme-primary), 0.2);
 }
@@ -824,6 +806,22 @@ function formatTime(timestamp: string): string {
 
 .v-theme--dark .details-list::-webkit-scrollbar-thumb {
   background: rgba(var(--v-theme-primary), 0.5);
+}
+
+.v-theme--dark .header-card {
+  background: linear-gradient(135deg, rgb(var(--v-theme-primary)) 0%, rgb(var(--v-theme-secondary)) 100%);
+}
+
+/* Header section background pattern - sama seperti menu lainnya */
+.header-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 50%;
+  height: 100%;
+  background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="25" cy="25" r="1" fill="white" opacity="0.1"/><circle cx="75" cy="75" r="1" fill="white" opacity="0.1"/><circle cx="50" cy="10" r="1" fill="white" opacity="0.05"/><circle cx="10" cy="50" r="1" fill="white" opacity="0.05"/><circle cx="90" cy="30" r="1" fill="white" opacity="0.05"/></pattern></defs><rect width="100" height="100" fill="url(%23grain)"/></svg>');
+  pointer-events: none;
 }
 
 /* Animations */

@@ -224,8 +224,27 @@ const closeDialog = () => {
 
 
 
+const getFullImageUrl = (url: string) => {
+  if (url.startsWith('http')) {
+    return url
+  }
+  if (url.startsWith('/static/')) {
+    return `${import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'}${url}`
+  }
+  // Handle blob URLs that aren't valid anymore
+  if (url.startsWith('blob:')) {
+    return null // Return null for invalid blob URLs
+  }
+  return `${import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'}/static/uploads/evidence/${url}`
+}
+
 const viewEvidence = (evidenceUrl: string) => {
-  window.open(evidenceUrl, '_blank')
+  const fullUrl = getFullImageUrl(evidenceUrl)
+  if (!fullUrl) {
+    alert('File evidence ini tidak tersedia')
+    return
+  }
+  window.open(fullUrl, '_blank')
 }
 
 // Utility functions

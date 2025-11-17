@@ -997,6 +997,7 @@ const editedItem = ref<Partial<Pelanggan>>({ ...defaultItem });
 const itemToDelete = ref<Pelanggan | null>(null);
 const snackbar = ref({ show: false, text: '', color: 'success' as 'success' | 'error' | 'warning' });
 
+
 const alamatOptions = ref([
   'Tambun',
   'Rusun Pinus Elok',

@@ -1,18 +1,40 @@
 <template>
-  <v-container fluid class="pa-6">
-    <div class="d-flex align-center mb-6">
-      <v-avatar class="me-3" color="indigo" size="40">
-        <v-icon color="white">mdi-router-network</v-icon>
-      </v-avatar>
-      <div>
-        <h1 class="text-h4 font-weight-bold">OLT Management</h1>
-        <p class="text-subtitle-1 text-medium-emphasis mb-0">Kelola perangkat OLT Anda</p>
+  <v-container fluid class="pa-4 pa-md-6">
+    <!-- Header Section with Gradient Background -->
+    <div class="header-card mb-4 mb-md-6">
+      <div class="header-section">
+        <div class="header-content">
+          <div class="d-flex align-center">
+            <div class="d-flex align-center">
+              <v-avatar class="me-4 elevation-4" color="primary" size="80">
+                <v-icon color="white" size="40">mdi-wifi</v-icon>
+              </v-avatar>
+              <div>
+                <h1 class="text-h4 font-weight-bold text-white mb-2">OLT Management</h1>
+                <p class="header-subtitle mb-0">
+                  Kelola perangkat OLT Anda
+                </p>
+              </div>
+            </div>
+            <v-spacer></v-spacer>
+            <v-btn
+              color="white"
+              variant="elevated"
+              size="large"
+              elevation="4"
+              @click="openDialog()"
+              prepend-icon="mdi-plus-circle-outline"
+              class="text-none font-weight-bold w-100 w-md-auto rounded-lg"
+              style="color: #4338ca !important;"
+            >
+              Tambah OLT
+            </v-btn>
+          </div>
+        </div>
       </div>
-      <v-spacer></v-spacer>
-      <v-btn color="primary" size="large" @click="openDialog()" prepend-icon="mdi-plus" class="text-none">
-        Tambah OLT
-      </v-btn>
     </div>
+
+    <div class="content-section">
 
     <v-card elevation="2" rounded="lg">
       <v-card-title class="d-flex align-center pa-4 bg-grey-lighten-5">
@@ -151,6 +173,7 @@
         <span class="font-weight-bold">{{ snackbar.text }}</span>
       </div>
     </v-snackbar>
+    </div>
   </v-container>
 </template>
 
@@ -323,6 +346,55 @@ function showSnackbar(text: string, color: 'success' | 'error' | 'info') {
 </script>
 
 <style scoped>
+/* Header Card styling - sama seperti halaman lain */
+.header-card {
+  border-radius: 15px;
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(102, 126, 234, 0.15);
+  background: white;
+}
+
+/* Header content untuk memperbesar box */
+.header-content {
+  padding: 24px 32px;
+}
+
+/* Content section - sama seperti halaman lain */
+.content-section {
+  width: 100%;
+}
+
+/* Header Section styling - sama seperti halaman lain */
+.header-section {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  position: relative;
+  overflow: hidden;
+}
+
+.header-section::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 50%;
+  height: 100%;
+  background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="25" cy="25" r="1" fill="white" opacity="0.1"/><circle cx="75" cy="75" r="1" fill="white" opacity="0.1"/><circle cx="50" cy="10" r="1" fill="white" opacity="0.05"/><circle cx="10" cy="50" r="1" fill="white" opacity="0.05"/><circle cx="90" cy="30" r="1" fill="white" opacity="0.05"/></pattern></defs><rect width="100" height="100" fill="url(%23grain)"/></svg>');
+}
+
+/* Header text styling */
+.header-section h1 {
+  color: white !important;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.header-subtitle {
+  color: rgba(255, 255, 255, 0.9) !important;
+  font-size: 1.1rem;
+  font-weight: 400;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  opacity: 0.95;
+}
+
 /* Menambahkan sedikit jarak antar tombol aksi */
 .gap-2 {
   gap: 8px;

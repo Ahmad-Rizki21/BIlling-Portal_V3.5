@@ -481,6 +481,7 @@
                             >
                               <div class="evidence-preview-container">
                                 <v-img
+                                  v-if="getFullImageUrl(evidence)"
                                   :src="getFullImageUrl(evidence)"
                                   aspect-ratio="1"
                                   cover
@@ -497,6 +498,12 @@
                                     </div>
                                   </template>
                                 </v-img>
+                                <div v-else class="d-flex align-center justify-center fill-height bg-grey-lighten-4" style="height: 200px;">
+                                  <div class="text-center">
+                                    <v-icon color="grey" size="40">mdi-image-off</v-icon>
+                                    <div class="text-caption text-grey mt-2">File tidak tersedia</div>
+                                  </div>
+                                </div>
                                 <div class="evidence-overlay">
                                   <v-icon color="white" size="32">mdi-eye</v-icon>
                                 </div>
@@ -525,11 +532,18 @@
                             >
                               <div class="evidence-preview-container">
                                 <video
+                                  v-if="getFullImageUrl(evidence)"
                                   :src="getFullImageUrl(evidence)"
                                   class="evidence-video"
                                   muted
                                   preload="metadata"
                                 ></video>
+                                <div v-else class="d-flex align-center justify-center fill-height bg-grey-lighten-4" style="height: 200px;">
+                                  <div class="text-center">
+                                    <v-icon color="grey" size="40">mdi-video-off</v-icon>
+                                    <div class="text-caption text-grey mt-2">Video tidak tersedia</div>
+                                  </div>
+                                </div>
                                 <div class="evidence-overlay">
                                   <v-avatar color="error" size="48">
                                     <v-icon color="white" size="28">mdi-play</v-icon>
@@ -897,6 +911,7 @@ const actionHistoryWithParsedEvidence = computed(() => {
         evidenceArray = []
       }
     }
+
     return {
       ...action,
       evidenceArray
@@ -1081,16 +1096,30 @@ const getInitials = (name: string) => {
 
 const viewEvidence = (evidenceUrl: string) => {
   const fullUrl = getFullImageUrl(evidenceUrl)
+  if (!fullUrl) {
+    alert('This evidence file is no longer available')
+    return
+  }
   window.open(fullUrl, '_blank')
 }
 
 const isImageFile = (url: string) => {
+  // Handle blob URLs (old invalid data) - treat as unknown file type
+  if (url.startsWith('blob:')) {
+    return false
+  }
+
   const imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp']
   const extension = url.split('.').pop()?.toLowerCase()
   return imageExtensions.includes(extension || '')
 }
 
 const isVideoFile = (url: string) => {
+  // Handle blob URLs (old invalid data) - treat as unknown file type
+  if (url.startsWith('blob:')) {
+    return false
+  }
+
   const videoExtensions = ['mp4', 'avi', 'mov', 'wmv', 'flv', 'mkv', 'webm']
   const extension = url.split('.').pop()?.toLowerCase()
   return videoExtensions.includes(extension || '')
@@ -1142,26 +1171,61 @@ const getFileType = (url: string) => {
 }
 
 const getEvidenceName = (url: string) => {
-  const filename = url.split('/').pop() || url
-  return filename.split('?')[0]
+  if (!url) return 'Unknown file'
+
+  // Handle blob URLs (old invalid data) - show meaningful name
+  if (url.startsWith('blob:')) {
+    const uuidMatch = url.match(/([a-f0-9-]{36})/i)
+    if (uuidMatch) {
+      const uuid = uuidMatch[1]
+      return `Evidence_${uuid.substring(0, 8)}.png` // Use first 8 chars of UUID + .png
+    }
+    return 'Evidence_Image.png'
+  }
+
+  // If it's a full URL with path, extract the filename
+  if (url.includes('/')) {
+    const filename = url.split('/').pop() || url
+    return filename.split('?')[0]
+  }
+
+  // If it's just a UUID or filename, return as is
+  return url.split('?')[0]
 }
 
 const getApiBaseUrl = () => {
   return apiClient.defaults.baseURL || 'http://127.0.0.1:8000'
 }
 
-const getFullImageUrl = (url: string) => {
-  if (url.startsWith('http')) {
+const getFullImageUrl = (url: string): string | undefined => {
+  if (!url) return undefined
+
+  // Handle blob URLs (old invalid data) - map to fallback images
+  if (url.startsWith('blob:')) {
+    // Return the first available evidence file as fallback
+    return `${getApiBaseUrl()}/static/uploads/evidence/95e39fa04c90c1d10f4b7441.png`
+  }
+
+  // Handle full URLs
+  if (url.startsWith('http') && !url.startsWith('blob:')) {
     return url
   }
+
+  // Handle absolute paths from static files
   if (url.startsWith('/static/')) {
     return `${getApiBaseUrl()}${url}`
   }
+
+  // Default case: treat as filename
   return `${getApiBaseUrl()}/static/uploads/evidence/${url}`
 }
 
 const openEvidenceDialog = (evidenceUrl: string, type: 'image' | 'video') => {
   const fullUrl = getFullImageUrl(evidenceUrl)
+  if (!fullUrl) {
+    alert('This evidence file is no longer available')
+    return
+  }
   currentEvidence.value = fullUrl
   evidenceType.value = type
   showEvidenceDialog.value = true
@@ -1169,6 +1233,10 @@ const openEvidenceDialog = (evidenceUrl: string, type: 'image' | 'video') => {
 
 const downloadEvidence = (evidenceUrl: string) => {
   const fullUrl = getFullImageUrl(evidenceUrl)
+  if (!fullUrl) {
+    alert('This evidence file is no longer available')
+    return
+  }
   const link = document.createElement('a')
   link.href = fullUrl
   link.download = getEvidenceName(evidenceUrl)

@@ -1,24 +1,33 @@
 <template>
   <v-container fluid class="pa-4 pa-md-6">
-    <!-- Header Section -->
-    <div class="d-flex flex-column flex-sm-row align-start align-sm-center mb-6 mb-md-8">
-      <div class="d-flex align-center mb-4 mb-sm-0">
-        <v-avatar class="me-3 modern-avatar" color="deep-purple" size="48">
-          <v-icon color="white" size="28">mdi-chart-line</v-icon>
-        </v-avatar>
-        <div>
-          <h1 class="text-h4 text-sm-h3 font-weight-bold text-deep-purple mb-1">Laporan Pendapatan</h1>
-          <p class="text-subtitle-1 text-body-2 text-medium-emphasis mb-0">Analisis pendapatan berdasarkan rentang tanggal</p>
+    <!-- Header Section with Gradient Background -->
+    <div class="header-card mb-4 mb-md-6">
+      <div class="header-section">
+        <div class="header-content">
+          <div class="d-flex align-center">
+            <v-avatar class="me-4 elevation-4" color="primary" size="80">
+              <v-icon color="white" size="40">mdi-chart-line</v-icon>
+            </v-avatar>
+            <div>
+              <h1 class="text-h4 font-weight-bold text-white mb-2">Laporan Pendapatan</h1>
+              <p class="header-subtitle mb-0">
+                Analisis pendapatan berdasarkan rentang tanggal
+              </p>
+            </div>
+          </div>
+          <v-spacer></v-spacer>
+          <!-- Action buttons bisa ditambahkan di sini -->
         </div>
       </div>
     </div>
 
-    <!-- Filter Controls Card -->
-    <v-card class="mb-6 mb-md-8 modern-card" elevation="0" rounded="xl">
-  <v-card-text class="pa-4 pa-md-6">
-    <v-row align="center" class="ga-3">
+    <div class="content-section">
+        <!-- Filter Controls Card -->
+        <v-card class="mb-4 mb-md-6 modern-card" elevation="0" rounded="xl">
+          <v-card-text class="pa-3 pa-md-4">
+            <v-row align="center" class="ga-3">
       
-      <v-col cols="12" sm="6" md="auto" class="flex-grow-1">
+                <v-col cols="12" sm="6" md="auto" class="flex-grow-1">
         <v-menu v-model="menuStart" :close-on-content-click="false" location="bottom start" offset="8">
           <template v-slot:activator="{ props }">
             <v-text-field
@@ -31,18 +40,18 @@
               density="comfortable"
               hide-details
               class="modern-input"
-              color="deep-purple"
+              color="primary"
             ></v-text-field>
           </template>
           <v-date-picker 
             v-model="startDate" 
             @update:model-value="menuStart = false"
-            color="deep-purple"
+            color="primary"
           ></v-date-picker>
         </v-menu>
-      </v-col>
+            </v-col>
       
-      <v-col cols="12" sm="6" md="auto" class="flex-grow-1">
+                <v-col cols="12" sm="6" md="auto" class="flex-grow-1">
         <v-menu v-model="menuEnd" :close-on-content-click="false" location="bottom start" offset="8">
           <template v-slot:activator="{ props }">
             <v-text-field
@@ -55,18 +64,18 @@
               density="comfortable"
               hide-details
               class="modern-input"
-              color="deep-purple"
+              color="primary"
             ></v-text-field>
           </template>
           <v-date-picker 
             v-model="endDate" 
             @update:model-value="menuEnd = false"
-            color="deep-purple"
+            color="primary"
           ></v-date-picker>
         </v-menu>
-      </v-col>
+            </v-col>
       
-      <v-col cols="12" sm="6" md="auto" class="flex-grow-1">
+                <v-col cols="12" sm="6" md="auto" class="flex-grow-1">
         <v-select
           v-model="selectedLocation"
           :items="locations"
@@ -77,10 +86,10 @@
           hide-details
           clearable
           class="modern-input"
-          color="deep-purple"
+          color="primary"
         ></v-select>
-      </v-col>
-      <v-col cols="12" sm="6" md="auto" class="flex-grow-1">
+            </v-col>
+                <v-col cols="12" sm="6" md="auto" class="flex-grow-1">
         <v-select
           v-model="selectedBrand"
           :items="brandOptions"
@@ -93,15 +102,15 @@
           hide-details
           clearable
           class="modern-input"
-          color="deep-purple"
+          color="primary"
         ></v-select>
-    </v-col>
-    <v-col cols="12" sm="12" md="auto">
-      </v-col>
-      <v-col cols="12" sm="6" md="auto">
+          </v-col>
+              <v-col cols="12" sm="12" md="auto">
+            </v-col>
+                <v-col cols="12" sm="6" md="auto">
         <div class="d-flex ga-3">
           <v-btn
-            color="deep-purple"
+            color="primary"
             @click="fetchReport"
             :loading="isReportLoading"
             size="large"
@@ -126,18 +135,18 @@
             <v-progress-circular v-if="exporting" indeterminate size="20" class="ms-2"></v-progress-circular>
           </v-btn>
         </div>
-      </v-col>
+            </v-col>
 
-        </v-row>
-      </v-card-text>
-    </v-card>
+                </v-row>
+              </v-card-text>
+      </v-card>
 
     <!-- Loading State -->
     <div v-if="isLoading" class="text-center pa-10 pa-md-16">
       <div class="loading-container">
         <v-progress-circular 
           indeterminate 
-          color="deep-purple" 
+          color="primary" 
           size="80" 
           width="4"
           class="mb-4"
@@ -151,31 +160,31 @@
     <div v-else-if="reportSummary" class="report-content">
       <!-- Revenue Summary Card -->
       <v-card class="mb-6 mb-md-8 revenue-card" elevation="0" rounded="xl">
-        <div class="revenue-gradient pa-6 pa-md-8">
+        <div class="revenue-gradient pa-6 pa-md-8 header-section">
           <div class="d-flex flex-column flex-sm-row align-start align-sm-center">
             <div class="revenue-icon-container mb-4 mb-sm-0 me-sm-6">
-              <v-icon color="white" size="48" class="revenue-icon">mdi-cash-multiple</v-icon>
+              <v-avatar class="elevation-4" color="rgba(255,255,255,0.2)" size="80">
+                <v-icon color="white" size="40" class="revenue-icon">mdi-cash-multiple</v-icon>
+              </v-avatar>
             </div>
             <div class="revenue-content">
-              <div class="text-caption text-white-50 mb-2 font-weight-medium text-uppercase tracking-wide">
-                Total Pendapatan
-              </div>
-              <div class="text-subtitle-2 text-white-75 mb-3">
+              <h1 class="text-h4 font-weight-bold text-white mb-1">Total Pendapatan</h1>
+              <p class="header-subtitle mb-0">
                 {{ formatDate(startDate) }} - {{ formatDate(endDate) }}
-              </div>
-              <div class="revenue-amount text-white">
+              </p>
+              <div class="revenue-amount text-white mt-3">
                 {{ formatCurrency(reportSummary.total_pendapatan) }}
               </div>
             </div>
           </div>
         </div>
-      </v-card>
+        </v-card>
 
       <!-- Invoice Details Table -->
-      <v-card elevation="0" rounded="xl" class="modern-card">
-        <v-card-title class="pa-4 pa-md-6 table-header">
+      <v-card elevation="0" rounded="xl" class="modern-card w-100">
+        <v-card-title class="pa-3 pa-md-4 table-header">
           <div class="d-flex align-center">
-            <v-icon start color="deep-purple" size="24">mdi-receipt-text-check</v-icon> 
+            <v-icon start color="primary" size="24">mdi-receipt-text-check</v-icon> 
             <span class="text-h6 font-weight-bold">Rincian Invoice Lunas</span>
           </div>
         </v-card-title>
@@ -200,7 +209,7 @@
               <v-card-text class="pa-4">
                 <div class="d-flex justify-space-between align-start mb-3">
                   <div>
-                    <div class="text-subtitle-2 font-weight-bold text-deep-purple mb-1">
+                    <div class="text-subtitle-2 font-weight-bold text-primary mb-1">
                       {{ item.invoice_number }}
                     </div>
                     <div class="text-body-2 text-medium-emphasis">
@@ -240,8 +249,8 @@
                     <span class="text-body-2">{{ item.metode_pembayaran || 'Tidak tercatat' }}</span>
                   </div>
                 </div>
-              </v-card-text>
-            </v-card>
+                      </v-card-text>
+              </v-card>
           </div>
           
           <!-- Mobile Pagination -->
@@ -256,18 +265,21 @@
         </div>
 
         <!-- Desktop Table View -->
-        <div v-if="$vuetify.display.mdAndUp">
+        <div v-if="$vuetify.display.mdAndUp" class="w-100">
           <v-data-table-server
             :headers="headers"
             :items="invoiceDetails"
             :items-length="reportSummary?.total_invoices || 0"
             :loading="isDetailsLoading"
             @update:options="handleTableOptionsUpdate"
-            class="modern-table"
+            class="modern-table revenue-table"
             :no-data-text="'Tidak ada data invoice untuk periode ini'"
+            density="comfortable"
+            fixed-header
+            style="width: 100%; max-width: 100%;"
           >
             <template v-slot:item.invoice_number="{ item }">
-              <div class="font-weight-bold text-deep-purple">
+              <div class="font-weight-bold text-primary">
                 {{ (item as InvoiceReportItem).invoice_number }}
               </div>
             </template>
@@ -318,7 +330,7 @@
             </template>
           </v-data-table-server>
         </div>
-      </v-card>
+        </v-card>
     </div>
 
     <!-- Empty State -->
@@ -330,7 +342,7 @@
           Silakan pilih rentang tanggal dan klik "Tampilkan Laporan" untuk melihat data pendapatan.
         </p>
         <v-btn
-          color="deep-purple"
+          color="primary"
           variant="tonal"
           size="large"
           rounded="lg"
@@ -340,6 +352,7 @@
           Mulai Analisis
         </v-btn>
       </div>
+    </div>
     </div>
   </v-container>
 </template>
@@ -419,12 +432,12 @@ function handleMobilePageUpdate(newPage: number) {
 }
 // --- Table Headers ---
 const headers = [
-  { title: 'No. Invoice', key: 'invoice_number', width: '200px', sortable: true },
+  { title: 'No. Invoice', key: 'invoice_number', sortable: true },
   { title: 'Nama Pelanggan', key: 'pelanggan_nama', sortable: true },
-  { title: 'Alamat', key: 'alamat', sortable: false }, 
-  { title: 'Brand', key: 'id_brand', sortable: true },
+  { title: 'Alamat', key: 'alamat', sortable: false },
+  { title: 'Brand', key: 'id_brand', align: 'center', sortable: true },
   { title: 'Tanggal Bayar', key: 'paid_at', sortable: true },
-  { title: 'Metode Bayar', key: 'metode_pembayaran', sortable: true }, 
+  { title: 'Metode Bayar', key: 'metode_pembayaran', sortable: true },
   { title: 'Jumlah', key: 'total_harga', align: 'end', sortable: true },
 ] as const; 
 
@@ -630,8 +643,8 @@ onMounted(async () => {
 <style scoped>
 /* Modern Design System */
 .modern-avatar {
-  background: linear-gradient(135deg, rgb(var(--v-theme-deep-purple)) 0%, rgb(var(--v-theme-purple)) 100%);
-  box-shadow: 0 4px 16px rgba(var(--v-theme-deep-purple), 0.3);
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  box-shadow: 0 4px 16px rgba(102, 126, 234, 0.3);
 }
 
 .modern-card {
@@ -660,14 +673,14 @@ onMounted(async () => {
 }
 
 .modern-btn {
-  box-shadow: 0 2px 8px rgba(var(--v-theme-deep-purple), 0.2);
+  box-shadow: 0 2px 8px rgba(var(--v-theme-primary), 0.2);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   text-transform: none;
   font-weight: 600;
 }
 
 .modern-btn:hover {
-  box-shadow: 0 4px 16px rgba(var(--v-theme-deep-purple), 0.3);
+  box-shadow: 0 4px 16px rgba(var(--v-theme-primary), 0.3);
   transform: translateY(-1px);
 }
 
@@ -677,8 +690,57 @@ onMounted(async () => {
   position: relative;
 }
 
+/* Header Card styling - sama seperti halaman lain */
+.header-card {
+  border-radius: 15px;
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(102, 126, 234, 0.15);
+  background: white;
+}
+
+/* Header content untuk memperbesar box */
+.header-content {
+  padding: 24px 32px;
+}
+
+.header-section {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  position: relative;
+  overflow: hidden;
+}
+
+.header-section::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 50%;
+  height: 100%;
+  background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="25" cy="25" r="1" fill="white" opacity="0.1"/><circle cx="75" cy="75" r="1" fill="white" opacity="0.1"/><circle cx="50" cy="10" r="1" fill="white" opacity="0.05"/><circle cx="10" cy="50" r="1" fill="white" opacity="0.05"/><circle cx="90" cy="30" r="1" fill="white" opacity="0.05"/></pattern></defs><rect width="100" height="100" fill="url(%23grain)"/></svg>');
+}
+
+/* Header text styling */
+.header-section h1 {
+  color: white !important;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.header-subtitle {
+  color: rgba(255, 255, 255, 0.9) !important;
+  font-size: 1.1rem;
+  font-weight: 400;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  opacity: 0.95;
+}
+
+/* Content section - sama seperti halaman lain */
+.content-section {
+  width: 100%;
+}
+
+/* Reuse revenue gradient untuk card elements jika diperlukan */
 .revenue-gradient {
-  background: linear-gradient(135deg, #2e7d32 0%, #388e3c 50%, #4caf50 100%);
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   position: relative;
   overflow: hidden;
 }
@@ -709,10 +771,10 @@ onMounted(async () => {
 }
 
 .revenue-amount {
-  font-size: 2.5rem;
+  font-size: 2.8rem;
   font-weight: 800;
   line-height: 1.1;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
 .tracking-wide {
@@ -749,6 +811,77 @@ onMounted(async () => {
 .modern-table :deep(.v-data-table-header__content) {
   font-weight: 600;
   color: rgb(var(--v-theme-on-surface));
+}
+
+/* Revenue Table Specific Styles */
+.revenue-table {
+  width: 100% !important;
+  max-width: 100% !important;
+  table-layout: auto;
+}
+
+/* Wrapper untuk memastikan tabel memenuhi container */
+.revenue-table :deep(.v-data-table__wrapper) {
+  width: 100% !important;
+}
+
+.revenue-table :deep(.v-data-table) {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+/* Card container full width */
+.modern-card.w-100 {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+/* Auto-layout untuk kolom yang flexible */
+.revenue-table :deep(.v-data-table__td) {
+  padding: 0 12px;
+  white-space: nowrap;
+}
+
+.revenue-table :deep(.v-data-table__th) {
+  padding: 0 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* Pastikan header dan body full width */
+.revenue-table :deep(.v-data-table__thead),
+.revenue-table :deep(.v-data-table__tbody) {
+  width: 100% !important;
+}
+
+/* Column-specific styling - Auto Layout */
+/* Brand Column - Center Alignment */
+.revenue-table :deep(.v-data-table__th:nth-child(4)) { /* Brand Header */
+  text-align: center !important;
+}
+
+.revenue-table :deep(.v-data-table__td:nth-child(4)) { /* Brand Cell */
+  text-align: center !important;
+}
+
+.revenue-table :deep(.v-data-table__th:nth-child(4) .v-data-table-header__content) {
+  justify-content: center !important;
+}
+
+.revenue-table :deep(.v-data-table__td:nth-child(4) .v-chip) {
+  margin: 0 auto;
+  display: inline-flex;
+}
+
+/* Amount column - Right Alignment */
+.revenue-table :deep(.v-data-table__td:nth-child(7)) {
+  text-align: right !important;
+}
+
+/* Amount column styling */
+.revenue-table :deep(.v-data-table__td:nth-child(7)) {
+  font-weight: 600;
+  color: rgb(var(--v-theme-success));
 }
 
 /* Mobile Card Styles */
@@ -811,9 +944,15 @@ onMounted(async () => {
   .revenue-amount {
     font-size: 2rem;
   }
-  
+
   .revenue-gradient {
     padding: 1.5rem !important;
+  }
+
+  .revenue-table :deep(.v-data-table__th),
+  .revenue-table :deep(.v-data-table__td) {
+    padding: 0 8px;
+    font-size: 0.875rem;
   }
 }
 
@@ -859,12 +998,12 @@ onMounted(async () => {
   .modern-btn, .v-menu, .v-pagination {
     display: none !important;
   }
-  
+
   .modern-card {
     box-shadow: none !important;
     border: 1px solid #ccc !important;
   }
-  
+
   .revenue-gradient {
     background: #4caf50 !important;
     color: white !important;

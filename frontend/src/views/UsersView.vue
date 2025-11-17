@@ -1,27 +1,33 @@
 <template>
-  <v-container fluid class="pa-6">
-    <!-- Header Section -->
-    <div class="d-flex align-center mb-6">
-      <div class="d-flex align-center">
-        <v-avatar class="me-3" color="success" size="40">
-          <v-icon color="white">mdi-account-group</v-icon>
-        </v-avatar>
-        <div>
-          <h1 class="text-h4 font-weight-bold text-success">User Management</h1>
-          <p class="text-subtitle-1 text-medium-emphasis mb-0">Kelola pengguna dan assign roles</p>
+  <v-container fluid class="pa-4 pa-md-6">
+    <!-- Header Section with Gradient Background -->
+    <div class="header-card mb-4 mb-md-6">
+      <div class="header-section">
+        <div class="header-content">
+          <div class="d-flex align-center">
+            <v-avatar class="me-4 elevation-4" color="primary" size="80">
+              <v-icon color="white" size="40">mdi-account-group</v-icon>
+            </v-avatar>
+            <div>
+              <h1 class="text-h4 font-weight-bold text-white mb-2">User Management</h1>
+              <p class="header-subtitle mb-0">
+                Kelola pengguna dan assign roles
+              </p>
+            </div>
+            <v-spacer></v-spacer>
+            <v-btn 
+              color="primary" 
+              size="large"
+              elevation="2"
+              @click="openDialog()"
+              prepend-icon="mdi-account-plus"
+              class="text-none rounded-lg"
+            >
+              Tambah User
+            </v-btn>
+          </div>
         </div>
       </div>
-      <v-spacer></v-spacer>
-      <v-btn 
-        color="success" 
-        size="large"
-        elevation="2"
-        @click="openDialog()"
-        prepend-icon="mdi-account-plus"
-        class="text-none"
-      >
-        Tambah User
-      </v-btn>
     </div>
 
     <!-- Stats Cards -->
@@ -354,7 +360,7 @@
             Batal
           </v-btn>
           <v-btn 
-            color="success" 
+            color="primary" 
             variant="flat" 
             @click="saveUser"
             size="large"
@@ -793,6 +799,49 @@ async function confirmDelete() {
 </script>
 
 <style scoped>
+/* Header Card styling - sama seperti halaman lain */
+.header-card {
+  border-radius: 15px;
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(102, 126, 234, 0.15);
+  background: white;
+}
+
+/* Header content for memperbesar box */
+.header-content {
+  padding: 24px 32px;
+}
+
+.header-section {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  position: relative;
+  overflow: hidden;
+}
+
+.header-section::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 50%;
+  height: 100%;
+  background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="25" cy="25" r="1" fill="white" opacity="0.1"/><circle cx="75" cy="75" r="1" fill="white" opacity="0.1"/><circle cx="50" cy="10" r="1" fill="white" opacity="0.05"/><circle cx="10" cy="50" r="1" fill="white" opacity="0.05"/><circle cx="90" cy="30" r="1" fill="white" opacity="0.05"/></pattern></defs><rect width="100" height="100" fill="url(%23grain)"/></svg>');
+}
+
+/* Header text styling */
+.header-section h1 {
+  color: white !important;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.header-subtitle {
+  color: rgba(255, 255, 255, 0.9) !important;
+  font-size: 1.1rem;
+  font-weight: 400;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  opacity: 0.95;
+}
+
 .v-data-table ::v-deep(.v-data-table__wrapper) {
   border-radius: 0 0 12px 12px;
 }

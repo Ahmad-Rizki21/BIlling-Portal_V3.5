@@ -2,23 +2,50 @@
   <div class="trouble-ticket-container">
     <!-- Header Section with Modern Design -->
     <div class="page-header">
+      <div class="header-pattern"></div>
+      <div class="header-particles"></div>
       <div class="header-content">
         <div class="header-text">
           <div class="d-flex align-center mb-2">
-            <v-avatar 
-              color="primary" 
-              size="56" 
-              class="me-4 header-avatar"
-              elevation="4"
-            >
-              <v-icon size="32">mdi-ticket-confirmation-outline</v-icon>
-            </v-avatar>
+            <div class="header-avatar-container">
+              <v-avatar
+                color="primary"
+                size="64"
+                class="me-4 header-avatar animated-avatar"
+                elevation="8"
+              >
+                <v-icon size="36">mdi-ticket-confirmation-outline</v-icon>
+              </v-avatar>
+              <div class="avatar-glow"></div>
+            </div>
             <div>
-              <h1 class="page-title">Trouble Ticket System</h1>
+              <h1 class="page-title">
+                Trouble Ticket System
+                <span class="title-badge">v3.0</span>
+              </h1>
               <p class="page-subtitle">
                 <v-icon size="16" class="me-1">mdi-information-outline</v-icon>
                 Kelola laporan masalah dan tracking downtime pelanggan
               </p>
+              <div class="header-stats">
+                <v-chip
+                  size="x-small"
+                  color="success"
+                  variant="tonal"
+                  class="me-2"
+                  prepend-icon="mdi-check-circle"
+                >
+                  System Active
+                </v-chip>
+                <v-chip
+                  size="x-small"
+                  color="info"
+                  variant="tonal"
+                  prepend-icon="mdi-clock"
+                >
+                  {{ formatCurrentTime() }}
+                </v-chip>
+              </div>
             </div>
           </div>
         </div>
@@ -28,20 +55,23 @@
             prepend-icon="mdi-plus-circle"
             @click="openCreateDialog"
             :disabled="loading"
-            class="me-2 create-btn"
+            class="me-2 create-btn modern-btn"
             variant="flat"
             size="large"
-            elevation="2"
+            elevation="4"
+            rounded="pill"
           >
+            <v-icon end class="ms-1">mdi-arrow-right</v-icon>
             Buat Ticket Baru
           </v-btn>
           <v-btn
-            variant="outlined"
+            variant="tonal"
             prepend-icon="mdi-refresh"
             @click="refreshData"
             :loading="loading"
             size="large"
-            class="refresh-btn"
+            class="refresh-btn modern-btn"
+            rounded="pill"
           >
             Refresh
           </v-btn>
@@ -52,12 +82,19 @@
       <div class="statistics-grid">
         <v-card class="stat-card stat-total" elevation="0">
           <div class="stat-gradient"></div>
+          <div class="stat-pulse"></div>
           <v-card-text class="stat-content">
             <div class="stat-icon-wrapper total">
               <v-icon size="32">mdi-ticket-outline</v-icon>
             </div>
             <div class="stat-info">
-              <div class="stat-number">{{ statistics?.total_tickets || 0 }}</div>
+              <div class="stat-number-wrapper">
+                <div class="stat-number">{{ statistics?.total_tickets || 0 }}</div>
+                <div class="stat-change positive">
+                  <v-icon size="16">mdi-arrow-up-thin</v-icon>
+                  +12%
+                </div>
+              </div>
               <div class="stat-label">Total Tickets</div>
               <div class="stat-trend">
                 <v-icon size="14" color="success">mdi-trending-up</v-icon>
@@ -69,15 +106,25 @@
 
         <v-card class="stat-card stat-open" elevation="0">
           <div class="stat-gradient"></div>
+          <div class="stat-pulse"></div>
           <v-card-text class="stat-content">
             <div class="stat-icon-wrapper open">
               <v-icon size="32">mdi-clock-outline</v-icon>
             </div>
             <div class="stat-info">
-              <div class="stat-number">{{ statistics?.open_tickets || 0 }}</div>
+              <div class="stat-number-wrapper">
+                <div class="stat-number">{{ statistics?.open_tickets || 0 }}</div>
+                <div class="stat-change neutral">
+                  <v-icon size="16">mdi-minus-thin</v-icon>
+                  0%
+                </div>
+              </div>
               <div class="stat-label">Open</div>
               <div class="stat-trend">
-                <v-chip size="x-small" color="warning" variant="flat">Active</v-chip>
+                <v-chip size="x-small" color="warning" variant="flat" class="trend-chip">
+                  <v-icon start size="x-small" class="pulse-icon">mdi-pulse</v-icon>
+                  Active
+                </v-chip>
               </div>
             </div>
           </v-card-text>
@@ -85,15 +132,25 @@
 
         <v-card class="stat-card stat-progress" elevation="0">
           <div class="stat-gradient"></div>
+          <div class="stat-pulse"></div>
           <v-card-text class="stat-content">
             <div class="stat-icon-wrapper progress">
               <v-icon size="32">mdi-progress-clock</v-icon>
             </div>
             <div class="stat-info">
-              <div class="stat-number">{{ statistics?.in_progress_tickets || 0 }}</div>
+              <div class="stat-number-wrapper">
+                <div class="stat-number">{{ statistics?.in_progress_tickets || 0 }}</div>
+                <div class="stat-change positive">
+                  <v-icon size="16">mdi-arrow-up-thin</v-icon>
+                  +5%
+                </div>
+              </div>
               <div class="stat-label">In Progress</div>
               <div class="stat-trend">
-                <v-chip size="x-small" color="info" variant="flat">Working</v-chip>
+                <v-chip size="x-small" color="info" variant="flat" class="trend-chip">
+                  <v-icon start size="x-small" class="pulse-icon">mdi-cog</v-icon>
+                  Working
+                </v-chip>
               </div>
             </div>
           </v-card-text>
@@ -101,15 +158,25 @@
 
         <v-card class="stat-card stat-high" elevation="0">
           <div class="stat-gradient"></div>
+          <div class="stat-pulse warning-pulse"></div>
           <v-card-text class="stat-content">
             <div class="stat-icon-wrapper high">
               <v-icon size="32">mdi-alert-circle-outline</v-icon>
             </div>
             <div class="stat-info">
-              <div class="stat-number">{{ statistics?.high_priority_tickets || 0 }}</div>
+              <div class="stat-number-wrapper">
+                <div class="stat-number">{{ statistics?.high_priority_tickets || 0 }}</div>
+                <div class="stat-change negative">
+                  <v-icon size="16">mdi-arrow-down-thin</v-icon>
+                  -3%
+                </div>
+              </div>
               <div class="stat-label">High Priority</div>
               <div class="stat-trend">
-                <v-chip size="x-small" color="error" variant="flat">Urgent</v-chip>
+                <v-chip size="x-small" color="error" variant="flat" class="trend-chip">
+                  <v-icon start size="x-small" class="pulse-icon">mdi-exclamation</v-icon>
+                  Urgent
+                </v-chip>
               </div>
             </div>
           </v-card-text>
@@ -117,16 +184,23 @@
 
         <v-card class="stat-card stat-critical" elevation="0">
           <div class="stat-gradient"></div>
+          <div class="stat-pulse critical-pulse"></div>
           <v-card-text class="stat-content">
             <div class="stat-icon-wrapper critical">
               <v-icon size="32">mdi-fire-alert</v-icon>
             </div>
             <div class="stat-info">
-              <div class="stat-number">{{ statistics?.critical_priority_tickets || 0 }}</div>
+              <div class="stat-number-wrapper">
+                <div class="stat-number">{{ statistics?.critical_priority_tickets || 0 }}</div>
+                <div class="stat-change negative">
+                  <v-icon size="16">mdi-arrow-down-thin</v-icon>
+                  -8%
+                </div>
+              </div>
               <div class="stat-label">Critical</div>
               <div class="stat-trend">
-                <v-chip size="x-small" color="red-darken-2" variant="flat">
-                  <v-icon start size="x-small">mdi-fire</v-icon>
+                <v-chip size="x-small" color="red-darken-2" variant="flat" class="trend-chip critical-chip">
+                  <v-icon start size="x-small" class="pulse-icon">mdi-fire</v-icon>
                   Emergency
                 </v-chip>
               </div>
@@ -385,15 +459,18 @@
     <!-- Search Field -->
     <div class="search-field-enhanced mt-5">
       <div class="filter-label mb-3">
-        <v-icon size="18" color="secondary" class="me-2">mdi-magnify</v-icon>
-        <span>Search Tickets</span>
+        <div class="search-label-content">
+          <v-icon size="18" color="primary" class="me-2">mdi-magnify</v-icon>
+          <span>Search Tickets</span>
+        </div>
         <v-chip
           v-if="filters.search"
           size="x-small"
-          color="secondary"
+          color="primary"
           variant="flat"
-          class="ms-2"
+          class="ms-2 active-search-chip"
         >
+          <v-icon start size="x-small">mdi-check-circle</v-icon>
           Active
         </v-chip>
       </div>
@@ -406,14 +483,14 @@
         hide-details
         variant="outlined"
         density="comfortable"
-        class="search-input-enhanced"
+        class="search-input-enhanced modern-search"
       >
         <template v-slot:prepend-inner>
-          <v-icon color="secondary" size="22">mdi-magnify</v-icon>
+          <v-icon color="primary" size="22">mdi-magnify</v-icon>
         </template>
         <template v-slot:append-inner>
           <v-fade-transition>
-            <v-icon v-if="filters.search" color="success" size="20">
+            <v-icon v-if="filters.search" color="success" size="20" class="search-success-icon">
               mdi-check-circle
             </v-icon>
           </v-fade-transition>
@@ -437,7 +514,10 @@
             >
               {{ filters.showClosed ? 'mdi-eye-check' : 'mdi-eye-off' }}
             </v-icon>
-            <span class="text-body-2 font-weight-medium">
+            <span
+              class="text-body-2 font-weight-medium"
+              :style="{ color: '#000000 !important' }"
+            >
               {{ filters.showClosed ? 'Showing Closed Tickets' : 'Hiding Closed Tickets' }}
             </span>
           </div>
@@ -482,11 +562,29 @@
     <v-card class="table-card" elevation="0">
       <div class="table-header">
         <div class="table-title">
-          <v-icon class="me-2" color="primary">mdi-table</v-icon>
-          <span>Ticket List</span>
-          <v-chip size="small" color="primary" variant="tonal" class="ms-3">
-            {{ totalItems }} Total
-          </v-chip>
+          <div class="table-title-content">
+            <div class="table-title-icon">
+              <v-icon color="primary">mdi-table</v-icon>
+            </div>
+            <div class="table-title-text">
+              <h3>Ticket List</h3>
+              <p class="table-subtitle">Manage and monitor all trouble tickets</p>
+            </div>
+          </div>
+          <div class="table-counter">
+            <v-chip
+              :color="totalItems > 0 ? 'success' : 'primary'"
+              variant="flat"
+              size="default"
+              class="total-chip"
+              :class="{ 'empty-counter': totalItems === 0 }"
+            >
+              <v-icon start>
+                {{ totalItems > 0 ? 'mdi-check-circle' : 'mdi-information-outline' }}
+              </v-icon>
+              {{ totalItems }} Total
+            </v-chip>
+          </div>
         </div>
       </div>
 
@@ -1232,6 +1330,13 @@ const formatTime = (dateString: string) => {
   })
 }
 
+const formatCurrentTime = () => {
+  return new Date().toLocaleTimeString('id-ID', {
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
+
 const calculateTicketDowntime = (created_at: string) => {
   const start = new Date(created_at)
   const now = currentTime.value
@@ -1300,16 +1405,62 @@ onUnmounted(() => {
 /* ===== CONTAINER ===== */
 .trouble-ticket-container {
   padding: 28px;
-  background: linear-gradient(135deg, 
-    rgb(var(--v-theme-background)) 0%, 
+  background: linear-gradient(135deg,
+    rgb(var(--v-theme-background)) 0%,
     rgba(var(--v-theme-surface), 0.5) 100%);
   min-height: 100vh;
 }
 
+/* Light Mode Overrides */
+.v-theme--light .trouble-ticket-container {
+  background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%);
+}
+
+.v-theme--light .page-header,
+.v-theme--light .filters-card,
+.v-theme--light .table-card,
+.v-theme--light .stat-card {
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.08);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+}
+
+.v-theme--light .modern-data-table :deep(.v-data-table__thead) {
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+}
+
+.v-theme--light .modern-data-table :deep(.v-data-table__th) {
+  color: #1e293b !important;
+}
+
+.v-theme--light .modern-data-table :deep(.v-data-table__th:hover) {
+  color: #0284c7 !important;
+  background: rgba(14, 165, 233, 0.05);
+}
+
+.v-theme--light .modern-data-table :deep(.v-data-table__tr:hover) {
+  background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%) !important;
+  border-left-color: #0284c7;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+}
+
+.v-theme--light .title-text,
+.v-theme--light .customer-name,
+.v-theme--light .user-name,
+.v-theme--light .date-main {
+  color: #1e293b !important;
+}
+
+.v-theme--light .title-description,
+.v-theme--light .customer-address,
+.v-theme--light .date-time {
+  color: #64748b !important;
+}
+
 /* ===== HEADER SECTION ===== */
 .page-header {
-  background: linear-gradient(135deg, 
-    rgba(var(--v-theme-primary), 0.08) 0%, 
+  background: linear-gradient(135deg,
+    rgba(var(--v-theme-primary), 0.08) 0%,
     rgba(var(--v-theme-secondary), 0.05) 100%);
   border-radius: 24px;
   padding: 36px;
@@ -1318,6 +1469,40 @@ onUnmounted(() => {
   box-shadow: 0 4px 24px rgba(var(--v-theme-shadow), 0.08);
   position: relative;
   overflow: hidden;
+}
+
+.header-pattern {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image:
+    radial-gradient(circle at 25% 25%, rgba(var(--v-theme-primary), 0.03) 0%, transparent 50%),
+    radial-gradient(circle at 75% 75%, rgba(var(--v-theme-secondary), 0.03) 0%, transparent 50%),
+    repeating-linear-gradient(45deg, transparent, transparent 35px, rgba(var(--v-theme-primary), 0.02) 35px, rgba(var(--v-theme-primary), 0.02) 70px);
+  pointer-events: none;
+}
+
+.header-particles {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image:
+    radial-gradient(2px 2px at 20% 30%, rgba(var(--v-theme-primary), 0.1), transparent),
+    radial-gradient(2px 2px at 60% 70%, rgba(var(--v-theme-secondary), 0.1), transparent),
+    radial-gradient(1px 1px at 50% 50%, rgba(var(--v-theme-primary), 0.1), transparent),
+    radial-gradient(1px 1px at 80% 10%, rgba(var(--v-theme-secondary), 0.1), transparent);
+  background-size: 200px 200px;
+  animation: floatParticles 20s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes floatParticles {
+  0% { transform: translateY(0) rotate(0deg); }
+  100% { transform: translateY(-20px) rotate(360deg); }
 }
 
 .page-header::before {
@@ -1330,6 +1515,12 @@ onUnmounted(() => {
   background: radial-gradient(circle, rgba(var(--v-theme-primary), 0.1) 0%, transparent 70%);
   border-radius: 50%;
   pointer-events: none;
+  animation: pulseGlow 4s ease-in-out infinite alternate;
+}
+
+@keyframes pulseGlow {
+  0% { opacity: 0.1; transform: scale(1); }
+  100% { opacity: 0.2; transform: scale(1.1); }
 }
 
 .header-content {
@@ -1342,8 +1533,44 @@ onUnmounted(() => {
   z-index: 1;
 }
 
+.header-avatar-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .header-avatar {
   box-shadow: 0 4px 16px rgba(var(--v-theme-primary), 0.3);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.animated-avatar {
+  animation: floatAvatar 3s ease-in-out infinite alternate;
+}
+
+@keyframes floatAvatar {
+  0% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-3px) rotate(2deg); }
+  100% { transform: translateY(-6px) rotate(-1deg); }
+}
+
+.avatar-glow {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 80px;
+  height: 80px;
+  background: radial-gradient(circle, rgba(var(--v-theme-primary), 0.3) 0%, transparent 70%);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  animation: glowPulse 2s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+
+@keyframes glowPulse {
+  0% { opacity: 0.3; transform: translate(-50%, -50%) scale(1); }
+  100% { opacity: 0.6; transform: translate(-50%, -50%) scale(1.1); }
 }
 
 .page-title {
@@ -1353,6 +1580,60 @@ onUnmounted(() => {
   margin: 0;
   line-height: 1.2;
   letter-spacing: -0.5px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.title-badge {
+  font-size: 0.625rem;
+  font-weight: 700;
+  color: rgb(var(--v-theme-primary));
+  background: rgba(var(--v-theme-primary), 0.1);
+  padding: 4px 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(var(--v-theme-primary), 0.2);
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  animation: badgePulse 2s ease-in-out infinite;
+}
+
+@keyframes badgePulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+
+.header-stats {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+
+.modern-btn {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.modern-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.6s;
+}
+
+.modern-btn:hover::before {
+  left: 100%;
+}
+
+.modern-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(var(--v-theme-shadow), 0.2);
 }
 
 .page-subtitle {
@@ -1385,7 +1666,8 @@ onUnmounted(() => {
 }
 
 .refresh-btn:hover {
-  transform: rotate(180deg);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(var(--v-theme-shadow), 0.15);
 }
 
 /* ===== STATISTICS GRID ===== */
@@ -1404,6 +1686,7 @@ onUnmounted(() => {
   transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   overflow: hidden;
   position: relative;
+  cursor: pointer;
 }
 
 .stat-gradient {
@@ -1412,25 +1695,63 @@ onUnmounted(() => {
   left: 0;
   right: 0;
   height: 4px;
-  background: linear-gradient(90deg, 
-    rgb(var(--v-theme-primary)) 0%, 
+  background: linear-gradient(90deg,
+    rgb(var(--v-theme-primary)) 0%,
     rgb(var(--v-theme-secondary)) 100%);
   opacity: 0;
   transition: opacity 0.3s ease;
 }
 
+.stat-pulse {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg,
+    rgba(var(--v-theme-primary), 0.02) 0%,
+    rgba(var(--v-theme-secondary), 0.01) 100%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+
+.warning-pulse {
+  background: linear-gradient(135deg,
+    rgba(var(--v-theme-warning), 0.02) 0%,
+    rgba(var(--v-theme-warning), 0.01) 100%);
+}
+
+.critical-pulse {
+  background: linear-gradient(135deg,
+    rgba(var(--v-theme-error), 0.03) 0%,
+    rgba(var(--v-theme-error), 0.015) 100%);
+}
+
 .stat-card:hover {
-  transform: translateY(-6px);
-  box-shadow: 0 12px 40px rgba(var(--v-theme-shadow), 0.18);
-  border-color: rgba(var(--v-theme-primary), 0.2);
+  transform: translateY(-8px) scale(1.02);
+  box-shadow: 0 16px 48px rgba(var(--v-theme-shadow), 0.24);
+  border-color: rgba(var(--v-theme-primary), 0.25);
 }
 
 .stat-card:hover .stat-gradient {
   opacity: 1;
 }
 
+.stat-card:hover .stat-pulse {
+  opacity: 1;
+}
+
 .stat-card:hover .stat-icon-wrapper {
-  transform: scale(1.1) rotate(5deg);
+  transform: scale(1.15) rotate(8deg);
+}
+
+.stat-card:hover .stat-number {
+  transform: scale(1.05);
+}
+
+.stat-card:hover .trend-chip {
+  transform: scale(1.1);
 }
 
 .stat-content {
@@ -1487,13 +1808,78 @@ onUnmounted(() => {
   min-width: 0;
 }
 
+.stat-number-wrapper {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
 .stat-number {
   font-size: 2.25rem;
   font-weight: 800;
   color: rgb(var(--v-theme-on-surface));
   line-height: 1;
-  margin-bottom: 6px;
   letter-spacing: -1px;
+  transition: all 0.3s ease;
+}
+
+.stat-change {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  line-height: 1;
+  margin-top: 2px;
+  transition: all 0.3s ease;
+}
+
+.stat-change.positive {
+  background: rgba(var(--v-theme-success), 0.1);
+  color: rgb(var(--v-theme-success));
+}
+
+.stat-change.negative {
+  background: rgba(var(--v-theme-error), 0.1);
+  color: rgb(var(--v-theme-error));
+}
+
+.stat-change.neutral {
+  background: rgba(var(--v-theme-warning), 0.1);
+  color: rgb(var(--v-theme-warning));
+}
+
+.stat-change:hover {
+  transform: scale(1.1);
+}
+
+.trend-chip {
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.pulse-icon {
+  animation: iconPulse 2s ease-in-out infinite;
+}
+
+.critical-chip .pulse-icon {
+  animation: criticalPulse 1s ease-in-out infinite;
+}
+
+@keyframes iconPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.8; transform: scale(1.1); }
+}
+
+@keyframes criticalPulse {
+  0%, 100% { opacity: 1; transform: scale(1); color: rgb(var(--v-theme-error)); }
+  50% { opacity: 1; transform: scale(1.2); color: rgb(var(--v-theme-error)); }
 }
 
 .stat-label {
@@ -1703,25 +2089,56 @@ onUnmounted(() => {
   animation: fadeInUp 0.6s ease-out 0.2s both;
 }
 
+.search-label-content {
+  display: flex;
+  align-items: center;
+  font-weight: 600;
+  font-size: 0.9375rem;
+  color: rgb(var(--v-theme-on-surface));
+  letter-spacing: 0.2px;
+}
+
+.active-search-chip {
+  animation: searchPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes searchPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+
 .search-input-enhanced {
   transition: all 0.3s ease;
 }
 
-.search-input-enhanced :deep(.v-field) {
+.modern-search :deep(.v-field) {
   border-radius: 16px;
-  background: rgba(var(--v-theme-surface-variant), 0.3);
-  transition: all 0.3s ease;
+  background: rgba(var(--v-theme-primary), 0.04);
+  border: 2px solid rgba(var(--v-theme-primary), 0.1);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.search-input-enhanced:hover :deep(.v-field) {
-  background: rgba(var(--v-theme-surface-variant), 0.5);
+.modern-search:hover :deep(.v-field) {
+  background: rgba(var(--v-theme-primary), 0.08);
+  border-color: rgba(var(--v-theme-primary), 0.2);
   transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(var(--v-theme-shadow), 0.12);
+  box-shadow: 0 8px 24px rgba(var(--v-theme-primary), 0.15);
 }
 
-.search-input-enhanced :deep(.v-field--focused) {
+.modern-search :deep(.v-field--focused) {
   background: rgb(var(--v-theme-surface));
-  box-shadow: 0 0 0 3px rgba(var(--v-theme-secondary), 0.12);
+  border-color: rgb(var(--v-theme-primary));
+  box-shadow: 0 0 0 4px rgba(var(--v-theme-primary), 0.15);
+}
+
+.search-success-icon {
+  animation: successPop 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+@keyframes successPop {
+  0% { transform: scale(0); opacity: 0; }
+  50% { transform: scale(1.2); }
+  100% { transform: scale(1); opacity: 1; }
 }
 
 /* Active Filters Section */
@@ -1898,20 +2315,115 @@ onUnmounted(() => {
   border: 1px solid rgba(var(--v-theme-outline), 0.08);
   overflow: hidden;
   box-shadow: 0 2px 16px rgba(var(--v-theme-shadow), 0.06);
+  transition: all 0.3s ease;
+}
+
+.table-card:hover {
+  box-shadow: 0 4px 24px rgba(var(--v-theme-shadow), 0.12);
+  border-color: rgba(var(--v-theme-primary), 0.12);
 }
 
 .table-header {
-  padding: 24px 28px;
-  background: rgba(var(--v-theme-surface-variant), 0.3);
+  padding: 28px 32px;
+  background: linear-gradient(135deg,
+    rgba(var(--v-theme-primary), 0.06) 0%,
+    rgba(var(--v-theme-secondary), 0.03) 100%);
   border-bottom: 1px solid rgba(var(--v-theme-outline), 0.08);
+  position: relative;
+  overflow: hidden;
+}
+
+.table-header::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg,
+    rgb(var(--v-theme-primary)) 0%,
+    rgb(var(--v-theme-secondary)) 100%);
+  opacity: 0.8;
 }
 
 .table-title {
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: rgb(var(--v-theme-on-surface));
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+}
+
+.table-title-content {
   display: flex;
   align-items: center;
+  gap: 16px;
+  flex: 1;
+}
+
+.table-title-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: linear-gradient(135deg,
+    rgba(var(--v-theme-primary), 0.1) 0%,
+    rgba(var(--v-theme-secondary), 0.05) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(var(--v-theme-primary), 0.2);
+  transition: all 0.3s ease;
+}
+
+.table-card:hover .table-title-icon {
+  transform: scale(1.05);
+  box-shadow: 0 4px 16px rgba(var(--v-theme-primary), 0.2);
+}
+
+.table-title-text h3 {
+  font-size: 1.375rem;
+  font-weight: 700;
+  color: rgb(var(--v-theme-on-surface));
+  margin: 0;
+  line-height: 1.2;
+  letter-spacing: -0.3px;
+}
+
+.table-subtitle {
+  font-size: 0.875rem;
+  color: rgba(var(--v-theme-on-surface), 0.7);
+  margin: 4px 0 0 0;
+  line-height: 1.4;
+}
+
+.table-counter {
+  flex-shrink: 0;
+}
+
+.total-chip {
+  font-weight: 700;
+  font-size: 0.875rem;
+  letter-spacing: 0.3px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 2px solid transparent;
+  box-shadow: 0 2px 8px rgba(var(--v-theme-shadow), 0.1);
+}
+
+.total-chip:hover {
+  transform: translateY(-2px) scale(1.05);
+  box-shadow: 0 4px 16px rgba(var(--v-theme-shadow), 0.2);
+}
+
+.total-chip.empty-counter {
+  background: linear-gradient(135deg,
+    rgba(var(--v-theme-primary), 0.12) 0%,
+    rgba(var(--v-theme-secondary), 0.08) 100%);
+  border-color: rgba(var(--v-theme-primary), 0.3);
+  animation: counterGlow 2s ease-in-out infinite alternate;
+}
+
+@keyframes counterGlow {
+  0% { opacity: 0.8; transform: scale(1); }
+  100% { opacity: 1; transform: scale(1.02); }
 }
 
 .modern-data-table {
@@ -1920,7 +2432,10 @@ onUnmounted(() => {
 }
 
 .modern-data-table :deep(.v-data-table__thead) {
-  background: rgba(var(--v-theme-surface-variant), 0.4);
+  background: linear-gradient(135deg,
+    rgba(var(--v-theme-primary), 0.08) 0%,
+    rgba(var(--v-theme-secondary), 0.04) 100%);
+  border-bottom: 2px solid rgba(var(--v-theme-primary), 0.2);
 }
 
 .modern-data-table :deep(.v-data-table__th) {
@@ -1928,9 +2443,35 @@ onUnmounted(() => {
   text-transform: uppercase;
   font-size: 0.75rem;
   letter-spacing: 0.8px;
-  color: rgba(var(--v-theme-on-surface), 0.8) !important;
-  border-bottom: 2px solid rgba(var(--v-theme-outline), 0.12);
+  color: rgb(var(--v-theme-primary)) !important;
+  border-bottom: none;
   padding: 20px 16px !important;
+  position: relative;
+  background: transparent;
+  transition: all 0.3s ease;
+}
+
+.modern-data-table :deep(.v-data-table__th:hover) {
+  color: rgb(var(--v-theme-secondary)) !important;
+  background: rgba(var(--v-theme-primary), 0.05);
+}
+
+.modern-data-table :deep(.v-data-table__th::after) {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  width: 0;
+  height: 2px;
+  background: linear-gradient(90deg,
+    rgb(var(--v-theme-primary)) 0%,
+    rgb(var(--v-theme-secondary)) 100%);
+  transition: all 0.3s ease;
+  transform: translateX(-50%);
+}
+
+.modern-data-table :deep(.v-data-table__th:hover::after) {
+  width: 80%;
 }
 
 .modern-data-table :deep(.v-data-table__td) {
@@ -1940,12 +2481,17 @@ onUnmounted(() => {
 }
 
 .modern-data-table :deep(.v-data-table__tr) {
-  transition: all 0.2s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
 }
 
 .modern-data-table :deep(.v-data-table__tr:hover) {
-  background-color: rgba(var(--v-theme-primary), 0.04) !important;
-  transform: scale(1.001);
+  background: linear-gradient(135deg,
+    rgba(var(--v-theme-primary), 0.06) 0%,
+    rgba(var(--v-theme-secondary), 0.03) 100%) !important;
+  transform: translateY(-1px) scale(1.001);
+  box-shadow: 0 4px 16px rgba(var(--v-theme-shadow), 0.08);
+  border-left: 3px solid rgb(var(--v-theme-primary));
 }
 
 /* ===== LOADING ===== */
@@ -1991,7 +2537,7 @@ onUnmounted(() => {
 
 .title-description {
   font-size: 0.875rem;
-  color: rgba(var(--v-theme-on-surface), 0.6);
+  color: rgba(var(--v-theme-on-surface), 0.7);
   line-height: 1.5;
 }
 
@@ -2017,7 +2563,7 @@ onUnmounted(() => {
 
 .customer-address {
   font-size: 0.8125rem;
-  color: rgba(var(--v-theme-on-surface), 0.6);
+  color: rgba(var(--v-theme-on-surface), 0.7);
   line-height: 1.4;
   display: flex;
   align-items: center;
@@ -2085,7 +2631,7 @@ onUnmounted(() => {
 
 .date-time {
   font-size: 0.8125rem;
-  color: rgba(var(--v-theme-on-surface), 0.6);
+  color: rgba(var(--v-theme-on-surface), 0.7);
   display: flex;
   align-items: center;
 }
@@ -2135,22 +2681,76 @@ onUnmounted(() => {
 }
 
 /* ===== DARK THEME ===== */
+.v-theme--dark .trouble-ticket-container {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+}
+
 .v-theme--dark .page-header {
-  background: linear-gradient(135deg, 
-    rgba(var(--v-theme-primary), 0.15) 0%, 
+  background: linear-gradient(135deg,
+    rgba(var(--v-theme-primary), 0.15) 0%,
     rgba(var(--v-theme-secondary), 0.1) 100%);
   border-color: rgba(var(--v-theme-primary), 0.2);
 }
 
 .v-theme--dark .stat-card {
-  background: rgb(var(--v-theme-surface-bright));
-  border-color: rgba(var(--v-theme-outline), 0.15);
+  background: #1e293b;
+  border-color: rgba(var(--v-theme-outline), 0.2);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
 }
 
 .v-theme--dark .filters-card,
 .v-theme--dark .table-card {
-  background: rgb(var(--v-theme-surface-bright));
-  border-color: rgba(var(--v-theme-outline), 0.15);
+  background: #1e293b;
+  border-color: rgba(var(--v-theme-outline), 0.2);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+}
+
+.v-theme--dark .modern-data-table :deep(.v-data-table__thead) {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+}
+
+.v-theme--dark .modern-data-table :deep(.v-data-table__th) {
+  color: #f1f5f9 !important;
+}
+
+.v-theme--dark .modern-data-table :deep(.v-data-table__th:hover) {
+  color: #60a5fa !important;
+  background: rgba(96, 165, 250, 0.1);
+}
+
+.v-theme--dark .modern-data-table :deep(.v-data-table__tr:hover) {
+  background: linear-gradient(135deg, #334155 0%, #475569 100%) !important;
+  border-left-color: #60a5fa;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+
+.v-theme--dark .title-text,
+.v-theme--dark .customer-name,
+.v-theme--dark .user-name,
+.v-theme--dark .date-main {
+  color: #f1f5f9 !important;
+}
+
+.v-theme--dark .title-description,
+.v-theme--dark .customer-address,
+.v-theme--dark .date-time {
+  color: #94a3b8 !important;
+}
+
+.v-theme--dark .page-title {
+  color: #f1f5f9;
+}
+
+.v-theme--dark .page-subtitle {
+  color: #94a3b8;
+}
+
+.v-theme--dark .table-title-text h3 {
+  color: #f1f5f9;
+}
+
+.v-theme--dark .table-subtitle {
+  color: #94a3b8;
 }
 
 /* ===== RESPONSIVE ===== */

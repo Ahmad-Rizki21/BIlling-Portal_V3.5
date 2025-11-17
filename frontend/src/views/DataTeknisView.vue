@@ -662,7 +662,33 @@
                     :disabled="isEditMode"
                     variant="outlined"
                     class="mb-4"
-                  ></v-select>
+                  >
+                    <template v-slot:item="{ props, item }">
+                      <v-list-item v-bind="props" class="px-4">
+                        <template v-slot:prepend>
+                          <v-avatar color="primary" size="32">
+                            <v-icon color="white" size="16">mdi-account</v-icon>
+                          </v-avatar>
+                        </template>
+                        <!-- Override title untuk menambahkan chip, gunakan append untuk menambah chip -->
+                        <template v-slot:title>
+                          <div class="font-weight-medium d-flex align-center">
+                            <span class="flex-grow-1">{{ item.title }}</span>
+                            <!-- Tampilkan chip NEW USER dengan warna untuk pelanggan yang belum ada data teknis -->
+                            <v-chip
+                              v-if="isPelangganDataTeknisBaru(item.raw.id)"
+                              size="x-small"
+                              color="success"
+                              variant="elevated"
+                              class="ms-2 flex-shrink-0"
+                            >
+                              NEW USER
+                            </v-chip>
+                          </div>
+                        </template>
+                      </v-list-item>
+                    </template>
+                  </v-select>
                   <v-row>
                 <v-col cols="12" sm="6">
                   <v-select
@@ -703,8 +729,12 @@
                         variant="outlined"
                         @update:modelValue="checkIpAvailability"
                         :loading="ipValidation.loading"
-                        :error-messages="ipValidation.color === 'error' ? ipValidation.message : ''"
-                        :success-messages="ipValidation.color === 'success' ? ipValidation.message : ''"
+                        :error-messages="ipValidation.color === 'error' ? ipValidation.message : []"
+                        :success-messages="ipValidation.color === 'success' ? ipValidation.message : []"
+                        :rules="ipRules"
+                        placeholder="Contoh: 192.168.1.100"
+                        hint="Format IPv4: xxx.xxx.xxx.xxx (0-255)"
+                        persistent-hint
                       >
                         <template v-slot:label>
                           IP Pelanggan <span class="text-error">*</span>
@@ -1238,6 +1268,15 @@ const ipValidation = ref({
   color: ''
 });
 
+// Validation rules untuk IP field
+const ipRules = [
+  (v: string) => {
+    if (!v) return 'IP Pelanggan wajib diisi';
+    const validation = validateIpFormat(v);
+    return validation.isValid || validation.message;
+  }
+];
+
 const lastIpInfo = ref({
   last_ip: null,
   last_octet: 0,
@@ -1246,13 +1285,113 @@ const lastIpInfo = ref({
   source: ''
 });
 
+// Cache untuk hasil pengecekan pelanggan data teknis
+const pelangganDataTeknisBaruCache = new Map<number, boolean>();
+
 const pelangganForSelect = computed(() => {
   if (isEditMode.value) {
     return pelangganList.value;
   }
-  const existingIds = new Set(dataTeknisList.value.map(dt => dt.pelanggan_id));
-  return pelangganList.value.filter(p => !existingIds.has(p.id));
+
+  // Filter pelanggan yang belum memiliki data teknis
+  return pelangganList.value.filter(pelanggan => isPelangganDataTeknisBaru(pelanggan.id));
 });
+
+// Cache untuk langganan pelanggan
+const langgananCache = ref<any[]>([]);
+
+// Fungsi: Cek apakah pelanggan benar-benar baru (baru saja ditambah di Pelanggan)
+function isPelangganDataTeknisBaru(pelangganId: number): boolean {
+  if (!pelangganId) return false;
+
+  // Cek cache dulu
+  if (pelangganDataTeknisBaruCache.has(pelangganId)) {
+    return pelangganDataTeknisBaruCache.get(pelangganId)!;
+  }
+
+  // Cek apakah pelanggan sudah pernah memiliki langganan (berarti pelanggan lama)
+  const hasLanggananSebelumnya = langgananCache.value.some(l => l.pelanggan_id === pelangganId);
+
+  // Jika sudah ada langganan, ini pelanggan lama
+  if (hasLanggananSebelumnya) {
+    pelangganDataTeknisBaruCache.set(pelangganId, false);
+    return false;
+  }
+
+  // Cek di dataTeknisList yang sudah dimuat (current page)
+  const hasDataTeknisSebelumnya = dataTeknisList.value.some(dt => dt.pelanggan_id === pelangganId);
+
+  // Cache hasilnya
+  pelangganDataTeknisBaruCache.set(pelangganId, !hasDataTeknisSebelumnya);
+
+  // Jika belum pernah ada data teknis sama sekali, ini adalah pelanggan benar-benar baru
+  return !hasDataTeknisSebelumnya;
+}
+
+// Fungsi untuk mengambil data langganan
+async function fetchLanggananForCache() {
+  try {
+    // Load semua langganan tanpa limit
+    const response = await apiClient.get('/langganan/?limit=10000');
+    langgananCache.value = response.data.data || response.data;
+  } catch (error) {
+    console.warn('Gagal mengambil data langganan untuk cache:', error);
+    langgananCache.value = [];
+  }
+}
+
+// Fungsi untuk mengupdate cache pelanggan data teknis baru secara asynchronous
+async function updatePelangganDataTeknisBaruCache() {
+  // Clear cache lama
+  pelangganDataTeknisBaruCache.clear();
+
+  // Tunggu sampai pelangganList dan langgananCache ada datanya
+  if (!pelangganList.value || pelangganList.value.length === 0 || !langgananCache.value) {
+    return;
+  }
+
+  try {
+    // Load semua data teknis tanpa pagination untuk checking yang akurat
+    const response = await apiClient.get('/data_teknis/?limit=500');
+    const allDataTeknis = response.data.data || response.data;
+
+    if (Array.isArray(allDataTeknis)) {
+      // Buat Set dari semua pelanggan_id yang sudah ada data teknis
+      const existingDataTeknisIds = new Set(allDataTeknis.map((dt: any) => dt.pelanggan_id));
+
+      // Buat Set dari semua pelanggan_id yang sudah ada langganan (pelanggan lama)
+      const existingLanggananIds = new Set(langgananCache.value.map(l => l.pelanggan_id));
+
+      // Update cache untuk semua pelanggan
+      pelangganList.value.forEach(pelanggan => {
+        // Pelanggan benar-benar baru = belum ada langganan DAN belum ada data teknis
+        const isBenarBenarBaru = !existingLanggananIds.has(pelanggan.id) && !existingDataTeknisIds.has(pelanggan.id);
+        pelangganDataTeknisBaruCache.set(pelanggan.id, isBenarBenarBaru);
+      });
+    } else {
+      // Fallback: gunakan data dari current page
+      const existingDataTeknisIds = new Set(dataTeknisList.value.map(dt => dt.pelanggan_id));
+      const existingLanggananIds = new Set(langgananCache.value.map(l => l.pelanggan_id));
+
+      pelangganList.value.forEach(pelanggan => {
+        const isBenarBenarBaru = !existingLanggananIds.has(pelanggan.id) && !existingDataTeknisIds.has(pelanggan.id);
+        pelangganDataTeknisBaruCache.set(pelanggan.id, isBenarBenarBaru);
+      });
+    }
+  } catch (error) {
+    console.warn('Gagal mengupdate cache pelanggan data teknis baru, menggunakan fallback:', error);
+    // Fallback: gunakan data dari current page
+    if (dataTeknisList.value && pelangganList.value && langgananCache.value) {
+      const existingDataTeknisIds = new Set(dataTeknisList.value.map(dt => dt.pelanggan_id));
+      const existingLanggananIds = new Set(langgananCache.value.map(l => l.pelanggan_id));
+
+      pelangganList.value.forEach(pelanggan => {
+        const isBenarBenarBaru = !existingLanggananIds.has(pelanggan.id) && !existingDataTeknisIds.has(pelanggan.id);
+        pelangganDataTeknisBaruCache.set(pelanggan.id, isBenarBenarBaru);
+      });
+    }
+  }
+}
 
 const oltOptions = ref<string[]>([]);
 
@@ -1338,12 +1477,13 @@ async function fetchLastUsedIp(serverId: number) {
 
 // --- Methods ---
 onMounted(() => {
-  fetchDataTeknis();
-  fetchPelanggan();
+  fetchPelanggan(); // Load pelanggan dulu untuk cache
+  fetchLanggananForCache(); // Load langganan untuk pengecekan pelanggan baru
   fetchMikrotikServers();
   fetchPaketLayananForSelect();
   fetchOdpList();
   fetchFilterOptions();
+  fetchDataTeknis(); // Load data teknis terakhir
   // fetchStatisticsData() akan dipanggil setelah fetchDataTeknis() selesai
 });
 
@@ -1397,6 +1537,9 @@ async function fetchDataTeknis(isLoadMore = false, preservePage = false) {
       dataTeknisList.value = newData;
       // Hitung ulang statistik setelah data baru di-load
       calculateStatisticsFromExistingData();
+
+      // Update cache pelanggan data teknis baru ketika data berubah (bukan loadMore)
+      updatePelangganDataTeknisBaruCache();
     }
 
     // Selalu update total count untuk pagination yang benar
@@ -1573,6 +1716,9 @@ async function fetchPelanggan() {
     }
     pelangganMap.value = newMap;
 
+    // Update cache pelanggan data teknis baru
+    updatePelangganDataTeknisBaruCache();
+
   } catch(error) {
     console.error("Gagal mengambil daftar pelanggan:", error);
   }
@@ -1635,22 +1781,93 @@ function closeDialog() {
   };
 }
 
+// Fungsi validasi format IP
+function validateIpFormat(ip: string): { isValid: boolean; message: string } {
+  if (!ip) {
+    return { isValid: false, message: '' }; // Biarkan kosong, tidak error
+  }
+
+  // Validasi panjang IP (max 15 karakter)
+  if (ip.length > 15) {
+    return { isValid: false, message: 'IP terlalu panjang (maksimal 15 karakter)' };
+  }
+
+  // Validasi format dasar - harus ada 3 titik
+  if ((ip.match(/\./g) || []).length !== 3) {
+    return { isValid: false, message: 'Format IP tidak valid. Harus xxx.xxx.xxx.xxx' };
+  }
+
+  // Validasi karakter - hanya boleh angka dan titik
+  if (!/^[0-9.]+$/.test(ip)) {
+    return { isValid: false, message: 'IP hanya boleh mengandung angka dan titik' };
+  }
+
+  // Validasi setiap oktet
+  const ipParts = ip.split('.');
+  if (ipParts.length !== 4) {
+    return { isValid: false, message: 'IP harus memiliki 4 oktet' };
+  }
+
+  for (let i = 0; i < ipParts.length; i++) {
+    const part = ipParts[i];
+
+    // Validasi tidak ada oktet kosong
+    if (part === '') {
+      return { isValid: false, message: `Oktet ke-${i+1} kosong` };
+    }
+
+    // Validasi panjang setiap oktet (max 3 digit)
+    if (part.length > 3) {
+      return { isValid: false, message: `Oktet ke-${i+1} terlalu panjang: ${part}` };
+    }
+
+    // Validasi tidak ada leading zero (kecuali "0")
+    if (part.length > 1 && part.startsWith('0')) {
+      return { isValid: false, message: `Oktet ke-${i+1} tidak boleh ada leading zero: ${part}` };
+    }
+
+    // Validasi angka
+    const num = parseInt(part, 10);
+    if (isNaN(num)) {
+      return { isValid: false, message: `Oktet ke-${i+1} harus angka: ${part}` };
+    }
+
+    // Validasi range 0-255
+    if (num < 0 || num > 255) {
+      return { isValid: false, message: `Oktet ke-${i+1} harus antara 0-255: ${part}` };
+    }
+  }
+
+  return { isValid: true, message: '' };
+}
+
 const checkIpAvailability = debounce(async (ip: string) => {
+  // Reset validasi
+  ipValidation.value = { loading: false, message: '', color: '' };
+
   // Jangan cek jika IP kosong
   if (!ip) {
-    ipValidation.value = { loading: false, message: '', color: '' };
     return;
   }
-  
+
+  // Validasi format IP terlebih dahulu
+  const formatValidation = validateIpFormat(ip);
+  if (!formatValidation.isValid) {
+    ipValidation.value.message = formatValidation.message;
+    ipValidation.value.color = 'error';
+    return;
+  }
+
+  // Format valid, lanjut cek ketersediaan
   ipValidation.value.loading = true;
   try {
     const response = await apiClient.post('/data_teknis/check-ip', {
       ip_address: ip,
       current_id: editedItem.value.id || null // Kirim ID saat mode edit
     });
-    
+
     const { is_taken, message } = response.data;
-    
+
     ipValidation.value.message = message;
     ipValidation.value.color = is_taken ? 'error' : 'success';
 
@@ -1736,9 +1953,12 @@ async function saveDataTeknis() {
         dataTeknisList.value[index] = updatedData;
       }
 
+      showSnackbar('Data teknis berhasil diperbarui', 'success');
+
     } else {
       // Untuk "Tambah Data", panggil ulang fetchDataTeknis
       await apiClient.post('/data_teknis/', editedItem.value);
+      showSnackbar('Data teknis berhasil ditambahkan', 'success');
       fetchDataTeknis();
     }
 
@@ -1747,6 +1967,7 @@ async function saveDataTeknis() {
     closeDialog();
   } catch (error: any) {
     console.error("Gagal saat menyimpan data teknis:", error);
+    showSnackbar('Gagal menyimpan data teknis', 'error');
 
     // Handle error validasi 422 secara spesifik
     if (error.response?.status === 422) {

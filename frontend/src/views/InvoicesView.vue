@@ -14,7 +14,7 @@
           </div>
         </div>
         <v-spacer class="d-none d-md-block"></v-spacer>
-        <v-btn 
+        <v-btn
           v-if="auth.hasPermission('create_invoices')"
           color="white"
           variant="elevated"
@@ -22,7 +22,7 @@
           elevation="4"
           @click="openGenerateDialog"
           prepend-icon="mdi-plus-circle-outline"
-          class="text-none font-weight-bold w-100 w-md-auto"
+          class="text-none font-weight-bold w-100 w-md-auto rounded-lg"
           style="color: #4338ca !important;"
         >
           Buat Invoice Manual

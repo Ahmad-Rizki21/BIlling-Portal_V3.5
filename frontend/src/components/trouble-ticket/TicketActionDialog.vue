@@ -71,8 +71,8 @@
             </v-select>
           </div>
 
-          <!-- Action Details Section -->
-          <div class="form-section mb-6">
+          <!-- Action Details Section - Only show for status changes or actions -->
+          <div class="form-section mb-6" v-if="shouldShowActionDetails">
             <div class="section-header mb-4">
               <v-icon color="primary" class="me-2">mdi-text-box-outline</v-icon>
               <span class="text-subtitle-1 font-weight-bold">Action Details</span>
@@ -90,14 +90,15 @@
               prepend-inner-icon="mdi-text"
               color="primary"
               counter
+              :rules="shouldShowSummaryFields ? [rules.required] : []"
             ></v-textarea>
           </div>
 
-          <!-- Summary Section -->
-          <div class="form-section mb-6">
+          <!-- Summary Section - Only show when status is Closed -->
+          <div class="form-section mb-6" v-if="shouldShowSummaryFields">
             <div class="section-header mb-4">
-              <v-icon color="primary" class="me-2">mdi-clipboard-text-outline</v-icon>
-              <span class="text-subtitle-1 font-weight-bold">Summary</span>
+              <v-icon color="warning" class="me-2">mdi-clipboard-text-outline</v-icon>
+              <span class="text-subtitle-1 font-weight-bold">Summary (Required for Closing Ticket)</span>
             </div>
 
             <v-row>
@@ -112,9 +113,10 @@
                   variant="outlined"
                   density="comfortable"
                   prepend-inner-icon="mdi-alert-circle-outline"
-                  color="primary"
+                  color="warning"
                   counter
                   class="summary-field"
+                  :rules="[rules.required]"
                 ></v-textarea>
               </v-col>
               <v-col cols="12" md="6">
@@ -128,16 +130,17 @@
                   variant="outlined"
                   density="comfortable"
                   prepend-inner-icon="mdi-check-circle-outline"
-                  color="primary"
+                  color="warning"
                   counter
                   class="summary-field"
+                  :rules="[rules.required]"
                 ></v-textarea>
               </v-col>
             </v-row>
           </div>
 
-          <!-- Notes Section -->
-          <div class="form-section mb-6">
+          <!-- Notes Section - Show for all statuses except when no status change -->
+          <div class="form-section mb-6" v-if="!shouldShowSummaryFields || formData.status">
             <div class="section-header mb-4">
               <v-icon color="primary" class="me-2">mdi-note-text-outline</v-icon>
               <span class="text-subtitle-1 font-weight-bold">Additional Notes</span>
@@ -308,7 +311,7 @@
           class="px-6 elevation-2"
           prepend-icon="mdi-check"
         >
-          Update Ticket Action
+          {{ formData.status ? `Update Status to ${formatStatus(formData.status)}` : 'Add Action Note' }}
         </v-btn>
       </v-card-actions>
     </v-card>
@@ -359,8 +362,11 @@ const formData = ref({
 const statusOptions = [
   { title: 'Open', value: 'open' },
   { title: 'In Progress', value: 'in_progress' },
-  { title: 'Pending', value: 'pending' },
+  { title: 'Pending Customer', value: 'pending_customer' },
+  { title: 'Pending Vendor', value: 'pending_vendor' },
+  { title: 'Resolved', value: 'resolved' },
   { title: 'Closed', value: 'closed' },
+  { title: 'Cancelled', value: 'cancelled' },
 ]
 
 // Computed
@@ -368,6 +374,20 @@ const dialog = computed({
   get: () => props.modelValue,
   set: (value) => emit('update:modelValue', value)
 })
+
+// Computed properties for dynamic field visibility
+const shouldShowSummaryFields = computed(() => {
+  return formData.value.status === 'closed' || formData.value.status === 'resolved'
+})
+
+const shouldShowActionDetails = computed(() => {
+  return formData.value.status && formData.value.status !== ''
+})
+
+// Validation rules
+const rules = {
+  required: (value: any) => !!value || 'This field is required',
+}
 
 // Methods
 const submitForm = async () => {
@@ -383,20 +403,42 @@ const submitForm = async () => {
 
   loading.value = true
   try {
-    // Convert file URLs to array of URLs
+    // Upload files to server and get URLs
     evidenceUrls.value = []
     if (file.value && file.value.length > 0) {
-      evidenceUrls.value = file.value.map(f => URL.createObjectURL(f))
+      // Upload each file and get server URLs
+      const uploadPromises = file.value.map(async (fileItem) => {
+        const formData = new FormData()
+        formData.append('file', fileItem)
+
+        const response = await apiClient.post('/uploads/evidence/', formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        })
+
+        return response.data.file_url
+      })
+
+      evidenceUrls.value = await Promise.all(uploadPromises)
     }
 
-    // Prepare API payload with evidence as JSON string
-    const payload = {
+    // Prepare API payload - only include relevant fields
+    const payload: any = {
       status: formData.value.status,
-      notes: formData.value.notes,
-      action_description: formData.value.action_description,
-      summary_problem: formData.value.summary_problem,
-      summary_action: formData.value.summary_action,
+      notes: formData.value.notes || null,
       evidence: evidenceUrls.value.length > 0 ? JSON.stringify(evidenceUrls.value) : null
+    }
+
+    // Only include action description if we're showing the field
+    if (shouldShowActionDetails.value) {
+      payload.action_description = formData.value.action_description || null
+    }
+
+    // Only include summary fields if status is closed
+    if (shouldShowSummaryFields.value) {
+      payload.summary_problem = formData.value.summary_problem
+      payload.summary_action = formData.value.summary_action
     }
 
     // Check if status is being updated or just adding action
@@ -411,9 +453,22 @@ const submitForm = async () => {
 
     emit('updated')
     closeDialog()
-  } catch (error) {
+  } catch (error: any) {
     console.error('Failed to update ticket action:', error)
-    alert('Failed to update ticket action')
+
+    // Provide more specific error messages
+    let errorMessage = 'Failed to update ticket action'
+    if (error.response?.status === 413) {
+      errorMessage = 'File too large. Maximum size is 10MB.'
+    } else if (error.response?.status === 415) {
+      errorMessage = 'File type not supported. Please use images, PDF, or documents.'
+    } else if (error.response?.status === 422) {
+      errorMessage = 'Validation error. Please check all required fields.'
+    } else if (error.response?.data?.detail) {
+      errorMessage = error.response.data.detail
+    }
+
+    alert(errorMessage)
   } finally {
     loading.value = false
   }
@@ -434,15 +489,14 @@ const resetForm = () => {
   }
   file.value = []
   previewUrls.value = []
-
-  // Clean up evidence URLs
-  evidenceUrls.value.forEach(url => URL.revokeObjectURL(url))
   evidenceUrls.value = []
 }
 
 const removeFile = (index: number) => {
   file.value.splice(index, 1)
-  URL.revokeObjectURL(previewUrls.value[index])
+  if (previewUrls.value[index]) {
+    URL.revokeObjectURL(previewUrls.value[index])
+  }
   previewUrls.value.splice(index, 1)
 }
 
@@ -495,8 +549,11 @@ const getStatusColor = (status: string) => {
   const colorMap: Record<string, string> = {
     open: 'info',
     in_progress: 'warning',
-    pending: 'orange',
-    closed: 'success',
+    pending_customer: 'orange',
+    pending_vendor: 'purple',
+    resolved: 'success',
+    closed: 'grey',
+    cancelled: 'error',
   }
   return colorMap[status] || 'grey'
 }
@@ -505,10 +562,17 @@ const getStatusIcon = (status: string) => {
   const iconMap: Record<string, string> = {
     open: 'mdi-email-open',
     in_progress: 'mdi-progress-clock',
-    pending: 'mdi-account-clock',
-    closed: 'mdi-close-circle',
+    pending_customer: 'mdi-account-clock',
+    pending_vendor: 'mdi-truck-fast',
+    resolved: 'mdi-check-circle',
+    closed: 'mdi-archive',
+    cancelled: 'mdi-cancel',
   }
   return iconMap[status] || 'mdi-help-circle'
+}
+
+const formatStatus = (status: string) => {
+  return status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
 }
 
 // Watchers
