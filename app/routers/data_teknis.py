@@ -168,7 +168,7 @@ async def read_data_teknis_by_pelanggan(pelanggan_id: int, db: AsyncSession = De
 @router.get("/", response_model=DataTeknisResponse)
 async def read_all_data_teknis(
     skip: int = 0,
-    limit: Optional[int] = None,
+    limit: Optional[int] = Query(default=50, le=500, description="Maximum 500 records per request for optimal performance"),
     search: Optional[str] = None,
     olt: Optional[str] = None,
     profile: Optional[str] = None,
@@ -206,6 +206,8 @@ async def read_all_data_teknis(
     else:
         # If no search, still join for eager loading but no where clause for the main query
         query = query.join(DataTeknisModel.pelanggan)
+        # Apply join to count_query as well for consistency
+        count_query = count_query.join(DataTeknisModel.pelanggan)
 
     # Filter OLT
     if olt and olt != "Semua":
@@ -602,7 +604,7 @@ async def download_csv_template_teknis():
 @router.get("/export/csv", response_class=StreamingResponse)
 async def export_to_csv_teknis(
     skip: int = 0,
-    limit: int = Query(default=5000, le=50000, description="Maximum 50,000 records per export"),  # Max 50k records
+    limit: int = Query(default=1000, le=10000, description="Maximum 10,000 records per export with progress indicator"),  # Production-ready
     search: Optional[str] = None,
     olt: Optional[str] = None,
     profile: Optional[str] = None,

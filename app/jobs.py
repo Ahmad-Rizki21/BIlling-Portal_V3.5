@@ -24,6 +24,7 @@ from sqlalchemy.orm import selectinload
 # Impor komponen
 from .database import AsyncSessionLocal
 from .database import get_db
+from .websocket_manager import manager
 
 # Type hints untuk Pylance
 SessionType: async_sessionmaker[AsyncSession] = AsyncSessionLocal  # type: ignore
@@ -32,37 +33,19 @@ from .models import DataTeknis as DataTeknisModel
 from .models import Invoice as InvoiceModel
 from .models import Langganan as LanggananModel
 from .models import Pelanggan as PelangganModel
-from .routers.invoice import _process_successful_payment, update_overdue_invoices
+from .routers.invoice import _process_successful_payment
 from .services import mikrotik_service, xendit_service
 from .services.rate_limiter import create_invoice_with_rate_limit, InvoicePriority
 
 logger = logging.getLogger("app.jobs")
 
 
+import re
+
+# ... (rest of the imports)
+
 async def generate_single_invoice(db: AsyncSession, langganan: LanggananModel) -> None:
-    """
-    Fungsi ini buat generate invoice buat satu pelanggan aja.
-    Dipanggil sama scheduler ketika udah waktunya bikin invoice baru.
-
-    Proses yang dijalanin:
-    1. Ambil data pelanggan, paket layanan, dan harga
-    2. Hitung total harga (dasar + pajak)
-    3. Generate nomor invoice unik
-    4. Simpan ke database
-    5. Buat payment link di Xendit
-
-    Args:
-        db: Database session yang lagi aktif
-        langganan: Object LanggananModel yang mau dibikinin invoice
-
-    Returns:
-        None (hasilnya langsung disimpen ke database)
-
-    Note:
-        - Invoice number format: INV-YYYYMMDD-XXXXXX
-        - Auto create payment link via Xendit API
-        - Support prorate billing untuk pelanggan baru
-    """
+    # ... (try block starts)
     try:
         pelanggan = langganan.pelanggan
         paket = langganan.paket_layanan
@@ -79,8 +62,18 @@ async def generate_single_invoice(db: AsyncSession, langganan: LanggananModel) -
         pajak = math.floor(pajak_mentah + 0.5)
         total_harga = harga_dasar + pajak
 
+        # --- MODIFICATION FOR INVOICE NUMBER ---
+        # 1. Sanitize and shorten customer name and address
+        nama_pelanggan_singkat = re.sub(r'[^a-zA-Z0-9]', '', pelanggan.nama).upper()[:10]
+        alamat_singkat = re.sub(r'[^a-zA-Z0-9]', '', pelanggan.alamat or '').upper()[:10]
+        brand_singkat = re.sub(r'[^a-zA-Z0-9]', '', brand.brand or '').upper()[:10]
+
+        # 2. Generate new invoice number
+        nomor_invoice_baru = f"INV-{brand_singkat}-{nama_pelanggan_singkat}-{alamat_singkat}-{date.today().strftime('%Y%m%d')}-{uuid.uuid4().hex[:4].upper()}"
+        # --- END OF MODIFICATION ---
+
         new_invoice_data = {
-            "invoice_number": f"INV-{date.today().strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}",
+            "invoice_number": nomor_invoice_baru, # Use the new invoice number
             "pelanggan_id": pelanggan.id,
             "id_pelanggan": data_teknis.id_pelanggan,
             "brand": brand.brand,
@@ -93,14 +86,13 @@ async def generate_single_invoice(db: AsyncSession, langganan: LanggananModel) -
         }
 
         db_invoice = InvoiceModel(**new_invoice_data)
-        db.add(db_invoice)
-        await db.flush()
+        # ... (rest of the function)
 
         deskripsi_xendit = ""
         jatuh_tempo_str_lengkap = datetime.combine(date.fromisoformat(str(db_invoice.tgl_jatuh_tempo)), datetime.min.time()).strftime("%d/%m/%Y")
 
         if langganan.metode_pembayaran == "Prorate":
-            # ▼▼▼ LOGIKA BARU DIMULAI DI SINI ▼▼▼
+            
 
             # Hitung harga normal untuk perbandingan
             harga_normal_full = float(paket.harga) * (1 + (float(brand.pajak) / 100))
@@ -174,13 +166,20 @@ async def generate_single_invoice(db: AsyncSession, langganan: LanggananModel) -
     except Exception as e:
         # 🔧 FIX: Save invoice even if Xendit fails, but log for manual retry
         logger.error(f"⚠️ Xendit API gagal untuk Langganan ID {langganan.id}: {e}")
-        logger.error(f"📝 Invoice {new_invoice_data.get('invoice_number', 'UNKNOWN')} akan disimpan tanpa payment link untuk retry manual")
+        logger.error(f"📝 Invoice {new_invoice_data.get('invoice_number', 'UNKNOWN')} akan disimpan tanpa payment link untuk retry otomatis")
 
-        # Save invoice tanpa payment link untuk retry nanti
+        # Save invoice tanpa payment link untuk retry otomatis nanti
         try:
+            # Tambah field retry tracking
+            new_invoice_data.update({
+                'xendit_status': 'failed',
+                'xendit_error_message': str(e),
+                'xendit_retry_count': 0,
+            })
+
             db_invoice = InvoiceModel(**new_invoice_data)
             db.add(db_invoice)
-            logger.info(f"🔄 Invoice {db_invoice.invoice_number} disimpan tanpa payment link (requires manual retry)")
+            logger.info(f"🔄 Invoice {db_invoice.invoice_number} disimpan tanpa payment link (akan di-retry otomatis)")
         except Exception as db_error:
             logger.error(f"❌ Database error juga: {db_error}")
         # Re-raise biar scheduler tau ada issue
@@ -247,7 +246,7 @@ async def job_generate_invoices() -> None:
                 # OPTIMISASI: Ambil semua invoice yang sudah ada untuk batch ini dalam satu query
                 pelanggan_ids_in_batch = [s.pelanggan_id for s in subscriptions_batch]
 
-                # 🔧 FIX: Check duplicate berdasarkan PERIODE BULAN, bukan exact date
+                # FIX: Check duplicate berdasarkan PERIODE BULAN, bukan exact date
                 # Calculate month period for target_due_date
                 target_year = target_due_date.year
                 target_month = target_due_date.month
@@ -300,16 +299,18 @@ async def job_suspend_services() -> None:
     Jalan setiap hari buat cek siapa aja yang udah overdue.
 
     Logic suspend:
-    1. Cari pelanggan yang telat bayar lebih dari 4 hari
-    2. Ubah status langganan jadi 'Suspended'
-    3. Ubah semua invoice belum bayar jadi 'Kadaluarsa'
-    4. Trigger update ke Mikrotik buat blokir internet
-    5. Log hasil proses
+    1. Cari pelanggan yang jatuh tempo tanggal 1 dan belum bayar sampai tanggal 4
+    2. Tepat tanggal 5 jam 00:00 WIB, suspend layanan mereka
+    3. Ubah status langganan jadi 'Suspended'
+    4. Ubah semua invoice belum bayar jadi 'Kadaluarsa'
+    5. Trigger update ke Mikrotik buat blokir internet
+    6. Log hasil proses
 
-    Aturan suspend:
-    - Jatuh tempo tgl 1 -> suspend tgl 5
-    - Artinya telat 4 hari baru disuspend
-    - Semua invoice belum bayar otomatis kadaluarsa
+    Aturan suspend (LOGIKA BISNIS):
+    - Jatuh tempo: 1 November
+    - Grace period: 1-4 November (4 hari)
+    - Suspend: 5 November jam 00:00 WIB
+    - Enable kembali: Setelah bayar, jatuh tempo berubah ke 1 Desember
 
     Integration:
     - Mikrotik API buat suspend/blokir internet
@@ -327,27 +328,70 @@ async def job_suspend_services() -> None:
     BATCH_SIZE = 50
     offset = 0
 
-    # Aturan: Layanan di-suspend pada hari ke-5 jika jatuh tempo tgl 1.
-    # Artinya, jika hari ini tgl 5, kita cari yg jatuh tempo tgl 1 (selisih 4 hari).
-    overdue_date_threshold = current_date - timedelta(days=4)
+    # LOGIKA BISNIS YANG BENAR:
+    # Cek apakah hari ini adalah tanggal 5 untuk melakukan suspend utama
+    is_main_suspend_day = current_date.day == 5
+
+    # Tambahkan retroactive mechanism untuk tanggal 6-10 (jika scheduler gagal tanggal 5)
+    is_retroactive_day = 6 <= current_date.day <= 10
+
+    if not (is_main_suspend_day or is_retroactive_day):
+        log_scheduler_event(
+            logger,
+            "job_suspend_services",
+            "completed",
+            f"Hari ini tanggal {current_date.day}, suspend hanya dilakukan tanggal 5-10 (retroactive)."
+        )
+        return
+
+    if is_retroactive_day:
+        logger.warning(f"🔄 RETROACTIVE SUSPEND: Menjalankan suspend ketinggalan dari tanggal 5 untuk hari {current_date.day}")
+
+    # Jika hari ini tanggal 5-10, cari yang jatuh tempo tanggal 1 bulan ini
+    current_month = current_date.month
+    current_year = current_date.year
+
+    # Target tanggal jatuh tempo yang harus disuspend: tanggal 1 bulan ini
+    target_due_date = date(current_year, current_month, 1)
+
+    logger.info(f"🔍 Mencari pelanggan yang jatuh tempo tanggal {target_due_date.strftime('%d %B %Y')} dan belum bayar")
 
     async with SessionType() as db:
         while True:
             try:
-                base_stmt = (
-                    select(LanggananModel)
-                    .join(
-                        InvoiceModel,
-                        LanggananModel.pelanggan_id == InvoiceModel.pelanggan_id,
+                # Filter tambahan untuk retroactive: hindari yang sudah disuspend
+                if is_retroactive_day:
+                    logger.info(f"🔍 Retroactive mode: mencari pelanggan yang belum disuspend dari tanggal 5")
+                    base_stmt = (
+                        select(LanggananModel)
+                        .join(
+                            InvoiceModel,
+                            LanggananModel.pelanggan_id == InvoiceModel.pelanggan_id,
+                        )
+                        .where(
+                            InvoiceModel.tgl_jatuh_tempo == target_due_date,  # Cari yang jatuh tempo tepat tanggal 1
+                            LanggananModel.status == "Aktif",  # Masih aktif (belum suspend)
+                            InvoiceModel.status_invoice == "Belum Dibayar",  # Invoice belum lunas
+                        )
+                        .distinct(LanggananModel.id)  # Pastikan setiap langganan hanya diproses sekali
+                        .options(selectinload(LanggananModel.pelanggan).selectinload(PelangganModel.data_teknis))
                     )
-                    .where(
-                        InvoiceModel.tgl_jatuh_tempo <= overdue_date_threshold,
-                        LanggananModel.status == "Aktif",
-                        InvoiceModel.status_invoice == "Belum Dibayar",
+                else:
+                    # Normal mode (tanggal 5)
+                    base_stmt = (
+                        select(LanggananModel)
+                        .join(
+                            InvoiceModel,
+                            LanggananModel.pelanggan_id == InvoiceModel.pelanggan_id,
+                        )
+                        .where(
+                            InvoiceModel.tgl_jatuh_tempo == target_due_date,  # Cari yang jatuh tempo tepat tanggal 1
+                            LanggananModel.status == "Aktif",
+                            InvoiceModel.status_invoice == "Belum Dibayar",
+                        )
+                        .distinct(LanggananModel.id)  # Pastikan setiap langganan hanya diproses sekali
+                        .options(selectinload(LanggananModel.pelanggan).selectinload(PelangganModel.data_teknis))
                     )
-                    .distinct(LanggananModel.id)  # <-- TAMBAHAN: Pastikan setiap langganan hanya diproses sekali
-                    .options(selectinload(LanggananModel.pelanggan).selectinload(PelangganModel.data_teknis))
-                )
 
                 batch_stmt = base_stmt.offset(offset).limit(BATCH_SIZE)
                 overdue_batch = (await db.execute(batch_stmt)).scalars().unique().all()
@@ -356,31 +400,72 @@ async def job_suspend_services() -> None:
                     break
 
                 for langganan in overdue_batch:
-                    logger.warning(f"Melakukan suspend layanan untuk Langganan ID: {langganan.id}...")
-
-                    # 1. Ubah status invoice terkait menjadi 'Kadaluarsa'
-                    # Ini lebih efisien daripada menjalankan job terpisah.
-                    update_invoice_stmt = (
-                        update(InvoiceModel)
-                        .where(InvoiceModel.pelanggan_id == langganan.pelanggan_id)
-                        .where(InvoiceModel.status_invoice == "Belum Dibayar")
-                        .values(status_invoice="Kadaluarsa")
-                    )
-                    invoice_update_result: Result = await db.execute(update_invoice_stmt)
-                    total_invoices_overdue += invoice_update_result.rowcount  # type: ignore
-
-                    # 2. Ubah status langganan menjadi 'Suspended'
-                    langganan.status = "Suspended"
-                    db.add(langganan)
+                    suspend_type = "RETROACTIVE" if is_retroactive_day else "SCHEDULED"
+                    logger.warning(f"⚠️ {suspend_type} SUSPEND: Melakukan suspend layanan untuk Langganan ID: {langganan.id} - Pelanggan: {langganan.pelanggan.nama}")
 
                     data_teknis = langganan.pelanggan.data_teknis
-                    if data_teknis:
-                        await mikrotik_service.trigger_mikrotik_update(db, langganan, data_teknis, data_teknis.id_pelanggan)
-                        total_services_suspended += 1
-                    else:
-                        logger.error(f"Data Teknis tidak ditemukan untuk langganan ID {langganan.id}, skip update Mikrotik.")
+                    mikrotik_success = False
+                    mikrotik_error_msg = None
 
-                await db.commit()
+                    # Opsi 2: Database First - Coba Mikrotik dulu tapi DB priority
+                    if data_teknis:
+                        try:
+                            # 1. Coba update Mikrotik DULU (tapi tidak akan rollback DB jika gagal)
+                            logger.info(f"🔄 Mencoba update Mikrotik untuk Langganan ID: {langganan.id}...")
+                            await mikrotik_service.trigger_mikrotik_update(db, langganan, data_teknis, data_teknis.id_pelanggan)
+                            mikrotik_success = True
+                            logger.info(f"✅ Mikrotik update SUKSES untuk Langganan ID: {langganan.id}")
+
+                        except Exception as mikrotik_error:
+                            # Log error tapi LANJUTKAN proses DB (business priority)
+                            mikrotik_error_msg = str(mikrotik_error)
+                            logger.error(f"❌ Mikrotik update GAGAL untuk Langganan ID: {langganan.id}, tetapi suspend di DB akan tetap dijalankan. Error: {mikrotik_error}")
+
+                            # Tandai untuk retry otomatis nanti
+                            if data_teknis:
+                                data_teknis.mikrotik_sync_pending = True
+                                db.add(data_teknis)
+                                logger.info(f"🔄 Ditandai untuk retry otomatis: Langganan ID {langganan.id}")
+                    else:
+                        logger.warning(f"⚠️ Data Teknis tidak ditemukan untuk langganan ID {langganan.id}, suspend hanya di DB.")
+
+                    # 2. UPDATE DATABASE (Priority - pastikan ini selalu jalan)
+                    try:
+                        # Update invoice menjadi kadaluarsa
+                        update_invoice_stmt = (
+                            update(InvoiceModel)
+                            .where(InvoiceModel.pelanggan_id == langganan.pelanggan_id)
+                            .where(InvoiceModel.status_invoice == "Belum Dibayar")
+                            .values(status_invoice="Kadaluarsa")
+                        )
+                        invoice_update_result: Result = await db.execute(update_invoice_stmt)
+                        total_invoices_overdue += invoice_update_result.rowcount  # type: ignore
+
+                        # Update langganan menjadi Suspended (ini PASTI jalan)
+                        langganan.status = "Suspended"
+                        db.add(langganan)
+
+                        # Commit perubahan DB
+                        await db.commit()
+                        logger.info(f"✅ DB update SUKSES untuk Langganan ID: {langganan.id}. Status = Suspended.")
+
+                        total_services_suspended += 1
+
+                        if mikrotik_success:
+                            logger.info(f"🔒 Layanan SUKSES di-suspend lengkap (DB + Mikrotik) untuk: {langganan.pelanggan.nama}")
+                        else:
+                            logger.warning(f"⚠️ Layanan di-suspend di DB saja (Mikrotik gagal) untuk: {langganan.pelanggan.nama}")
+                            if mikrotik_error_msg:
+                                logger.warning(f"📝 Mikrotik error detail: {mikrotik_error_msg}")
+
+                    except Exception as db_error:
+                        # Ini ERROR SEVERE - tidak bisa update DB
+                        logger.error(f"❌ KRITIK: Gagal update DB untuk Langganan ID {langganan.id}. Error: {db_error}")
+                        await db.rollback()
+                        logger.error(f"🔄 Rollback DB SELESAI untuk Langganan ID: {langganan.id}.")
+                        # Lanjut ke pelanggan berikutnya
+                        continue
+
                 offset += BATCH_SIZE
 
             except Exception as e:
@@ -395,14 +480,14 @@ async def job_suspend_services() -> None:
             logger,
             "job_suspend_services",
             "completed",
-            f"Berhasil suspend {total_services_suspended} layanan dan mengubah {total_invoices_overdue} invoice menjadi Kadaluarsa.",
+            f"✅ Berhasil suspend {total_services_suspended} layanan dan mengubah {total_invoices_overdue} invoice menjadi Kadaluarsa. (Tanggal jatuh tempo: {target_due_date.strftime('%d %B %Y')})",
         )
     else:
         log_scheduler_event(
             logger,
             "job_suspend_services",
             "completed",
-            "Tidak ada layanan baru untuk di-suspend.",
+            f"✅ Tidak ada layanan baru untuk di-suspend. (Target tanggal jatuh tempo: {target_due_date.strftime('%d %B %Y')})",
         )
 
 
@@ -564,6 +649,208 @@ async def job_verify_payments() -> None:
             await db.rollback()
             error_details = traceback.format_exc()
             logger.error(f"[FAIL] Scheduler 'job_verify_payments' failed. Details:\n{error_details}")
+
+
+async def job_retry_failed_invoices() -> None:
+    """
+    Job scheduler buat retry invoice yang gagal dibuat payment link-nya.
+    Fokus pada invoice yang belum ada payment_link atau xendit_id-nya.
+
+    Logic yang dijalanin:
+    1. Cari invoice yang belum punya payment link (xendit_id = NULL)
+    2. Cek jumlah retry yang sudah dilakukan (max 3 kali)
+    3. Coba buat payment link lagi ke Xendit
+    4. Update status invoice jika berhasil
+    5. Notifikasi admin jika masih gagal setelah max retry
+
+    Aturan retry:
+    - Max 3 kali percobaan
+    - Interval 1 jam antara retry
+    - Skip invoice yang sudah lunas
+    - Log semua retry attempts
+
+    Integration:
+    - Xendit API untuk pembuatan payment link
+    - Email/notifikasi ke admin untuk monitoring
+    - Database update untuk tracking status
+    """
+    log_scheduler_event(logger, "job_retry_failed_invoices", "started")
+
+    MAX_RETRY = 3
+    RETRY_INTERVAL_HOURS = 1
+    BATCH_SIZE = 50
+    offset = 0
+    total_retried = 0
+    total_success = 0
+    total_failed = 0
+
+    async with SessionType() as db:
+        while True:
+            try:
+                # Cari invoice yang gagal (belum ada xendit_id)
+                stmt = (
+                    select(InvoiceModel)
+                    .where(
+                        InvoiceModel.xendit_id.is_(None),
+                        InvoiceModel.status_invoice == "Belum Dibayar",
+                        InvoiceModel.xendit_retry_count < MAX_RETRY,
+                    )
+                    .where(
+                        # Cek interval retry (1 jam sejak retry terakhir)
+                        (InvoiceModel.xendit_last_retry.is_(None)) |
+                        (
+                            InvoiceModel.xendit_last_retry <
+                            datetime.now() - timedelta(hours=RETRY_INTERVAL_HOURS)
+                        )
+                    )
+                    .options(
+                        selectinload(InvoiceModel.pelanggan).options(
+                            selectinload(PelangganModel.harga_layanan),
+                            selectinload(PelangganModel.data_teknis),
+                            selectinload(PelangganModel.langganan).selectinload(LanggananModel.paket_layanan),
+                        )
+                    )
+                    .order_by(InvoiceModel.created_at.desc())  # Prioritaskan yang paling lama
+                )
+
+                batch_stmt = stmt.offset(offset).limit(BATCH_SIZE)
+                failed_invoices = (await db.execute(batch_stmt)).scalars().unique().all()
+
+                if not failed_invoices:
+                    break
+
+                for invoice in failed_invoices:
+                    try:
+                        logger.info(f"🔄 Retrying invoice {invoice.invoice_number} (attempt {invoice.xendit_retry_count + 1}/{MAX_RETRY})")
+
+                        # Update status ke processing
+                        invoice.xendit_status = "processing"
+                        invoice.xendit_last_retry = datetime.now()
+                        db.add(invoice)
+                        await db.flush()
+
+                        # Siapkan data untuk retry
+                        pelanggan = invoice.pelanggan
+                        paket = pelanggan.langganan[0].paket_layanan if pelanggan.langganan else None
+                        brand = pelanggan.harga_layanan
+
+                        if not all([pelanggan, paket, brand]):
+                            raise ValueError("Data tidak lengkap untuk retry invoice")
+
+                        # Generate deskripsi yang sama seperti saat pembuatan awal
+                        jatuh_tempo_str = datetime.combine(invoice.tgl_jatuh_tempo, datetime.min.time()).strftime("%d/%m/%Y")
+                        deskripsi_xendit = (
+                            f"Biaya berlangganan internet up to {paket.kecepatan if paket else 'N/A'} Mbps "
+                            f"jatuh tempo pembayaran tanggal {jatuh_tempo_str}"
+                        )
+
+                        # Hitung pajak
+                        pajak_persen = float(brand.pajak) if brand else 0.0
+                        harga_dasar = float(paket.harga if paket else 0.0)
+                        pajak = math.floor(harga_dasar * (pajak_persen / 100) + 0.5)
+
+                        no_telp_xendit = f"+62{pelanggan.no_telp.lstrip('0')}" if pelanggan.no_telp else ""
+
+                        # Coba buat payment link lagi
+                        xendit_response = await create_invoice_with_rate_limit(
+                            invoice=invoice,
+                            pelanggan=pelanggan,
+                            paket=paket,
+                            deskripsi_xendit=deskripsi_xendit,
+                            pajak=pajak,
+                            no_telp_xendit=no_telp_xendit,
+                            priority=InvoicePriority.NORMAL  # Lower priority untuk retry
+                        )
+
+                        # Validasi response
+                        if not xendit_response or not xendit_response.get("id"):
+                            raise ValueError(f"Invalid Xendit response: {xendit_response}")
+
+                        # Update invoice dengan payment link
+                        invoice.payment_link = xendit_response.get("short_url", xendit_response.get("invoice_url"))
+                        invoice.xendit_id = xendit_response.get("id")
+                        invoice.xendit_external_id = xendit_response.get("external_id")
+                        invoice.xendit_status = "completed"
+                        invoice.xendit_error_message = None
+
+                        db.add(invoice)
+                        logger.info(f"✅ Invoice {invoice.invoice_number} BERHASIL dibuatkan payment link")
+                        logger.info(f"📱 Payment link: {invoice.payment_link}")
+                        logger.info(f"📱 WhatsApp notification sent to: {pelanggan.nama} ({pelanggan.no_telp})")
+
+                        total_success += 1
+
+                    except Exception as retry_error:
+                        # Increment retry count
+                        invoice.xendit_retry_count += 1
+                        invoice.xendit_status = "failed"
+                        invoice.xendit_error_message = str(retry_error)
+
+                        db.add(invoice)
+
+                        if invoice.xendit_retry_count >= MAX_RETRY:
+                            total_failed += 1
+                            logger.error(f"❌ Invoice {invoice.invoice_number} GAGAL setelah {MAX_RETRY} kali retry: {retry_error}")
+                            logger.error(f"📧 Mohon hubungi pelanggan {pelanggan.nama} secara manual")
+                        else:
+                            logger.warning(f"⚠️ Invoice {invoice.invoice_number} retry {invoice.xendit_retry_count}/{MAX_RETRY} gagal: {retry_error}")
+
+                    total_retried += 1
+
+                await db.commit()
+                offset += BATCH_SIZE
+
+            except Exception as e:
+                await db.rollback()
+                logger.error(f"[FAIL] Scheduler 'job_retry_failed_invoices' failed at offset {offset}. Details: {traceback.format_exc()}")
+                break
+
+    # Log hasil proses
+    if total_retried > 0:
+        log_scheduler_event(
+            logger,
+            "job_retry_failed_invoices",
+            "completed",
+            f"Processed {total_retried} invoices: {total_success} success, {total_failed} failed",
+        )
+
+        # Notifikasi admin jika ada yang masih gagal
+        if total_failed > 0:
+            logger.warning(f"🚨 ADMIN ALERT: {total_failed} invoices still failed after {MAX_RETRY} retries")
+            logger.warning("📧 Mohon periksa dan hubungi pelanggan secara manual")
+
+            # Kirim notifikasi real-time ke admin
+            try:
+                notification_data = {
+                    "title": "🚨 Invoice Retry Failed",
+                    "message": f"{total_failed} invoice masih gagal setelah {MAX_RETRY} kali retry. Mohon periksa dan hubungi pelanggan secara manual.",
+                    "type": "error",
+                    "timestamp": datetime.now().isoformat(),
+                    "data": {
+                        "failed_count": total_failed,
+                        "max_retry": MAX_RETRY,
+                        "action_url": "/invoices?filter=failed"
+                    }
+                }
+                # Dapatkan semua user dengan role admin dan super_admin
+                admin_users = manager.get_users_by_role("admin")
+                super_admin_users = manager.get_users_by_role("super_admin")
+                all_admin_users = list(set(admin_users + super_admin_users))  # Remove duplicates
+
+                if all_admin_users:
+                    await manager.broadcast_to_roles(notification_data, all_admin_users)
+                    logger.info(f"📢 Notifikasi error terkirim ke {len(all_admin_users)} admin via WebSocket")
+                else:
+                    logger.warning("⚠️ Tidak ada admin user yang aktif untuk notifikasi")
+            except Exception as notif_error:
+                logger.error(f"Gagal mengirim notifikasi ke admin: {notif_error}")
+    else:
+        log_scheduler_event(
+            logger,
+            "job_retry_failed_invoices",
+            "completed",
+            "No failed invoices to retry.",
+        )
 
 
 async def job_retry_mikrotik_syncs() -> None:

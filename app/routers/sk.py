@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from typing import List
 
-from ..models.sk import SK as SKModel
+from ..models.syarat_ketentuan import SyaratKetentuan as SKModel
 from ..schemas.sk import SK as SKSchema, SKCreate, SKUpdate
 from ..database import get_db
 

@@ -116,6 +116,12 @@ class Invoice(Base):
     xendit_external_id: Mapped[str | None] = mapped_column(String(191))  # External ID buat Xendit
     is_processing: Mapped[bool] = mapped_column(Boolean, default=False)  # Flag buat hindari duplicate processing
 
+    # Retry System - Tracking Invoice Gagal
+    xendit_retry_count: Mapped[int] = mapped_column(BigInteger, default=0)  # Jumlah retry yang sudah dilakukan
+    xendit_last_retry: Mapped[datetime | None] = mapped_column(DateTime)   # Waktu retry terakhir
+    xendit_error_message: Mapped[str | None] = mapped_column(Text)         # Error message terakhir
+    xendit_status: Mapped[str] = mapped_column(String(50), default="pending")  # pending/processing/completed/failed
+
     # Timestamps
     created_at: Mapped[datetime | None] = mapped_column(DateTime, server_default=func.now())  # Waktu invoice dibuat
     updated_at: Mapped[datetime | None] = mapped_column(
@@ -170,15 +176,15 @@ class Invoice(Base):
 
             # Sekarang invoice_date pasti Python date object yang valid
             if invoice_date.month == 12:
-                expiry_date = date(invoice_date.year + 1, 1, 6)
+                expiry_date = date(invoice_date.year + 1, 1, 4)  # Link aktif sampai tanggal 4
             else:
-                expiry_date = date(invoice_date.year, invoice_date.month + 1, 6)
+                expiry_date = date(invoice_date.year, invoice_date.month + 1, 4)  # Link aktif sampai tanggal 4
 
-            # Link aktif jika hari ini <= expiry_date (tanggal 6 atau sebelumnya)
+            # Link aktif jika hari ini <= expiry_date (tanggal 4 atau sebelumnya)
             if today <= expiry_date:
                 return "Belum Dibayar"
             else:
-                # Link expired jika hari ini > expiry_date (tanggal 7 atau setelahnya)
+                # Link expired jika hari ini > expiry_date (tanggal 5 atau setelahnya)
                 return "Expired"
 
         # Fallback ke status invoice yang ada
@@ -190,7 +196,7 @@ class Invoice(Base):
         Mengembalikan True jika link pembayaran masih aktif.
         Link aktif jika:
         - Status invoice "Belum Dibayar"
-        - Hari ini <= tanggal 6 bulan berikutnya
+        - Hari ini <= tanggal 4 bulan berikutnya (grace period sampai tanggal 4)
         """
         return self.get_payment_link_status() == "Belum Dibayar"
 

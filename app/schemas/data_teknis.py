@@ -1,6 +1,7 @@
 from pydantic import BaseModel, Field, validator
 from typing import Optional
 import re
+import logging
 
 
 # ====================================================================
@@ -179,21 +180,42 @@ class DataTeknisBase(BaseModel):
         if not v_str:
             return None
 
+        # Validasi panjang IP (max 15 karakter untuk format standar IPv4)
         if len(v_str) > 15:
-            raise ValueError("IP pelanggan terlalu panjang (maksimal 15 karakter)")
+            raise ValueError(f"IP terlalu panjang: {v_str}. Format standar IPv4 maksimal 15 karakter.")
 
-        # Basic IP validation
+        # Validasi format dasar - harus ada 3 titik
+        if v_str.count('.') != 3:
+            raise ValueError(f"Format IP tidak valid: {v_str}. Harus memiliki format xxx.xxx.xxx.xxx")
+
+        # Validasi karakter - hanya boleh angka dan titik
+        if not all(c.isdigit() or c == '.' for c in v_str):
+            raise ValueError(f"IP hanya boleh mengandung angka dan titik: {v_str}")
+
+        # Validasi setiap oktet
         ip_parts = v_str.split(".")
         if len(ip_parts) != 4:
-            raise ValueError("Format IP tidak valid")
+            raise ValueError(f"IP harus memiliki 4 oktet: {v_str}")
 
-        for part in ip_parts:
+        for i, part in enumerate(ip_parts):
+            # Validasi tidak ada oktet kosong
+            if part == "":
+                raise ValueError(f"Oktet ke-{i+1} kosong: {v_str}")
+
+            # Validasi panjang setiap oktet (max 3 digit)
+            if len(part) > 3:
+                raise ValueError(f"Oktet ke-{i+1} terlalu panjang: {part}")
+
+            # Validasi tidak ada leading zero (kecuali "0")
+            if len(part) > 1 and part.startswith('0'):
+                raise ValueError(f"Oktet ke-{i+1} tidak boleh ada leading zero: {part}")
+
             try:
                 num = int(part)
                 if num < 0 or num > 255:
-                    raise ValueError("Format IP tidak valid")
+                    raise ValueError(f"Oktet ke-{i+1} harus antara 0-255: {part}")
             except ValueError:
-                raise ValueError("Format IP tidak valid")
+                raise ValueError(f"Oktet ke-{i+1} harus angka: {part}")
 
         return v_str
 
@@ -334,7 +356,48 @@ class DataTeknisCreate(DataTeknisBase):
     def validate_ip_pelanggan_required(cls, v):
         if not v:
             raise ValueError("IP pelanggan tidak boleh kosong")
-        return v
+
+        # Gunakan validasi yang sama dengan validator utama
+        v_str = str(v).strip()
+
+        # Validasi panjang IP (max 15 karakter untuk format standar IPv4)
+        if len(v_str) > 15:
+            raise ValueError(f"IP terlalu panjang: {v_str}. Format standar IPv4 maksimal 15 karakter.")
+
+        # Validasi format dasar - harus ada 3 titik
+        if v_str.count('.') != 3:
+            raise ValueError(f"Format IP tidak valid: {v_str}. Harus memiliki format xxx.xxx.xxx.xxx")
+
+        # Validasi karakter - hanya boleh angka dan titik
+        if not all(c.isdigit() or c == '.' for c in v_str):
+            raise ValueError(f"IP hanya boleh mengandung angka dan titik: {v_str}")
+
+        # Validasi setiap oktet
+        ip_parts = v_str.split(".")
+        if len(ip_parts) != 4:
+            raise ValueError(f"IP harus memiliki 4 oktet: {v_str}")
+
+        for i, part in enumerate(ip_parts):
+            # Validasi tidak ada oktet kosong
+            if part == "":
+                raise ValueError(f"Oktet ke-{i+1} kosong: {v_str}")
+
+            # Validasi panjang setiap oktet (max 3 digit)
+            if len(part) > 3:
+                raise ValueError(f"Oktet ke-{i+1} terlalu panjang: {part}")
+
+            # Validasi tidak ada leading zero (kecuali "0")
+            if len(part) > 1 and part.startswith('0'):
+                raise ValueError(f"Oktet ke-{i+1} tidak boleh ada leading zero: {part}")
+
+            try:
+                num = int(part)
+                if num < 0 or num > 255:
+                    raise ValueError(f"Oktet ke-{i+1} harus antara 0-255: {part}")
+            except ValueError:
+                raise ValueError(f"Oktet ke-{i+1} harus angka: {part}")
+
+        return v_str
 
     @validator("mikrotik_server_id")
     def validate_mikrotik_server_id_required(cls, v):
@@ -528,21 +591,34 @@ class DataTeknisImport(BaseModel):
         if not v_str:
             raise ValueError("IP pelanggan tidak boleh kosong")
 
+        # Gunakan validasi strict yang sama
         if len(v_str) > 15:
-            raise ValueError("IP pelanggan terlalu panjang (maksimal 15 karakter)")
+            raise ValueError(f"IP terlalu panjang: {v_str}. Format standar IPv4 maksimal 15 karakter.")
 
-        # Basic IP validation
+        if v_str.count('.') != 3:
+            raise ValueError(f"Format IP tidak valid: {v_str}. Harus memiliki format xxx.xxx.xxx.xxx")
+
+        if not all(c.isdigit() or c == '.' for c in v_str):
+            raise ValueError(f"IP hanya boleh mengandung angka dan titik: {v_str}")
+
         ip_parts = v_str.split(".")
         if len(ip_parts) != 4:
-            raise ValueError("Format IP tidak valid")
+            raise ValueError(f"IP harus memiliki 4 oktet: {v_str}")
 
-        for part in ip_parts:
+        for i, part in enumerate(ip_parts):
+            if part == "":
+                raise ValueError(f"Oktet ke-{i+1} kosong: {v_str}")
+            if len(part) > 3:
+                raise ValueError(f"Oktet ke-{i+1} terlalu panjang: {part}")
+            if len(part) > 1 and part.startswith('0'):
+                raise ValueError(f"Oktet ke-{i+1} tidak boleh ada leading zero: {part}")
+
             try:
                 num = int(part)
                 if num < 0 or num > 255:
-                    raise ValueError("Format IP tidak valid")
+                    raise ValueError(f"Oktet ke-{i+1} harus antara 0-255: {part}")
             except ValueError:
-                raise ValueError("Format IP tidak valid")
+                raise ValueError(f"Oktet ke-{i+1} harus angka: {part}")
 
         return v_str
 

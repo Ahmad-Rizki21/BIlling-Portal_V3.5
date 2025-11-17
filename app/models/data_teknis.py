@@ -108,7 +108,7 @@ class DataTeknis(Base):
     speedtest_proof: Mapped[str | None] = mapped_column(String(191), nullable=True, index=True)  # Link bukti speedtest
 
     # Flag Sinkronisasi Mikrotik - Penting banget buat otomasi
-    mikrotik_sync_pending = Column(Boolean, default=False, nullable=False, index=True)  # True kalau perlu disync ke Mikrotik
+    mikrotik_sync_pending: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)  # True kalau perlu disync ke Mikrotik
 
     # Server Configuration
     mikrotik_server_id: Mapped[int | None] = mapped_column(ForeignKey("mikrotik_servers.id"), index=True)  # ID Mikrotik server

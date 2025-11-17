@@ -18,8 +18,8 @@ import os
 from typing import AsyncGenerator
 
 from dotenv import load_dotenv
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.orm import declarative_base
 
 # Setup logger buat monitoring database
 logger = logging.getLogger(__name__)
@@ -93,8 +93,8 @@ logger.info(f"📊 Pool Settings: size={POOL_SIZE}, overflow={MAX_OVERFLOW}, tot
 # Session factory buat bikin database session di setiap request
 # Config ini dioptimasi buat dashboard performance
 
-AsyncSessionLocal = sessionmaker(
-    bind=engine,
+AsyncSessionLocal = async_sessionmaker(
+    engine,
     class_=AsyncSession,        # Pake async session buat performa
     expire_on_commit=False,     # Jangan expire objects pas commit (biar bisa dipake lagi)
     autoflush=True,             # Auto flush untuk data consistency di dashboard

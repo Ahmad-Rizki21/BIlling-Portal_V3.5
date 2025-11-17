@@ -220,6 +220,36 @@ async def get_all_langganan(
     return LanggananListResponse(data=langganan_list, total_count=total_count)
 
 
+# GET /langganan/{langganan_id} - Ambil detail langganan
+# Buat ambil data detail satu langganan berdasarkan ID
+# Path parameters:
+# - langganan_id: ID langganan yang mau diambil
+# Response: data langganan lengkap dengan relasi pelanggan dan paket layanan
+# Error handling: 404 kalau langganan nggak ketemu
+# Performance: eager loading biar nggak N+1 query
+@router.get("/{langganan_id}", response_model=LanggananSchema)
+async def get_langganan_by_id(
+    langganan_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """Mengambil detail langganan berdasarkan ID."""
+    query = (
+        select(LanggananModel)
+        .where(LanggananModel.id == langganan_id)
+        .options(
+            joinedload(LanggananModel.pelanggan).joinedload(PelangganModel.harga_layanan),
+            joinedload(LanggananModel.paket_layanan),
+        )
+    )
+    result = await db.execute(query)
+    langganan = result.scalar_one_or_none()
+
+    if not langganan:
+        raise HTTPException(status_code=404, detail="Langganan tidak ditemukan")
+
+    return langganan
+
+
 # PATCH /langganan/{langganan_id} - Update data langganan
 # Buat update data langganan yang udah ada
 # Path parameters:
@@ -717,3 +747,5 @@ async def get_all_pelanggan_with_status(db: AsyncSession = Depends(get_db)):
         p.has_subscription = len(p.langganan) > 0
 
     return pelanggan
+
+

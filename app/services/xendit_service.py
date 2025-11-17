@@ -124,19 +124,19 @@ async def create_xendit_invoice(
     if target_key_name == "ajn-01":  # JAKINET -> Pakai JAKINET API key (ARTACOMINDO account)
         jakinet_key = settings.XENDIT_API_KEYS.get("JAKINET")
         if jakinet_key:
-            logger.info(f"📱 Using JAKINET API key (ARTACOMINDO account) for {pelanggan.nama} (JAKINET - ajn-01)")
+            logger.info(f" Using JAKINET API key (ARTACOMINDO account) for {pelanggan.nama} (JAKINET - ajn-01)")
             api_key = jakinet_key
 
     elif target_key_name == "ajn-02":  # JELANTIK -> Pakai JELANTIK API key (murni)
         jelantik_key = settings.XENDIT_API_KEYS.get("JELANTIK")
         if jelantik_key:
-            logger.info(f"📱 Using JELANTIK API key for {pelanggan.nama} (JELANTIK - ajn-02)")
+            logger.info(f" Using JELANTIK API key for {pelanggan.nama} (JELANTIK - ajn-02)")
             api_key = jelantik_key
 
     elif target_key_name == "ajn-03":  # JELANTIK NAGRAK -> Pakai JAKINET API key (pesan ke Jakinet)
         jakinet_key = settings.XENDIT_API_KEYS.get("JAKINET")
         if jakinet_key:
-            logger.info(f"📱 Using JAKINET API key (ARTACOMINDO account) for {pelanggan.nama} (JELANTIK NAGRAK - ajn-03)")
+            logger.info(f" Using JAKINET API key (ARTACOMINDO account) for {pelanggan.nama} (JELANTIK NAGRAK - ajn-03)")
             api_key = jakinet_key
 
     encoded_key = base64.b64encode(f"{api_key}:".encode("utf-8")).decode("utf-8")
@@ -207,21 +207,23 @@ async def create_xendit_invoice(
         "fees": [{"type": "Tax", "value": pajak}],
     }
 
-    # Logika external_id dinamis
-    brand_prefix_map = {"ajn-01": "Jakinet", "ajn-02": "Jelantik", "ajn-03": "Nagrak"}
+    # Logika external_id dinamis - CONSISTENT dengan invoice_number
+    brand_prefix_map = {"ajn-01": "JAKINET", "ajn-02": "JELANTIK", "ajn-03": "NAGRAK"}
 
     id_brand_pelanggan = brand_info.id_brand
     brand_prefix = brand_prefix_map.get(id_brand_pelanggan, brand_info.brand)
-    nama_user = pelanggan.nama.replace(" ", "")
-    lokasi_singkat = pelanggan.alamat.split(" ")[0] if pelanggan.alamat else "Lokasi"
 
-    
-    # Langsung format tanggal jatuh tempo dari invoice tanpa menambahkan bulan
-    bulan_tahun = invoice.tgl_jatuh_tempo.strftime("%B-%Y")  # type: ignore
+    # Gunakan format yang SAMA dengan invoice_number agar konsisten
+    import re
+    nama_user = re.sub(r'[^a-zA-Z0-9]', '', pelanggan.nama).upper()
+    lokasi_singkat = re.sub(r'[^a-zA-Z0-9]', '', pelanggan.alamat or '').upper()[:10]
 
+    # Format tanggal yang konsisten dengan invoice_number
+    bulan_tahun = invoice.tgl_jatuh_tempo.strftime("%B-%Y").upper()  # type: ignore
+
+    # External ID menggunakan format yang sama dengan invoice_number untuk konsistensi
+    # Ini akan menghasilkan ID yang konsisten antara Portal JAKINET dan Dashboard Xendit
     payload["external_id"] = f"{brand_prefix}/ftth/{nama_user}/{bulan_tahun}/{lokasi_singkat}/{invoice.id}"
-    # bulan_tahun = invoice.tgl_jatuh_tempo.strftime('%B-%Y')
-    # payload["external_id"] = f"{brand_prefix}/ftth/{nama_user}/{bulan_tahun}/{invoice.id}"
 
     logger.info(f"Payload yang dikirim ke Xendit: {json.dumps(payload, indent=2)}")
 
@@ -234,7 +236,7 @@ async def create_xendit_invoice(
 
             # DEBUG: Log WhatsApp status specifically
             if result.get("should_send_whatsapp") or result.get("customer_notification_preference"):
-                logger.info(f"📱 WhatsApp Notification Status:")
+                logger.info(f"  WhatsApp Notification Status:")
                 logger.info(f"   should_send_whatsapp: {result.get('should_send_whatsapp', 'Not in response')}")
                 logger.info(f"   notification_preference: {result.get('customer_notification_preference', 'Not in response')}")
                 logger.info(f"   customer_mobile: {result.get('customer', {}).get('mobile_number', 'Not in response')}")

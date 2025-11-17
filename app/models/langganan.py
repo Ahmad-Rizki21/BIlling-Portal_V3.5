@@ -78,6 +78,10 @@ class Langganan(Base):
 
     metode_pembayaran: Mapped[str] = mapped_column(String(50), default="Otomatis", index=True)
     harga_awal: Mapped[float | None] = mapped_column(Numeric(15, 2), index=True)
+    alasan_berhenti: Mapped[str | None] = mapped_column(String(500), nullable=True)  # Alasan berhenti opsional
+    status_modem: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)  # Status modem (Terpasang/Diambil)
+    whatsapp_status: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)  # Status WhatsApp (sent/pending)
+    last_whatsapp_sent: Mapped[datetime | None] = mapped_column(nullable=True, index=True)  # Terakhir kali WhatsApp dikirim
     created_at: Mapped[datetime | None] = mapped_column(server_default=func.now(), index=True)
     updated_at: Mapped[datetime | None] = mapped_column(server_default=func.now(), onupdate=func.now(), index=True)
 

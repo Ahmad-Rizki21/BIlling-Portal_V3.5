@@ -1,5 +1,5 @@
 # app/schemas/sk.py
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from datetime import datetime
 from typing import Optional
 
@@ -16,6 +16,17 @@ class SKCreate(SKBase):
 
 
 class SKUpdate(SKBase):
+    pass
+
+
+# Alias untuk backward compatibility dengan model lama
+class SyaratKetentuanBase(SKBase):
+    pass
+
+class SyaratKetentuanCreate(SyaratKetentuanBase):
+    pass
+
+class SyaratKetentuanUpdate(SyaratKetentuanBase):
     pass
 
 

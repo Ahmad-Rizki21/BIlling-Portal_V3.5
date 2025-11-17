@@ -46,6 +46,7 @@ from .database import AsyncSessionLocal, Base, engine, get_db, init_encryption
 # Import job-job terjadwal (auto-invoice, suspend, dll)
 from .jobs import (
     job_generate_invoices,      # Auto generate invoice H-5 jatuh tempo
+    job_retry_failed_invoices,  # Retry invoice yang gagal dibuat payment link
     job_retry_mikrotik_syncs,   # Retry sync mikrotik yang gagal
     job_send_payment_reminders, # Kirim reminder pembayaran
     job_suspend_services,       # Suspend layanan telat bayar
@@ -603,18 +604,34 @@ async def startup_event():
     #scheduler.add_job(job_suspend_services, 'cron', day=5, hour=0, minute=0, timezone='Asia/Jakarta', id="suspend_services_job", replace_existing=True)
     #==============================================================SUSPANDED AND UNSUSPANDED=======================================================================#
 
+    #==============================================================REMAINDERS INVOICE=======================================================================#
     # Mengirim pengingat pembayaran setiap hari jam 8 pagi.
     #scheduler.add_job(job_send_payment_reminders, 'cron', hour=8, minute=0, timezone='Asia/Jakarta', id="send_reminders_job", replace_existing=True)
+    #==============================================================REMAINDERS INVOICE=======================================================================#
 
+    #==============================================================NYARI INVOICE 3 HARI KE BELAKANG JIKA SERVER MATI=======================================================================#
     # Memverifikasi pembayaran yang mungkin terlewat setiap 15 menit.
     #scheduler.add_job(job_verify_payments, 'interval', minutes=15, id="verify_payments_job", replace_existing=True)
+    #==============================================================NYARI INVOICE 3 HARI KE BELAKANG JIKA SERVER MATI=======================================================================#
 
+
+    #==============================================================SINGKRONISASI PROSES MIKROTIK KE SERVER=======================================================================#
     # Mencoba ulang sinkronisasi Mikrotik yang gagal setiap 5 menit.
     #scheduler.add_job(job_retry_mikrotik_syncs, 'interval', minutes=5, id="retry_mikrotik_syncs_job", replace_existing=True)
+    #==============================================================SINGKRONISASI PROSES MIKROTIK KE SERVER=======================================================================#
 
+
+    #==============================================================MENGULANG PROSES INVOICEING JIKA GAGAL=======================================================================#
+    # Retry invoice yang gagal dibuat payment link setiap 1 jam
+    #scheduler.add_job(job_retry_failed_invoices, 'interval', hours=1, id="retry_failed_invoices_job", replace_existing=True)
+    #==============================================================MENGULANG PROSES INVOICEING JIKA GAGAL=======================================================================#
+
+    #==============================================================COLLECT TRAFFIC DARI MIKROTIK=======================================================================#
     # 5. Setup traffic monitoring jobs
     # from .jobs_traffic import setup_traffic_monitoring_jobs
     # setup_traffic_monitoring_jobs(scheduler)
+    #==============================================================COLLECT TRAFFIC DARI MIKROTIK=======================================================================#
+
     print("Traffic monitoring jobs telah dijadwalkan...")
 
     # 6. Mulai scheduler

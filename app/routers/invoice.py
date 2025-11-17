@@ -26,7 +26,7 @@ from ..auth import has_permission, get_current_active_user
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, selectinload
 from pydantic import ValidationError
 import logging
 
@@ -680,7 +680,20 @@ async def generate_manual_invoice(invoice_data: InvoiceGenerate, db: AsyncSessio
     jatuh_tempo_str = safe_format_date(jatuh_tempo_date, "%d/%m/%Y")
     jatuh_tempo_yyyymm = safe_format_date(jatuh_tempo_date, "%Y%m") or "202501"  # Default fallback
 
-    nomor_invoice = f"INV-{pelanggan.nama.replace(' ', '')}-{jatuh_tempo_yyyymm}-{uuid.uuid4().hex[:4].upper()}"
+    # --- MODIFICATION FOR INVOICE NUMBER ---
+    # 1. Sanitize customer name and address
+    import re
+    nama_pelanggan_singkat = re.sub(r'[^a-zA-Z0-9]', '', pelanggan.nama).upper()
+    alamat_singkat = re.sub(r'[^a-zA-Z0-9]', '', pelanggan.alamat or '').upper()[:10]  # Take only first 10 chars
+    brand_singkat = re.sub(r'[^a-zA-Z0-9]', '', brand.brand or '').upper()
+    # Convert SQLAlchemy Date to Python date for datetime.combine
+    from datetime import date, datetime
+    jatuh_tempo_python_date = date.fromisoformat(str(langganan.tgl_jatuh_tempo))
+    bulan_tahun = datetime.combine(jatuh_tempo_python_date, datetime.min.time()).strftime("%B-%Y").upper()
+
+    # 2. Generate new invoice number in format: BRAND/LAYANAN/NAMA_PELANGGAN/BULAN_TAHUN/ALAMAT_SINGKAT/IDPELANGGAN_LAST3
+    nomor_invoice = f"{brand_singkat}/ftth/{nama_pelanggan_singkat}/{bulan_tahun}/{alamat_singkat}/{str(data_teknis.id_pelanggan)[-3:]}"
+    # --- END OF MODIFICATION ---
 
     # Ambil total harga langsung dari data langganan yang sudah dihitung (prorate + PPN).
     total_harga = float(langganan.harga_awal or 0)
@@ -888,6 +901,336 @@ async def get_invoices_missing_payment_links(
 
     logger.info(f"Found {len(invoices)} invoices missing payment links")
     return invoices
+
+
+@router.post("/{invoice_id}/retry-xendit", response_model=dict)
+async def retry_invoice_xendit(
+    invoice_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user),
+    _: None = Depends(has_permission("edit_invoices")),
+):
+    """
+    Manual retry pembuatan payment link Xendit untuk invoice yang gagal.
+    Endpoint ini untuk admin agar bisa retry invoice yang gagal secara manual.
+
+    Parameters:
+    - invoice_id: ID invoice yang mau di-retry
+
+    Returns:
+    - success: status retry
+    - message: pesan hasilnya
+    - payment_link: link pembayaran jika berhasil
+
+    Process:
+    1. Cek invoice harus ada dan belum punya payment link
+    2. Reset retry count ke 0
+    3. Coba buat payment link lagi ke Xendit
+    4. Update invoice jika berhasil
+    """
+    from math import floor
+
+    # Load invoice dengan semua relasi yang dibutuhkan
+    stmt = (
+        select(InvoiceModel)
+        .where(InvoiceModel.id == invoice_id)
+        .options(
+            joinedload(InvoiceModel.pelanggan).options(
+                joinedload(PelangganModel.harga_layanan),
+                joinedload(PelangganModel.langganan).joinedload(LanggananModel.paket_layanan),
+                joinedload(PelangganModel.data_teknis),
+            )
+        )
+    )
+    invoice = (await db.execute(stmt)).unique().scalar_one_or_none()
+
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice tidak ditemukan")
+
+    if invoice.xendit_id and invoice.payment_link:
+        raise HTTPException(status_code=400, detail="Invoice ini sudah punya payment link")
+
+    if invoice.status_invoice == "Lunas":
+        raise HTTPException(status_code=400, detail="Invoice sudah lunas")
+
+    try:
+        pelanggan = invoice.pelanggan
+        if not pelanggan or not pelanggan.langganan:
+            raise HTTPException(status_code=400, detail="Data pelanggan/langganan tidak lengkap")
+
+        paket = pelanggan.langganan[0].paket_layanan
+        brand = pelanggan.harga_layanan
+        data_teknis = pelanggan.data_teknis
+
+        if not all([paket, brand, data_teknis]):
+            raise HTTPException(status_code=400, detail="Data paket/brand/data teknis tidak lengkap")
+
+        # Reset retry count untuk manual retry
+        invoice.xendit_retry_count = 0
+        invoice.xendit_status = "processing"
+        invoice.xendit_last_retry = datetime.now()
+        await db.flush()
+
+        # Generate deskripsi yang sama seperti generate_single_invoice
+        # Convert SQLAlchemy Date ke Python 
+        try:
+            jatuh_tempo_date = date.fromisoformat(str(invoice.tgl_jatuh_tempo))
+            invoice_date = date.fromisoformat(str(invoice.tgl_invoice))
+        except (ValueError, TypeError):
+            jatuh_tempo_date = date.today()
+            invoice_date = date.today()
+
+        jatuh_tempo_str = datetime.combine(jatuh_tempo_date, datetime.min.time()).strftime("%d/%m/%Y")
+
+        if pelanggan.langganan[0].metode_pembayaran == "Prorate":
+            deskripsi_xendit = (
+                f"Biaya berlangganan internet up to {paket.kecepatan} Mbps, "
+                f"Periode Tgl {invoice_date.day}-{jatuh_tempo_date.day} "
+                f"{jatuh_tempo_date.strftime('%B %Y')}"
+            )
+        else:  # Otomatis
+            deskripsi_xendit = (
+                f"Biaya berlangganan internet up to {paket.kecepatan} Mbps "
+                f"jatuh tempo pembayaran tanggal {jatuh_tempo_str}"
+            )
+
+        # Hitung pajak
+        pajak_persen = float(brand.pajak)
+        harga_dasar = float(paket.harga)
+        pajak = floor(harga_dasar * (pajak_persen / 100) + 0.5)
+
+        no_telp_xendit = f"+62{pelanggan.no_telp.lstrip('0')}" if pelanggan.no_telp else ""
+
+        # Coba buat payment link lagi
+        xendit_response = await create_invoice_with_rate_limit(
+            invoice=invoice,
+            pelanggan=pelanggan,
+            paket=paket,
+            deskripsi_xendit=deskripsi_xendit,
+            pajak=pajak,
+            no_telp_xendit=no_telp_xendit,
+            priority=InvoicePriority.HIGH  # High priority untuk manual retry
+        )
+
+        # Validasi response
+        if not xendit_response or not xendit_response.get("id"):
+            raise ValueError(f"Invalid Xendit response: {xendit_response}")
+
+        # Update invoice dengan payment link
+        invoice.payment_link = xendit_response.get("short_url", xendit_response.get("invoice_url"))
+        invoice.xendit_id = xendit_response.get("id")
+        invoice.xendit_external_id = xendit_response.get("external_id")
+        invoice.xendit_status = "completed"
+        invoice.xendit_error_message = None
+
+        await db.commit()
+
+        logger.info(f"✅ Manual retry SUCCESS: Invoice {invoice.invoice_number} - {pelanggan.nama}")
+        logger.info(f"📱 Payment link: {invoice.payment_link}")
+
+        return {
+            "success": True,
+            "message": f"Payment link berhasil dibuat untuk invoice {invoice.invoice_number}",
+            "payment_link": invoice.payment_link,
+            "xendit_id": invoice.xendit_id,
+            "pelanggan": pelanggan.nama
+        }
+
+    except Exception as e:
+        await db.rollback()
+
+        # Update error tracking
+        invoice.xendit_retry_count += 1
+        invoice.xendit_status = "failed"
+        invoice.xendit_error_message = str(e)
+        await db.commit()
+
+        logger.error(f"❌ Manual retry FAILED: Invoice {invoice.invoice_number} - {str(e)}")
+
+        raise HTTPException(
+            status_code=500,
+            detail=f"Gagal membuat payment link: {str(e)}"
+        )
+
+
+@router.post("/batch-retry-xendit", response_model=dict)
+async def batch_retry_failed_invoices(
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user),
+    _: None = Depends(has_permission("edit_invoices")),
+):
+    """
+    Batch retry untuk semua invoice yang gagal (belum ada payment link).
+    Endpoint ini untuk admin agar bisa retry semua invoice gagal sekaligus.
+
+    Returns:
+    - total_processed: total invoice yang diproses
+    - success_count: jumlah yang berhasil
+    - failed_count: jumlah yang gagal
+    - results: detail hasil per invoice
+    """
+    from math import floor
+
+    # Cari semua invoice yang belum ada payment link-nya
+    stmt = (
+        select(InvoiceModel)
+        .where(
+            InvoiceModel.payment_link.is_(None),
+            InvoiceModel.status_invoice == "Belum Dibayar"
+        )
+        .options(
+            joinedload(InvoiceModel.pelanggan).options(
+                joinedload(PelangganModel.harga_layanan),
+                joinedload(PelangganModel.langganan).joinedload(LanggananModel.paket_layanan),
+                joinedload(PelangganModel.data_teknis),
+            )
+        )
+        .order_by(InvoiceModel.created_at.desc())
+        .limit(50)  # Batasi max 50 invoice per batch
+    )
+
+    invoices = (await db.execute(stmt)).unique().scalars().all()
+
+    if not invoices:
+        return {
+            "success": True,
+            "message": "Tidak ada invoice yang perlu di-retry",
+            "total_processed": 0,
+            "success_count": 0,
+            "failed_count": 0,
+            "results": []
+        }
+
+    total_processed = len(invoices)
+    success_count = 0
+    failed_count = 0
+    results = []
+
+    logger.info(f"🔄 Starting batch retry for {total_processed} invoices by user {current_user.name}")
+
+    for invoice in invoices:
+        try:
+            pelanggan = invoice.pelanggan
+            if not pelanggan or not pelanggan.langganan:
+                results.append({
+                    "invoice_id": invoice.id,
+                    "invoice_number": invoice.invoice_number,
+                    "success": False,
+                    "message": "Data pelanggan/langganan tidak lengkap"
+                })
+                failed_count += 1
+                continue
+
+            paket = pelanggan.langganan[0].paket_layanan
+            brand = pelanggan.harga_layanan
+
+            if not all([paket, brand]):
+                results.append({
+                    "invoice_id": invoice.id,
+                    "invoice_number": invoice.invoice_number,
+                    "success": False,
+                    "message": "Data paket/brand tidak lengkap"
+                })
+                failed_count += 1
+                continue
+
+            # Reset retry count
+            invoice.xendit_retry_count = 0
+            invoice.xendit_status = "processing"
+            invoice.xendit_last_retry = datetime.now()
+            await db.flush()
+
+            # Generate deskripsi
+            # Convert SQLAlchemy Date ke Python date dengan aman
+            try:
+                jatuh_tempo_date = date.fromisoformat(str(invoice.tgl_jatuh_tempo))
+                invoice_date = date.fromisoformat(str(invoice.tgl_invoice))
+            except (ValueError, TypeError):
+                jatuh_tempo_date = date.today()
+                invoice_date = date.today()
+
+            jatuh_tempo_str = datetime.combine(jatuh_tempo_date, datetime.min.time()).strftime("%d/%m/%Y")
+
+            if pelanggan.langganan[0].metode_pembayaran == "Prorate":
+                deskripsi_xendit = (
+                    f"Biaya berlangganan internet up to {paket.kecepatan} Mbps, "
+                    f"Periode Tgl {invoice_date.day}-{jatuh_tempo_date.day} "
+                    f"{jatuh_tempo_date.strftime('%B %Y')}"
+                )
+            else:
+                deskripsi_xendit = (
+                    f"Biaya berlangganan internet up to {paket.kecepatan} Mbps "
+                    f"jatuh tempo pembayaran tanggal {jatuh_tempo_str}"
+                )
+
+            # Hitung pajak
+            pajak_persen = float(brand.pajak)
+            harga_dasar = float(paket.harga)
+            pajak = floor(harga_dasar * (pajak_persen / 100) + 0.5)
+
+            no_telp_xendit = f"+62{pelanggan.no_telp.lstrip('0')}" if pelanggan.no_telp else ""
+
+            # Coba buat payment link
+            xendit_response = await create_invoice_with_rate_limit(
+                invoice=invoice,
+                pelanggan=pelanggan,
+                paket=paket,
+                deskripsi_xendit=deskripsi_xendit,
+                pajak=pajak,
+                no_telp_xendit=no_telp_xendit,
+                priority=InvoicePriority.NORMAL
+            )
+
+            if xendit_response and xendit_response.get("id"):
+                # Update invoice
+                invoice.payment_link = xendit_response.get("short_url", xendit_response.get("invoice_url"))
+                invoice.xendit_id = xendit_response.get("id")
+                invoice.xendit_external_id = xendit_response.get("external_id")
+                invoice.xendit_status = "completed"
+                invoice.xendit_error_message = None
+
+                results.append({
+                    "invoice_id": invoice.id,
+                    "invoice_number": invoice.invoice_number,
+                    "success": True,
+                    "message": "Payment link berhasil dibuat",
+                    "payment_link": invoice.payment_link,
+                    "pelanggan": pelanggan.nama
+                })
+                success_count += 1
+
+                logger.info(f"✅ Batch retry SUCCESS: {invoice.invoice_number} - {pelanggan.nama}")
+            else:
+                raise ValueError("Invalid Xendit response")
+
+        except Exception as e:
+            # Update error tracking
+            invoice.xendit_retry_count += 1
+            invoice.xendit_status = "failed"
+            invoice.xendit_error_message = str(e)
+
+            results.append({
+                "invoice_id": invoice.id,
+                "invoice_number": invoice.invoice_number,
+                "success": False,
+                "message": str(e)
+            })
+            failed_count += 1
+
+            logger.error(f"❌ Batch retry FAILED: {invoice.invoice_number} - {str(e)}")
+
+    await db.commit()
+
+    logger.info(f"🏁 Batch retry completed: {success_count} success, {failed_count} failed")
+
+    return {
+        "success": True,
+        "message": f"Batch retry selesai: {success_count} berhasil, {failed_count} gagal",
+        "total_processed": total_processed,
+        "success_count": success_count,
+        "failed_count": failed_count,
+        "results": results
+    }
 
 
 # DELETE /invoices/{invoice_id} - Hapus invoice
@@ -1399,8 +1742,8 @@ async def get_invoice_generation_status(
         )
     )
 
-    total = total_today.scalar()
-    success = with_payment_link.scalar()
+    total = total_today.scalar() or 0
+    success = with_payment_link.scalar() or 0
     failed = total - success
 
     return {
