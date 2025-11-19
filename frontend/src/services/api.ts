@@ -7,8 +7,8 @@ import { getEncryptedToken, removeEncryptedToken } from '@/utils/crypto';
 // Konfigurasi instance axios
 const apiClient = axios.create({
   // Gunakan environment variable untuk production
-  baseURL: '/api', // Jika ingin build lalu Upload ke Server
-  // baseURL: 'http://127.0.0.1:8000', // Local
+  // baseURL: '/api', // Jika ingin build lalu Upload ke Server
+  baseURL: 'http://127.0.0.1:8000', // Local
   timeout: 30000,
 });
 

@@ -1028,21 +1028,31 @@ function connectWebSocket() {
   if (!authStore.token || (socket && socket.readyState === WebSocket.OPEN)) {
     return;
   }
-  
+
   if (reconnectTimeout) clearTimeout(reconnectTimeout);
-  
+
   const token = authStore.token;
+
+  // Validasi token sebelum connect
+  if (!token || token.length < 10) {
+    console.warn('[WebSocket] Token tidak valid atau terlalu pendek');
+    return;
+  }
+
   const hostname = window.location.hostname;
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   let wsUrl = '';
 
+  // Encode token untuk URL safety
+  const encodedToken = encodeURIComponent(token);
+
   if (hostname === 'billingftth.my.id') {
-      wsUrl = `${protocol}//${hostname}/ws/notifications?token=${token}`;
+      wsUrl = `${protocol}//${hostname}/ws/notifications?token=${encodedToken}`;
   } else {
       const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
       const wsProtocol = API_BASE_URL.startsWith('https') ? 'wss:' : 'ws:';
       const wsHost = API_BASE_URL.replace(/^https?:\/\//, '');
-      wsUrl = `${wsProtocol}//${wsHost}/ws/notifications?token=${token}`; 
+      wsUrl = `${wsProtocol}//${wsHost}/ws/notifications?token=${encodedToken}`;
   }
 
   socket = new WebSocket(wsUrl);
@@ -1203,7 +1213,7 @@ function connectWebSocket() {
   };
 
   socket.onclose = (event) => {
-    console.warn(`[WebSocket] Koneksi ditutup: Kode ${event.code}`);
+    console.warn(`[WebSocket] Koneksi ditutup: Kode ${event.code}, Reason: ${event.reason || 'No reason provided'}`);
     socket = null;
 
     if (pingInterval) clearInterval(pingInterval);
@@ -1213,21 +1223,37 @@ function connectWebSocket() {
                                event.reason === "Connection replaced" ||
                                event.reason === "Logout Pengguna" ||
                                event.reason?.includes("Invalid token") ||
-                               event.reason?.includes("Token decode failed");
+                               event.reason?.includes("Token decode failed") ||
+                               event.reason?.includes("Token expired") ||
+                               event.reason?.includes("Token signature invalid");
 
-    if (event.code === 1008 || event.reason?.includes("Invalid token") || event.reason?.includes("Token decode failed")) {
-      console.warn('[WebSocket] Token invalid, forcing logout...');
+    // Handle token-related errors with better feedback
+    if (event.code === 1008 || event.reason?.includes("Invalid token") || event.reason?.includes("Token decode failed") || event.reason?.includes("Token expired") || event.reason?.includes("Token signature invalid")) {
+      console.warn('[WebSocket] Token invalid atau expired, forcing logout...');
+      console.warn(`[WebSocket] Error details: Code=${event.code}, Reason=${event.reason}`);
+
+      // Clear tokens and logout
       localStorage.removeItem('access_token');
       localStorage.removeItem('refresh_token');
+
+      // Clear any pending reconnect attempts
+      if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout);
+        reconnectTimeout = null;
+      }
+
       authStore.logout();
       router.push('/login');
       return;
     }
 
+    // Only reconnect if user is still authenticated and reconnection is allowed
     if (authStore.isAuthenticated && !shouldNotReconnect) {
       if (event.code === 1008) {
+        // Token error - use refresh token approach
         reconnectTimeout = setTimeout(refreshTokenAndReconnect, 1000);
       } else {
+        // Other errors - standard reconnection
         reconnectTimeout = setTimeout(connectWebSocket, 5000);
       }
     }

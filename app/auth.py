@@ -592,13 +592,33 @@ async def get_user_from_token(token: str, db: AsyncSession) -> User | None:
     - Prevent connection kalau token invalid
     - Load permissions buat WebSocket authorization
     """
+    # Validasi token format sebelum decode
+    if not token or not isinstance(token, str):
+        return None
+
+    # Handle URL encoded token
+    import urllib.parse
     try:
-        payload = verify_access_token(token)
+        decoded_token = urllib.parse.unquote(token)
+    except Exception:
+        decoded_token = token
+
+    # Additional validation for token length and format
+    if len(decoded_token) < 10:
+        return None
+
+    try:
+        payload = verify_access_token(decoded_token)
         user_id: str = payload.get("sub")
         if user_id is None:
             return None
-    except (JWTError, ValueError, TypeError):
+    except (JWTError, ValueError, TypeError) as e:
         # Return None instead of raising exception for WebSocket compatibility
+        # Log error untuk debugging tanpa expose sensitive data
+        import logging
+        logger = logging.getLogger("app.websocket")
+        token_preview = decoded_token[:20] + "..." if len(decoded_token) > 20 else decoded_token
+        logger.debug(f"Token validation failed in get_user_from_token - Token preview: {token_preview}")
         return None
 
     # Ambil user dari database
@@ -606,6 +626,9 @@ async def get_user_from_token(token: str, db: AsyncSession) -> User | None:
         query = select(User).where(User.id == int(user_id)).options(selectinload(User.role).selectinload(Role.permissions))
         user = (await db.execute(query)).scalar_one_or_none()
         return user
-    except (ValueError, Exception):
+    except (ValueError, Exception) as e:
         # Handle conversion errors and database errors
+        import logging
+        logger = logging.getLogger("app.websocket")
+        logger.debug(f"Database query failed in get_user_from_token: {type(e).__name__}")
         return None

@@ -488,23 +488,38 @@ async def websocket_notifications(websocket: WebSocket, token: str = Query(...))
         # Verifikasi token dan dapatkan user
         user = await get_user_from_token(token, db)
         if not user:
+            # Handle URL encoded token
+            import urllib.parse
+            try:
+                decoded_token = urllib.parse.unquote(token)
+            except Exception:
+                decoded_token = token
+
             # Log detail token untuk debugging (hanya sebagian untuk security)
-            token_preview = token[:20] + "..." if len(token) > 20 else token
-            logger.error(f"[{endpoint_name}] Invalid token provided - Token preview: {token_preview}")
+            token_preview = decoded_token[:20] + "..." if len(decoded_token) > 20 else decoded_token
+            logger.warning(f"[{endpoint_name}] Invalid token provided - Token preview: {token_preview}, Length: {len(decoded_token)}")
 
             # Coba decode token untuk melihat expiry dan beri feedback yang lebih berguna
             try:
                 from .auth import verify_access_token
-                payload = verify_access_token(token)
+                payload = verify_access_token(decoded_token)
                 exp = payload.get('exp', 'unknown')
                 exp_time = datetime.fromtimestamp(exp) if isinstance(exp, (int, float)) else 'unknown'
-                logger.error(f"[{endpoint_name}] Token decode successful but user not found. Expiry: {exp_time}")
+                logger.warning(f"[{endpoint_name}] Token decode successful but user not found. Expiry: {exp_time}")
 
                 # Kirim pesan error yang lebih informatif ke client
-                await websocket.close(code=4401, reason="Token expired or invalid - Please refresh your page and login again")
+                await websocket.close(code=4401, reason="Token valid but user not found - Please refresh your page and login again")
             except Exception as decode_error:
-                logger.error(f"[{endpoint_name}] Token decode failed: {str(decode_error)}")
-                await websocket.close(code=4400, reason="Invalid token format - Please refresh your page and login again")
+                error_type = type(decode_error).__name__
+                logger.warning(f"[{endpoint_name}] Token decode failed ({error_type}): {str(decode_error)}")
+
+                # Berikan pesan error yang lebih spesifik berdasarkan tipe error
+                if "expired" in str(decode_error).lower():
+                    await websocket.close(code=4401, reason="Token expired - Please refresh your page and login again")
+                elif "signature" in str(decode_error).lower():
+                    await websocket.close(code=4400, reason="Token signature invalid - Please refresh your page and login again")
+                else:
+                    await websocket.close(code=4400, reason="Invalid token format - Please refresh your page and login again")
             return
 
         logger.info(f"[{endpoint_name}] Authentication successful: {user.name} (ID: {user.id}, Email: {user.email})")
