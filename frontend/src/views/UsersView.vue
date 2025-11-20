@@ -89,14 +89,27 @@
             ></v-select>
           </v-col>
           <v-col cols="12" md="2">
-            <v-btn 
-              variant="outlined" 
+            <v-btn
+              variant="outlined"
               @click="clearFilters"
               class="text-none"
               block
             >
               <v-icon start>mdi-filter-remove</v-icon>
               Clear
+            </v-btn>
+          </v-col>
+          <v-col cols="12" md="2">
+            <v-btn
+              variant="flat"
+              color="primary"
+              @click="refreshData"
+              class="text-none"
+              block
+              :loading="loading"
+            >
+              <v-icon start>mdi-refresh</v-icon>
+              Refresh
             </v-btn>
           </v-col>
         </v-row>
@@ -272,16 +285,31 @@
               </v-col>
               
               <v-col cols="12" md="6">
-                <v-text-field 
-                  v-model="editedItem.password" 
-                  label="Password" 
+                <v-text-field
+                  v-model="editedItem.password"
+                  label="Password"
                   type="password"
                   variant="outlined"
                   prepend-inner-icon="mdi-lock"
-                  :placeholder="editedIndex > -1 ? 'Kosongkan jika tidak ingin mengubah' : 'Masukkan password'"
+                  :placeholder="editedIndex > -1 ? 'Kosongkan jika tidak ingin mengubah' : 'Contoh: MyPassword123!'"
                   :rules="passwordRules"
                   hide-details="auto"
-                ></v-text-field>
+                >
+                  <template v-slot:append-inner v-if="editedIndex === -1">
+                    <v-tooltip>
+                      <template v-slot:activator="{ props }">
+                        <v-icon v-bind="props" color="info" size="20">mdi-information</v-icon>
+                      </template>
+                      <div>Password harus mengandung:</div>
+                      <div>• Minimal 8 karakter</div>
+                      <div>• Huruf kapital (A-Z)</div>
+                      <div>• Huruf kecil (a-z)</div>
+                      <div>• Angka (0-9)</div>
+                      <div>• Karakter khusus (!@#$%^&*)</div>
+                      <div>• Tanpa spasi</div>
+                    </v-tooltip>
+                  </template>
+                </v-text-field>
               </v-col>
               
               <v-col cols="12" md="6">
@@ -555,15 +583,15 @@ const formTitle = computed(() => ({
 
 const filteredUsers = computed(() => {
   let filtered = users.value;
-  
+
   if (searchQuery.value) {
     const query = searchQuery.value.toLowerCase();
-    filtered = filtered.filter(user => 
-      user.name.toLowerCase().includes(query) || 
+    filtered = filtered.filter(user =>
+      user.name.toLowerCase().includes(query) ||
       user.email.toLowerCase().includes(query)
     );
   }
-  
+
   if (filterRole.value) {
     if (filterRole.value === 'no-role') {
       filtered = filtered.filter(user => !user.role_id);
@@ -571,7 +599,7 @@ const filteredUsers = computed(() => {
       filtered = filtered.filter(user => user.role_id?.toString() === filterRole.value);
     }
   }
-  
+
   return filtered;
 });
 
@@ -623,8 +651,10 @@ const passwordRules = computed(() => {
     rules.push((v: string) => /[A-Z]/.test(v) || 'Password harus mengandung minimal 1 huruf kapital');
     rules.push((v: string) => /[a-z]/.test(v) || 'Password harus mengandung minimal 1 huruf kecil');
     rules.push((v: string) => /[0-9]/.test(v) || 'Password harus mengandung minimal 1 angka');
+    rules.push((v: string) => /[!@#$%^&*(),.?":{}|<>]/.test(v) || 'Password harus mengandung minimal 1 karakter khusus');
+    rules.push((v: string) => !/\s/.test(v) || 'Password tidak boleh mengandung spasi');
   }
-  
+
   return rules;
 });
 
@@ -682,6 +712,15 @@ function clearFilters(): void {
   filterRole.value = null;
 }
 
+async function refreshData(): Promise<void> {
+  // Force refresh dengan clear cache
+  users.value = [];
+  roles.value = [];
+  await new Promise(resolve => setTimeout(resolve, 100));
+  await fetchUsers();
+  await fetchRoles();
+}
+
 // --- Lifecycle ---
 onMounted(() => {
   fetchUsers();
@@ -692,7 +731,12 @@ onMounted(() => {
 async function fetchUsers() {
   loading.value = true;
   try {
-    const response = await apiClient.get('/users/');
+    // Fetch all users by setting a high limit
+    const response = await apiClient.get('/users/', {
+      params: {
+        limit: 1000 // Get all users
+      }
+    });
     users.value = response.data;
   } catch (error) {
     console.error('Gagal mengambil data users:', error);
@@ -754,7 +798,7 @@ async function saveUser() {
     if (!payload.password) {
       delete payload.password;
     }
-    
+
     if (payload.role_id) {
       payload.role_id = parseInt(payload.role_id, 10);
     } else {
@@ -776,8 +820,35 @@ async function saveUser() {
     }
     await fetchUsers();
     closeDialog();
-  } catch (error) {
+  } catch (error: any) {
     console.error('Gagal menyimpan user:', error);
+
+    // Handle specific error cases
+    let errorMessage = 'Terjadi kesalahan saat menyimpan user.';
+
+    if (error.response?.status === 422) {
+      const errorData = error.response.data;
+
+      if (errorData.error && errorData.error.includes('Password')) {
+        errorMessage = 'Password tidak memenuhi syarat keamanan:\n' +
+          '• Minimal 8 karakter\n' +
+          '• Mengandung huruf kapital (A-Z)\n' +
+          '• Mengandung huruf kecil (a-z)\n' +
+          '• Mengandung angka (0-9)\n' +
+          '• Mengandung karakter khusus (!@#$%^&*(),.?":{}|<>)\n' +
+          '• Tidak boleh mengandung spasi';
+      } else if (errorData.error && errorData.error.includes('email')) {
+        errorMessage = 'Email sudah digunakan oleh user lain.';
+      } else if (errorData.detail) {
+        errorMessage = typeof errorData.detail === 'string'
+          ? errorData.detail
+          : JSON.stringify(errorData.detail);
+      }
+    } else if (error.response?.status === 409) {
+      errorMessage = 'User dengan email tersebut sudah ada.';
+    }
+
+    alert(errorMessage);
   } finally {
     saving.value = false;
   }

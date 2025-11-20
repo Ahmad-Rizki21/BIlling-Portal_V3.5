@@ -64,6 +64,8 @@ class User(Base):
     # Security & Token Management
     revoked_before: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)      # Waktu revokasi token
     password_changed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)  # Waktu password terakhir diubah
+    reset_token: Mapped[str | None] = mapped_column(String(255), nullable=True)          # Token untuk reset password
+    reset_token_expires: Mapped[datetime | None] = mapped_column(DateTime, nullable=True) # Waktu expiry reset token
 
     # Timestamps
     created_at: Mapped[datetime | None] = mapped_column(DateTime, server_default=func.now())  # Waktu user dibuat
