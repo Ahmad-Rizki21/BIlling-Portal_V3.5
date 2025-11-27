@@ -112,12 +112,12 @@ function backToLogin() {
 </script>
 
 <template>
-  <div class="min-h-screen gradient-bg flex items-center justify-center p-6 md:p-12">
+  <div class="min-h-screen gradient-bg flex flex-col items-center justify-center p-6 md:p-12 relative pb-20">
     <!-- Main Login Card -->
-    <div class="w-full max-w-7xl flex rounded-3xl overflow-hidden login-card-enhanced relative z-10 mx-auto" style="width: 95vw; max-width: 1200px;">
+    <div class="w-full max-w-7xl flex overflow-hidden login-card-enhanced relative z-10 mx-auto" style="width: 95vw; max-width: 1200px; border-radius: 1.5rem 1.5rem 0 0; position: relative; overflow: visible;">
 
       <!-- Login Form - Left Side (LoginForm.js) -->
-      <div class="w-full lg:w-[60%] glass-effect px-4 sm:px-6 md:px-8 lg:px-12 py-6 sm:py-8 flex flex-col" data-name="login-form">
+      <div class="w-full lg:w-[60%] glass-effect px-4 sm:px-6 md:px-8 lg:px-12 py-6 sm:py-8 flex flex-col">
         <div class="w-full max-w-md mx-auto">
           <div class="logo-header mb-4">
             <h2 class="text-lg font-semibold text-black pb-1 border-b-2 border-gray-300 inline-block">
@@ -224,7 +224,7 @@ function backToLogin() {
 
             <button
               type="submit"
-              class="w-full rounded font-medium flex items-center justify-center"
+              class="w-full rounded font-medium flex items-center justify-center hover:opacity-90 transition-opacity duration-200"
               style="
                 background: #0d2691;
                 color: white;
@@ -236,8 +236,6 @@ function backToLogin() {
                 box-shadow: 0 4px 14px rgba(13, 38, 145, 0.3);
                 transition: all 0.2s ease;
               "
-              onmouseover="this.style.opacity='0.9'"
-              onmouseout="this.style.opacity='1'"
             >
               LOG IN
             </button>
@@ -320,7 +318,7 @@ function backToLogin() {
               <i class="lucide lucide-refresh-cw text-base mr-2"></i>
               <span v-if="loading" class="inline-flex items-center">
                 <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                   <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
                 Processing...
@@ -342,8 +340,9 @@ function backToLogin() {
         </div>
       </div>
 
+      
       <!-- Welcome Panel - Right Side (WelcomePanel.js) -->
-      <div class="hidden lg:flex lg:w-[40%] blue-gradient-bg relative overflow-hidden items-center justify-center" data-name="welcome-panel">
+      <div class="hidden lg:flex lg:w-[40%] blue-gradient-bg relative overflow-hidden items-center justify-center">
         <div class="absolute inset-0">
           <div class="absolute -top-32 -right-32 w-[400px] h-[400px] bg-blue-400 rounded-full opacity-30 blur-3xl"></div>
           <div class="absolute top-20 right-20 w-[350px] h-[350px] bg-blue-500 rounded-full opacity-25 blur-3xl"></div>
@@ -365,6 +364,58 @@ function backToLogin() {
           <p class="text-base opacity-90 max-w-sm mx-auto leading-relaxed">
             PORTAL FTTH & BILLING AJNUSA V3.5
           </p>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Credit dan Copyright Section - Menyatu dengan Login Card -->
+    <div class="w-full max-w-7xl login-card-enhanced relative z-10 mx-auto" style="width: 95vw; max-width: 1200px; margin-top: -1px; position: relative;">
+      <div class="copyright-section-merged bg-white/95 backdrop-blur-xl border border-gray-200/50 shadow-2xl relative" style="border-radius: 0 0 1.5rem 1.5rem; box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.12), 0 -2px 8px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.9);">
+
+        <!-- Corner fixes to remove sharp edges -->
+        <div class="absolute inset-x-0 -top-4 h-12 overflow-hidden pointer-events-none z-30">
+          <!-- Left corner cover -->
+          <div class="absolute left-0 top-0 w-40 h-40 bg-white rounded-full transform -translate-x-24 -translate-y-20 opacity-100 shadow-2xl" style="box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.15), 0 -4px 16px rgba(0, 0, 0, 0.1);"></div>
+          <!-- Right corner cover -->
+          <div class="absolute right-0 top-0 w-40 h-40 bg-white rounded-full transform translate-x-24 -translate-y-20 opacity-100 shadow-2xl" style="box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.15), 0 -4px 16px rgba(0, 0, 0, 0.1);"></div>
+          <!-- Enhanced gradient overlay -->
+          <div class="absolute inset-0 bg-gradient-to-b from-white/95 via-white/80 to-transparent"></div>
+        </div>
+
+        <!-- Additional corner smoothing -->
+        <div class="absolute -top-2 left-0 right-0 h-4 z-25">
+          <div class="absolute left-0 top-0 w-8 h-8 bg-white rounded-full transform -translate-x-4 -translate-y-4"></div>
+          <div class="absolute right-0 top-0 w-8 h-8 bg-white rounded-full translate-x-4 -translate-y-4"></div>
+        </div>
+
+        <!-- Gradient accent strip -->
+        <div class="h-1 bg-gradient-to-r from-[var(--primary-color)] via-blue-500 to-[var(--primary-color)] opacity-80 relative overflow-hidden">
+          <!-- Animated shimmer effect -->
+          <div class="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent shimmer-animation"></div>
+        </div>
+
+        <div class="flex items-center justify-center px-6 sm:px-8 md:px-12 lg:px-16 py-5 sm:py-6 space-x-2 sm:space-x-4 md:space-x-6">
+          <a
+            href="https://www.ajnusa.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="text-gray-600 font-bold text-sm sm:text-base py-2 px-3 rounded-lg"
+          >
+            www.ajnusa.com
+          </a>
+          <span class="text-gray-600 text-sm sm:text-base">|</span>
+          <a
+            href="https://www.jelantik.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="text-gray-600 font-bold text-sm sm:text-base py-2 px-3 rounded-lg"
+          >
+            www.jelantik.com
+          </a>
+              <span class="hidden sm:inline text-gray-600 font-bold text-sm sm:text-base">
+               |  © Copyright by PT. Artacomindo Jejaring Nusa
+          </span>
         </div>
       </div>
     </div>
@@ -1493,6 +1544,339 @@ input[type="email"] {
     border-radius: 1rem !important;
     height: auto !important;
     min-height: auto !important;
+  }
+}
+
+/* Credit Section Styles */
+.pb-20 {
+  padding-bottom: 1rem;
+}
+
+.text-gray-600 {
+  color: #6b7280;
+}
+
+.text-gray-400 {
+  color: #9ca3af;
+}
+
+.hover\:text-\[var\(--primary-color\)\]:hover {
+  color: var(--primary-color) !important;
+}
+
+.space-x-6 > :not([hidden]) ~ :not([hidden]) {
+  --space-x-reverse: 0;
+  margin-right: calc(1.5rem * var(--space-x-reverse));
+  margin-left: calc(1.5rem * calc(1 - var(--space-x-reverse)));
+}
+
+.space-x-4 > :not([hidden]) ~ :not([hidden]) {
+  --space-x-reverse: 0;
+  margin-right: calc(1rem * var(--space-x-reverse));
+  margin-left: calc(1rem * calc(1 - var(--space-x-reverse)));
+}
+
+.space-y-2 > :not([hidden]) ~ :not([hidden]) {
+  --space-y-reverse: 0;
+  margin-top: calc(0.5rem * calc(1 - var(--space-y-reverse)));
+  margin-bottom: calc(0.5rem * var(--space-y-reverse));
+}
+
+.flex-shrink-0 {
+  flex-shrink: 0;
+}
+
+/* Bottom credit bar styles */
+.bottom-0 {
+  bottom: 0;
+}
+
+.left-8 {
+  left: 2rem;
+}
+
+.right-8 {
+  right: 2rem;
+}
+
+.px-8 {
+  padding-left: 2rem;
+  padding-right: 2rem;
+}
+
+.py-4 {
+  padding-top: 1rem;
+  padding-bottom: 1rem;
+}
+
+.bg-white\/90 {
+  background-color: rgba(255, 255, 255, 0.9);
+}
+
+.backdrop-blur-sm {
+  backdrop-filter: blur(4px);
+}
+
+.border-t {
+  border-top-width: 1px;
+}
+
+.border-gray-200 {
+  border-color: #e5e7eb;
+}
+
+.rounded-t-2xl {
+  border-top-left-radius: 1rem;
+  border-top-right-radius: 1rem;
+}
+
+.z-50 {
+  z-index: 50;
+}
+
+/* Enhanced Copyright Section Styles */
+.copyright-section-merged {
+  position: relative;
+  background: rgba(255, 255, 255, 0.98) !important;
+  backdrop-filter: blur(24px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.3) !important;
+  border-top: none !important;
+  box-shadow:
+    0 -8px 32px rgba(0, 0, 0, 0.12),
+    0 -2px 8px rgba(0, 0, 0, 0.08),
+    0 0 0 1px rgba(255, 255, 255, 0.5) inset,
+    0 1px 0 rgba(255, 255, 255, 0.9) inset !important;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: visible;
+}
+
+.copyright-section-merged:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 -12px 40px rgba(0, 0, 0, 0.15),
+    0 -4px 12px rgba(0, 0, 0, 0.1),
+    0 0 0 1px rgba(255, 255, 255, 0.6) inset,
+    0 2px 0 rgba(255, 255, 255, 0.95) inset,
+    0 0 0 1px rgba(13, 38, 145, 0.1);
+}
+
+.copyright-section-merged::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.1) 0%,
+    transparent 100%
+  );
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Enhanced curved edges */
+.copyright-section-merged > div:first-child {
+  z-index: 2;
+}
+
+/* Better curve styling for left and right sides */
+.copyright-section-merged > div:first-child > div:first-child,
+.copyright-section-merged > div:first-child > div:nth-child(2) {
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.1);
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+}
+
+/* Gradient overlay improvements */
+.copyright-section-merged > div:first-child > div:nth-child(3) {
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, 0.9) 0%,
+    rgba(255, 255, 255, 0.3) 30%,
+    transparent 100%
+  );
+}
+
+.website-links {
+  position: relative;
+  z-index: 2;
+}
+
+.website-link {
+  position: relative;
+  overflow: hidden;
+  color: #6b7280 !important;
+  text-decoration: none !important;
+  background: transparent;
+  border-radius: 8px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.website-link::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(13, 38, 145, 0.1), transparent);
+  transition: left 0.6s ease;
+  z-index: -1;
+}
+
+.website-link:hover::before {
+  left: 100%;
+}
+
+.website-link:hover {
+  color: var(--primary-color) !important;
+  background: rgba(13, 38, 145, 0.05) !important;
+  border-radius: 8px;
+  transform: translateY(-1px) scale(1.02);
+  box-shadow: 0 2px 8px rgba(13, 38, 145, 0.15);
+  text-decoration: none !important;
+}
+
+.instagram-credit {
+  position: relative;
+  z-index: 2;
+}
+
+.instagram-container {
+  position: relative;
+}
+
+.instagram-link {
+  position: relative;
+  overflow: hidden;
+  color: #6b7280 !important;
+  text-decoration: none !important;
+  background: transparent;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.instagram-link::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg,
+    transparent,
+    rgba(219, 39, 119, 0.1),
+    rgba(147, 51, 234, 0.1),
+    transparent
+  );
+  transition: left 0.6s ease;
+  z-index: -1;
+}
+
+.instagram-link:hover::before {
+  left: 100%;
+}
+
+.instagram-link:hover {
+  color: var(--primary-color) !important;
+  background: linear-gradient(135deg,
+    rgba(219, 39, 119, 0.05),
+    rgba(147, 51, 234, 0.05)
+  ) !important;
+  border-color: rgba(219, 39, 119, 0.2) !important;
+  border-radius: 8px;
+  transform: translateY(-1px) scale(1.02);
+  box-shadow:
+    0 2px 8px rgba(219, 39, 119, 0.15),
+    0 1px 4px rgba(147, 51, 234, 0.1);
+  text-decoration: none !important;
+}
+
+/* Enhanced hover effects for Instagram icon */
+.instagram-container svg {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.1));
+}
+
+.instagram-container:hover svg {
+  color: #ec4899 !important;
+  transform: scale(1.1) rotate(5deg);
+  filter: drop-shadow(0 2px 8px rgba(236, 72, 153, 0.4));
+}
+
+/* Gradient accent strip animation */
+.copyright-container > div:first-child {
+  position: relative;
+  overflow: hidden;
+}
+
+.copyright-container > div:first-child::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.3),
+    transparent
+  );
+  animation: shimmer 3s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    left: -100%;
+  }
+  100% {
+    left: 100%;
+  }
+}
+
+.shimmer-animation {
+  animation: shimmer 4s ease-in-out infinite;
+}
+
+/* Add pulse effect to gradient accent strip */
+.copyright-container > div:first-child {
+  animation: pulse 3s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 0.8;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* Enhanced responsive design */
+@media (max-width: 768px) {
+  .copyright-section-merged {
+    margin-left: 0.75rem !important;
+    margin-right: 0.75rem !important;
+  }
+
+  .copyright-section-merged {
+    border-radius: 0 0 1.25rem 1.25rem !important;
+  }
+
+  .website-link,
+  .instagram-link {
+    font-size: 0.75rem !important;
+    padding: 0.5rem 0.75rem !important;
+  }
+}
+
+/* Hide copyright section on mobile devices for cleaner look */
+@media (max-width: 640px) {
+  .copyright-section-merged {
+    display: none !important;
   }
 }
 </style>
