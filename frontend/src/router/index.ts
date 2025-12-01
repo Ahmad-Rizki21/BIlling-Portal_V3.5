@@ -155,6 +155,15 @@ const router = createRouter({
           },
         },
         {
+          path: '/global-search-results',
+          name: 'GlobalSearchResults',
+          component: () => import('@/views/GlobalSearchResultsView.vue'),
+          meta: {
+            requiresAuth: true,
+            permissions: ['view_pelanggan', 'view_langganan', 'view_activity_log', 'view_trouble_tickets', 'view_invoices']
+          },
+        },
+        {
           path: '/trouble-tickets',
           name: 'TroubleTickets',
           component: () => import('@/views/TroubleTicketView.vue'),

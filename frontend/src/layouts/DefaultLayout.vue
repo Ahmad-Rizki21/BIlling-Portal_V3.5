@@ -209,11 +209,14 @@
 
       <v-spacer></v-spacer>
 
+      <!-- Global Search -->
+      <GlobalSearch class="me-2" />
+
       <!-- Theme Toggle -->
-      <v-btn 
-        icon 
-        variant="text" 
-        @click="toggleTheme" 
+      <v-btn
+        icon
+        variant="text"
+        @click="toggleTheme"
         class="header-icon-btn"
       >
         <v-icon>
@@ -421,6 +424,7 @@ import { useSettingsStore } from '@/stores/settings'
 import apiClient from '@/services/api';
 import logoLight from '@/assets/images/Jelantik-Light.webp';
 import logoDark from '@/assets/images/Jelantik-Dark.webp';
+import GlobalSearch from '@/components/GlobalSearch.vue';
 
 // --- State ---
 const theme = useTheme();

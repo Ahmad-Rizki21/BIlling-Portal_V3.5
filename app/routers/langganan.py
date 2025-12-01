@@ -21,6 +21,7 @@ from ..models.invoice import Invoice as InvoiceModel
 from ..models.langganan import Langganan as LanggananModel
 from ..models.paket_layanan import PaketLayanan as PaketLayananModel
 from ..models.pelanggan import Pelanggan as PelangganModel
+from ..models.data_teknis import DataTeknis as DataTeknisModel
 from ..schemas.langganan import (
     Langganan as LanggananSchema,
     LanggananCreate,
@@ -58,7 +59,11 @@ async def create_langganan(langganan_data: LanggananCreate, db: AsyncSession = D
     """
     Membuat langganan baru dengan perhitungan harga otomatis di backend.
     Mendukung metode pembayaran 'Otomatis' dan 'Prorate' (biasa atau gabungan).
+
+    VALIDATION PENTING: Langganan hanya bisa dibuat jika pelanggan sudah memiliki data teknis.
+    NOC harus menambahkan data teknis terlebih dahulu sebelum Finance bisa membuat langganan.
     """
+    # 1. Validasi pelanggan ada
     pelanggan = await db.get(
         PelangganModel,
         langganan_data.pelanggan_id,
@@ -67,6 +72,20 @@ async def create_langganan(langganan_data: LanggananCreate, db: AsyncSession = D
     if not pelanggan or not pelanggan.harga_layanan:
         raise HTTPException(status_code=404, detail="Data Brand pelanggan tidak ditemukan.")
 
+    # 2. VALIDASI UTAMA: Cek apakah pelanggan sudah punya data teknis
+    data_teknis_query = select(DataTeknisModel).where(DataTeknisModel.pelanggan_id == langganan_data.pelanggan_id)
+    data_teknis_result = await db.execute(data_teknis_query)
+    data_teknis = data_teknis_result.scalar_one_or_none()
+
+    if not data_teknis:
+        logger.warning(f"PERCOBAAN LANGGANAN TANPA DATA TEKNIS: Finance mencoba membuat langganan untuk pelanggan ID {langganan_data.pelanggan_id} ({pelanggan.nama}) tanpa data teknis")
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Langganan tidak dapat dibuat. Pelanggan '{pelanggan.nama}' belum memiliki data teknis. "
+                   f"Tim NOC harus menambahkan data teknis terlebih dahulu sebelum membuat langganan."
+        )
+
+    # 3. Validasi paket layanan ada
     paket = await db.get(PaketLayananModel, langganan_data.paket_layanan_id)
     if not paket:
         raise HTTPException(status_code=404, detail="Paket Layanan tidak ditemukan.")
@@ -112,6 +131,8 @@ async def create_langganan(langganan_data: LanggananCreate, db: AsyncSession = D
 
     db.add(db_langganan)
     await db.commit()
+
+    logger.info(f"LANGGANAN BERHASIL DIBUAT: Finance berhasil membuat langganan untuk pelanggan '{pelanggan.nama}' (ID: {pelanggan.id}) dengan paket '{paket.nama_paket}'")
 
     query = (
         select(LanggananModel)
@@ -476,6 +497,8 @@ async def export_to_csv_langganan(
             {
                 "Nama Pelanggan": (langganan.pelanggan.nama if langganan.pelanggan else "N/A"),
                 "Email Pelanggan": (langganan.pelanggan.email if langganan.pelanggan else "N/A"),
+                "Alamat": (langganan.pelanggan.alamat if langganan.pelanggan else "N/A"),
+                "Alamat Lengkap": (langganan.pelanggan.alamat_2 if langganan.pelanggan else "N/A"),
                 "Paket Layanan": (langganan.paket_layanan.nama_paket if langganan.paket_layanan else "N/A"),
                 "Status": langganan.status,
                 "Metode Pembayaran": langganan.metode_pembayaran,
@@ -587,6 +610,15 @@ async def import_from_csv_langganan(file: UploadFile = File(...), db: AsyncSessi
 
             if pelanggan.id in subscribed_pelanggan_ids:
                 errors.append(f"Baris {row_num}: Pelanggan '{pelanggan.nama}' sudah memiliki langganan.")
+                continue
+
+            # VALIDASI PENTING: Cek apakah pelanggan sudah punya data teknis sebelum import langganan
+            data_teknis_query = select(DataTeknisModel).where(DataTeknisModel.pelanggan_id == pelanggan.id)
+            data_teknis_result = await db.execute(data_teknis_query)
+            data_teknis = data_teknis_result.scalar_one_or_none()
+
+            if not data_teknis:
+                errors.append(f"Baris {row_num}: Pelanggan '{pelanggan.nama}' belum memiliki data teknis. Tim NOC harus menambahkan data teknis terlebih dahulu sebelum langganan dapat dibuat.")
                 continue
 
             # Konversi string tanggal ke objek date jika tidak None
@@ -736,15 +768,23 @@ async def get_langganan_count(db: AsyncSession = Depends(get_db)):
 @router.get("/pelanggan/list", response_model=List[PelangganSchema])
 async def get_all_pelanggan_with_status(db: AsyncSession = Depends(get_db)):
     """
-    Mengambil daftar semua pelanggan, dengan status langganan mereka.
+    Mengambil daftar semua pelanggan, dengan status langganan dan data teknis mereka.
+    Info penting untuk Finance: hanya pelanggan dengan data teknis yang bisa dibuatkan langganan.
     """
     result = await db.execute(
-        select(PelangganModel).options(joinedload(PelangganModel.langganan)).order_by(PelangganModel.nama)
+        select(PelangganModel)
+        .options(
+            joinedload(PelangganModel.langganan),
+            joinedload(PelangganModel.data_teknis)
+        )
+        .order_by(PelangganModel.nama)
     )
     pelanggan = result.scalars().unique().all()
 
     for p in pelanggan:
         p.has_subscription = len(p.langganan) > 0
+        # Tambahkan informasi apakah pelanggan sudah punya data teknis
+        p.has_data_teknis = len(p.data_teknis) > 0 if hasattr(p, 'data_teknis') and p.data_teknis else False
 
     return pelanggan
 

@@ -662,6 +662,30 @@
               hide-details="auto"
               class="mb-4"
             >
+              <!-- Data Teknis Status Indicator -->
+              <template v-slot:append-inner>
+                <v-tooltip
+                  v-if="selectedPelangganHasDataTeknis !== null"
+                  :text="dataTeknisIndicatorText"
+                  location="top"
+                >
+                  <v-icon
+                    :color="dataTeknisIndicatorColor"
+                    size="20"
+                    class="mr-2"
+                  >
+                    {{ selectedPelangganHasDataTeknis ? 'mdi-check-circle' : 'mdi-alert-circle' }}
+                  </v-icon>
+                </v-tooltip>
+                <v-progress-circular
+                  v-if="checkingDataTeknis"
+                  indeterminate
+                  size="20"
+                  width="2"
+                  color="primary"
+                  class="mr-2"
+                ></v-progress-circular>
+              </template>
               <template v-slot:item="{ props, item }">
   <v-list-item v-bind="props" class="px-4">
     <template v-slot:prepend>
@@ -689,6 +713,20 @@
   </v-list-item>
 </template>
             </v-autocomplete>
+
+            <!-- Warning Message untuk Pelanggan tanpa Data Teknis -->
+            <v-alert
+              v-if="selectedPelangganHasDataTeknis === false"
+              type="warning"
+              variant="tonal"
+              icon="mdi-alert-outline"
+              class="mt-3 mb-4"
+              border="start"
+            >
+              <v-icon start>mdi-information</v-icon>
+              <strong>Perhatian:</strong> Pelanggan ini belum memiliki data teknis.
+              Silakan hubungi tim NOC untuk menambahkan data teknis terlebih dahulu mba UMAY! sebelum membuat langganan.
+            </v-alert>
         </div>
 
         <!-- Package and Payment -->
@@ -934,7 +972,7 @@
         variant="flat"
         @click="saveLangganan"
         :loading="saving"
-        :disabled="!isFormValid"
+        :disabled="!isFormValid || (selectedPelangganHasDataTeknis === false)"
         class="text-none"
       >
         <v-icon start size="18">{{ editedIndex === -1 ? 'mdi-plus' : 'mdi-content-save' }}</v-icon>
@@ -1471,6 +1509,10 @@ const isProratePlusFull = ref<boolean>(false);
 const hargaProrate = ref<number>(0);
 const hargaNormal = ref<number>(0);
 
+// --- Data Teknis Validation State ---
+const pelangganDataTeknisStatus = ref<Map<number, boolean>>(new Map());
+const checkingDataTeknis = ref(false);
+
 // --- State for Total Count ---
 const totalLanggananCount = ref(0);
 
@@ -1601,6 +1643,54 @@ const headers = computed(() => {
 const formTitle = computed(() => (editedIndex.value === -1 ? 'Tambah Langganan Baru' : 'Edit Langganan'));
 const isFormValid = computed(() => !!(editedItem.value.pelanggan_id && editedItem.value.paket_layanan_id && editedItem.value.status));
 
+// Computed property untuk cek status data teknis pelanggan yang dipilih
+const selectedPelangganHasDataTeknis = computed(() => {
+  if (!editedItem.value.pelanggan_id) return null;
+  return pelangganDataTeknisStatus.value.get(editedItem.value.pelanggan_id);
+});
+
+// Computed property untuk menentukan warna indikator
+const dataTeknisIndicatorColor = computed(() => {
+  const status = selectedPelangganHasDataTeknis.value;
+  if (status === true) return 'success';
+  if (status === false) return 'error';
+  return 'grey';
+});
+
+// Computed property untuk text indikator
+const dataTeknisIndicatorText = computed(() => {
+  const status = selectedPelangganHasDataTeknis.value;
+  if (status === true) return 'Data Teknis: ✓ Ada';
+  if (status === false) return 'Data Teknis: ✗ Belum Ada';
+  return 'Data Teknis: ?';
+});
+
+// --- Fungsi untuk mengecek data teknis status ---
+async function checkPelangganDataTeknis(pelangganId: number): Promise<boolean | null> {
+  if (!pelangganId) return null;
+
+  // Check cache dulu
+  if (pelangganDataTeknisStatus.value.has(pelangganId)) {
+    return pelangganDataTeknisStatus.value.get(pelangganId);
+  }
+
+  try {
+    checkingDataTeknis.value = true;
+    const response = await apiClient.get(`/data_teknis/by-pelanggan/${pelangganId}`);
+    const hasDataTeknis = response.data && response.data.length > 0;
+
+    // Update cache
+    pelangganDataTeknisStatus.value.set(pelangganId, hasDataTeknis);
+
+    return hasDataTeknis;
+  } catch (error) {
+    console.warn(`Gagal mengecek data teknis untuk pelanggan ${pelangganId}:`, error);
+    return null;
+  } finally {
+    checkingDataTeknis.value = false;
+  }
+}
+
 // --- Lifecycle ---
 onMounted(() => {
   fetchLangganan();
@@ -1640,13 +1730,16 @@ watch(() => editedItem.value.pelanggan_id, async (newPelangganId) => {
   // Reset HANYA pilihan paket layanan
   editedItem.value.paket_layanan_id = undefined;
   isPaketLocked.value = false;
-  
+
   // Baris yang menyebabkan error ('hargaAwal.value = 0;') sudah dihapus.
 
   if (!newPelangganId) {
     filteredPaketLayanan.value = [];
     return;
   }
+
+  // Check data teknis status untuk pelanggan yang dipilih
+  await checkPelangganDataTeknis(newPelangganId);
 
   try {
     // 1. Panggil API untuk mendapatkan detail lengkap pelanggan
@@ -2095,7 +2188,32 @@ function closeDialog() {
 async function saveLangganan() {
   // Validasi form (tidak berubah)
   if (!isFormValid.value) return;
-  
+
+  // VALIDASI PENTING: Cek apakah pelanggan sudah punya data teknis
+  if (editedItem.value.pelanggan_id) {
+    try {
+      const customerName = getPelangganName(editedItem.value.pelanggan_id);
+      const response = await apiClient.get(`/data_teknis/by-pelanggan/${editedItem.value.pelanggan_id}`);
+
+      if (!response.data || response.data.length === 0) {
+        showSnackbar(
+          `Tidak dapat membuat langganan. Pelanggan "${customerName}" belum memiliki data teknis. Silakan hubungi tim NOC untuk menambahkan data teknis terlebih dahulu.`,
+          'warning'
+        );
+        saving.value = false;
+        return;
+      }
+    } catch (error) {
+      console.warn('Gagal mengecek data teknis:', error);
+      showSnackbar(
+        `Gagal memvalidasi data teknis. Silakan hubungi tim NOC untuk memastikan data teknis sudah ada.`,
+        'warning'
+      );
+      saving.value = false;
+      return;
+    }
+  }
+
   saving.value = true;
   
   // Siapkan payload yang akan dikirim ke backend

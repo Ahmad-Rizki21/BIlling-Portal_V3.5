@@ -69,6 +69,7 @@ from .routers import (
     dashboard,         # Dashboard admin
     dashboard_pelanggan, # Dashboard pelanggan
     data_teknis,       # Data teknis koneksi
+    global_search,     # Global search functionality
     harga_layanan,     # Harga paket layanan
     inventory,         # Manajemen inventory
     inventory_status,  # Status inventory
@@ -84,7 +85,7 @@ from .routers import (
     permission,        # Manajemen permission
     report,            # Laporan-laporan
     role,              # Role-based access control
-      trouble_ticket,    # Sistem trouble ticket
+    trouble_ticket,    # Sistem trouble ticket
 )
 from .routers import settings as settings_router  # Pengaturan sistem
 from .routers import (
@@ -687,6 +688,7 @@ app.include_router(mikrotik_server.router)
 app.include_router(uploads.router)
 app.include_router(calculator.router)
 # app.include_router(system_log.router)
+app.include_router(global_search.router)
 app.include_router(activity_log.router)
 app.include_router(notifications.router)
 app.include_router(dashboard.router)
