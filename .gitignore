@@ -177,9 +177,9 @@ config.local.*
 local_config.*
 
 # --- Package Manager Lock Files ---
-package-lock.json
-yarn.lock
-pnpm-lock.yaml
+# Keep package-lock.json for reproducible builds
+# yarn.lock
+# pnpm-lock.yaml
 
 # --- Docker Build Context ---
 .dockerignore
