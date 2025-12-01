@@ -11,6 +11,58 @@ Sistem billing untuk layanan Fiber to the Home (FTTH) dengan fitur lengkap.
 - **Monitoring Dashboard**: Real-time monitoring dan reporting
 - **Mobile Support**: Aplikasi mobile dengan Capacitor
 
+## CI/CD Pipeline
+
+Project ini menggunakan GitHub Actions yang modern dan reliable:
+
+### 🔄 Automated Testing
+- **Backend Tests**: Pytest dengan coverage reporting
+- **Frontend Tests**: TypeScript checking, linting, dan build validation
+- **Security Scans**: Bandit dan Safety untuk vulnerability detection
+- **Code Quality**: Flake8, Black, dan MyPy untuk code standards
+
+### 🚀 Automated Deployment
+- **Multi-stage Docker builds** untuk optimal image size
+- **Database migrations** otomatis
+- **Health checks** dan monitoring
+- **Rollback capabilities** jika deployment gagal
+
+### 📊 Environment Support
+- **Development**: `docker-compose.dev.yml` dengan live reload
+- **Staging**: Branch `dev` untuk testing
+- **Production**: Branch `main` dengan full monitoring
+
+## 🐳 Docker Deployment
+
+### Quick Start (Development)
+```bash
+# Clone repository
+git clone https://github.com/Ahmad-Rizki21/BIlling-Portal_V3.5.git
+cd BIlling-Portal_V3.5
+
+# Start development environment
+docker-compose -f docker-compose.dev.yml up -d
+
+# Access applications
+# Backend API: http://localhost:8000
+# Frontend: http://localhost:5173
+# PgAdmin: http://localhost:5050
+# Redis Commander: http://localhost:8081
+```
+
+### Production Deployment
+```bash
+# Set environment variables
+cp .env.example .env
+# Edit .env dengan production values
+
+# Deploy to production
+docker-compose -f docker-compose.production.yml up -d
+
+# Run database migrations
+docker-compose -f docker-compose.production.yml run migrate
+```
+
 ## Teknologi
 
 ### Backend
@@ -26,9 +78,11 @@ Sistem billing untuk layanan Fiber to the Home (FTTH) dengan fitur lengkap.
 - **Pinia**: State management
 - **Vite**: Build tool
 
-### Database
-- **PostgreSQL**: Database utama
+### Infrastructure
+- **PostgreSQL**: Database utama dengan replication
 - **Redis**: Cache dan session storage
+- **Nginx**: Reverse proxy dan load balancer
+- **Docker**: Containerization dan orchestration
 
 ## Instalasi
 

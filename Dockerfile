@@ -1,18 +1,22 @@
-# ============================================
-# BILLINGJELANTIKFTTHV3 - DOCKERFILE
-# ============================================
+# Multi-stage build for FTTH Billing Portal V3.5
+FROM node:20-alpine AS frontend-builder
 
-# Use Python 3.11 slim image as base (better compatibility with pandas)
-FROM python:3.11-slim
+# Build frontend
+WORKDIR /app/frontend
+COPY frontend/package*.json ./
+RUN npm ci --only=production
+
+COPY frontend/ ./
+RUN npm run build
+
+# Production stage
+FROM python:3.11-slim AS production
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app \
     TZ=Asia/Jakarta
-
-# Set working directory
-WORKDIR /app
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
@@ -21,12 +25,17 @@ RUN apt-get update && apt-get install -y \
     default-libmysqlclient-dev \
     pkg-config \
     curl \
+    postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements first for better caching
-COPY requirements.txt .
+# Create non-root user
+RUN groupadd -r appuser && useradd -r -g appuser appuser
 
-# Install Python dependencies
+# Set working directory
+WORKDIR /app
+
+# Copy Python dependencies
+COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
@@ -35,12 +44,14 @@ COPY app/ ./app/
 COPY alembic.ini .
 COPY alembic/ ./alembic/
 
-# Create necessary directories
-RUN mkdir -p logs static uploads
+# Copy frontend build
+COPY --from=frontend-builder /app/frontend/dist ./static/
 
-# Create non-root user for security
-RUN useradd --create-home --shell /bin/bash appuser && \
+# Create necessary directories
+RUN mkdir -p logs uploads static && \
     chown -R appuser:appuser /app
+
+# Switch to non-root user
 USER appuser
 
 # Expose port
@@ -48,7 +59,7 @@ EXPOSE 8000
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8000/ || exit 1
+    CMD curl -f http://localhost:8000/health || exit 1
 
-# Command to run the application
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+# Start application
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
