@@ -527,7 +527,7 @@ function createPieChart() {
       }
     }
   };
-  pieChart = new Chart(ctx, config);
+  pieChart = new Chart(ctx, config as any);
 }
 
 function createLineChart() {

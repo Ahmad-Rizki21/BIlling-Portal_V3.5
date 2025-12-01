@@ -364,7 +364,7 @@ function handleKeyboardInput(event: KeyboardEvent) {
     }
     scannerTimeout = setTimeout(() => {
       scannerBuffer = '';
-    }, 100); // 100ms timeout untuk membedakan scanner vs manual typing
+    }, 100) as any; // 100ms timeout untuk membedakan scanner vs manual typing
 
     // Update visual feedback
     scannedValue.value = scannerBuffer;
