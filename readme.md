@@ -22,45 +22,50 @@ Project ini menggunakan GitHub Actions yang modern dan reliable:
 - **Code Quality**: Flake8, Black, dan MyPy untuk code standards
 
 ### 🚀 Automated Deployment
-- **Multi-stage Docker builds** untuk optimal image size
-- **Database migrations** otomatis
+- **Automated database migrations**
 - **Health checks** dan monitoring
 - **Rollback capabilities** jika deployment gagal
 
 ### 📊 Environment Support
-- **Development**: `docker-compose.dev.yml` dengan live reload
+- **Development**: Local development dengan hot reload
 - **Staging**: Branch `dev` untuk testing
 - **Production**: Branch `main` dengan full monitoring
 
-## 🐳 Docker Deployment
+## Quick Start (Local Development)
 
-### Quick Start (Development)
 ```bash
 # Clone repository
 git clone https://github.com/Ahmad-Rizki21/BIlling-Portal_V3.5.git
 cd BIlling-Portal_V3.5
 
-# Start development environment
-docker-compose -f docker-compose.dev.yml up -d
+# Setup Backend
+python3 -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+pip install -r requirements.txt
+
+# Setup Database (PostgreSQL)
+sudo apt install postgresql postgresql-contrib  # Ubuntu/Debian
+# Buat database dan user sesuai kebutuhan
+
+# Copy dan edit environment variables
+cp .env.example .env
+# Edit .env dengan konfigurasi database Anda
+
+# Run database migrations
+alembic upgrade head
+
+# Start backend server
+uvicorn app.main:app --reload
+
+# Open new terminal untuk frontend
+cd frontend
+npm install
+npm run dev
 
 # Access applications
 # Backend API: http://localhost:8000
 # Frontend: http://localhost:5173
-# PgAdmin: http://localhost:5050
-# Redis Commander: http://localhost:8081
-```
-
-### Production Deployment
-```bash
-# Set environment variables
-cp .env.example .env
-# Edit .env dengan production values
-
-# Deploy to production
-docker-compose -f docker-compose.production.yml up -d
-
-# Run database migrations
-docker-compose -f docker-compose.production.yml run migrate
+# API Documentation: http://localhost:8000/docs
 ```
 
 ## Teknologi
@@ -79,10 +84,10 @@ docker-compose -f docker-compose.production.yml run migrate
 - **Vite**: Build tool
 
 ### Infrastructure
-- **PostgreSQL**: Database utama dengan replication
+- **PostgreSQL**: Database utama
 - **Redis**: Cache dan session storage
-- **Nginx**: Reverse proxy dan load balancer
-- **Docker**: Containerization dan orchestration
+- **Nginx**: Reverse proxy dan load balancer (opsional untuk production)
+- **Local Development**: Development environment langsung di mesin lokal
 
 ## Instalasi
 
@@ -90,7 +95,7 @@ docker-compose -f docker-compose.production.yml run migrate
 - Python 3.9+
 - Node.js 16+
 - PostgreSQL 12+
-- Redis
+- Redis (opsional, untuk cache)
 
 ### Setup Backend
 ```bash
@@ -98,12 +103,20 @@ docker-compose -f docker-compose.production.yml run migrate
 git clone https://github.com/Ahmad-Rizki21/BIlling-Portal_V3.5.git
 cd BIlling-Portal_V3.5
 
+# Create virtual environment
+python3 -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
 # Install dependencies
 pip install -r requirements.txt
 
 # Setup environment
 cp .env.example .env
 # Edit .env with your configuration
+
+# Setup database PostgreSQL
+sudo -u postgres createdb billing_ftth
+sudo -u postgres createuser --interactive
 
 # Database migration
 alembic upgrade head
@@ -125,6 +138,41 @@ npm run dev
 
 # Build for production
 npm run build
+```
+
+### Production Deployment (Tanpa Docker)
+```bash
+# Setup production environment
+sudo apt install postgresql nginx redis-server
+
+# Setup database dengan user dan database production
+sudo -u postgres createdb billing_ftth_prod
+sudo -u postgres createuser --interactive
+
+# Install backend dependencies
+cd /path/to/BIlling-Portal_V3.5
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+
+# Setup environment production
+cp .env.example .env
+# Edit .env dengan production values
+
+# Run migrations
+alembic upgrade head
+
+# Build frontend
+cd frontend
+npm install
+npm run build
+
+# Setup Nginx untuk serve frontend dan proxy API
+# Copy nginx configuration dan restart nginx
+
+# Start backend dengan Gunicorn
+pip install gunicorn
+gunicorn app.main:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
 ```
 
 ## Environment Variables
