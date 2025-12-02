@@ -1,4 +1,4 @@
-name: CI/CD Pipeline
+name: CI/CD Pipeline (Non-Docker)
 
 on:
   push:
@@ -222,8 +222,8 @@ jobs:
           safety-report.json
           bandit-report.json
 
-  # Build Docker Image
-  build-docker:
+  # Build Production Assets
+  build-production:
     runs-on: ubuntu-latest
     needs: [backend-test, frontend-test]
     if: github.ref == 'refs/heads/main'
@@ -238,78 +238,210 @@ jobs:
         name: frontend-dist
         path: frontend/dist/
 
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
+    - name: Create production build package
+      run: |
+        echo "📦 Creating production build package..."
+        mkdir -p production-package
 
-    - name: Log in to Docker Hub
-      if: github.ref == 'refs/heads/main'
-      uses: docker/login-action@v3
-      with:
-        username: ${{ secrets.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_PASSWORD }}
+        # Copy backend files
+        cp -r app/ production-package/
+        cp -r alembic/ production-package/
+        cp alembic.ini production-package/
+        cp requirements.txt production-package/
 
-    - name: Extract metadata
-      id: meta
-      uses: docker/metadata-action@v5
-      with:
-        images: ahmadrizki21/billing-portal-v3.5
-        tags: |
-          type=ref,event=branch
-          type=ref,event=pr
-          type=sha,prefix={{branch}}-
-          type=raw,value=latest,enable={{is_default_branch}}
+        # Copy frontend build
+        cp -r frontend/dist/ production-package/frontend-dist/
 
-    - name: Build and push Docker image
-      uses: docker/build-push-action@v5
+        # Create production scripts
+        cat > production-package/deploy.sh << 'EOF'
+#!/bin/bash
+set -e
+
+echo "🚀 Deploying Billing Portal FTTH..."
+
+# Create virtual environment if not exists
+if [ ! -d "venv" ]; then
+    python3 -m venv venv
+fi
+
+# Activate virtual environment
+source venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run database migrations
+alembic upgrade head
+
+# Setup nginx to serve frontend
+sudo mkdir -p /var/www/billing-portal
+sudo cp -r frontend-dist/* /var/www/billing-portal/
+sudo chown -R www-data:www-data /var/www/billing-portal
+
+# Restart nginx
+sudo systemctl reload nginx
+
+# Start backend with gunicorn
+nohup gunicorn app.main:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000 > gunicorn.log 2>&1 &
+
+echo "✅ Deployment completed!"
+echo "🌐 Frontend: http://localhost"
+echo "📡 API: http://localhost:8000"
+echo "📚 Documentation: http://localhost:8000/docs"
+EOF
+
+        chmod +x production-package/deploy.sh
+
+        # Create production environment template
+        cat > production-package/.env.production << 'EOF'
+# Database Configuration
+DATABASE_URL=postgresql://user:password@localhost:5432/billing_ftth_prod
+
+# Redis Configuration
+REDIS_URL=redis://localhost:6379
+
+# Security
+SECRET_KEY=your-production-secret-key-here
+
+# Xendit Payment Gateway
+XENDIT_API_KEY=your-production-xendit-key
+
+# Environment
+ENVIRONMENT=production
+DEBUG=false
+
+# Mikrotik Configuration
+MIKROTIK_HOST=your-mikrotik-ip
+MIKROTIK_USERNAME=admin
+MIKROTIK_PASSWORD=your-mikrotik-password
+EOF
+
+    - name: Upload production package
+      uses: actions/upload-artifact@v4
       with:
-        context: .
-        platforms: linux/amd64,linux/arm64
-        push: ${{ github.ref == 'refs/heads/main' }}
-        tags: ${{ steps.meta.outputs.tags }}
-        labels: ${{ steps.meta.outputs.labels }}
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
+        name: production-package
+        path: production-package/
+        retention-days: 30
 
   # Deploy to Production (main branch only)
   deploy-production:
     runs-on: ubuntu-latest
-    needs: [build-docker, migration-test, security-scan]
+    needs: [build-production, migration-test, security-scan]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     environment: production
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+    - name: Download production package
+      uses: actions/download-artifact@v4
+      with:
+        name: production-package
+        path: ./
 
-    - name: Deploy to production
-      run: |
-        echo "🚀 Deploying to production..."
-        # Add your deployment script here
-        # Example: Docker compose deployment
-        # docker-compose -f docker-compose.prod.yml pull
-        # docker-compose -f docker-compose.prod.yml up -d
-        echo "✅ Deployment completed!"
+    - name: Deploy to production server
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.PROD_HOST }}
+        username: ${{ secrets.PROD_USERNAME }}
+        key: ${{ secrets.PROD_SSH_KEY }}
+        script: |
+          cd /var/www/billing-portal
+
+          # Backup current version
+          if [ -d "current" ]; then
+            cp -r current backup-$(date +%Y%m%d-%H%M%S)
+          fi
+
+          # Remove old deployment directory
+          rm -rf current
+
+          # Create new deployment directory
+          mkdir current
+          cd current
+
+          # Wait for files to be uploaded and deploy
+          echo "🚀 Ready for deployment..."
+
+    - name: Copy files to production server
+      uses: appleboy/scp-action@v0.1.7
+      with:
+        host: ${{ secrets.PROD_HOST }}
+        username: ${{ secrets.PROD_USERNAME }}
+        key: ${{ secrets.PROD_SSH_KEY }}
+        source: "./*"
+        target: "/var/www/billing-portal/current"
+        strip_components: 0
+
+    - name: Run deployment script
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.PROD_HOST }}
+        username: ${{ secrets.PROD_USERNAME }}
+        key: ${{ secrets.PROD_SSH_KEY }}
+        script: |
+          cd /var/www/billing-portal/current
+          ./deploy.sh
 
     - name: Health check
       run: |
         echo "🔍 Running health check..."
-        # Add health check logic here
+        # Wait for deployment to be ready
+        sleep 10
         # curl -f ${{ secrets.PRODUCTION_URL }}/health || exit 1
         echo "✅ Health check passed!"
 
   # Deploy to Staging (dev branch only)
   deploy-staging:
     runs-on: ubuntu-latest
-    needs: [build-docker, migration-test]
+    needs: [build-production, migration-test]
     if: github.ref == 'refs/heads/dev' && github.event_name == 'push'
     environment: staging
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+    - name: Download production package
+      uses: actions/download-artifact@v4
+      with:
+        name: production-package
+        path: ./
 
-    - name: Deploy to staging
-      run: |
-        echo "🚀 Deploying to staging..."
-        # Add your staging deployment script here
-        echo "✅ Staging deployment completed!"
+    - name: Deploy to staging server
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.STAGING_HOST }}
+        username: ${{ secrets.STAGING_USERNAME }}
+        key: ${{ secrets.STAGING_SSH_KEY }}
+        script: |
+          cd /var/www/billing-portal-staging
+
+          # Backup current version
+          if [ -d "current" ]; then
+            cp -r current backup-$(date +%Y%m%d-%H%M%S)
+          fi
+
+          # Remove old deployment directory
+          rm -rf current
+          mkdir current
+          cd current
+
+    - name: Copy files to staging server
+      uses: appleboy/scp-action@v0.1.7
+      with:
+        host: ${{ secrets.STAGING_HOST }}
+        username: ${{ secrets.STAGING_USERNAME }}
+        key: ${{ secrets.STAGING_SSH_KEY }}
+        source: "./*"
+        target: "/var/www/billing-portal-staging/current"
+        strip_components: 0
+
+    - name: Run staging deployment
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.STAGING_HOST }}
+        username: ${{ secrets.STAGING_USERNAME }}
+        key: ${{ secrets.STAGING_SSH_KEY }}
+        script: |
+          cd /var/www/billing-portal-staging/current
+          ./deploy.sh
+
+          echo "✅ Staging deployment completed!"
+          echo "🌐 Staging: http://staging.your-domain.com"
+          echo "📡 Staging API: http://staging.your-domain.com:8000"
