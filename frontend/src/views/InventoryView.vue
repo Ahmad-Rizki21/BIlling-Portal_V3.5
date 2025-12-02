@@ -1584,6 +1584,167 @@
       </v-card>
     </v-dialog>
 
+    <!-- Bulk Import Dialog -->
+    <v-dialog v-model="bulkImportDialog" :max-width="isMobile ? '95vw' : '600px'" persistent>
+      <v-card class="modern-dialog-card">
+        <!-- Enhanced Header -->
+        <div class="dialog-modern-header">
+          <div class="header-gradient-bg">
+            <div class="header-content">
+              <v-icon class="me-3" color="white" size="28">mdi-upload-multiple</v-icon>
+              <div>
+                <h3 class="text-h6 font-weight-bold text-white mb-1">Bulk Import Inventaris</h3>
+                <p class="text-body-2 text-white opacity-90 mb-0">Import data inventaris dari file Excel/CSV</p>
+              </div>
+              <v-spacer></v-spacer>
+              <v-btn
+                icon
+                variant="text"
+                color="white"
+                @click="closeBulkImportDialog"
+                :disabled="bulkImportLoading"
+              >
+                <v-icon>mdi-close</v-icon>
+              </v-btn>
+            </div>
+          </div>
+        </div>
+
+        <v-card-text class="pa-6">
+          <!-- File Upload Section -->
+          <div class="mb-4">
+            <v-label class="text-subtitle-2 font-weight-medium mb-2 d-block">
+              Pilih File Import
+            </v-label>
+
+            <v-file-input
+              v-model="bulkImportFile"
+              label="Pilih file Excel atau CSV"
+              accept=".xlsx,.xls,.csv"
+              prepend-icon="mdi-file-excel"
+              variant="outlined"
+              density="comfortable"
+              :loading="bulkImportLoading"
+              :disabled="bulkImportLoading"
+              show-size
+              hide-details
+              class="mb-3"
+            ></v-file-input>
+          </div>
+
+          <!-- Error Message -->
+          <v-alert
+            v-if="bulkImportError"
+            type="error"
+            variant="tonal"
+            class="mb-4"
+            density="compact"
+            :text="bulkImportError"
+          ></v-alert>
+
+          <!-- Success Result -->
+          <v-alert
+            v-if="bulkImportResult?.success"
+            type="success"
+            variant="tonal"
+            class="mb-4"
+            density="compact"
+            :text="bulkImportResult?.message"
+          >
+            <template v-slot:append>
+              <div class="text-end">
+                <div class="text-caption opacity-75">Berhasil:</div>
+                <div class="text-body-2 font-weight-medium">{{ bulkImportResult?.success_count }} item</div>
+              </div>
+            </template>
+          </v-alert>
+
+          <!-- Partial Success with Errors -->
+          <v-alert
+            v-if="bulkImportResult?.success && bulkImportResult?.error_count && bulkImportResult.error_count > 0"
+            type="warning"
+            variant="tonal"
+            class="mb-4"
+            density="compact"
+          >
+            <template v-slot:title>
+              Import Selesai dengan Beberapa Error
+            </template>
+            <template v-slot:text>
+              <div class="mb-2">
+                Berhasil: {{ bulkImportResult?.success_count || 0 }} item,
+                Gagal: {{ bulkImportResult?.error_count || 0 }} item
+              </div>
+              <div v-if="bulkImportResult?.errors && bulkImportResult.errors.length > 0" class="mt-2">
+                <v-btn
+                  size="small"
+                  variant="outlined"
+                  color="warning"
+                  @click="showImportErrors = !showImportErrors"
+                >
+                  {{ showImportErrors ? 'Sembunyikan' : 'Tampilkan' }} Detail Error
+                </v-btn>
+              </div>
+            </template>
+          </v-alert>
+
+          <!-- Error Details -->
+          <v-expand-transition>
+            <div v-show="showImportErrors && bulkImportResult?.errors && bulkImportResult.errors.length > 0">
+              <v-card variant="outlined" class="mt-2" max-height="200">
+                <v-card-text class="pa-3">
+                  <div class="text-caption">
+                    <div
+                      v-for="(error, index) in (bulkImportResult?.errors || []).slice(0, 10)"
+                      :key="index"
+                      class="mb-1"
+                    >
+                      <v-icon size="12" color="error" class="me-1">mdi-alert-circle</v-icon>
+                      {{ error }}
+                    </div>
+                    <div v-if="bulkImportResult?.errors && bulkImportResult.errors.length > 10" class="mt-2 font-weight-medium">
+                      ... dan {{ bulkImportResult.errors.length - 10 }} error lainnya
+                    </div>
+                  </div>
+                </v-card-text>
+              </v-card>
+            </div>
+          </v-expand-transition>
+
+          <!-- Help Text -->
+          <div class="text-caption text-medium-emphasis mt-3">
+            <v-icon size="14" class="me-1">mdi-information-outline</v-icon>
+            Pastikan file memiliki kolom: serial_number, item_type_id, status_id.
+            Download template untuk contoh format yang benar.
+          </div>
+        </v-card-text>
+
+        <v-divider></v-divider>
+
+        <v-card-actions class="pa-4">
+          <v-spacer></v-spacer>
+          <v-btn
+            variant="outlined"
+            color="medium-emphasis"
+            @click="closeBulkImportDialog"
+            :disabled="bulkImportLoading"
+          >
+            Batal
+          </v-btn>
+          <v-btn
+            color="primary"
+            variant="elevated"
+            @click="handleBulkImport"
+            :loading="bulkImportLoading"
+            :disabled="!bulkImportFile || bulkImportLoading"
+          >
+            <v-icon start>mdi-upload</v-icon>
+            Import Data
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
     <!-- Barcode Scanner Dialogs -->
     <BarcodeScanner
       v-model="isSerialScannerOpen"
@@ -2020,13 +2181,71 @@ function downloadTemplate() {
 }
 
 const bulkImportDialog = ref(false);
+const bulkImportFile = ref<File | null>(null);
+const bulkImportLoading = ref(false);
+const bulkImportResult = ref<any>(null);
+const bulkImportError = ref<string | null>(null);
+const showImportErrors = ref(false);
 
 function openBulkImportDialog() {
   bulkImportDialog.value = true;
+  bulkImportFile.value = null;
+  bulkImportResult.value = null;
+  bulkImportError.value = null;
+  showImportErrors.value = false;
 }
 
 function closeBulkImportDialog() {
   bulkImportDialog.value = false;
+  bulkImportFile.value = null;
+  bulkImportResult.value = null;
+  bulkImportError.value = null;
+  showImportErrors.value = false;
+}
+
+function handleFileUpload(event: Event) {
+  const target = event.target as HTMLInputElement;
+  if (target.files && target.files.length > 0) {
+    bulkImportFile.value = target.files[0];
+  }
+}
+
+async function handleBulkImport() {
+  if (!bulkImportFile.value) {
+    bulkImportError.value = 'Silakan pilih file terlebih dahulu';
+    return;
+  }
+
+  bulkImportLoading.value = true;
+  bulkImportError.value = null;
+  bulkImportResult.value = null;
+
+  try {
+    const formData = new FormData();
+    formData.append('file', bulkImportFile.value);
+
+    const response = await apiClient.post('/inventory/bulk-import', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+
+    bulkImportResult.value = response.data;
+
+    // Refresh data setelah import berhasil
+    await fetchData();
+
+    // Auto tutup dialog setelah 2 detik jika berhasil
+    setTimeout(() => {
+      closeBulkImportDialog();
+    }, 2000);
+
+  } catch (error: any) {
+    console.error('Bulk import error:', error);
+    bulkImportError.value = error.response?.data?.detail || 'Gagal mengimport file. Silakan coba lagi.';
+  } finally {
+    bulkImportLoading.value = false;
+  }
 }
 
 // History functions

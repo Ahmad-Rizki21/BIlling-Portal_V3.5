@@ -2,7 +2,7 @@
 
 import axios from 'axios';
 import router from '@/router'; // 1. Impor router Vue Anda
-import { getEncryptedToken, removeEncryptedToken } from '@/utils/crypto';
+import { getEncryptedToken, removeEncryptedToken, setEncryptedToken } from '@/utils/crypto';
 import { errorStorage, networkErrorRateLimit } from './errorStorage';
 
 // Konfigurasi instance axios
@@ -60,7 +60,6 @@ apiClient.interceptors.response.use(
         const { access_token, refresh_token } = response.data;
 
         // Gunakan fungsi enkripsi yang konsisten
-        const { setEncryptedToken } = await import('@/utils/crypto');
         setEncryptedToken('access_token', access_token);
         if (refresh_token) {
           setEncryptedToken('refresh_token', refresh_token);
