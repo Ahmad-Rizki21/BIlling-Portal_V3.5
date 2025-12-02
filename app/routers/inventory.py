@@ -13,6 +13,7 @@ import io
 from datetime import datetime
 
 from ..database import get_db
+from ..auth import get_current_active_user
 
 # Import Model dengan alias
 from ..models.inventory_item import InventoryItem as InventoryItemModel
@@ -69,7 +70,7 @@ async def log_inventory_change(
 
 
 @router.post("/", response_model=InventoryItemResponse, status_code=status.HTTP_201_CREATED)
-async def create_inventory_item(item: InventoryItemCreate, db: AsyncSession = Depends(get_db)):
+async def create_inventory_item(item: InventoryItemCreate, db: AsyncSession = Depends(get_db), current_user: UserModel = Depends(get_current_active_user)):
     try:
         db_item = InventoryItemModel(**item.model_dump())
         db.add(db_item)
@@ -77,7 +78,7 @@ async def create_inventory_item(item: InventoryItemCreate, db: AsyncSession = De
 
         # Log history
         action_text = f"Created item - SN: {db_item.serial_number}, Type ID: {db_item.item_type_id}, Location: {db_item.location or 'Not set'}"
-        await log_inventory_change(db, db_item.id, action_text, user_id=1)  # TODO: Get actual user ID
+        await log_inventory_change(db, db_item.id, action_text, current_user.id)
 
         # Muat relasi secara eksplisit setelah commit
         await db.refresh(db_item, ["item_type", "status"])
@@ -115,7 +116,7 @@ async def get_inventory_items(db: AsyncSession = Depends(get_db)):
 
 
 @router.patch("/{item_id}", response_model=InventoryItemResponse)
-async def update_inventory_item(item_id: int, item_update: InventoryItemUpdate, db: AsyncSession = Depends(get_db)):
+async def update_inventory_item(item_id: int, item_update: InventoryItemUpdate, db: AsyncSession = Depends(get_db), current_user: UserModel = Depends(get_current_active_user)):
     try:
         db_item = await db.get(InventoryItemModel, item_id)
         if not db_item:
@@ -146,7 +147,7 @@ async def update_inventory_item(item_id: int, item_update: InventoryItemUpdate, 
         # Log history if there are changes
         if changes:
             action_text = f"Updated item - SN: {db_item.serial_number}, Changes: {', '.join(changes)}"
-            await log_inventory_change(db, db_item.id, action_text, user_id=1)  # TODO: Get actual user ID
+            await log_inventory_change(db, db_item.id, action_text, current_user.id)
 
         # Refresh relationships for response
         await db.refresh(db_item, ["item_type", "status"])
@@ -165,7 +166,7 @@ async def update_inventory_item(item_id: int, item_update: InventoryItemUpdate, 
 
 
 @router.delete("/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_inventory_item(item_id: int, db: AsyncSession = Depends(get_db)):
+async def delete_inventory_item(item_id: int, db: AsyncSession = Depends(get_db), current_user: UserModel = Depends(get_current_active_user)):
     try:
         db_item = await db.get(InventoryItemModel, item_id)
         if not db_item:
@@ -176,7 +177,7 @@ async def delete_inventory_item(item_id: int, db: AsyncSession = Depends(get_db)
 
         # Log history before delete
         action_text = f"Deleted item - {item_info}"
-        await log_inventory_change(db, item_id, action_text, user_id=1)  # TODO: Get actual user ID
+        await log_inventory_change(db, item_id, action_text, current_user.id)
 
         await db.delete(db_item)
         await db.commit()
@@ -527,7 +528,8 @@ async def download_inventory_template(db: AsyncSession = Depends(get_db)):
 @router.post("/bulk-import")
 async def bulk_import_inventory(
     file: UploadFile = File(...),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user)
 ):
     """
     Bulk import inventory items dari file Excel/CSV
@@ -740,7 +742,7 @@ async def bulk_import_inventory(
 
                 # Log history
                 action_text = f"Imported item - SN: {db_item.serial_number}, Type ID: {db_item.item_type_id}, Location: {db_item.location or 'Not set'}"
-                await log_inventory_change(db, db_item.id, action_text, user_id=1)  # TODO: Get actual user ID
+                await log_inventory_change(db, db_item.id, action_text, current_user.id)
 
                 success_count += 1
 
