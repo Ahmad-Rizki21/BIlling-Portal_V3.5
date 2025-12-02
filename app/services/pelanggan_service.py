@@ -4,6 +4,7 @@ Pelanggan Service Layer - Menghilangkan duplikasi business logic dari routers
 
 from typing import List, Optional, Dict, Any
 import logging
+from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import func, or_
@@ -14,6 +15,8 @@ from ..models.role import Role as RoleModel
 from ..models.user import User as UserModel
 from ..models.harga_layanan import HargaLayanan as HargaLayananModel
 from ..models.data_teknis import DataTeknis as DataTeknisModel
+from ..models.langganan import Langganan as LanggananModel
+from ..models.paket_layanan import PaketLayanan as PaketLayananModel
 from ..schemas.pelanggan import PelangganCreate, PelangganUpdate
 from ..services.base_service import BaseService, PaginatedResponse
 from ..utils.validators import DatabaseValidator, FieldValidator  # type: ignore
@@ -85,15 +88,25 @@ class PelangganService(BaseService[PelangganModel, PelangganCreate, PelangganUpd
                 self.db, PelangganModel, update_dict, ["email", "no_ktp"], exclude_id=pelanggan_id
             )
 
+        # Check if layanan is being changed
+        old_layanan = pelanggan.layanan
+        new_layanan = update_dict.get("layanan")
+
         # Update pelanggan
         updated_pelanggan = await self.update(pelanggan, pelanggan_data)
+
+        # Auto-update langganan if layanan changed
+        if new_layanan and new_layanan != old_layanan:
+            await self._auto_update_langganan_on_service_change(
+                pelanggan_id, old_layanan, new_layanan, pelanggan.id_brand, current_user_id
+            )
 
         # Log success
         SuccessHandler.log_success(
             operation="mengupdate",
             resource_name="pelanggan",
             identifier=pelanggan_id,
-            additional_info={"updated_by": current_user_id},
+            additional_info={"updated_by": current_user_id, "service_change": old_layanan != new_layanan},
         )
 
         return updated_pelanggan
@@ -371,6 +384,96 @@ class PelangganService(BaseService[PelangganModel, PelangganCreate, PelangganUpd
                 mapped_data[model_field] = row_data[csv_field].strip()
 
         return PelangganCreate(**mapped_data)
+
+    async def _auto_update_langganan_on_service_change(
+        self, pelanggan_id: int, old_layanan: str, new_layanan: str, id_brand: str, updated_by: int
+    ) -> None:
+        """
+        Auto-update langganan ketika pelanggan mengubah layanan (downgrade/upgrade)
+        Mencari paket layanan yang sesuai dengan layanan baru dan brand yang sama
+        """
+        try:
+            # Find the corresponding paket layanan for the new service
+            paket_query = (
+                select(PaketLayananModel)
+                .where(PaketLayananModel.id_brand == id_brand)
+                .where(PaketLayananModel.nama_paket.ilike(f"%{new_layanan}%"))
+            )
+            paket_result = await self.db.execute(paket_query)
+            new_paket = paket_result.scalar_one_or_none()
+
+            if not new_paket:
+                logger.warning(f"Tidak menemukan paket layanan untuk {new_layanan} dengan brand {id_brand}")
+                return
+
+            # Find active langganan for this pelanggan
+            langganan_query = (
+                select(LanggananModel)
+                .where(LanggananModel.pelanggan_id == pelanggan_id)
+                .where(LanggananModel.status == "Aktif")
+                .options(joinedload(LanggananModel.paket_layanan))
+            )
+            langganan_result = await self.db.execute(langganan_query)
+            active_langganan = langganan_result.scalar_one_or_none()
+
+            if not active_langganan:
+                logger.info(f"Pelanggan {pelanggan_id} tidak memiliki langganan aktif untuk diupdate")
+                return
+
+            old_paket_name = active_langganan.paket_layanan.nama_paket if active_langganan.paket_layanan else "Unknown"
+
+            # Check if it's actually a downgrade (new package is slower or cheaper)
+            is_downgrade = False
+            if active_langganan.paket_layanan:
+                if new_paket.kecepatan < active_langganan.paket_layanan.kecepatan:
+                    is_downgrade = True
+                elif float(new_paket.harga) < float(active_langganan.paket_layanan.harga):
+                    is_downgrade = True
+
+            action_type = "downgrade" if is_downgrade else "upgrade" if new_paket.kecepatan > (active_langganan.paket_layanan.kecepatan if active_langganan.paket_layanan else 0) else "change"
+
+            logger.info(f"Auto-{action_type} langganan untuk pelanggan {pelanggan_id}: {old_paket_name} → {new_paket.nama_paket}")
+
+            # Update the langganan to new package
+            old_paket_id = active_langganan.paket_layanan_id
+            active_langganan.paket_layanan_id = new_paket.id
+
+            # Update harga if needed (recalculate based on new package and tax)
+            # Get customer's tax rate from their brand
+            brand_query = select(HargaLayananModel).where(HargaLayananModel.id_brand == id_brand)
+            brand_result = await self.db.execute(brand_query)
+            brand_info = brand_result.scalar_one_or_none()
+
+            if brand_info:
+                pajak_rate = float(brand_info.pajak) / 100
+                new_harga = float(new_paket.harga) * (1 + pajak_rate)
+                active_langganan.harga_awal = new_harga
+
+            self.db.add(active_langganan)
+
+            # Send notification about the service change
+            await NotificationService.send_system_notification(
+                self.db,
+                f"Auto-{action_type} Langganan: Pelanggan {pelanggan_id} ({old_layanan} → {new_layanan})",
+                "service_change",
+                data={
+                    "pelanggan_id": pelanggan_id,
+                    "old_layanan": old_layanan,
+                    "new_layanan": new_layanan,
+                    "old_paket": old_paket_name,
+                    "new_paket": new_paket.nama_paket,
+                    "action_type": action_type,
+                    "updated_by": updated_by,
+                    "timestamp": datetime.now().isoformat(),
+                },
+            )
+
+            logger.info(f"✅ Auto-{action_type} langganan berhasil: pelanggan {pelanggan_id}, {old_paket_name} → {new_paket.nama_paket}")
+
+        except Exception as e:
+            logger.error(f"❌ Gagal auto-update langganan untuk pelanggan {pelanggan_id}: {e}")
+            # Don't raise exception - this is a background operation
+            # The main pelanggan update should still succeed
 
     async def _notify_new_pelanggan(self, pelanggan: PelangganModel) -> None:
         """Send notification untuk pelanggan baru"""

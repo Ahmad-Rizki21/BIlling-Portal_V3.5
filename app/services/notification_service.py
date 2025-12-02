@@ -12,7 +12,7 @@ import logging
 from ..models.user import User as UserModel
 from ..models.role import Role as RoleModel
 from ..websocket_manager import manager
-from ..utils.error_handler import ErrorHandler, SuccessHandler  # type: ignore
+from fastapi import HTTPException, status
 
 logger = logging.getLogger(__name__)
 

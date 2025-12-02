@@ -17,6 +17,7 @@ from datetime import datetime, date
 import io
 import csv
 import chardet
+import re
 from dateutil import parser
 from fastapi.responses import StreamingResponse
 from sqlalchemy import func, or_
@@ -35,6 +36,7 @@ from ..models.harga_layanan import HargaLayanan as HargaLayananModel
 from ..models.data_teknis import DataTeknis as DataTeknisModel
 from ..models.langganan import Langganan as LanggananModel
 from ..models.invoice import Invoice as InvoiceModel
+from ..models.paket_layanan import PaketLayanan as PaketLayananModel
 from ..schemas.pelanggan import (
     PaginatedPelangganResponse,
     PaginationInfo,
@@ -56,6 +58,79 @@ router = APIRouter(
 )
 
 logger = logging.getLogger(__name__)
+
+
+async def auto_update_langganan(db: AsyncSession, pelanggan_id: int, old_layanan: str, new_layanan: str, id_brand: str) -> None:
+    """
+    Otomatis update langganan aktif pelanggan ketika layanan diubah
+
+    Logic sederhana:
+    1. Cari langganan aktif untuk pelanggan
+    2. Cari paket layanan yang sesuai dengan layanan baru
+    3. Update langganan ke paket baru dan harga baru
+    """
+    try:
+        # 1. Cari langganan aktif pelanggan
+        langganan_query = (
+            select(LanggananModel)
+            .where(LanggananModel.pelanggan_id == pelanggan_id)
+            .where(LanggananModel.status == "Aktif")
+            .options(joinedload(LanggananModel.paket_layanan))
+        )
+        langganan_result = await db.execute(langganan_query)
+        active_langganan = langganan_result.scalar_one_or_none()
+
+        if not active_langganan:
+            logger.warning(f"Pelanggan {pelanggan_id} tidak memiliki langganan aktif")
+            return
+
+        old_paket_name = active_langganan.paket_layanan.nama_paket if active_langganan.paket_layanan else "Unknown"
+
+        # 2. Cari paket layanan yang sesuai dengan layanan baru
+        paket_query = (
+            select(PaketLayananModel)
+            .where(PaketLayananModel.id_brand == id_brand)
+            .where(PaketLayananModel.nama_paket.ilike(f"%{new_layanan}%"))
+        )
+        paket_result = await db.execute(paket_query)
+        new_paket = paket_result.scalar_one_or_none()
+
+        if not new_paket:
+            # Coba extract speed dari layanan
+            speed_match = re.search(r'(\d+)\s*Mbps', new_layanan, re.IGNORECASE)
+            if speed_match:
+                speed = speed_match.group(1)
+                paket_query_speed = (
+                    select(PaketLayananModel)
+                    .where(PaketLayananModel.id_brand == id_brand)
+                    .where(PaketLayananModel.nama_paket.ilike(f"%{speed}%"))
+                )
+                paket_result_speed = await db.execute(paket_query_speed)
+                new_paket = paket_result_speed.scalar_one_or_none()
+
+        if not new_paket:
+            logger.error(f"Tidak menemukan paket untuk layanan '{new_layanan}' (brand: {id_brand})")
+            return
+
+        # 3. Update langganan ke paket baru
+        active_langganan.paket_layanan_id = new_paket.id
+
+        # Update harga dengan pajak dari brand
+        brand_query = select(HargaLayananModel).where(HargaLayananModel.id_brand == id_brand)
+        brand_result = await db.execute(brand_query)
+        brand_info = brand_result.scalar_one_or_none()
+
+        if brand_info:
+            pajak_rate = float(brand_info.pajak) / 100
+            new_harga = float(new_paket.harga) * (1 + pajak_rate)
+            active_langganan.harga_awal = new_harga
+
+        db.add(active_langganan)
+        logger.info(f"Update langganan: Pelanggan {pelanggan_id} {old_paket_name} → {new_paket.nama_paket}")
+
+    except Exception as e:
+        logger.error(f"Gagal auto-update langganan pelanggan {pelanggan_id}: {e}", exc_info=True)
+        # Jangan gagalkan update pelanggan utama
 
 
 # --- Skema Respons Baru ---
@@ -415,7 +490,20 @@ async def update_pelanggan(
         for key, value in update_data.items():
             setattr(db_pelanggan, key, value)
 
-        # 6. Mark for update
+        # 6. Auto-update langganan if layanan changed
+        old_layanan = db_pelanggan.layanan
+        new_layanan = update_data.get("layanan")
+
+        if new_layanan:
+            logger.info(f"Auto-update langganan: Pelanggan {pelanggan_id} '{old_layanan}' → '{new_layanan}'")
+
+        if new_layanan:
+            logger.info(f"🔄 Service update requested: Pelanggan {pelanggan_id} '{old_layanan}' → '{new_layanan}', Brand: {db_pelanggan.id_brand}")
+            await auto_update_langganan(db, pelanggan_id, old_layanan, new_layanan, db_pelanggan.id_brand)
+        else:
+            logger.info(f"ℹ️ No layanan field in update_data")
+
+        # 7. Mark for update
         db.add(db_pelanggan)
         await db.flush()  # Validate sebelum commit
 
