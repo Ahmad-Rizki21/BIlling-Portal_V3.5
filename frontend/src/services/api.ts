@@ -1,8 +1,8 @@
 // frontend/src/services/api.ts (atau di mana pun file ini berada)
 
 import axios from 'axios';
-import router from '@/router'; // 1. Impor router Vue Anda
-import { getEncryptedToken, removeEncryptedToken, setEncryptedToken } from '@/utils/crypto';
+import router from '@/router'; 
+import { getEncryptedToken, removeEncryptedToken, setEncryptedToken } from '@/utils';
 import { errorStorage, networkErrorRateLimit } from './errorStorage';
 
 // Konfigurasi instance axios

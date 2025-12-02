@@ -152,3 +152,7 @@ export const useAuthStore = defineStore('auth', () => {
     initializeAuth,
   };
 });
+
+// Also provide a default export to make imports that expect a default available
+// This is a harmless addition that doesn't change runtime logic.
+export default useAuthStore;
