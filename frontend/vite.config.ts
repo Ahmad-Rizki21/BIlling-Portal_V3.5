@@ -25,6 +25,11 @@ export default defineConfig({
     host: true
   },
   build: {
+    cssCodeSplit: false,
+    target: 'es2015',
+    outDir: 'dist',
+    assetsDir: 'assets',
+    sourcemap: false,
     rollupOptions: {
       output: {
         manualChunks: (id) => {
