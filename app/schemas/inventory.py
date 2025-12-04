@@ -155,6 +155,10 @@ class InventoryItemUpdate(BaseModel):
     item_type_id: Optional[int] = Field(None, gt=0, description="ID tipe perangkat")
     status_id: Optional[int] = Field(None, gt=0, description="ID status perangkat")
 
+    class Config:
+        # Block any additional fields that frontend might send
+        extra = "forbid"
+
     @validator("serial_number", pre=True)
     def validate_serial_number_update(cls, v):
         if v is None or v == "":
@@ -315,11 +319,21 @@ class InventoryStatus(BaseModel):
         return v_str
 
 
-class InventoryItemResponse(InventoryItemBase):
+class InventoryItemResponse(BaseModel):
     id: int
+    serial_number: str
+    mac_address: Optional[str] = None
+    location: Optional[str] = None
+    purchase_date: Optional[date] = None
+    notes: Optional[str] = None
+    item_type_id: int
+    status_id: int
     # Kita akan ganti ID dengan nama di response
     item_type: InventoryItemType
     status: InventoryStatus
+    # Additional fields that might be in the model
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True

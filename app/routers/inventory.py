@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from fastapi import status
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
@@ -95,7 +95,11 @@ async def create_inventory_item(item: InventoryItemCreate, db: AsyncSession = De
 
 
 @router.get("/", response_model=List[InventoryItemResponse])
-async def get_inventory_items(db: AsyncSession = Depends(get_db)):
+async def get_inventory_items(
+    db: AsyncSession = Depends(get_db),
+    # Cloudflare cache bypass headers
+    response: Response = None
+):
     try:
         query = (
             select(InventoryItemModel)
@@ -106,7 +110,21 @@ async def get_inventory_items(db: AsyncSession = Depends(get_db)):
             .order_by(InventoryItemModel.id)
         )
         result = await db.execute(query)
-        return result.scalars().all()
+        items = result.scalars().all()
+
+        # DEBUG: Log item ID 4 location for tracking
+        item_4 = next((item for item in items if item.id == 4), None)
+        if item_4:
+            # logger.info(f"🔧 DEBUG: GET items - Item 4 location = '{item_4.location}'")
+            pass
+
+        # Bypass Cloudflare cache for inventory endpoints
+        if response:
+            response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate, max-age=0"
+            response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
+
+        return items
     except Exception as e:
         logger.error(f"Error retrieving inventory items: {str(e)}")
         raise HTTPException(
@@ -116,13 +134,35 @@ async def get_inventory_items(db: AsyncSession = Depends(get_db)):
 
 
 @router.patch("/{item_id}", response_model=InventoryItemResponse)
-async def update_inventory_item(item_id: int, item_update: InventoryItemUpdate, db: AsyncSession = Depends(get_db), current_user: UserModel = Depends(get_current_active_user)):
+async def update_inventory_item(
+    item_id: int,
+    item_update: InventoryItemUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user),
+    # Cloudflare cache bypass headers
+    response: Response = None
+):
+    # DEBUG LOG untuk memastikan kode yang jalan adalah yang baru
+    # logger.info(f"🔧 INVENTORY UPDATE v2.0 - Item ID: {item_id}")
+    # logger.info(f"🔧 DEBUG: Update data = {item_update.model_dump(exclude_unset=True)}")
+
     try:
         db_item = await db.get(InventoryItemModel, item_id)
         if not db_item:
             raise HTTPException(status_code=404, detail="Item not found")
 
         update_data = item_update.model_dump(exclude_unset=True)
+
+        # DEBUG: Log update data yang valid
+        # logger.info(f"🔧 DEBUG: Valid update data = {update_data}")
+
+        # Remove any invalid fields that might have slipped through
+        invalid_fields = ['created_at', 'updated_at', 'id']
+        for field in invalid_fields:
+            if field in update_data:
+                # logger.warning(f"🔧 WARNING: Removing invalid field '{field}' from update data")
+                del update_data[field]
+
         changes = []
 
         # Track changes before applying
@@ -149,10 +189,22 @@ async def update_inventory_item(item_id: int, item_update: InventoryItemUpdate, 
             action_text = f"Updated item - SN: {db_item.serial_number}, Changes: {', '.join(changes)}"
             await log_inventory_change(db, db_item.id, action_text, current_user.id)
 
-        # Refresh relationships for response
+        # Refresh the item completely to get updated data
+        await db.refresh(db_item)
+        # logger.info(f"🔧 DEBUG: After db.refresh - location = {db_item.location}")
+
+        # Also refresh relationships for response
         await db.refresh(db_item, ["item_type", "status"])
+        # logger.info(f"🔧 DEBUG: Response ready - location = {db_item.location}")
 
         logger.info(f"Updated inventory item with ID: {db_item.id}")
+
+        # Bypass Cloudflare cache for inventory endpoints
+        if response:
+            response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate, max-age=0"
+            response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
+
         return db_item
     except HTTPException:
         raise

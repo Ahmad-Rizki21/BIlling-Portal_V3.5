@@ -2030,10 +2030,14 @@ async function saveItem() {
     } else {
       await apiClient.post('/inventory/', payload);
     }
+    // console.log('🔧 Frontend: Starting fetchData after update...');
     await fetchData();
+    // console.log('🔧 Frontend: fetchData completed, closing dialog...');
     closeItemDialog();
-  } catch (e) { console.error(e); }
-  finally { saving.value = false; }
+  } catch (e) {
+    // console.error('🔧 Frontend: Error in saveItem:', e);
+    showSnackbar('Gagal menyimpan perubahan. Silakan refresh halaman.', 'error');
+  } finally { saving.value = false; }
 }
 async function deleteItem(item: InventoryItem) {
   if (confirm(`Hapus item SN: ${item.serial_number}?`)) {
