@@ -25,6 +25,7 @@ from ..models import (
     MikrotikServer,
     PaketLayanan,
     Langganan,
+    DataTeknis,
 )
 from sqlalchemy.orm import selectinload
 from ..models.user import User as UserModel
