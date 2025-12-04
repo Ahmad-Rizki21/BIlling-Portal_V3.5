@@ -281,11 +281,11 @@
           :loading="loading"
           item-value="id"
           class="elegant-table"
-          :items-per-page="25"
           :server-items-length="totalPelangganCount"
           hover
           show-select
           return-object
+          hide-default-footer
         >
 
           <template v-slot:loading>
