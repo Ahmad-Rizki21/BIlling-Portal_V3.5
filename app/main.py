@@ -24,10 +24,13 @@ from datetime import datetime
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 # FastAPI core components
-from fastapi import FastAPI, Query, Request, WebSocket, WebSocketDisconnect, status
+from fastapi import FastAPI, Query, Request, Response, WebSocket, WebSocketDisconnect, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request as StarletteRequest
 
 # JWT token handling
 from jose import JWTError, jwt
@@ -160,6 +163,24 @@ origins = [
     "http://127.0.0.1:8000",  # Backend origin
     "*",  # Allow all origins for development
 ]
+
+# Add GZip compression untuk response yang lebih kecil
+# Middleware untuk cache headers
+class CacheControlMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: StarletteRequest, call_next):
+        response = await call_next(request)
+
+        # Cache static files untuk 1 tahun
+        if request.url.path.startswith("/static/"):
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        # Cache API response untuk 5 menit (kecuali POST/PUT/DELETE)
+        elif request.method in ["GET"] and request.url.path.startswith("/api/"):
+            response.headers["Cache-Control"] = "public, max-age=300"
+
+        return response
+
+app.add_middleware(CacheControlMiddleware)
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 app.add_middleware(
     CORSMiddleware,

@@ -11,7 +11,7 @@ import json
 import uuid
 from typing import Union, TYPE_CHECKING
 
-from fastapi import APIRouter, Depends, HTTPException, status, Request, Header
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Header, Query
 from fastapi.responses import StreamingResponse, Response
 from dateutil import parser
 from dateutil.relativedelta import relativedelta
@@ -138,7 +138,7 @@ async def get_all_invoices(
     end_date: Optional[date] = None,
     show_active_only: Optional[bool] = False,  # <-- FILTER untuk link pembayaran aktif saja
     skip: int = 0,  # <-- TAMBAHKAN INI
-    limit: Optional[int] = None,  # <-- TAMBAHKAN INI
+    limit: Optional[int] = None,  # <-- Tidak mengubah default untuk menjaga logika bisnis
 ):
     """Mengambil semua data invoice dengan filter."""
     # OPTIMIZED: Query dengan comprehensive eager loading untuk mencegah semua N+1 problems
@@ -188,9 +188,14 @@ async def get_all_invoices(
             )
         ).order_by(InvoiceModel.tgl_invoice.desc())
 
+    # Optimized: Tambahkan order by untuk konsistent pagination
+    if show_active_only:
+        query = query.order_by(InvoiceModel.tgl_invoice.desc())
+    else:
+        query = query.order_by(InvoiceModel.created_at.desc())
+
     # Terapkan paginasi setelah semua filter
-    if limit is not None:
-        query = query.offset(skip).limit(limit)
+    query = query.offset(skip).limit(limit)
     # ---------------------------
 
     result = await db.execute(query)

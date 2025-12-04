@@ -10,7 +10,7 @@ from collections import defaultdict
 import locale
 import logging
 
-# 🛡️ Import schema classes untuk dashboard data
+# Import schema classes untuk dashboard data
 from ..schemas.dashboard import DashboardData, ChartData, RevenueSummary, StatCard, InvoiceSummary
 
 # Atur logger
@@ -319,11 +319,13 @@ async def get_dashboard_data(
         # 3. Widget Chart Pelanggan per Lokasi
         if "view_widget_pelanggan_per_lokasi" in user_permissions:
             try:
+                # Optimized: Gunakan index yang sudah ada di model Pelanggan
                 lokasi_stmt = (
                     select(Pelanggan.alamat, func.count(Pelanggan.id))
+                    .where(Pelanggan.alamat.isnot(None))  # Filter null values
                     .group_by(Pelanggan.alamat)
                     .order_by(func.count(Pelanggan.id).desc())
-                    .limit(20)
+                    .limit(15)  # Kurangi dari 20 ke 15 untuk lebih cepat
                 )
                 lokasi_data = (await db.execute(lokasi_stmt)).all()
                 dashboard_response.lokasi_chart = ChartData(
@@ -338,11 +340,14 @@ async def get_dashboard_data(
         # 4. Widget Chart Pelanggan per Paket
         if "view_widget_pelanggan_per_paket" in user_permissions:
             try:
+                # Optimized: Filter hanya langganan aktif untuk data yang relevan
                 paket_stmt = (
                     select(PaketLayanan.kecepatan, func.count(Langganan.id))
                     .join(Langganan, PaketLayanan.id == Langganan.paket_layanan_id, isouter=True)
+                    .where(Langganan.status == "Aktif")  # Hanya yang aktif
                     .group_by(PaketLayanan.kecepatan)
                     .order_by(PaketLayanan.kecepatan)
+                    .limit(10)  # Batasi hasil untuk performance
                 )
                 paket_data = (await db.execute(paket_stmt)).all()
                 dashboard_response.paket_chart = ChartData(
@@ -522,52 +527,71 @@ async def get_loyalty_users_by_segment(segmen: Optional[str] = None, db: AsyncSe
     tanpa N+1 query.
     """
     try:
-        # 1. Get all active customer IDs
-        active_customers_stmt = select(Langganan.pelanggan_id).where(Langganan.status == "Aktif").distinct()
-        active_customer_ids = (await db.execute(active_customers_stmt)).scalars().all()
-        active_customer_ids_set = set(active_customer_ids)
-
-        # 2. Get IDs of customers with outstanding invoices
-        outstanding_payers_stmt = (
-            select(Invoice.pelanggan_id).where(Invoice.status_invoice.in_(["Belum Dibayar", "Kadaluarsa"])).distinct()
+        # OPTIMIZED: Single query dengan aggregation untuk menggantikan 3 query terpisah
+        loyalty_query = select(
+            Pelanggan.id,
+            Pelanggan.nama,
+            Pelanggan.alamat,
+            Pelanggan.no_telp,
+            DataTeknis.id_pelanggan,
+            func.sum(
+                case(
+                    (Invoice.status_invoice.in_(["Belum Dibayar", "Kadaluarsa"]), 1),
+                    else_=0
+                )
+            ).label("outstanding_count"),
+            func.sum(
+                case(
+                    (Invoice.paid_at > Invoice.tgl_jatuh_tempo, 1),
+                    else_=0
+                )
+            ).label("late_count"),
+        ).select_from(
+            Pelanggan
+        ).join(
+            Langganan, Pelanggan.id == Langganan.pelanggan_id
+        ).outerjoin(
+            Invoice, Pelanggan.id == Invoice.pelanggan_id
+        ).outerjoin(
+            DataTeknis, Pelanggan.id == DataTeknis.pelanggan_id
+        ).where(
+            Langganan.status == "Aktif"
+        ).group_by(
+            Pelanggan.id, Pelanggan.nama, Pelanggan.alamat, Pelanggan.no_telp, DataTeknis.id_pelanggan
         )
-        outstanding_payer_ids = (await db.execute(outstanding_payers_stmt)).scalars().all()
-        outstanding_payer_ids_set = set(outstanding_payer_ids)
 
-        # 3. Get IDs of customers who have ever paid late
-        ever_late_payers_stmt = select(Invoice.pelanggan_id).where(Invoice.paid_at > Invoice.tgl_jatuh_tempo).distinct()
-        ever_late_payer_ids = (await db.execute(ever_late_payers_stmt)).scalars().all()
-        ever_late_payer_ids_set = set(ever_late_payer_ids)
+        loyalty_result = await db.execute(loyalty_query)
+        loyalty_data = loyalty_result.all()
 
-        # 4. Categorize based on the requested segment
-        target_ids = set()
-        if segmen == "Menunggak":
-            target_ids = active_customer_ids_set.intersection(outstanding_payer_ids_set)
-        elif segmen == "Lunas (Tapi Telat)":
-            target_ids = active_customer_ids_set.difference(outstanding_payer_ids_set).intersection(ever_late_payer_ids_set)
-        elif segmen == "Setia On-Time":
-            target_ids = active_customer_ids_set.difference(outstanding_payer_ids_set).difference(ever_late_payer_ids_set)
-        else:
-            return []
+        # Filter hasil berdasarkan segment yang diminta
+        filtered_customers = []
+        for row in loyalty_data:
+            outstanding_count = row.outstanding_count or 0
+            late_count = row.late_count or 0
 
-        if not target_ids:
-            return []
+            is_outstanding = outstanding_count > 0
+            is_ever_late = late_count > 0
 
-        # 5. Fetch the full details for the target customers
-        final_query = select(Pelanggan).where(Pelanggan.id.in_(list(target_ids))).options(selectinload(Pelanggan.data_teknis))
-        final_customers = (await db.execute(final_query)).scalars().all()
+            # Kategorisasi customer
+            if segmen == "Menunggak" and is_outstanding:
+                pass  # Include outstanding customers
+            elif segmen == "Lunas (Tapi Telat)" and not is_outstanding and is_ever_late:
+                pass  # Include paid but late customers
+            elif segmen == "Setia On-Time" and not is_outstanding and not is_ever_late:
+                pass  # Include on-time customers
+            else:
+                continue  # Skip customers yang tidak match segment
 
-        # 6. Format the response
-        return [
-            {
-                "id": p.id,
-                "nama": p.nama,
-                "id_pelanggan": (p.data_teknis.id_pelanggan if p.data_teknis else f"PLG-{p.id:04d}"),
-                "alamat": p.alamat or "Alamat tidak tersedia",
-                "no_telp": p.no_telp or "Nomor tidak tersedia",
-            }
-            for p in final_customers
-        ]
+            # Format response data
+            filtered_customers.append({
+                "id": row.id,
+                "nama": row.nama,
+                "id_pelanggan": (row.id_pelanggan if row.id_pelanggan else f"PLG-{row.id:04d}"),
+                "alamat": row.alamat or "Alamat tidak tersedia",
+                "no_telp": row.no_telp or "Nomor tidak tersedia",
+            })
+
+        return filtered_customers
     except Exception as e:
         import traceback
 
@@ -576,8 +600,21 @@ async def get_loyalty_users_by_segment(segmen: Optional[str] = None, db: AsyncSe
         raise HTTPException(status_code=500, detail=f"Gagal mengambil data user loyalitas: {str(e)}")
 
 
+# Simple in-memory cache untuk sidebar badges
+_sidebar_cache = {"data": None, "timestamp": 0}
+_cache_duration = 60  # 60 seconds cache
+
 @router.get("/sidebar-badges", response_model=SidebarBadgeResponse)
 async def get_sidebar_badges(db: AsyncSession = Depends(get_db)):
+    import time
+
+    # Check cache dulu untuk performance
+    current_time = time.time()
+    if (_sidebar_cache["data"] and
+        current_time - _sidebar_cache["timestamp"] < _cache_duration):
+        return _sidebar_cache["data"]
+
+    # Jika cache expired, generate data baru
     # PERBAIKAN: Menggunakan nama 'Langganan' dan 'Invoice'
     suspended_query = select(func.count(Langganan.id)).where(Langganan.status == "Suspended")
     suspended_result = await db.execute(suspended_query)
@@ -591,11 +628,18 @@ async def get_sidebar_badges(db: AsyncSession = Depends(get_db)):
     stopped_result = await db.execute(stopped_query)
     stopped_count = stopped_result.scalar_one_or_none() or 0
 
-    return SidebarBadgeResponse(
+    # Generate response dan cache
+    response_data = SidebarBadgeResponse(
         suspended_count=suspended_count,
         unpaid_invoice_count=unpaid_count,
         stopped_count=stopped_count,
     )
+
+    # Simpan ke cache
+    _sidebar_cache["data"] = response_data
+    _sidebar_cache["timestamp"] = current_time
+
+    return response_data
 
 
 # --- 1. Definisikan Skema Pydantic Baru untuk Respons ---

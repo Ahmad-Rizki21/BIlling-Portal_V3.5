@@ -321,11 +321,12 @@ async def read_pelanggan_paginated(
     logger.info(f"Mengambil data pelanggan dengan pagination: skip={skip}, limit={limit}")
 
     try:
-        # OPTIMIZED: Query dengan comprehensive eager loading untuk paginated results
+        # OPTIMIZED: Query dengan selective eager loading untuk better performance
+        # Load dasar data pelanggan + yang penting-penting saja untuk list view
         query = select(PelangganModel).options(
-            joinedload(PelangganModel.data_teknis),
-            joinedload(PelangganModel.harga_layanan),
-            joinedload(PelangganModel.langganan).joinedload(LanggananModel.paket_layanan),
+            selectinload(PelangganModel.harga_layanan),  # Penting untuk brand info
+            selectinload(PelangganModel.data_teknis),   # Penting untuk status koneksi
+            # Langganan hanya di-load jika dibutuhkan (lazy loading untuk performance)
         )
 
         if search:

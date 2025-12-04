@@ -25,7 +25,8 @@ export default defineConfig({
     host: true
   },
   build: {
-    cssCodeSplit: false,
+    cssCodeSplit: true,
+    cssMinify: true,  // Tambah minification untuk CSS
     target: 'es2015',
     outDir: 'dist',
     assetsDir: 'assets',

@@ -79,6 +79,10 @@ class Invoice(Base):
         Index("idx_invoice_xendit_lookup", "xendit_id", "status_invoice"),        # Lookup invoice dari Xendit callback
         Index("idx_invoice_number_lookup", "invoice_number", "status_invoice"),    # Search invoice by number
         Index("idx_invoice_payment_method", "metode_pembayaran", "status_invoice"), # Analisis metode pembayaran
+
+        # Index tambahan untuk optimasi dashboard loyalty query
+        Index("idx_invoice_late_payment_analysis", "pelanggan_id", "paid_at", "tgl_jatuh_tempo"),  # Loyalty analysis
+        Index("idx_invoice_outstanding_analysis", "pelanggan_id", "status_invoice"),                   # Outstanding analysis
     )
 
     # ====================================================================

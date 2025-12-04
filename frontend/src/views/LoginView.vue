@@ -128,6 +128,7 @@ function backToLogin() {
                 src="/src/assets/icon_dark.ico"
                 alt="Jelantik Logo"
                 class="h-20 w-auto object-contain"
+                loading="lazy"
                 @error="handleImageError"
               />
             </div>

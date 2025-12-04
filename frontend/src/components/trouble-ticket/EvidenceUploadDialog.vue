@@ -29,11 +29,13 @@
             <v-col cols="12">
               <div class="text-subtitle-2">Preview:</div>
               <div v-if="isImage" class="mt-2">
-                <v-img 
-                  :src="previewUrl" 
-                  max-height="300" 
-                  contain 
+                <v-img
+                  :src="previewUrl"
+                  max-height="300"
+                  contain
                   class="rounded border"
+                  eager
+                  loading="lazy"
                 />
               </div>
               <div v-else-if="isVideo" class="mt-2">

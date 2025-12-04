@@ -8,8 +8,8 @@ class OLTBase(BaseModel):
     ip_address: str
     tipe_olt: str
     username: Optional[str] = None
-    # TAMBAHKAN INI: ID Mikrotik yang akan dihubungkan, wajib saat membuat
-    mikrotik_server_id: int
+    # FIX: Allow null values untuk mikrotik_server_id (sesuai model)
+    mikrotik_server_id: Optional[int] = None
 
 
 class OLTCreate(OLTBase):

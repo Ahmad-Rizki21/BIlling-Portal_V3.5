@@ -579,6 +579,12 @@ async def import_from_csv_langganan(file: UploadFile = File(...), db: AsyncSessi
     )
     subscribed_pelanggan_ids = set(existing_langganan_q.scalars().all())
 
+    # OPTIMIZATION: Batch query untuk DataTeknis agar tidak N+1
+    data_teknis_q = await db.execute(
+        select(DataTeknisModel).where(DataTeknisModel.pelanggan_id.in_(pelanggan_ids_found))
+    )
+    data_teknis_map = {dt.pelanggan_id: dt for dt in data_teknis_q.scalars().all()}
+
     for row_num, row in enumerate(reader, start=2):
         # Skip baris jika benar-benar kosong (tidak ada data sama sekali)
         if not any(row.values()):
@@ -612,10 +618,8 @@ async def import_from_csv_langganan(file: UploadFile = File(...), db: AsyncSessi
                 errors.append(f"Baris {row_num}: Pelanggan '{pelanggan.nama}' sudah memiliki langganan.")
                 continue
 
-            # VALIDASI PENTING: Cek apakah pelanggan sudah punya data teknis sebelum import langganan
-            data_teknis_query = select(DataTeknisModel).where(DataTeknisModel.pelanggan_id == pelanggan.id)
-            data_teknis_result = await db.execute(data_teknis_query)
-            data_teknis = data_teknis_result.scalar_one_or_none()
+            # OPTIMIZED: Cek data teknis dari batch query (tidak N+1 lagi)
+            data_teknis = data_teknis_map.get(pelanggan.id)
 
             if not data_teknis:
                 errors.append(f"Baris {row_num}: Pelanggan '{pelanggan.nama}' belum memiliki data teknis. Tim NOC harus menambahkan data teknis terlebih dahulu sebelum langganan dapat dibuat.")
