@@ -219,7 +219,33 @@
       class="flex-grow-1"
       style="min-width: 180px;"
     ></v-select>
-    
+
+    <v-text-field
+      v-model="selectedJatuhTempoStart"
+      label="Jatuh Tempo Dari"
+      type="date"
+      prepend-inner-icon="mdi-calendar-start"
+      variant="outlined"
+      density="comfortable"
+      hide-details
+      clearable
+      class="flex-grow-1"
+      style="min-width: 160px;"
+    ></v-text-field>
+
+    <v-text-field
+      v-model="selectedJatuhTempoEnd"
+      label="Jatuh Tempo Sampai"
+      type="date"
+      prepend-inner-icon="mdi-calendar-end"
+      variant="outlined"
+      density="comfortable"
+      hide-details
+      clearable
+      class="flex-grow-1"
+      style="min-width: 160px;"
+    ></v-text-field>
+
     <v-btn
         variant="text"
         @click="resetFilters"
@@ -1503,6 +1529,8 @@ const searchQuery = ref('');
 const selectedAlamat = ref('');
 const selectedPaket = ref<number | null>(null);
 const selectedStatus = ref<string | null>(null);
+const selectedJatuhTempoStart = ref('');
+const selectedJatuhTempoEnd = ref('');
 const statusOptions = ref(['Aktif', 'Suspended', 'Berhenti']);
 
 const isProratePlusFull = ref<boolean>(false);
@@ -1894,6 +1922,8 @@ async function fetchLangganan(isLoadMore = false, explicitPage: number | null = 
     if (selectedAlamat.value && selectedAlamat.value.trim() !== '') params.append('alamat', selectedAlamat.value.trim());
     if (selectedPaket.value) params.append('paket_layanan_id', String(selectedPaket.value));
     if (selectedStatus.value) params.append('status', selectedStatus.value);
+    if (selectedJatuhTempoStart.value) params.append('jatuh_tempo_start', selectedJatuhTempoStart.value);
+    if (selectedJatuhTempoEnd.value) params.append('jatuh_tempo_end', selectedJatuhTempoEnd.value);
 
     // --- LOGIKA KUNCI: Tambahkan paginasi ---
     // Determine page number based on the context
@@ -1994,7 +2024,7 @@ const applyFilters = debounce(() => {
 }, 500); // Tunda 500ms
 
 // Perhatikan perubahan pada filter dan panggil fungsi applyFilters
-watch([searchQuery, selectedAlamat, selectedPaket, selectedStatus], () => {
+watch([searchQuery, selectedAlamat, selectedPaket, selectedStatus, selectedJatuhTempoStart, selectedJatuhTempoEnd], () => {
   applyFilters();
 });
 
@@ -2088,6 +2118,8 @@ function resetFilters() {
   selectedAlamat.value = '';
   selectedPaket.value = null;
   selectedStatus.value = null;
+  selectedJatuhTempoStart.value = '';
+  selectedJatuhTempoEnd.value = '';
 }
 // ============================================
 
@@ -2444,6 +2476,12 @@ async function exportLangganan() {
     }
     if (selectedStatus.value) {
       params.append('status', selectedStatus.value);
+    }
+    if (selectedJatuhTempoStart.value) {
+      params.append('jatuh_tempo_start', selectedJatuhTempoStart.value);
+    }
+    if (selectedJatuhTempoEnd.value) {
+      params.append('jatuh_tempo_end', selectedJatuhTempoEnd.value);
     }
     // Tambahkan flag untuk export semua data (tanpa pagination)
     params.append('export_all', 'true');

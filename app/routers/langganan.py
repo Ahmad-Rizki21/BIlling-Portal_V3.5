@@ -166,6 +166,8 @@ async def get_all_langganan(
     alamat: Optional[str] = None,
     paket_layanan_name: Optional[str] = None,
     status: Optional[str] = None,
+    jatuh_tempo_start: Optional[str] = None,
+    jatuh_tempo_end: Optional[str] = None,
     for_invoice_selection: bool = False,
     skip: int = 0,
     limit: Optional[int] = 15,
@@ -205,6 +207,27 @@ async def get_all_langganan(
         filter_condition = LanggananModel.status == status
         base_query = base_query.where(filter_condition)
         count_query = count_query.where(filter_condition)
+
+    # Filter berdasarkan tanggal jatuh tempo
+    if jatuh_tempo_start:
+        try:
+            start_date = datetime.strptime(jatuh_tempo_start, "%Y-%m-%d").date()
+            filter_condition = LanggananModel.tgl_jatuh_tempo >= start_date
+            base_query = base_query.where(filter_condition)
+            count_query = count_query.where(filter_condition)
+        except ValueError:
+            # Skip filter jika format tanggal tidak valid
+            pass
+
+    if jatuh_tempo_end:
+        try:
+            end_date = datetime.strptime(jatuh_tempo_end, "%Y-%m-%d").date()
+            filter_condition = LanggananModel.tgl_jatuh_tempo <= end_date
+            base_query = base_query.where(filter_condition)
+            count_query = count_query.where(filter_condition)
+        except ValueError:
+            # Skip filter jika format tanggal tidak valid
+            pass
 
     # Get total count before applying pagination
     total_count_result = await db.execute(count_query)
@@ -460,6 +483,8 @@ async def export_to_csv_langganan(
     alamat: Optional[str] = None,
     paket_layanan_name: Optional[str] = None,
     status: Optional[str] = None,
+    jatuh_tempo_start: Optional[str] = None,
+    jatuh_tempo_end: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
 ):
     """Mengekspor semua data langganan ke dalam file CSV dengan filter."""
@@ -480,6 +505,23 @@ async def export_to_csv_langganan(
         query = query.join(PaketLayananModel).where(PaketLayananModel.nama_paket == paket_layanan_name)
     if status:
         query = query.where(LanggananModel.status == status)
+
+    # Filter berdasarkan tanggal jatuh tempo untuk export
+    if jatuh_tempo_start:
+        try:
+            start_date = datetime.strptime(jatuh_tempo_start, "%Y-%m-%d").date()
+            query = query.where(LanggananModel.tgl_jatuh_tempo >= start_date)
+        except ValueError:
+            # Skip filter jika format tanggal tidak valid
+            pass
+
+    if jatuh_tempo_end:
+        try:
+            end_date = datetime.strptime(jatuh_tempo_end, "%Y-%m-%d").date()
+            query = query.where(LanggananModel.tgl_jatuh_tempo <= end_date)
+        except ValueError:
+            # Skip filter jika format tanggal tidak valid
+            pass
 
     query = query.order_by(LanggananModel.id.desc())
 
