@@ -35,6 +35,28 @@ router = APIRouter(prefix="/langganan", tags=["Langganan"])
 logger = logging.getLogger(__name__)
 
 
+# --- Helper Functions ---
+def format_phone_number(phone_number: str) -> str:
+    """
+    Format phone number to international format (62 prefix).
+    Converts numbers starting with 0 to 62 format.
+    """
+    if not phone_number or phone_number.strip() == '':
+        return phone_number
+
+    phone = phone_number.strip()
+
+    # Remove any non-digit characters first
+    phone_digits = ''.join(c for c in phone if c.isdigit())
+
+    # If starts with 0, replace with 62
+    if phone_digits.startswith('0'):
+        return '62' + phone_digits[1:]
+
+    # If already starts with 62 or doesn't start with 0, return as is
+    return phone_digits
+
+
 # --- Skema Respons Baru ---
 class LanggananListResponse(BaseModel):
     data: List[LanggananSchema]
@@ -155,6 +177,9 @@ async def create_langganan(langganan_data: LanggananCreate, db: AsyncSession = D
 # - alamat: filter berdasarkan alamat pelanggan
 # - paket_layanan_name: filter berdasarkan nama paket
 # - status: filter berdasarkan status (Aktif/Berhenti)
+# - brand: filter berdasarkan brand (JAKINET, JELANTIK, JELANTIK Nagrak, dll)
+# - jatuh_tempo_start: filter tanggal jatuh tempo mulai
+# - jatuh_tempo_end: filter tanggal jatuh tempo akhir
 # - for_invoice_selection: kalo true, exclude langganan status "Berhenti"
 # - skip: offset pagination (default: 0)
 # - limit: jumlah data per halaman (default: 15)
@@ -208,6 +233,8 @@ async def get_all_langganan(
         base_query = base_query.where(filter_condition)
         count_query = count_query.where(filter_condition)
 
+    
+    
     # Filter berdasarkan tanggal jatuh tempo
     if jatuh_tempo_start:
         try:
@@ -241,6 +268,7 @@ async def get_all_langganan(
     result = await db.execute(data_query)
     langganan_list = result.unique().scalars().all()
 
+    
     if for_invoice_selection and langganan_list:
         pelanggan_ids = {l.pelanggan_id for l in langganan_list}
         invoice_counts_stmt = (
@@ -474,7 +502,10 @@ async def download_csv_template_langganan():
 # - alamat: filter berdasarkan alamat
 # - paket_layanan_name: filter berdasarkan nama paket
 # - status: filter berdasarkan status
-# Response: file CSV dengan kolom: Nama Pelanggan, Email, Paket Layanan, Status, Metode Pembayaran, Harga, dll
+# - brand: filter berdasarkan brand (JAKINET, JELANTIK, JELANTIK Nagrak, dll)
+# - jatuh_tempo_start: filter tanggal jatuh tempo mulai
+# - jatuh_tempo_end: filter tanggal jatuh tempo akhir
+# Response: file CSV dengan kolom: Nama Pelanggan, Email, Nomor Telepon, Brand, Paket Layanan, Status, Metode Pembayaran, Harga, dll
 # Format file: CSV dengan BOM dan timestamp di filename
 # Performance: eager loading biar efficient
 @router.get("/export/csv", response_class=StreamingResponse)
@@ -483,6 +514,7 @@ async def export_to_csv_langganan(
     alamat: Optional[str] = None,
     paket_layanan_name: Optional[str] = None,
     status: Optional[str] = None,
+    brand: Optional[str] = None,
     jatuh_tempo_start: Optional[str] = None,
     jatuh_tempo_end: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
@@ -491,7 +523,7 @@ async def export_to_csv_langganan(
     query = (
         select(LanggananModel)
         .options(
-            joinedload(LanggananModel.pelanggan),
+            joinedload(LanggananModel.pelanggan).joinedload(PelangganModel.harga_layanan),
             joinedload(LanggananModel.paket_layanan),
         )
         .join(LanggananModel.pelanggan)
@@ -505,6 +537,11 @@ async def export_to_csv_langganan(
         query = query.join(PaketLayananModel).where(PaketLayananModel.nama_paket == paket_layanan_name)
     if status:
         query = query.where(LanggananModel.status == status)
+
+    
+    # Filter berdasarkan brand (JAKINET, JELANTIK, JELANTIK Nagrak, dll)
+    if brand:
+        query = query.where(PelangganModel.id_brand == brand)
 
     # Filter berdasarkan tanggal jatuh tempo untuk export
     if jatuh_tempo_start:
@@ -541,6 +578,8 @@ async def export_to_csv_langganan(
                 "Email Pelanggan": (langganan.pelanggan.email if langganan.pelanggan else "N/A"),
                 "Alamat": (langganan.pelanggan.alamat if langganan.pelanggan else "N/A"),
                 "Alamat Lengkap": (langganan.pelanggan.alamat_2 if langganan.pelanggan else "N/A"),
+                "Nomor Telepon": (format_phone_number(langganan.pelanggan.no_telp) if langganan.pelanggan and langganan.pelanggan.no_telp else "N/A"),
+                "Brand": (langganan.pelanggan.harga_layanan.brand if langganan.pelanggan and langganan.pelanggan.harga_layanan else "N/A"),
                 "Paket Layanan": (langganan.paket_layanan.nama_paket if langganan.paket_layanan else "N/A"),
                 "Status": langganan.status,
                 "Metode Pembayaran": langganan.metode_pembayaran,

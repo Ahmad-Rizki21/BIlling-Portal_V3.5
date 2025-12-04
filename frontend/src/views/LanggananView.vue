@@ -220,6 +220,8 @@
       style="min-width: 180px;"
     ></v-select>
 
+    
+  
     <v-text-field
       v-model="selectedJatuhTempoStart"
       label="Jatuh Tempo Dari"
@@ -245,6 +247,21 @@
       class="flex-grow-1"
       style="min-width: 160px;"
     ></v-text-field>
+
+    <v-select
+      v-model="selectedExportBrand"
+      :items="exportBrandOptions"
+      item-title="title"
+      item-value="value"
+      label="Export Filter Brand"
+      prepend-inner-icon="mdi-domain"
+      variant="outlined"
+      density="comfortable"
+      hide-details
+      clearable
+      class="flex-grow-1"
+      style="min-width: 180px;"
+    ></v-select>
 
     <v-btn
         variant="text"
@@ -343,6 +360,17 @@
             <v-list-item-title class="text-body-2">No. Telepon</v-list-item-title>
             <template v-slot:append>
               <span class="text-body-2">{{ getPelangganPhone(item.pelanggan_id) }}</span>
+            </template>
+          </v-list-item>
+          <v-list-item class="px-0">
+            <template v-slot:prepend>
+              <v-icon size="18" class="me-3 text-medium-emphasis">mdi-domain</v-icon>
+            </template>
+            <v-list-item-title class="text-body-2">Brand</v-list-item-title>
+            <template v-slot:append>
+              <v-chip size="x-small" color="primary" variant="tonal">
+                {{ item.pelanggan?.harga_layanan?.brand || 'N/A' }}
+              </v-chip>
             </template>
           </v-list-item>
           <v-list-item class="px-0" v-if="(item.status === 'Aktif' || item.status === 'Berhenti')">
@@ -490,6 +518,12 @@
           <template v-slot:item.pelanggan.no_tlp="{ item }: { item: Langganan }">
             <div class="text-body-2">
               {{ getPelangganPhone(item.pelanggan_id) }}
+            </div>
+          </template>
+
+          <template v-slot:item.pelanggan.harga_layanan.brand="{ item }: { item: Langganan }">
+            <div class="text-body-2">
+              {{ item.pelanggan?.harga_layanan?.brand || 'N/A' }}
             </div>
           </template>
 
@@ -1457,10 +1491,12 @@ interface Langganan {
 }
 
 interface PelangganData {
+  harga_layanan: any;
   id: number;
   nama: string;
   alamat: string;
   no_telp?: string;
+  id_brand?: string;
 }
 
 interface PelangganSelectItem {
@@ -1529,6 +1565,7 @@ const searchQuery = ref('');
 const selectedAlamat = ref('');
 const selectedPaket = ref<number | null>(null);
 const selectedStatus = ref<string | null>(null);
+const selectedExportBrand = ref(''); // Brand filter khusus untuk export
 const selectedJatuhTempoStart = ref('');
 const selectedJatuhTempoEnd = ref('');
 const statusOptions = ref(['Aktif', 'Suspended', 'Berhenti']);
@@ -1922,7 +1959,7 @@ async function fetchLangganan(isLoadMore = false, explicitPage: number | null = 
     if (selectedAlamat.value && selectedAlamat.value.trim() !== '') params.append('alamat', selectedAlamat.value.trim());
     if (selectedPaket.value) params.append('paket_layanan_id', String(selectedPaket.value));
     if (selectedStatus.value) params.append('status', selectedStatus.value);
-    if (selectedJatuhTempoStart.value) params.append('jatuh_tempo_start', selectedJatuhTempoStart.value);
+      if (selectedJatuhTempoStart.value) params.append('jatuh_tempo_start', selectedJatuhTempoStart.value);
     if (selectedJatuhTempoEnd.value) params.append('jatuh_tempo_end', selectedJatuhTempoEnd.value);
 
     // --- LOGIKA KUNCI: Tambahkan paginasi ---
@@ -2112,12 +2149,57 @@ const uniquePaketLayananOptions = computed(() => {
   return uniquePackages;
 });
 
+const exportBrandOptions = computed(() => {
+  const brandMap = new Map<string, string>();
+
+  // Extract brand information from langgananList (has harga_layanan.brand)
+  if (langgananList.value && langgananList.value.length > 0) {
+    langgananList.value.forEach(langganan => {
+      if (langganan.pelanggan?.harga_layanan?.brand && langganan.pelanggan?.id_brand) {
+        const brandName = langganan.pelanggan.harga_layanan.brand;
+        const brandCode = langganan.pelanggan.id_brand;
+        // Use brand name as display, but store brand code as value
+        brandMap.set(brandCode, brandName);
+      }
+    });
+  }
+
+  // Fallback: extract from pelangganSelectList and map known brand codes
+  const knownBrandNames: { [key: string]: string } = {
+    'ajn-01': 'JAKINET',
+    'ajn-02': 'JELANTIK',
+    'ajn-03': 'JELANTIK NAGRAK'
+  };
+
+  if (pelangganSelectList.value && pelangganSelectList.value.length > 0) {
+    pelangganSelectList.value.forEach(item => {
+      if (item.id_brand && item.id_brand.trim() !== '' && !brandMap.has(item.id_brand)) {
+        const brandCode = item.id_brand.trim();
+        const brandName = knownBrandNames[brandCode] || brandCode.toUpperCase();
+        // Use brand name as display, but store brand code as value
+        brandMap.set(brandCode, brandName);
+      }
+    });
+  }
+
+  // Convert Map to array of objects for v-select with value and title
+  const brandOptions = Array.from(brandMap.entries()).map(([brandCode, brandName]) => ({
+    value: brandCode,  // Send brand code to backend
+    title: brandName   // Display brand name to user
+  }));
+
+  // Sort by brand name alphabetically and add "All Brands" option
+  const sortedOptions = brandOptions.sort((a, b) => a.title.localeCompare(b.title));
+  return [{ value: '', title: 'Semua Brand' }, ...sortedOptions];
+});
+
 // Fungsi untuk mereset semua filter
 function resetFilters() {
   searchQuery.value = '';
   selectedAlamat.value = '';
   selectedPaket.value = null;
   selectedStatus.value = null;
+  selectedExportBrand.value = '';
   selectedJatuhTempoStart.value = '';
   selectedJatuhTempoEnd.value = '';
 }
@@ -2477,7 +2559,10 @@ async function exportLangganan() {
     if (selectedStatus.value) {
       params.append('status', selectedStatus.value);
     }
-    if (selectedJatuhTempoStart.value) {
+    if (selectedExportBrand.value && selectedExportBrand.value.trim() !== '') {
+      params.append('brand', selectedExportBrand.value.trim());
+    }
+        if (selectedJatuhTempoStart.value) {
       params.append('jatuh_tempo_start', selectedJatuhTempoStart.value);
     }
     if (selectedJatuhTempoEnd.value) {
