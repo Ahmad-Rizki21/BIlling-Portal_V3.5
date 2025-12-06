@@ -857,8 +857,8 @@ const getPaidCount = () => {
 };
 const getPendingCount = () => {
   if (!invoices.value) return 0;
-  // Hitung berdasarkan status link pembayaran yang aktif
-  return invoices.value.filter(inv => inv.payment_link_status === 'Belum Dibayar').length;
+  // Hitung berdasarkan filteredInvoices untuk exclude expired
+  return filteredInvoices.value.filter(inv => inv.payment_link_status === 'Belum Dibayar').length;
 };
 const getOverdueCount = () => {
   if (!invoices.value) return 0;
@@ -888,10 +888,18 @@ function getStatusColor(status: string): string {
 }
 
 const filteredInvoices = computed(() => {
-  // Optimasi: Data sudah difilter di server, jadi tidak perlu filter client-side lagi
-  // showPaidInvoices.value = false -> data sudah difilter show_active_only di backend
-  // showPaidInvoices.value = true -> data lengkap (tapi dengan limit)
-  return invoices.value;
+  // Filter data di client-side untuk mengecek payment link status yang expired
+  let filtered = invoices.value;
+
+  // Jika switch "Tampilkan Lunas & Kadaluarsa" tidak aktif, exclude invoice dengan payment link expired
+  if (!showPaidInvoices.value && filtered) {
+    filtered = filtered.filter(invoice => {
+      // Exclude invoice yang payment link status-nya "Expired"
+      return invoice.payment_link_status !== 'Expired';
+    });
+  }
+
+  return filtered || [];
 });
 
 /**

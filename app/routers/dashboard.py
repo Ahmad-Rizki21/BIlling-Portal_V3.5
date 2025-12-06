@@ -621,9 +621,49 @@ async def get_sidebar_badges(db: AsyncSession = Depends(get_db)):
     suspended_result = await db.execute(suspended_query)
     suspended_count = suspended_result.scalar_one_or_none() or 0
 
-    unpaid_query = select(func.count(Invoice.id)).where(Invoice.status_invoice == "Belum Dibayar")
-    unpaid_result = await db.execute(unpaid_query)
-    unpaid_count = unpaid_result.scalar_one_or_none() or 0
+    # PERBAIKAN: Exclude invoice dengan payment link expired
+    # Logic yang sama dengan Invoice.get_payment_link_status()
+    from datetime import date
+    today = date.today()
+
+    # Ambil semua invoice "Belum Dibayar" lalu filter dengan Python logic
+    all_unpaid_query = select(Invoice).where(Invoice.status_invoice == "Belum Dibayar")
+    all_unpaid_result = await db.execute(all_unpaid_query)
+    all_unpaid_invoices = all_unpaid_result.scalars().all()
+
+    # Filter invoice dengan payment link masih aktif
+    active_unpaid_count = 0
+    expired_count = 0
+    for invoice in all_unpaid_invoices:
+        try:
+            # Logic yang sama dengan Invoice.get_payment_link_status()
+            invoice_date = invoice.tgl_invoice
+            if isinstance(invoice_date, str):
+                invoice_date = date.fromisoformat(invoice_date)
+            elif hasattr(invoice_date, 'date'):
+                invoice_date = invoice_date.date()
+
+            # Hitung tanggal expiry (tanggal 4 bulan berikutnya)
+            if invoice_date.month == 12:
+                expiry_date = date(invoice_date.year + 1, 1, 4)
+            else:
+                expiry_date = date(invoice_date.year, invoice_date.month + 1, 4)
+
+            # Link aktif jika hari ini <= expiry_date
+            if today <= expiry_date:
+                active_unpaid_count += 1
+            else:
+                expired_count += 1
+                # Debug: log invoice yang expired
+                logger.info(f"EXPIRED: {invoice.invoice_number} - Invoice: {invoice_date}, Expiry: {expiry_date}, Today: {today}")
+        except Exception as e:
+            # Skip jika ada error dalam parsing tanggal
+            logger.warning(f"Error processing invoice {invoice.invoice_number}: {e}")
+            continue
+
+    logger.info(f"Unpaid invoice stats - Total: {len(all_unpaid_invoices)}, Active: {active_unpaid_count}, Expired: {expired_count}")
+
+    unpaid_count = active_unpaid_count
 
     stopped_query = select(func.count(Langganan.id)).where(Langganan.status == "Berhenti")
     stopped_result = await db.execute(stopped_query)
@@ -641,6 +681,13 @@ async def get_sidebar_badges(db: AsyncSession = Depends(get_db)):
     _sidebar_cache["timestamp"] = current_time
 
     return response_data
+
+
+# Function untuk clear sidebar cache (dipanggil dari invoice callback)
+def clear_sidebar_cache():
+    """Clear sidebar badge cache when invoice status changes."""
+    global _sidebar_cache
+    _sidebar_cache = {"data": None, "timestamp": 0}
 
 
 # --- 1. Definisikan Skema Pydantic Baru untuk Respons ---

@@ -478,19 +478,22 @@ async def download_inventory_template(db: AsyncSession = Depends(get_db)):
         if not default_status_id and statuses:
             default_status_id = statuses[0].id
 
-        # Create template data with user-friendly names
+        # Create template data with user-friendly names - pastikan urutan kolom benar
         template_data = {
-            'serial_number': ['SN001', 'SN002', 'SN003'],
-            'mac_address': ['AA:BB:CC:DD:EE:01', 'AA:BB:CC:DD:EE:02', 'AA:BB:CC:DD:EE:03'],
-            'location': ['Gudang A', 'Gudang B', 'Gudang C'],
-            'purchase_date': ['2024-01-15', '2024-01-16', '2024-01-17'],
-            'notes': ['Catatan untuk item 1', 'Catatan untuk item 2', 'Catatan untuk item 3'],
-            'item_type': [item_types[0].name if item_types else 'ONT ZTE'] * 3,
-            'status': [statuses[0].name if statuses else 'DI GUDANG'] * 3
+            'Serial Number': ['SN001', 'SN002', 'SN003'],
+            'MAC Address': ['AA:BB:CC:DD:EE:01', 'AA:BB:CC:DD:EE:02', 'AA:BB:CC:DD:EE:03'],
+            'Tipe Barang': [item_types[0].name if item_types else 'ONT ZTE'] * 3,
+            'Status': [statuses[0].name if statuses else 'DI GUDANG'] * 3,
+            'Lokasi': ['Gudang A', 'Gudang B', 'Gudang C'],
+            'Tanggal Pembelian': ['2024-01-15', '2024-01-16', '2024-01-17'],
+            'Catatan': ['Catatan untuk item 1', 'Catatan untuk item 2', 'Catatan untuk item 3']
         }
 
-        # Create DataFrame
-        df = pd.DataFrame(template_data)
+        # Create DataFrame dengan urutan kolom yang pasti
+        df = pd.DataFrame(template_data, columns=[
+            'Serial Number', 'MAC Address', 'Tipe Barang', 'Status',
+            'Lokasi', 'Tanggal Pembelian', 'Catatan'
+        ])
 
         # Create Excel file dengan multiple sheets dan dropdown
         output = io.BytesIO()
@@ -536,37 +539,57 @@ async def download_inventory_template(db: AsyncSession = Depends(get_db)):
                 worksheet.write(0, col_num, value, header_format)
 
                 # Add comments untuk setiap column
-                if col_num == 0:  # serial_number
+                if col_num == 0:  # Serial Number
                     worksheet.write_comment(0, col_num, "Serial Number unik perangkat (wajib diisi)")
-                elif col_num == 1:  # mac_address
+                elif col_num == 1:  # MAC Address
                     worksheet.write_comment(0, col_num, "MAC Address dalam format XX:XX:XX:XX:XX:XX")
-                elif col_num == 2:  # location
+                elif col_num == 2:  # Tipe Barang
+                    worksheet.write_comment(0, col_num, f"Tipe perangkat (lihat sheet Referensi Tipe). Default: {item_types[0].name if item_types else 'ONT ZTE'}")
+                elif col_num == 3:  # Status
+                    worksheet.write_comment(0, col_num, f"Status perangkat (lihat sheet Referensi Status). Default: {statuses[0].name if statuses else 'DI GUDANG'}")
+                elif col_num == 4:  # Lokasi
                     worksheet.write_comment(0, col_num, "Lokasi penyimpanan perangkat")
-                elif col_num == 3:  # purchase_date
+                elif col_num == 5:  # Tanggal Pembelian
                     worksheet.write_comment(0, col_num, "Tanggal pembelian (format: YYYY-MM-DD)")
-                elif col_num == 4:  # notes
+                elif col_num == 6:  # Catatan
                     worksheet.write_comment(0, col_num, "Catatan tambahan (opsional)")
-                elif col_num == 5:  # item_type_id
-                    worksheet.write_comment(0, col_num, f"ID Tipe perangkat (lihat sheet Referensi Tipe). Default: ONT ZTE (ID: {default_item_type_id})")
-                elif col_num == 6:  # status_id
-                    worksheet.write_comment(0, col_num, f"ID Status perangkat (lihat sheet Referensi Status). Default: DI GUDANG (ID: {default_status_id})")
 
-            # Adjust column widths
+            # Adjust column widths dengan lebar yang sesuai untuk Libre Office
+            column_widths = {
+                'Serial Number': 20,
+                'MAC Address': 20,
+                'Tipe Barang': 15,
+                'Status': 15,
+                'Lokasi': 15,
+                'Tanggal Pembelian': 20,  # Lebar cukup untuk tanggal
+                'Catatan': 25
+            }
+
             for i, col in enumerate(df.columns):
-                worksheet.set_column(i, i, 20)
+                width = column_widths.get(col, 20)
+                worksheet.set_column(i, i, width)
 
         output.seek(0)
 
-        # Generate filename dengan timestamp
+        # Generate filename dengan timestamp dan random ID untuk cache busting
+        import random
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"template_inventory_import_{timestamp}.xlsx"
+        random_id = random.randint(1000, 9999)
+        filename = f"template_inventory_import_{timestamp}_{random_id}.xlsx"
 
         logger.info(f"Generated inventory import template: {filename}")
+        logger.info(f"Final template columns after Excel creation: {list(df.columns)}")
+        logger.info(f"Total columns in template: {len(df.columns)}")
 
         return StreamingResponse(
             io.BytesIO(output.read()),
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            headers={"Content-Disposition": f"attachment; filename={filename}"}
+            headers={
+                "Content-Disposition": f"attachment; filename={filename}",
+                "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0, post-check=0, pre-check=0",
+                "Pragma": "no-cache",
+                "Expires": "0"
+            }
         )
 
     except Exception as e:
@@ -609,19 +632,80 @@ async def bulk_import_inventory(
                 detail=f"Error reading file: {str(e)}"
             )
 
-        # Validate required columns (support both ID and name formats)
-        required_columns = ['serial_number']
-        if 'item_type' not in df.columns and 'item_type_id' not in df.columns:
-            required_columns.append('item_type atau item_type_id')
-        if 'status' not in df.columns and 'status_id' not in df.columns:
-            required_columns.append('status atau status_id')
+        # Fungsi untuk mencocokkan nama kolom dengan berbagai variasi
+        def find_column(df_columns, possible_names):
+            """Mencari kolom dengan berbagai variasi nama"""
+            for col in df_columns:
+                # Normalisasi kolom: lowercase, strip spasi, ganti spasi dan dash dengan underscore
+                normalized_col = str(col).lower().strip().replace(' ', '_').replace('-', '_').replace('.', '_')
+                for name in possible_names:
+                    # Normalisasi nama yang dicari
+                    normalized_name = name.lower().strip().replace(' ', '_').replace('-', '_').replace('.', '_')
+                    if normalized_col == normalized_name:
+                        return col
+            return None
 
-        missing_columns = [col for col in required_columns if col not in df.columns]
-        if missing_columns:
+        # Debug: Log nama kolom untuk membantu troubleshooting
+        logger.info(f"Kolom-kolom yang ditemukan dalam file: {list(df.columns)}")
+
+        # Cek apakah kolom-kolom wajib ada (dengan variasi nama)
+        serial_number_col = find_column(df.columns, [
+            'serial_number', 'serialnumber', 'serial_no', 'serial no', 'no serial', 'nomor serial', 'sn', 'serial number',
+            'Serial_Number', 'SerialNumber', 'Serial_no', 'Serial no', 'No Serial', 'Nomor Serial', 'Serial Number',
+            'serial number', 'serial number'
+        ])
+        if not serial_number_col:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Kolom wajib tidak ditemukan: {', '.join(missing_columns)}"
+                detail=f"Kolom wajib tidak ditemukan: Serial Number. Kolom yang ditemukan: {list(df.columns)}"
             )
+
+        # Cek item_type atau item_type_id atau Tipe Barang
+        item_type_col = find_column(df.columns, [
+            'item_type', 'itemtype', 'item_type_id', 'itemtypeid', 'jenis_barang', 'tipe_barang', 'type', 'tipe',
+            'Item_Type', 'ItemType', 'Item_type', 'Itemtype', 'Jenis_Barang', 'Tipe_Barang', 'Type', 'Tipe',
+            'tipe barang', 'tipe_barang'
+        ])
+        if not item_type_col:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Kolom wajib tidak ditemukan: Tipe Barang/Item Type. Kolom yang ditemukan: {list(df.columns)}"
+            )
+
+        # Cek status atau status_id
+        status_col = find_column(df.columns, [
+            'status', 'status_id', 'statusid', 'kondisi', 'keadaan', 'Status', 'Status_id', 'Kondisi', 'Keadaan', 'status id'
+        ])
+        if not status_col:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Kolom wajib tidak ditemukan: Status. Kolom yang ditemukan: {list(df.columns)}"
+            )
+
+        logger.info(f"Kolom yang berhasil dipetakan: serial_number='{serial_number_col}', item_type='{item_type_col}', status='{status_col}'")
+
+        # Fungsi untuk mencari dan mengganti nama kolom tambahan
+        def find_and_rename_additional_column(df, current_cols, possible_names, new_name):
+            col_found = find_column(current_cols, possible_names)
+            if col_found and col_found != new_name:
+                df.rename(columns={col_found: new_name}, inplace=True)
+
+        # Rename kolom untuk standardisasi
+        df.rename(columns={
+            serial_number_col: 'serial_number',
+            item_type_col: 'item_type',
+            status_col: 'status'
+        }, inplace=True)
+
+        # Rename kolom tambahan jika ditemukan
+        find_and_rename_additional_column(df, df.columns,
+            ['location', 'lokasi', 'tempat', 'letak'], 'location')
+        find_and_rename_additional_column(df, df.columns,
+            ['mac_address', 'mac', 'macaddress', 'alamat_mac', 'mac addr'], 'mac_address')
+        find_and_rename_additional_column(df, df.columns,
+            ['notes', 'catatan', 'keterangan', 'note'], 'notes')
+        find_and_rename_additional_column(df, df.columns,
+            ['purchase_date', 'tanggal_pembelian', 'tgl_pembelian', 'purchasedate'], 'purchase_date')
 
         # Get valid item types and statuses
         item_types_result = await db.execute(select(InventoryItemTypeModel))
@@ -761,31 +845,84 @@ async def bulk_import_inventory(
                 if pd.notna(notes) and str(notes).strip():
                     row_data['notes'] = str(notes).strip()
 
-                # Item Type ID (required, with default)
-                item_type_value = row.get('item_type_id')
+                # Item Type (required, with default) - can be name or ID
+                item_type_value = row.get('item_type')
                 if pd.isna(item_type_value) or item_type_value == '':
                     # Use default item type
                     row_data['item_type_id'] = default_item_type_id
                 else:
-                    item_type_id = int(item_type_value)
-                    if item_type_id not in valid_item_type_ids:
-                        errors.append(f"Baris {index + 2}: ID Tipe ({item_type_id}) tidak valid")
+                    # Use resolve_item_type function which handles both name and ID
+                    resolved_item_type_id = resolve_item_type(item_type_value)
+
+                    # Check if the resolved ID is valid (not default unless it was the actual default)
+                    original_item_type_str = str(item_type_value).strip().lower()
+                    original_is_default = False
+
+                    # Check if the original value matches the default name
+                    for item_type in item_types:
+                        if item_type.id == default_item_type_id:
+                            if item_type.name.lower() == original_item_type_str:
+                                original_is_default = True
+                            break
+
+                    # If resolved to default but original wasn't default and original value exists, it might be invalid
+                    # However, let's use a different approach: check if original value could be resolved to any valid ID/name
+                    item_type_found = False
+                    # For ID
+                    try:
+                        int_val = int(item_type_value)
+                        if int_val in valid_item_type_ids:
+                            item_type_found = True
+                    except (ValueError, TypeError):
+                        pass
+                    # For name
+                    if str(item_type_value).lower() in item_type_names:
+                        item_type_found = True
+
+                    if not item_type_found and resolved_item_type_id == default_item_type_id:
+                        errors.append(f"Baris {index + 2}: Tipe barang '{item_type_value}' tidak valid")
                         error_count += 1
                         continue
-                    row_data['item_type_id'] = item_type_id
+                    row_data['item_type_id'] = resolved_item_type_id
 
-                # Status ID (required, with default)
-                status_value = row.get('status_id')
+                # Status (required, with default) - can be name or ID
+                status_value = row.get('status')
                 if pd.isna(status_value) or status_value == '':
                     # Use default status
                     row_data['status_id'] = default_status_id
                 else:
-                    status_id = int(status_value)
-                    if status_id not in valid_status_ids:
-                        errors.append(f"Baris {index + 2}: ID Status ({status_id}) tidak valid")
+                    # Use resolve_status function which handles both name and ID
+                    resolved_status_id = resolve_status(status_value)
+
+                    # Check if the resolved ID is valid (not default unless it was the actual default)
+                    original_status_str = str(status_value).strip().lower()
+                    original_is_default = False
+
+                    # Check if the original value matches the default name
+                    for status_obj in statuses:
+                        if status_obj.id == default_status_id:
+                            if status_obj.name.lower() == original_status_str:
+                                original_is_default = True
+                            break
+
+                    # Check if original value could be resolved to any valid status
+                    status_found = False
+                    # For ID
+                    try:
+                        int_val = int(status_value)
+                        if int_val in valid_status_ids:
+                            status_found = True
+                    except (ValueError, TypeError):
+                        pass
+                    # For name
+                    if str(status_value).lower() in status_names:
+                        status_found = True
+
+                    if not status_found and resolved_status_id == default_status_id:
+                        errors.append(f"Baris {index + 2}: Status '{status_value}' tidak valid")
                         error_count += 1
                         continue
-                    row_data['status_id'] = status_id
+                    row_data['status_id'] = resolved_status_id
 
                 # Create inventory item
                 db_item = InventoryItemModel(**row_data)

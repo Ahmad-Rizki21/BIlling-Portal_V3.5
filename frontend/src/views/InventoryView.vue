@@ -2147,14 +2147,15 @@ function resetFilters() {
 }
 
 function downloadTemplate() {
-  // Create template data for Excel import
+  // Create template data for Excel import dengan Tanggal Pembelian
   const templateData = [
     {
       'Serial Number': 'SN001234567890',
       'MAC Address': 'AA:BB:CC:DD:EE:FF',
-      'Tipe': 'ONT',
+      'Tipe Barang': 'ONT',
       'Status': 'Gudang',
       'Lokasi': 'Gudang Utama',
+      'Tanggal Pembelian': '2024-01-15',
       'Catatan': 'Contoh catatan'
     }
   ];
@@ -2165,17 +2166,25 @@ function downloadTemplate() {
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Template Inventaris');
 
-    // Auto-size columns
-    const cols = Object.keys(templateData[0] || {}).map(key => ({
-      wch: Math.max(key.length, 15)
-    }));
+    // Auto-size columns dengan lebar yang sesuai
+    const cols = Object.keys(templateData[0] || {}).map(key => {
+      let width = 15;
+      if (key === 'Serial Number') width = 20;
+      if (key === 'MAC Address') width = 20;
+      if (key === 'Tipe Barang') width = 15;
+      if (key === 'Status') width = 15;
+      if (key === 'Lokasi') width = 15;
+      if (key === 'Tanggal Pembelian') width = 20; // Pastikan cukup lebar
+      if (key === 'Catatan') width = 25;
+      return { wch: width };
+    });
     worksheet['!cols'] = cols;
 
     XLSX.writeFile(workbook, `template_inventaris_${new Date().toISOString().split('T')[0]}.xlsx`);
   }).catch(error => {
     console.error('Error downloading template:', error);
-    // Fallback: create a simple CSV
-    const csvContent = 'Serial Number,MAC Address,Tipe,Status,Lokasi,Catatan\nSN001234567890,AA:BB:CC:DD:EE:FF,ONT,Gudang,Gudang Utama,Contoh catatan';
+    // Fallback: create a simple CSV dengan Tanggal Pembelian
+    const csvContent = 'Serial Number,MAC Address,Tipe Barang,Status,Lokasi,Tanggal Pembelian,Catatan\nSN001234567890,AA:BB:CC:DD:EE:FF,ONT,Gudang,Gudang Utama,2024-01-15,Contoh catatan';
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);

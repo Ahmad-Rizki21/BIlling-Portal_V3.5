@@ -212,8 +212,13 @@ async def job_generate_invoices() -> None:
     Job scheduler yang jalan tiap hari buat bikin invoice otomatis.
     Scheduler ini bakal jalan setiap jam 00:00 (sesuai konfigurasi).
 
+    LOGIKA BISNIS YANG BENAR:
+    - H-5 sebelum jatuh tempo: Generate invoice & payment link
+    - Contoh: Jatuh tempo 1 Des, maka tanggal 26 Nov generate payment link
+    - Contoh: Jatuh tempo 1 Jan, maka tanggal 27 Des generate payment link
+
     Logic yang dijalanin:
-    1. Cari semua langganan aktif yang jatuh tempo 5 hari lagi
+    1. Cari semua langganan aktif yang jatuh tempo 5 hari lagi (H-5)
     2. Proses secara bertahap (batching) biar nggak berat server
     3. Buat invoice buat tiap pelanggan yang belum ada invoice-nya
     4. Generate payment link via Xendit
@@ -237,6 +242,8 @@ async def job_generate_invoices() -> None:
     total_invoices_created = 0
     BATCH_SIZE = 100
     offset = 0
+
+    logger.info(f"🔍 Mencari langganan yang jatuh tempo pada: {target_due_date.strftime('%d %B %Y')} (H-5)")
 
     async with SessionType() as db:
         while True:
@@ -313,24 +320,35 @@ async def job_generate_invoices() -> None:
 async def job_suspend_services() -> None:
     """
     Job scheduler buat suspend pelanggan yang telat bayar.
-    Jalan setiap hari buat cek siapa aja yang udah overdue.
+    Jalan setiap tanggal 5 untuk cek siapa aja yang udah overdue.
+
+    LOGIKA BISNIS YANG BENAR:
+    - H-5 (tgl 26): Generate payment link untuk jatuh tempo tgl 1 bulan depan
+    - Tgl 1-4: Grace period untuk pembayaran
+    - Tgl 5 jam 00:00 WIB: Otomatis suspend user yang belum bayar
+    - Contoh: Jatuh tempo 1 Des, tgl 5 Des jam 00:00 suspend
 
     Logic suspend:
-    1. Cari pelanggan yang jatuh tempo tanggal 1 dan belum bayar sampai tanggal 4
+    1. Cari pelanggan yang jatuh tempo tanggal 1 bulan ini dan belum bayar
     2. Tepat tanggal 5 jam 00:00 WIB, suspend layanan mereka
     3. Ubah status langganan jadi 'Suspended'
     4. Ubah semua invoice belum bayar jadi 'Kadaluarsa'
-    5. Trigger update ke Mikrotik buat blokir internet
+    5. Trigger update ke Mikrotik buat blokir internet (disabled PPPoE secret)
     6. Log hasil proses
 
     Aturan suspend (LOGIKA BISNIS):
-    - Jatuh tempo: 1 November
-    - Grace period: 1-4 November (4 hari)
-    - Suspend: 5 November jam 00:00 WIB
-    - Enable kembali: Setelah bayar, jatuh tempo berubah ke 1 Desember
+    - Jatuh tempo: 1 Desember 2025
+    - Payment link generated: 26 November 2025 (H-5)
+    - Grace period: 1-4 Desember (4 hari)
+    - Suspend: 5 Desember jam 00:00 WIB
+    - Enable kembali: Setelah bayar, re-activate service
+
+    NOTE: Berdasarkan fungsi create_langganan, sebagian besar pelanggan dengan
+    metode pembayaran "Otomatis" akan memiliki tgl_jatuh_tempo tanggal 1 setiap bulan,
+    jadi job ini memang fokus ke tanggal 1 setiap bulan.
 
     Integration:
-    - Mikrotik API buat suspend/blokir internet
+    - Mikrotik API buat suspend/blokir internet (PPPoE secret disabled)
     - Database status updates
     - Audit logging
 
@@ -357,21 +375,32 @@ async def job_suspend_services() -> None:
             logger,
             "job_suspend_services",
             "completed",
-            f"Hari ini tanggal {current_date.day}, suspend hanya dilakukan tanggal 5-10 (retroactive)."
+            f"Hari ini tanggal {current_date.day}, suspend hanya dilakukan tanggal 5-10 (retroactive). Sesuai logika bisnis: H-5 generate payment link, tanggal 5 auto suspend.",
         )
         return
 
+    suspend_type = "RETROACTIVE" if is_retroactive_day else "SCHEDULED"
     if is_retroactive_day:
         logger.warning(f"🔄 RETROACTIVE SUSPEND: Menjalankan suspend ketinggalan dari tanggal 5 untuk hari {current_date.day}")
+    else:
+        logger.info(f"⏰ SCHEDULED SUSPEND: Menjalankan suspend otomatis tanggal 5 jam 00:00 WIB")
 
-    # Jika hari ini tanggal 5-10, cari yang jatuh tempo tanggal 1 bulan ini
+    # Target tanggal jatuh tempo yang harus disuspend sesuai logika bisnis:
+    # Contoh: Invoice terbit H-5 sebelum tanggal jatuh tempo
+    # Jika jatuh tempo 1 Desember, maka invoice terbit 26 November (H-5)
+    # Tepat tanggal 5 Desember jam 00:00, semua invoice yang masih "Belum Dibayar" dan jatuh tempo akan disuspend
+    #
+    # Maka logika: Hari ini tanggal 5 Desember -> cari semua invoice yang jatuh tempo tanggal 1 Desember
+    # dan statusnya masih "Belum Dibayar"
+
+    # Tapi lebih umumnya: Jika hari ini tanggal 5 bulan ini, cari invoice yang jatuh tempo tanggal 1 bulan ini
     current_month = current_date.month
     current_year = current_date.year
 
-    # Target tanggal jatuh tempo yang harus disuspend: tanggal 1 bulan ini
+    # Target tanggal jatuh tempo yang sesuai dengan logika bisnis
     target_due_date = date(current_year, current_month, 1)
 
-    logger.info(f"🔍 Mencari pelanggan yang jatuh tempo tanggal {target_due_date.strftime('%d %B %Y')} dan belum bayar")
+    logger.info(f"🔍 Mencari pelanggan yang jatuh tempo tanggal {target_due_date.strftime('%d %B %Y')} dan belum bayar (Payment link generated H-5)")
 
     async with SessionType() as db:
         while True:
@@ -944,3 +973,366 @@ async def job_retry_mikrotik_syncs() -> None:
         except Exception as e:
             await db.rollback()
             logger.error(f"[FAIL] Scheduler 'job_retry_mikrotik_syncs' encountered an error: {traceback.format_exc()}")
+
+
+# ====================================================================
+# LOCATION-BASED BATCH SUSPEND
+# ====================================================================
+# Modifikasi dari job_suspend_services untuk batch processing per lokasi
+# dengan mempertahankan system yang ada (Database First, Mikrotik Second)
+
+async def job_suspend_services_by_location() -> None:
+    """
+    Location-based batch suspend dengan mempertahankan existing logic.
+    Memproses suspend per lokasi (Tambun, Cibitung, Cikarang, dll) dengan batch processing.
+
+    Alur:
+    1. Get lokasi-lokasi yang ada pelanggan overdue
+    2. Process lokasi secara sequential sesuai priority
+    3. Dalam setiap lokasi, process pelanggan dalam batch
+    4. Mikrotik dan Database processing tetap seperti existing logic
+    """
+    from sqlalchemy import text
+    import asyncio
+
+    logger.info("🚀 Starting LOCATION-BASED BATCH SUSPEND...")
+
+    # Settings untuk location batch - akan diambil dari database
+    MAX_BATCH_SIZE_PER_LOCATION = 30
+    DELAY_BETWEEN_LOCATIONS = 2.0  # detik
+    DELAY_BETWEEN_BATCHES = 1.0   # detik
+    MAX_CONCURRENT_MIKROTIK = 5   # parallel operations
+
+    # Get locations dynamically from database (pelanggan.alamat)
+    async def get_locations_from_database(db, target_date):
+        """Get lokasi dari database, diurutkan berdasarkan jumlah pelanggan terbanyak"""
+        location_query = text("""
+            SELECT p.alamat, COUNT(l.id) as customer_count
+            FROM pelanggan p
+            JOIN langganan l ON p.id = l.pelanggan_id
+            JOIN invoice i ON l.pelanggan_id = i.pelanggan_id
+            WHERE l.status = 'Aktif'
+            AND i.status_invoice = 'Belum Dibayar'
+            AND i.tgl_jatuh_tempo = :target_date
+            AND p.alamat IS NOT NULL
+            AND p.alamat != ''
+            GROUP BY p.alamat
+            HAVING COUNT(l.id) > 0
+            ORDER BY customer_count DESC, p.alamat ASC
+        """)
+
+        result = await db.execute(location_query, {"target_date": target_date})
+        locations_with_count = [(row[0], row[1]) for row in result.fetchall()]
+
+        # Log location counts untuk monitoring
+        logger.info(f"📍 Found locations with overdue customers:")
+        for loc, count in locations_with_count[:10]:  # Show top 10
+            logger.info(f"   🏠 {loc}: {count} customers (will be processed first)")
+
+        if len(locations_with_count) > 10:
+            logger.info(f"   ... and {len(locations_with_count) - 10} more locations")
+
+        # Return only location names, sorted by customer count (prioritas yang paling banyak)
+        return [loc for loc, count in locations_with_count]
+
+    total_stats = {
+        'total_locations': 0,
+        'total_customers': 0,
+        'mikrotik_success': 0,
+        'mikrotik_failed': 0,
+        'database_success': 0,
+        'database_failed': 0,
+        'requires_manual_sync': 0,
+        'processed_locations': [],
+        'failed_locations': []
+    }
+
+    current_date = date.today()
+
+    # Logic tanggal yang sama dengan existing function
+    is_main_suspend_day = current_date.day == 5
+    is_retroactive_day = 6 <= current_date.day <= 10
+
+    if not (is_main_suspend_day or is_retroactive_day):
+        log_scheduler_event(
+            logger,
+            "job_suspend_services_by_location",
+            "completed",
+            f"Hari ini tanggal {current_date.day}, suspend hanya dilakukan tanggal 5-10 (retroactive).",
+        )
+        return
+
+    suspend_type = "RETROACTIVE" if is_retroactive_day else "SCHEDULED"
+    target_due_date = date(current_date.year, current_date.month, 1)
+
+    logger.info(f"🎯 {suspend_type} LOCATION-BATCH SUSPEND: Target {target_due_date.strftime('%d %B %Y')}")
+
+    async with SessionType() as db:
+        try:
+            # Step 1: Get lokasi dari database secara dinamis, diurutkan berdasarkan jumlah pelanggan
+            logger.info("📍 Getting locations from database, sorted by customer count...")
+
+            # Gunakan fungsi dinamis untuk get lokasi
+            sorted_locations = await get_locations_from_database(db, target_due_date)
+
+            if not sorted_locations:
+                logger.info("✅ No locations with overdue customers found")
+                return
+
+            total_stats['total_locations'] = len(sorted_locations)
+            logger.info(f"📍 Processing {len(sorted_locations)} locations in order of customer count")
+
+            # Step 2: Process setiap lokasi secara sequential
+            for loc_idx, location in enumerate(sorted_locations, 1):
+                logger.info(f"🎯 [{loc_idx}/{len(sorted_locations)}] Processing location: {location}")
+
+                try:
+                    # Get pelanggan untuk lokasi ini
+                    customers_query = text("""
+                        SELECT
+                            l.id as langganan_id,
+                            p.id as pelanggan_id,
+                            p.nama as pelanggan_nama,
+                            p.alamat as pelanggan_alamat,
+                            l.status as langganan_status,
+                            i.id as invoice_id,
+                            i.invoice_number as invoice_number,
+                            i.status_invoice as invoice_status,
+                            i.tgl_jatuh_tempo as due_date,
+                            dt.id as data_teknis_id,
+                            dt.id_pelanggan as mikrotik_id,
+                            dt.mikrotik_server as mikrotik_server,
+                            dt.mikrotik_sync_pending as sync_pending
+                        FROM pelanggan p
+                        JOIN langganan l ON p.id = l.pelanggan_id
+                        JOIN invoice i ON l.pelanggan_id = i.pelanggan_id
+                        LEFT JOIN data_teknis dt ON p.id = dt.pelanggan_id
+                        WHERE l.status = 'Aktif'
+                        AND i.status_invoice = 'Belum Dibayar'
+                        AND i.tgl_jatuh_tempo = :target_date
+                        AND p.alamat = :location
+                        ORDER BY p.nama
+                    """)
+
+                    customer_result = await db.execute(customers_query, {
+                        "target_date": target_due_date,
+                        "location": location
+                    })
+                    customers = [dict(row._mapping) for row in customer_result.fetchall()]
+
+                    if not customers:
+                        logger.info(f"✅ No overdue customers in {location}")
+                        continue
+
+                    logger.info(f"📊 Found {len(customers)} customers to suspend in {location}")
+                    location_stats = {
+                        'total_customers': len(customers),
+                        'mikrotik_success': 0,
+                        'mikrotik_failed': 0,
+                        'database_success': 0,
+                        'database_failed': 0,
+                        'requires_manual_sync': 0
+                    }
+
+                    # Process dalam batch untuk lokasi ini
+                    for batch_start in range(0, len(customers), MAX_BATCH_SIZE_PER_LOCATION):
+                        batch_customers = customers[batch_start:batch_start + MAX_BATCH_SIZE_PER_LOCATION]
+                        batch_num = (batch_start // MAX_BATCH_SIZE_PER_LOCATION) + 1
+
+                        logger.info(f"🔄 {location} - Batch {batch_num}: {len(batch_customers)} customers")
+
+                        # Load langganan objects untuk batch ini
+                        langganan_objects = []
+                        for customer in batch_customers:
+                            try:
+                                langganan_result = await db.execute(
+                                    select(LanggananModel)
+                                    .options(selectinload(LanggananModel.pelanggan).selectinload(PelangganModel.data_teknis))
+                                    .where(LanggananModel.id == customer['langganan_id'])
+                                )
+                                langganan_obj = langganan_result.scalar_one_or_none()
+                                if langganan_obj:
+                                    langganan_objects.append({
+                                        'data': customer,
+                                        'object': langganan_obj
+                                    })
+                            except Exception as e:
+                                logger.error(f"❌ Error loading langganan {customer['pelanggan_nama']}: {e}")
+                                location_stats['database_failed'] += 1
+
+                        # Step 3: Mikrotik suspend (parallel) - Existing logic
+                        async def suspend_single_mikrotik(customer_info):
+                            data = customer_info['data']
+                            langganan_obj = customer_info['object']
+
+                            try:
+                                data_teknis = langganan_obj.pelanggan.data_teknis
+
+                                if not data_teknis or not data_teknis.id_pelanggan:
+                                    return {'success': False, 'error': 'No Mikrotik data', 'requires_sync': False}
+
+                                logger.info(f"🔄 [Mikrotik] Suspending: {data['pelanggan_nama']} ({data['mikrotik_id']})")
+
+                                # Existing Mikrotik logic
+                                await mikrotik_service.trigger_mikrotik_update(
+                                    db=None,  # No DB context for Mikrotik-only
+                                    langganan=langganan_obj,
+                                    data_teknis=data_teknis,
+                                    old_id_pelanggan=data['mikrotik_id']
+                                )
+
+                                return {'success': True, 'error': None, 'requires_sync': False}
+
+                            except Exception as e:
+                                logger.error(f"❌ [Mikrotik] Failed {data['pelanggan_nama']}: {str(e)}")
+                                return {'success': False, 'error': str(e), 'requires_sync': True}
+
+                        # Execute Mikrotik suspends dengan concurrency limit
+                        semaphore = asyncio.Semaphore(MAX_CONCURRENT_MIKROTIK)
+
+                        async def controlled_suspend(customer_info):
+                            async with semaphore:
+                                return await suspend_single_mikrotik(customer_info)
+
+                        mikrotik_results = await asyncio.gather(
+                            *[controlled_suspend(info) for info in langganan_objects],
+                            return_exceptions=True
+                        )
+
+                        # Handle exceptions
+                        processed_mikrotik = []
+                        for result in mikrotik_results:
+                            if isinstance(result, Exception):
+                                processed_mikrotik.append({'success': False, 'error': str(result), 'requires_sync': True})
+                            else:
+                                processed_mikrotik.append(result)
+
+                        # Step 4: Database update (batch atomic) - Existing logic
+                        try:
+                            invoice_ids = [cust['invoice_id'] for cust in batch_customers]
+                            langganan_ids = [cust['langganan_id'] for cust in batch_customers]
+                            sync_pending_updates = []
+
+                            for i, customer in enumerate(batch_customers):
+                                if not processed_mikrotik[i]['success'] and customer.get('mikrotik_id'):
+                                    sync_pending_updates.append({
+                                        'data_teknis_id': customer['data_teknis_id'],
+                                        'sync_pending': True
+                                    })
+
+                            # Batch database updates
+                            if invoice_ids:
+                                await db.execute(
+                                    update(InvoiceModel)
+                                    .where(InvoiceModel.id.in_(invoice_ids))
+                                    .values(status_invoice="Kadaluarsa")
+                                )
+
+                            if langganan_ids:
+                                await db.execute(
+                                    update(LanggananModel)
+                                    .where(LanggananModel.id.in_(langganan_ids))
+                                    .values(status="Suspended")
+                                )
+
+                            if sync_pending_updates:
+                                data_teknis_ids = [update['data_teknis_id'] for update in sync_pending_updates]
+                                await db.execute(
+                                    update(DataTeknisModel)
+                                    .where(DataTeknisModel.id.in_(data_teknis_ids))
+                                    .values(mikrotik_sync_pending=True)
+                                )
+
+                            await db.commit()
+
+                            # Update statistics
+                            for i, result in enumerate(processed_mikrotik):
+                                if result['success']:
+                                    location_stats['mikrotik_success'] += 1
+                                else:
+                                    location_stats['mikrotik_failed'] += 1
+                                    if result['requires_sync']:
+                                        location_stats['requires_manual_sync'] += 1
+
+                                location_stats['database_success'] += 1
+
+                            logger.info(f"✅ {location} - Batch {batch_num} completed successfully")
+
+                        except Exception as e:
+                            logger.error(f"❌ {location} - Batch {batch_num} DB update failed: {str(e)}")
+                            await db.rollback()
+                            location_stats['database_failed'] += len(batch_customers)
+                            for result in processed_mikrotik:
+                                if not result['success']:
+                                    location_stats['mikrotik_failed'] += 1
+                                    if result['requires_sync']:
+                                        location_stats['requires_manual_sync'] += 1
+
+                        # Delay between batches (except last batch)
+                        if batch_start + MAX_BATCH_SIZE_PER_LOCATION < len(customers):
+                            await asyncio.sleep(DELAY_BETWEEN_BATCHES)
+
+                    # Update total statistics
+                    total_stats['total_customers'] += location_stats['total_customers']
+                    total_stats['mikrotik_success'] += location_stats['mikrotik_success']
+                    total_stats['mikrotik_failed'] += location_stats['mikrotik_failed']
+                    total_stats['database_success'] += location_stats['database_success']
+                    total_stats['database_failed'] += location_stats['database_failed']
+                    total_stats['requires_manual_sync'] += location_stats['requires_manual_sync']
+
+                    total_stats['processed_locations'].append({
+                        'location': location,
+                        'customers': location_stats['total_customers'],
+                        'success': location_stats['database_failed'] == 0
+                    })
+
+                    logger.info(f"✅ [{loc_idx}/{len(sorted_locations)}] Completed {location}:")
+                    logger.info(f"   Customers: {location_stats['total_customers']}")
+                    logger.info(f"   Mikrotik Success: {location_stats['mikrotik_success']}")
+                    logger.info(f"   Database Success: {location_stats['database_success']}")
+
+                    # Delay between locations (except last location)
+                    if loc_idx < len(sorted_locations):
+                        logger.info(f"⏳ Waiting {DELAY_BETWEEN_LOCATIONS}s before next location...")
+                        await asyncio.sleep(DELAY_BETWEEN_LOCATIONS)
+
+                except Exception as e:
+                    logger.error(f"❌ Failed to process location {location}: {str(e)}")
+                    total_stats['failed_locations'].append({
+                        'location': location,
+                        'customers': 0,
+                        'success': False,
+                        'error': str(e)
+                    })
+
+            # Final summary
+            logger.info("🎉 LOCATION-BASED SUSPEND SUMMARY:")
+            logger.info(f"   📅 Target Date: {target_due_date.strftime('%d %B %Y')}")
+            logger.info(f"   📍 Total Locations: {total_stats['total_locations']}")
+            logger.info(f"   👥 Total Customers: {total_stats['total_customers']}")
+            logger.info(f"   ✅ Mikrotik Success: {total_stats['mikrotik_success']}")
+            logger.info(f"   ❌ Mikrotik Failed: {total_stats['mikrotik_failed']}")
+            logger.info(f"   💾 Database Success: {total_stats['database_success']}")
+            logger.info(f"   💥 Database Failed: {total_stats['database_failed']}")
+            logger.info(f"   🔧 Requires Manual Sync: {total_stats['requires_manual_sync']}")
+
+            if total_stats['processed_locations']:
+                logger.info(f"   ✅ Successfully Processed:")
+                for loc in total_stats['processed_locations']:
+                    status = "✅" if loc['success'] else "❌"
+                    logger.info(f"      {status} {loc['location']}: {loc['customers']} customers")
+
+            if total_stats['failed_locations']:
+                logger.warning(f"   ⚠️ Failed Locations:")
+                for loc in total_stats['failed_locations']:
+                    logger.info(f"      ❌ {loc['location']}: {loc.get('customers', 0)} customers")
+
+            if total_stats['requires_manual_sync'] > 0:
+                logger.warning(f"⚠️ {total_stats['requires_manual_sync']} customers require manual Mikrotik sync!")
+
+            logger.info("✅ Location-based batch suspend completed successfully!")
+
+        except Exception as e:
+            await db.rollback()
+            logger.error(f"❌ Critical error in location-based suspend: {str(e)}")
+            raise

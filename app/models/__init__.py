@@ -14,6 +14,7 @@ from .olt import OLT
 from .odp import ODP
 from .system_setting import SystemSetting
 from .activity_log import ActivityLog
+from .inventory_history import InventoryHistory
 from .inventory_item import InventoryItem
 from .inventory_item_type import InventoryItemType
 from .inventory_status import InventoryStatus

@@ -22,6 +22,7 @@ from datetime import datetime
 
 # Library untuk scheduling (auto-jobs)
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.schedulers.base import SchedulerAlreadyRunningError
 
 # FastAPI core components
 from fastapi import FastAPI, Query, Request, Response, WebSocket, WebSocketDisconnect, status
@@ -645,7 +646,20 @@ async def startup_event():
 
     #==============================================================SUSPANDED AND UNSUSPANDED=======================================================================#
     # Suspend services tepat tanggal 5 jam 00:00 untuk pelanggan yang telat bayar dari jatuh tempo tanggal 1.
-    #scheduler.add_job(job_suspend_services, 'cron', day=5, hour=0, minute=0, timezone='Asia/Jakarta', id="suspend_services_job", replace_existing=True)
+    # Updated: Gunakan location-based batch suspend untuk optimal performance
+    # from .jobs import job_suspend_services_by_location
+    # scheduler.add_job(
+    #     job_suspend_services_by_location,
+    #     'cron',
+    #     day=5,
+    #     hour=0,
+    #     minute=0,
+    #     timezone='Asia/Jakarta',
+    #     id="suspend_services_job",
+    #     replace_existing=True,
+    #     max_instances=1,  # Prevent duplicate runs
+    #     misfire_grace_time=300  # 5 minutes grace time for missed runs
+    # )
     #==============================================================SUSPANDED AND UNSUSPANDED=======================================================================#
 
     #==============================================================REMAINDERS INVOICE=======================================================================#
@@ -655,13 +669,15 @@ async def startup_event():
 
     #==============================================================NYARI INVOICE 3 HARI KE BELAKANG JIKA SERVER MATI=======================================================================#
     # Memverifikasi pembayaran yang mungkin terlewat setiap 15 menit.
-    #scheduler.add_job(job_verify_payments, 'interval', minutes=15, id="verify_payments_job", replace_existing=True)
+    #from .jobs import job_verify_payments
+    #scheduler.add_job(job_verify_payments, 'interval', minutes=15, id="verify_payments_job", replace_existing=True, max_instances=1)
     #==============================================================NYARI INVOICE 3 HARI KE BELAKANG JIKA SERVER MATI=======================================================================#
 
 
     #==============================================================SINGKRONISASI PROSES MIKROTIK KE SERVER=======================================================================#
     # Mencoba ulang sinkronisasi Mikrotik yang gagal setiap 5 menit.
-    #scheduler.add_job(job_retry_mikrotik_syncs, 'interval', minutes=5, id="retry_mikrotik_syncs_job", replace_existing=True)
+    #from .jobs import job_retry_mikrotik_syncs
+    #scheduler.add_job(job_retry_mikrotik_syncs, 'interval', minutes=5, id="retry_mikrotik_syncs_job", replace_existing=True, max_instances=1)
     #==============================================================SINGKRONISASI PROSES MIKROTIK KE SERVER=======================================================================#
 
 
@@ -676,19 +692,43 @@ async def startup_event():
     # setup_traffic_monitoring_jobs(scheduler)
     #==============================================================COLLECT TRAFFIC DARI MIKROTIK=======================================================================#
 
-    print("Traffic monitoring jobs telah dijadwalkan...")
+    # Log scheduler info
+    # print("="*80)
+    # print("📅 SCHEDULED JOBS STATUS")
+    # print("="*80)
+    # print("✅ Invoice Generation: menggunakan H-5 system")
+    # print("✅ Location-Based Batch Suspend: Setiap tanggal 5 jam 00:00 WIB")
+    # print("✅ Payment Reminders: Diaktifkan tanggal 4")
+    # print("✅ Payment Verification: Setiap 15 menit")
+    # print("✅ Mikrotik Sync Retry: Setiap 5 menit")
+    # print("✅ Payment Link Retry: Setiap 1 jam")
+    # print("ℹ️ Traffic Monitoring: Dinonaktifkan")
+    # print("="*80)
 
-    # 6. Mulai scheduler
-    scheduler.start()
-    print("Scheduler telah dimulai...")
-    logger.info("Application startup complete")
+    # # 6. Mulai scheduler dengan safety check
+    # try:
+    #     scheduler.start()
+    #     print("🚀 Scheduler telah dimulai dengan Location-Based Batch Suspend!")
+    #     logger.info("✅ Application startup complete - Location-Based Batch Suspend Active")
+    # except SchedulerAlreadyRunningError:
+    #     print("⚠️  Scheduler sudah berjalan, melanjutkan dengan instance yang ada...")
+    #     logger.warning("⚠️ Scheduler already running, continuing with existing instance")
+    # except Exception as e:
+    #     print(f"❌ Error starting scheduler: {str(e)}")
+    #     logger.error(f"❌ Error starting scheduler: {str(e)}")
+    #     raise
 
 
 # Event handler untuk shutdown aplikasi
 @app.on_event("shutdown")
 async def shutdown_event():
-    scheduler.shutdown()
-    print("Scheduler telah dimatikan.")
+    try:
+        scheduler.shutdown(wait=False)
+        print("✅ Scheduler telah dimatikan dengan aman.")
+        logger.info("✅ Scheduler shutdown completed successfully")
+    except Exception as e:
+        print(f"⚠️  Warning saat mematikan scheduler: {str(e)}")
+        logger.warning(f"⚠️ Warning during scheduler shutdown: {str(e)}")
 
 
 # API_PREFIX = os.getenv("API_PREFIX", "")

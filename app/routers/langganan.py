@@ -874,3 +874,132 @@ async def get_all_pelanggan_with_status(db: AsyncSession = Depends(get_db)):
     return pelanggan
 
 
+# POST /langganan/sync-suspended - Sync semua suspended langganan ke Mikrotik
+# Endpoint buat sinkronisasi manual semua langganan yang statusnya Suspended
+# Response: summary hasil sinkronisasi
+# Fitur:
+# - Cari semua langganan dengan status "Suspended"
+# - Update status Mikrotik (disable PPPoE secret, set profile SUSPENDED)
+# - Hapus koneksi aktif dari Mikrotik
+# - Report jumlah success dan failed
+# Use case: Fix masalah user yang statusnya Suspended di DB tapi masih aktif di Mikrotik
+@router.post("/sync-suspended", status_code=status.HTTP_200_OK)
+async def sync_suspended_to_mikrotik(db: AsyncSession = Depends(get_db)):
+    """
+    Sinkronisasi manual semua langganan yang statusnya Suspended ke Mikrotik.
+    Endpoint ini digunakan untuk memastikan semua user yang sudah Suspended
+    di database juga diblokir di Mikrotik.
+
+    Use case: User sudah jatuh tempo dan statusnya Suspended di database,
+    tapi akses internetnya masih aktif karena belum di-sync ke Mikrotik.
+    """
+    try:
+        from ..services import mikrotik_service
+
+        # 1. Cari semua langganan Suspended dengan data teknis
+        query = (
+            select(LanggananModel)
+            .where(LanggananModel.status == "Suspended")
+            .options(
+                joinedload(LanggananModel.pelanggan).options(
+                    joinedload(PelangganModel.data_teknis),
+                ),
+            )
+        )
+        result = await db.execute(query)
+        suspended_langganans = result.scalars().unique().all()
+
+        if not suspended_langganans:
+            return {
+                "message": "Tidak ada langganan dengan status Suspended",
+                "total_processed": 0,
+                "success_count": 0,
+                "failed_count": 0
+            }
+
+        logger.info(f"🔄 Found {len(suspended_langganans)} suspended langganan to sync with Mikrotik")
+
+        # 2. Proses setiap langganan
+        success_count = 0
+        failed_count = 0
+        failed_details = []
+
+        for langganan in suspended_langganans:
+            try:
+                data_teknis_list = langganan.pelanggan.data_teknis if hasattr(langganan.pelanggan, 'data_teknis') else []
+
+                if not data_teknis_list:
+                    logger.warning(f"⚠️ Langganan ID {langganan.id} ({langganan.pelanggan.nama}) tidak punya data teknis")
+                    failed_details.append({
+                        "langganan_id": langganan.id,
+                        "pelanggan_nama": langganan.pelanggan.nama,
+                        "error": "Tidak ada data teknis"
+                    })
+                    failed_count += 1
+                    continue
+
+                data_teknis = data_teknis_list[0]
+
+                if not data_teknis.id_pelanggan:
+                    logger.warning(f"⚠️ Langganan ID {langganan.id} ({langganan.pelanggan.nama}) data teknis tidak punya id_pelanggan")
+                    failed_details.append({
+                        "langganan_id": langganan.id,
+                        "pelanggan_nama": langganan.pelanggan.nama,
+                        "error": "Data teknis tidak lengkap (id_pelanggan kosong)"
+                    })
+                    failed_count += 1
+                    continue
+
+                # Sync ke Mikrotik dengan status Suspended
+                await mikrotik_service.trigger_mikrotik_update(
+                    db=db,
+                    langganan=langganan,
+                    data_teknis=data_teknis,
+                    old_id_pelanggan=data_teknis.id_pelanggan
+                )
+
+                # Reset flag sync pending jika ada
+                if data_teknis.mikrotik_sync_pending:
+                    data_teknis.mikrotik_sync_pending = False
+                    db.add(data_teknis)
+
+                logger.info(f"✅ Sync SUCCESS: Langganan ID {langganan.id}, Pelanggan: {langganan.pelanggan.nama}, PPPoE: {data_teknis.id_pelanggan}")
+                success_count += 1
+
+            except Exception as e:
+                error_msg = str(e)
+                logger.error(f"❌ Sync FAILED: Langganan ID {langganan.id}, Pelanggan: {langganan.pelanggan.nama}, Error: {error_msg}")
+                failed_details.append({
+                    "langganan_id": langganan.id,
+                    "pelanggan_nama": langganan.pelanggan.nama,
+                    "error": error_msg
+                })
+                failed_count += 1
+
+        # 3. Commit perubahan
+        await db.commit()
+
+        # 4. Return response
+        total_processed = len(suspended_langganans)
+        response_data = {
+            "message": f"Sinkronisasi selesai: {success_count} success, {failed_count} failed dari {total_processed} langganan Suspended",
+            "total_processed": total_processed,
+            "success_count": success_count,
+            "failed_count": failed_count,
+            "failed_details": failed_details,
+            "logika_bisnis": "User dengan status Suspended akan diblokir akses internetnya melalui Mikrotik (PPPoE secret disabled, profile=SUSPENDED)"
+        }
+
+        logger.info(f"🔄 Bulk sync COMPLETED: {success_count}/{total_processed} langganan berhasil di-sync ke Mikrotik")
+
+        return response_data
+
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"❌ Bulk sync FAILED: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Gagal sinkronisasi langganan Suspended ke Mikrotik: {str(e)}"
+        )
+
+

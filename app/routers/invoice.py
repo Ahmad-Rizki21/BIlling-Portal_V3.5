@@ -137,6 +137,7 @@ async def get_all_invoices(
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
     show_active_only: Optional[bool] = False,  # <-- FILTER untuk link pembayaran aktif saja
+    exclude_expired: Optional[bool] = False,  # <-- FILTER untuk exclude invoice expired
     skip: int = 0,  # <-- TAMBAHKAN INI
     limit: Optional[int] = None,  # <-- Tidak mengubah default untuk menjaga logika bisnis
 ):
@@ -172,6 +173,22 @@ async def get_all_invoices(
         query = query.where(InvoiceModel.tgl_jatuh_tempo >= start_date)
     if end_date:
         query = query.where(InvoiceModel.tgl_jatuh_tempo <= end_date)
+
+    # Exclude invoice yang sudah kadaluarsa (lewat 5 hari grace period)
+    if exclude_expired:
+        from datetime import date
+        overdue_threshold_date = date.today() - timedelta(days=5)
+        query = query.where(
+            or_(
+                # Invoice Lunas selalu boleh tampil
+                InvoiceModel.status_invoice == 'Lunas',
+                # Invoice Belum Dibayar boleh tampil jika masih dalam grace period
+                and_(
+                    InvoiceModel.status_invoice == 'Belum Dibayar',
+                    InvoiceModel.tgl_jatuh_tempo >= overdue_threshold_date
+                )
+            )
+        )
 
     # Filter untuk hanya menampilkan invoice dengan link pembayaran aktif
     if show_active_only:
@@ -582,6 +599,13 @@ async def handle_xendit_callback(
             db.add(invoice)
 
         await db.commit()
+
+        # Clear sidebar cache untuk update badge count
+        try:
+            from .dashboard import clear_sidebar_cache
+            clear_sidebar_cache()
+        except ImportError:
+            pass  # Fallback jika import gagal
     except Exception as e:
         await db.rollback()
         logger.error(f"Error processing Xendit callback for external_id {external_id}: {str(e)}")
@@ -893,6 +917,13 @@ async def mark_invoice_as_paid(invoice_id: int, payload: MarkAsPaidRequest, db: 
 
     await db.commit()
     await db.refresh(invoice)
+
+    # Clear sidebar cache untuk update badge count
+    try:
+        from .dashboard import clear_sidebar_cache
+        clear_sidebar_cache()
+    except ImportError:
+        pass  # Fallback jika import gagal
 
     logger.info(f"Invoice {invoice.invoice_number} ditandai lunas secara manual via {payload.metode_pembayaran}")
 
@@ -1698,6 +1729,7 @@ async def get_invoice_count(
     status_invoice: Optional[str] = None,
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
+    exclude_expired: Optional[bool] = False,
 ):
     """
     Menghitung total jumlah invoice dengan filter opsional.
@@ -1724,6 +1756,22 @@ async def get_invoice_count(
         count_query = count_query.where(InvoiceModel.tgl_jatuh_tempo >= start_date)
     if end_date:
         count_query = count_query.where(InvoiceModel.tgl_jatuh_tempo <= end_date)
+
+    # Exclude invoice yang sudah kadaluarsa (lewat 5 hari grace period)
+    if exclude_expired:
+        from datetime import date
+        overdue_threshold_date = date.today() - timedelta(days=5)
+        count_query = count_query.where(
+            or_(
+                # Invoice Lunas selalu boleh tampil
+                InvoiceModel.status_invoice == 'Lunas',
+                # Invoice Belum Dibayar boleh tampil jika masih dalam grace period
+                and_(
+                    InvoiceModel.status_invoice == 'Belum Dibayar',
+                    InvoiceModel.tgl_jatuh_tempo >= overdue_threshold_date
+                )
+            )
+        )
 
     result = await db.execute(count_query)
     total_count = result.scalar_one()
