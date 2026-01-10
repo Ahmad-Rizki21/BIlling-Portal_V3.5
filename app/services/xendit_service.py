@@ -194,17 +194,17 @@ async def create_xendit_invoice(
         "should_send_email": True,  # Force enable email
         "should_send_whatsapp": True, # Force enable WhatsApp
 
-        # TAMBAHKAN ALTERNATIVE WHATSAPP CONFIGURATIONS
+        # Menambahkan ALTERNATIVE WHATSAPP CONFIGURATIONS
         "customer_notification_method": "whatsapp",
         "preferred_notification_channel": "whatsapp",
 
-        # TAMBAHKAN WHATSAPP CONFIGURATION
+        # Menambahkan WHATSAPP CONFIGURATION
         "notification_channels": ["whatsapp", "email"],
         "force_notification_channels": True,
         "send_whatsapp": True,
         "whatsapp_enabled": True,
 
-        # TAMBAHKAN BUSINESS DETAILS
+        # Menambahkan BUSINESS DETAILS
         "business_profile": {
             "business_name": "Artacomindo Jejaring Nusa",
             "business_address": "Indonesia",
@@ -244,7 +244,7 @@ async def create_xendit_invoice(
 
     logger.info(f"Payload yang dikirim ke Xendit: {json.dumps(payload, indent=2)}")
 
-    async with httpx.AsyncClient(timeout=30.0) as client:  # Tambahkan timeout
+    async with httpx.AsyncClient(timeout=30.0) as client:  # Menambahkan timeout
         try:
             response = await client.post(settings.XENDIT_API_URL, json=payload, headers=headers)
             response.raise_for_status()

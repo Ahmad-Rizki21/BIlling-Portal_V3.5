@@ -338,7 +338,7 @@ def create_pppoe_secret(api, data_teknis: DataTeknisModel):
             # 'comment': f"Created by Billing API on {datetime.now().strftime('%Y-%m-%d')}"
         }
 
-        # Tambahkan IP Address jika ada
+        # Menambahkan IP Address jika ada
         if data_teknis.ip_pelanggan:
             secret_payload["remote-address"] = data_teknis.ip_pelanggan
 

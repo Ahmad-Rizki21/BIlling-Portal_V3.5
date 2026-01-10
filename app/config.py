@@ -73,6 +73,8 @@ class Settings(BaseSettings):
         "invoice_bulanan",                           # Statistik invoice bulanan
         "status_langganan",                          # Grafik status langganan (aktif/non-aktif)
         "alamat_aktif",                              # Daftar alamat yang aktif
+        "invoice_generation_monitor",                # Monitoring generate invoice otomatis
+        "future_invoice_projection",                 # Proyeksi invoice untuk tanggal spesifik
 
         # Widget Dashboard Pelanggan
         "pelanggan_statistik_utama",                 # Statistik utama pelanggan
@@ -91,6 +93,39 @@ class Settings(BaseSettings):
         "uploads",     # Akses ke upload file
         "traffic_monitoring",  # Akses ke traffic monitoring dashboard
     ]
+
+    # Permissions untuk widget-dashboard
+    # Format: "widget_name": ["role1", "role2", ...]
+    # Roles yang tersedia: superadmin, admin, manager, staff, viewer
+    DASHBOARD_WIDGET_PERMISSIONS: dict = {
+        # Widget Financial (High restriction)
+        "pendapatan_bulanan": ["superadmin", "admin", "manager"],
+        "invoice_bulanan": ["superadmin", "admin", "manager"],
+
+        # Widget Monitoring (High restriction)
+        "invoice_generation_monitor": ["superadmin", "admin", "manager"],
+        "future_invoice_projection": ["superadmin", "admin", "manager"],
+
+        # Widget Server/System (High restriction)
+        "statistik_server": ["superadmin", "admin"],
+
+        # Widget Analytics (Medium restriction)
+        "statistik_pelanggan": ["superadmin", "admin", "manager", "staff"],
+        "pelanggan_per_lokasi": ["superadmin", "admin", "manager", "staff"],
+        "pelanggan_per_paket": ["superadmin", "admin", "manager", "staff"],
+        "tren_pertumbuhan": ["superadmin", "admin", "manager"],
+        "status_langganan": ["superadmin", "admin", "manager", "staff"],
+        "alamat_aktif": ["superadmin", "admin", "manager", "staff"],
+
+        # Widget Pelanggan (Lower restriction)
+        "pelanggan_statistik_utama": ["superadmin", "admin", "manager", "staff", "viewer"],
+        "pelanggan_pendapatan_jakinet": ["superadmin", "admin", "manager", "staff"],
+        "pelanggan_distribusi_chart": ["superadmin", "admin", "manager", "staff", "viewer"],
+        "pelanggan_pertumbuhan_chart": ["superadmin", "admin", "manager", "staff", "viewer"],
+        "pelanggan_status_overview_chart": ["superadmin", "admin", "manager", "staff", "viewer"],
+        "pelanggan_metrik_cepat": ["superadmin", "admin", "manager", "staff"],
+        "pelanggan_tren_pendapatan_chart": ["superadmin", "admin", "manager", "staff"],
+    }
 
     # ====================================================================
     # KONFIGURASI DATABASE & SECRET KEY
@@ -157,6 +192,34 @@ class Settings(BaseSettings):
             "ARTACOMINDO": self.XENDIT_CALLBACK_TOKEN_ARTACOMINDO,
             "JELANTIK": self.XENDIT_CALLBACK_TOKEN_JELANTIK,
         }
+
+    def can_access_widget(self, widget_name: str, user_role: str) -> bool:
+        """
+        Check if user can access specific widget based on their role
+        """
+        # Convert role to lowercase for case-insensitive comparison
+        user_role = user_role.lower()
+
+        # Check widget-specific permissions
+        if widget_name in self.DASHBOARD_WIDGET_PERMISSIONS:
+            allowed_roles = self.DASHBOARD_WIDGET_PERMISSIONS[widget_name]
+            return user_role in [role.lower() for role in allowed_roles]
+
+        # Default: only admins and above can access if widget not in permissions
+        return user_role in ["superadmin", "admin"]
+
+    def get_user_widgets(self, user_role: str) -> List[str]:
+        """
+        Get list of widgets user can access based on their role
+        """
+        user_role = user_role.lower()
+        accessible_widgets = []
+
+        for widget_name in self.DASHBOARD_WIDGETS:
+            if self.can_access_widget(widget_name, user_role):
+                accessible_widgets.append(widget_name)
+
+        return accessible_widgets
 
     class Config:
         # Be explicit about the .env file path and encoding

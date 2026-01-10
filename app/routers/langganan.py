@@ -1,5 +1,6 @@
 import csv
 import io
+import json
 import logging
 from calendar import monthrange
 from datetime import date, datetime
@@ -7,7 +8,7 @@ from typing import List, Optional
 
 import chardet
 from dateutil.relativedelta import relativedelta
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ValidationError, Field
 from sqlalchemy import func
@@ -29,6 +30,7 @@ from ..schemas.langganan import (
     LanggananUpdate,
 )
 from ..schemas.pelanggan import Pelanggan as PelangganSchema
+from ..utils.export import create_langganan_export_response
 
 router = APIRouter(prefix="/langganan", tags=["Langganan"])
 
@@ -292,6 +294,106 @@ async def get_all_langganan(
     return LanggananListResponse(data=langganan_list, total_count=total_count)
 
 
+# GET /langganan/export - Export data langganan ke CSV atau Excel
+# Buat export data langganan ke file dengan format yang dipilih (CSV/Excel) dengan filter yang sama seperti list
+# Query parameters:
+# - search: filter pencarian (sama seperti di list)
+# - alamat: filter berdasarkan alamat
+# - paket_layanan_name: filter berdasarkan nama paket
+# - status: filter berdasarkan status
+# - brand: filter berdasarkan brand (JAKINET, JELANTIK, JELANTIK Nagrak, dll)
+# - jatuh_tempo_start: filter tanggal jatuh tempo mulai
+# - jatuh_tempo_end: filter tanggal jatuh tempo akhir
+# - format: format export (csv atau excel), default csv
+# Response: file export dengan kolom: Nama Pelanggan, Email, Nomor Telepon, Brand, Paket Layanan, Status, Metode Pembayaran, Harga, dll
+# Format file: CSV dengan BOM atau Excel dengan formatting, timestamp di filename
+# Performance: eager loading biar efficient
+@router.get("/export", response_class=StreamingResponse)
+async def export_langganan(
+    search: Optional[str] = None,
+    alamat: Optional[str] = None,
+    paket_layanan_name: Optional[str] = None,
+    status: Optional[str] = None,
+    brand: Optional[str] = None,
+    jatuh_tempo_start: Optional[str] = None,
+    jatuh_tempo_end: Optional[str] = None,
+    format: str = Query("csv", description="Export format: csv atau excel"),
+    db: AsyncSession = Depends(get_db),
+):
+    """Mengekspor semua data langganan ke dalam file dengan format yang dipilih (CSV/Excel)."""
+    # Validate format
+    if format.lower() not in ["csv", "excel", "xlsx"]:
+        raise HTTPException(status_code=400, detail="Format tidak valid. Pilih 'csv' atau 'excel'.")
+
+    query = (
+        select(LanggananModel)
+        .options(
+            joinedload(LanggananModel.pelanggan).joinedload(PelangganModel.harga_layanan),
+            joinedload(LanggananModel.paket_layanan),
+        )
+        .join(LanggananModel.pelanggan)
+    )
+
+    if search:
+        query = query.where(PelangganModel.nama.ilike(f"%{search}%"))
+    if alamat:
+        query = query.where(PelangganModel.alamat.ilike(f"%{alamat}%"))
+    if paket_layanan_name:
+        query = query.join(PaketLayananModel).where(PaketLayananModel.nama_paket == paket_layanan_name)
+    if status:
+        query = query.where(LanggananModel.status == status)
+
+
+    # Filter berdasarkan brand (JAKINET, JELANTIK, JELANTIK Nagrak, dll)
+    if brand:
+        query = query.where(PelangganModel.id_brand == brand)
+
+    # Filter berdasarkan tanggal jatuh tempo untuk export
+    if jatuh_tempo_start:
+        try:
+            start_date = datetime.strptime(jatuh_tempo_start, "%Y-%m-%d").date()
+            query = query.where(LanggananModel.tgl_jatuh_tempo >= start_date)
+        except ValueError:
+            # Skip filter jika format tanggal tidak valid
+            pass
+
+    if jatuh_tempo_end:
+        try:
+            end_date = datetime.strptime(jatuh_tempo_end, "%Y-%m-%d").date()
+            query = query.where(LanggananModel.tgl_jatuh_tempo <= end_date)
+        except ValueError:
+            # Skip filter jika format tanggal tidak valid
+            pass
+
+    query = query.order_by(LanggananModel.id.desc())
+
+    result = await db.execute(query)
+    langganan_list = result.scalars().unique().all()
+
+    if not langganan_list:
+        raise HTTPException(status_code=404, detail="Tidak ada data langganan untuk diekspor dengan filter yang diberikan.")
+
+    # Prepare data untuk export dengan format yang sesuai
+    export_data = []
+    for langganan in langganan_list:
+        export_data.append({
+            "id": langganan.id,
+            "pelanggan_nama": (langganan.pelanggan.nama if langganan.pelanggan else "N/A"),
+            "pelanggan_email": (langganan.pelanggan.email if langganan.pelanggan else "N/A"),
+            "pelanggan_no_telp": (format_phone_number(langganan.pelanggan.no_telp) if langganan.pelanggan and langganan.pelanggan.no_telp else "N/A"),
+            "pelanggan_alamat": (langganan.pelanggan.alamat if langganan.pelanggan else "N/A"),
+            "paket_nama": (langganan.paket_layanan.nama_paket if langganan.paket_layanan else "N/A"),
+            "paket_harga": (langganan.paket_layanan.harga if langganan.paket_layanan else 0),
+            "status_langganan": langganan.status,
+            "tanggal_aktif": langganan.tgl_mulai_langganan,
+            "tanggal_jatuh_tempo": langganan.tgl_jatuh_tempo,
+            "brand": (langganan.pelanggan.harga_layanan.brand if langganan.pelanggan and langganan.pelanggan.harga_layanan else "N/A"),
+        })
+
+    # Gunakan export utility yang sudah dioptimasi
+    return create_langganan_export_response(export_data, format.lower())
+
+
 # GET /langganan/{langganan_id} - Ambil detail langganan
 # Buat ambil data detail satu langganan berdasarkan ID
 # Path parameters:
@@ -342,6 +444,38 @@ async def update_langganan(
         raise HTTPException(status_code=404, detail="Langganan tidak ditemukan")
 
     update_data = langganan_update.model_dump(exclude_unset=True)
+
+    # Jika status diubah menjadi "Berhenti", isi tgl_berhenti secara otomatis dan simpan riwayat
+    if "status" in update_data and update_data["status"] == "Berhenti":
+        hari_ini = date.today()
+        update_data["tgl_berhenti"] = hari_ini
+
+        # Simpan riwayat tanggal berhenti
+        riwayat_list = []
+        if db_langganan.riwayat_tgl_berhenti:
+            try:
+                riwayat_list = json.loads(db_langganan.riwayat_tgl_berhenti)
+            except (json.JSONDecodeError, TypeError):
+                riwayat_list = []
+
+        # Menambahkan tanggal berhenti baru ke riwayat
+        riwayat_list.append({
+            "tanggal": hari_ini.isoformat(),
+            "alasan": update_data.get("alasan_berhenti", ""),
+            "timestamp": datetime.now().isoformat()
+        })
+
+        # Simpan sebagai JSON string
+        update_data["riwayat_tgl_berhenti"] = json.dumps(riwayat_list)
+
+        logger.info(f"Langganan ID {langganan_id} status diubah menjadi Berhenti, tgl_berhenti diset ke {hari_ini}, riwayat ditambahkan")
+
+    # Jika status diubah dari "Berhenti" ke status lain, kosongkan tgl_berhenti tapi RIWAYAT TETAP DISIMPAN
+    elif "status" in update_data and update_data["status"] != "Berhenti" and db_langganan.status == "Berhenti":
+        update_data["tgl_berhenti"] = None
+        # RIWAYAT TIDAK DIHAPUS, tetap disimpan untuk histori
+        logger.info(f"Langganan ID {langganan_id} status diubah dari Berhenti, tgl_berhenti dikosongkan, riwayat tetap dipertahankan")
+
     for key, value in update_data.items():
         setattr(db_langganan, key, value)
 
@@ -508,8 +642,8 @@ async def download_csv_template_langganan():
 # Response: file CSV dengan kolom: Nama Pelanggan, Email, Nomor Telepon, Brand, Paket Layanan, Status, Metode Pembayaran, Harga, dll
 # Format file: CSV dengan BOM dan timestamp di filename
 # Performance: eager loading biar efficient
-@router.get("/export/csv", response_class=StreamingResponse)
-async def export_to_csv_langganan(
+@router.get("/export", response_class=StreamingResponse)
+async def export_langganan(
     search: Optional[str] = None,
     alamat: Optional[str] = None,
     paket_layanan_name: Optional[str] = None,
@@ -517,9 +651,13 @@ async def export_to_csv_langganan(
     brand: Optional[str] = None,
     jatuh_tempo_start: Optional[str] = None,
     jatuh_tempo_end: Optional[str] = None,
+    format: str = Query("csv", description="Export format: csv atau excel"),
     db: AsyncSession = Depends(get_db),
 ):
-    """Mengekspor semua data langganan ke dalam file CSV dengan filter."""
+    """Mengekspor semua data langganan ke dalam file dengan format yang dipilih (CSV/Excel)."""
+    # Validate format
+    if format.lower() not in ["csv", "excel", "xlsx"]:
+        raise HTTPException(status_code=400, detail="Format tidak valid. Pilih 'csv' atau 'excel'.")
     query = (
         select(LanggananModel)
         .options(
@@ -568,42 +706,25 @@ async def export_to_csv_langganan(
     if not langganan_list:
         raise HTTPException(status_code=404, detail="Tidak ada data langganan untuk diekspor dengan filter yang diberikan.")
 
-    output = io.StringIO()
-    output.write("\ufeff")
-    rows_to_write = []
+    # Prepare data untuk export dengan format yang sesuai
+    export_data = []
     for langganan in langganan_list:
-        rows_to_write.append(
-            {
-                "Nama Pelanggan": (langganan.pelanggan.nama if langganan.pelanggan else "N/A"),
-                "Email Pelanggan": (langganan.pelanggan.email if langganan.pelanggan else "N/A"),
-                "Alamat": (langganan.pelanggan.alamat if langganan.pelanggan else "N/A"),
-                "Alamat Lengkap": (langganan.pelanggan.alamat_2 if langganan.pelanggan else "N/A"),
-                "Nomor Telepon": (format_phone_number(langganan.pelanggan.no_telp) if langganan.pelanggan and langganan.pelanggan.no_telp else "N/A"),
-                "Brand": (langganan.pelanggan.harga_layanan.brand if langganan.pelanggan and langganan.pelanggan.harga_layanan else "N/A"),
-                "Paket Layanan": (langganan.paket_layanan.nama_paket if langganan.paket_layanan else "N/A"),
-                "Status": langganan.status,
-                "Metode Pembayaran": langganan.metode_pembayaran,
-                "Harga": langganan.harga_awal,
-                "Tgl Jatuh Tempo": langganan.tgl_jatuh_tempo,
-                "Tgl Invoice Terakhir": langganan.tgl_invoice_terakhir,
-            }
-        )
+        export_data.append({
+            "id": langganan.id,
+            "pelanggan_nama": (langganan.pelanggan.nama if langganan.pelanggan else "N/A"),
+            "pelanggan_email": (langganan.pelanggan.email if langganan.pelanggan else "N/A"),
+            "pelanggan_no_telp": (format_phone_number(langganan.pelanggan.no_telp) if langganan.pelanggan and langganan.pelanggan.no_telp else "N/A"),
+            "pelanggan_alamat": (langganan.pelanggan.alamat if langganan.pelanggan else "N/A"),
+            "paket_nama": (langganan.paket_layanan.nama_paket if langganan.paket_layanan else "N/A"),
+            "paket_harga": (langganan.paket_layanan.harga if langganan.paket_layanan else 0),
+            "status_langganan": langganan.status,
+            "tanggal_aktif": langganan.tgl_mulai_langganan,
+            "tanggal_jatuh_tempo": langganan.tgl_jatuh_tempo,
+            "brand": (langganan.pelanggan.harga_layanan.brand if langganan.pelanggan and langganan.pelanggan.harga_layanan else "N/A"),
+        })
 
-    if not rows_to_write:
-        raise HTTPException(status_code=404, detail="Tidak ada data valid untuk diekspor.")
-
-    writer = csv.DictWriter(output, fieldnames=rows_to_write[0].keys())
-    writer.writeheader()
-    writer.writerows(rows_to_write)
-    output.seek(0)
-
-    filename = f"export_langganan_{datetime.now().strftime('%Y%m%d')}.csv"
-    response_headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
-    return StreamingResponse(
-        io.BytesIO(output.getvalue().encode("utf-8")),
-        headers=response_headers,
-        media_type="text/csv; charset=utf-8",
-    )
+    # Gunakan export utility yang sudah dioptimasi
+    return create_langganan_export_response(export_data, format.lower())
 
 
 # POST /langganan/import/csv - Import data langganan dari CSV
@@ -868,7 +989,7 @@ async def get_all_pelanggan_with_status(db: AsyncSession = Depends(get_db)):
 
     for p in pelanggan:
         p.has_subscription = len(p.langganan) > 0
-        # Tambahkan informasi apakah pelanggan sudah punya data teknis
+        # Menambahkan informasi apakah pelanggan sudah punya data teknis
         p.has_data_teknis = len(p.data_teknis) > 0 if hasattr(p, 'data_teknis') and p.data_teknis else False
 
     return pelanggan

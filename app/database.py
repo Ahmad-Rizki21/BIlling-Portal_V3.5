@@ -48,19 +48,18 @@ environment = os.getenv("ENVIRONMENT", "development")
 
 # Dynamic pool configuration yang disesuaikan dengan environment
 if environment == "production":
-    # Production environment - optimized untuk real-world usage
-    # Config ini dirancang untuk handle traffic tinggi dengan efisien
-    POOL_SIZE = 8       # Jumlah koneksi default di pool (dari 20 → 8 buat hemat memory)
-    MAX_OVERFLOW = 12   # Maks koneksi tambahan kalau pool penuh (total max = 20)
-    POOL_TIMEOUT = 15   # Timeout dapetin koneksi dari pool (15 detik)
-    POOL_RECYCLE = 1800 # Recycle koneksi setiap 30 menit (prevent stale connection)
+    # Production environment - optimized untuk high traffic via Cloudflare
+    # Increased pool size untuk handle concurrent users dan prevent delay
+    POOL_SIZE = 15      # Dari 8 → 15 untuk handle lebih banyak concurrent connections
+    MAX_OVERFLOW = 25   # Dari 12 → 25 (total max = 40 koneksi)
+    POOL_TIMEOUT = 8    # Dari 15 → 8 detik untuk faster failover
+    POOL_RECYCLE = 1200 # Dari 1800 → 1200 (20 menit) untuk fresh connections
 else:
     # Development environment - resources yang lebih kecil
-    # Config ini cukup buat development tapi nggak boros resources
-    POOL_SIZE = 5       # Development nggak butuh banyak koneksi
-    MAX_OVERFLOW = 10   # Total maks = 15 koneksi
-    POOL_TIMEOUT = 10   # Quick timeout buat development (10 detik)
-    POOL_RECYCLE = 900  # Recycle setiap 15 menit (lebih sering)
+    POOL_SIZE = 8       # Dari 5 → 8 untuk development yang lebih smooth
+    MAX_OVERFLOW = 12   # Total maks = 20 koneksi
+    POOL_TIMEOUT = 5    # Dari 10 → 5 detik untuk development feedback
+    POOL_RECYCLE = 600  # 10 menit untuk development
 
 # ====================================================================
 # DATABASE ENGINE CREATION

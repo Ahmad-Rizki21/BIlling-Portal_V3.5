@@ -16,6 +16,9 @@ class InvoiceGenerate(BaseModel):
     """
 
     langganan_id: int = Field(..., gt=0, description="ID langganan yang akan dibuatkan invoice")
+    is_reinvoice: bool = Field(False, description="True jika invoice ini adalah reinvoice dari invoice sebelumnya")
+    original_invoice_id: Optional[int] = Field(None, description="ID invoice asli yang direinvoice (hanya jika is_reinvoice=True)")
+    reinvoice_reason: Optional[str] = Field(None, description="Alasan reinvoice (expired/suspended/manual)")
 
     @validator("langganan_id", pre=True)
     def validate_langganan_id(cls, v):
@@ -136,7 +139,7 @@ class InvoiceUpdate(BaseModel):
 
     @validator("pelanggan_id", pre=True)
     def validate_pelanggan_id_update(cls, v):
-        # Tambahkan validasi untuk mencegah pelanggan_id menjadi None/null
+        # Menambahkan validasi untuk mencegah pelanggan_id menjadi None/null
         # Jika ingin menghapus relasi, seharusnya tidak mengupdate pelanggan_id ke None
         # Tapi jika memang diperlukan, pastikan logikanya benar
         if v is None:
@@ -309,9 +312,12 @@ class Invoice(InvoiceBase):
     created_at: Optional[datetime] = Field(None, description="Waktu pembuatan record")
     updated_at: Optional[datetime] = Field(None, description="Waktu update terakhir")
 
-    # Tambahkan field computed untuk status link pembayaran
+    # Menambahkan field computed untuk status link pembayaran
     payment_link_status: Optional[str] = Field(None, description="Status link pembayaran (Belum Dibayar/Expired/Lunas)")
     is_payment_link_active: Optional[bool] = Field(None, description="True jika link pembayaran masih aktif")
+    
+    # Menambahkan nama pelanggan untuk display di frontend tanpa lookup
+    pelanggan_nama: Optional[str] = Field(None, description="Nama pelanggan (dari relasi)")
 
     class Config:
         from_attributes = True

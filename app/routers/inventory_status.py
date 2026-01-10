@@ -58,7 +58,7 @@ async def delete_status(status_id: int, db: AsyncSession = Depends(get_db)):
     if not db_status:
         raise HTTPException(status_code=404, detail="Status not found")
 
-    # Tambahkan validasi di sini jika status sedang digunakan oleh item inventaris
+    # Menambahkan validasi di sini jika status sedang digunakan oleh item inventaris
     # Untuk saat ini, kita langsung hapus
     await db.delete(db_status)
     await db.commit()

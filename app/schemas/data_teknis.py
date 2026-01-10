@@ -144,16 +144,20 @@ class DataTeknisBase(BaseModel):
         if v is None or v == "":
             return None
 
-        v_str = str(v).strip()
+        v_str = str(v)
         if not v_str:
             return None
 
         if len(v_str) > 100:
             raise ValueError("ID pelanggan terlalu panjang (maksimal 100 karakter)")
 
-        # Check for valid characters (including spaces)
-        if not re.match(r"^[a-zA-Z0-9\-_\. ]+$", v_str):
-            raise ValueError("ID pelanggan hanya boleh mengandung huruf, angka, dash, underscore, titik, dan spasi")
+        # Validasi ID Pelanggan tidak boleh mengandung spasi
+        if ' ' in v_str:
+            raise ValueError("ID Pelanggan PPPoE tidak boleh mengandung spasi. Contoh: user123, test-service, client_01")
+
+        # Check for valid characters (tanpa spasi)
+        if not re.match(r"^[a-zA-Z0-9\-_\.]+$", v_str):
+            raise ValueError("ID pelanggan hanya boleh mengandung huruf, angka, dash, underscore, dan titik")
 
         return v_str
 
@@ -168,6 +172,10 @@ class DataTeknisBase(BaseModel):
 
         if len(v_str) > 100:
             raise ValueError("Password PPPoE terlalu panjang (maksimal 100 karakter)")
+
+        # Validasi password tidak boleh mengandung spasi
+        if ' ' in v_str:
+            raise ValueError("Password PPPoE tidak boleh mengandung spasi. Contoh format yang benar: support123.!!")
 
         return v_str
 
@@ -344,12 +352,22 @@ class DataTeknisCreate(DataTeknisBase):
     def validate_id_pelanggan_required(cls, v):
         if not v:
             raise ValueError("ID pelanggan tidak boleh kosong")
+
+        # Validasi ID Pelanggan tidak boleh mengandung spasi
+        if ' ' in v:
+            raise ValueError("ID Pelanggan PPPoE tidak boleh mengandung spasi. Contoh: user123, test-service, client_01")
+
         return v
 
     @validator("password_pppoe")
     def validate_password_pppoe_required(cls, v):
         if not v:
             raise ValueError("Password PPPoE tidak boleh kosong")
+
+        # Validasi password tidak boleh mengandung spasi
+        if ' ' in v:
+            raise ValueError("Password PPPoE tidak boleh mengandung spasi. Contoh format yang benar: support123.!!")
+
         return v
 
     @validator("ip_pelanggan")
@@ -555,16 +573,20 @@ class DataTeknisImport(BaseModel):
         if v is None:
             raise ValueError("ID pelanggan tidak boleh kosong")
 
-        v_str = str(v).strip()
+        v_str = str(v)
         if not v_str:
             raise ValueError("ID pelanggan tidak boleh kosong")
 
         if len(v_str) > 100:
             raise ValueError("ID pelanggan terlalu panjang (maksimal 100 karakter)")
 
-        # Check for valid characters (including spaces)
-        if not re.match(r"^[a-zA-Z0-9\-_\. ]+$", v_str):
-            raise ValueError("ID pelanggan hanya boleh mengandung huruf, angka, dash, underscore, titik, dan spasi")
+        # Validasi ID Pelanggan tidak boleh mengandung spasi
+        if ' ' in v_str:
+            raise ValueError("ID Pelanggan PPPoE tidak boleh mengandung spasi. Contoh: user123, test-service, client_01")
+
+        # Check for valid characters (tanpa spasi)
+        if not re.match(r"^[a-zA-Z0-9\-_\.]+$", v_str):
+            raise ValueError("ID pelanggan hanya boleh mengandung huruf, angka, dash, underscore, dan titik")
 
         return v_str
 
@@ -579,6 +601,10 @@ class DataTeknisImport(BaseModel):
 
         if len(v_str) > 100:
             raise ValueError("Password PPPoE terlalu panjang (maksimal 100 karakter)")
+
+        # Validasi password tidak boleh mengandung spasi
+        if ' ' in v_str:
+            raise ValueError("Password PPPoE tidak boleh mengandung spasi. Contoh format yang benar: support123.!!")
 
         return v_str
 
@@ -728,8 +754,11 @@ class DataTeknisImport(BaseModel):
 # ====================================================================
 # SKEMA RESPONSE - Data yang dikembalikan oleh API
 # ====================================================================
+from ..schemas.pelanggan import Pelanggan as PelangganSchema
+
 class DataTeknis(DataTeknisBase):
     id: int
+    pelanggan: Optional[PelangganSchema] = None
 
     class Config:
         from_attributes = True

@@ -22,7 +22,7 @@ class OLTUpdate(BaseModel):
     tipe_olt: Optional[str] = None
     username: Optional[str] = None
     password: Optional[str] = None
-    # TAMBAHKAN INI: Agar bisa mengubah koneksi Mikrotik saat edit
+    # Menambahkan INI: Agar bisa mengubah koneksi Mikrotik saat edit
     mikrotik_server_id: Optional[int] = None
 
 

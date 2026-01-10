@@ -16,7 +16,7 @@
           <v-btn
             variant="outlined"
             prepend-icon="mdi-arrow-left"
-            @click="$router.go(-1)"
+            @click="router.back()"
           >
             Kembali
           </v-btn>
@@ -402,7 +402,8 @@ const loadMoreResults = async () => {
 
     if (response.data && response.data.results) {
       // Append new results to existing results
-      Object.entries(response.data.results).forEach(([category, newItems]) => {
+      const newResults = response.data.results as Record<string, SearchResult[]>;
+      Object.entries(newResults).forEach(([category, newItems]) => {
         if (searchResults.value?.results[category]) {
           searchResults.value.results[category].push(...newItems)
         }

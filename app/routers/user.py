@@ -30,15 +30,26 @@ router = APIRouter(
 
 
 # Endpoint /me sekarang menggunakan dependency yang sudah eager loading
+# Endpoint /me sekarang menggunakan dependency yang sudah eager loading
 @router.get("/me", response_model=UserSchema)
 async def get_current_user_info(
     current_user: UserModel = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db)
 ):
-    return current_user
+    # Eager load role data
+    stmt = select(UserModel).options(selectinload(UserModel.role).selectinload(RoleModel.permissions)).where(UserModel.id == current_user.id)
+    result = await db.execute(stmt)
+    user = result.scalar_one_or_none()
+
+    return user
 
 
 @router.post("/", response_model=UserSchema, status_code=status.HTTP_201_CREATED)
-async def create_user(user: UserCreate, db: AsyncSession = Depends(get_db)):
+async def create_user(
+    user: UserCreate, 
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user)  # PROTECTED
+):
     """
     Create user dengan password validation untuk security.
     ✅ PASSWORD SECURE: Hanya password kuat yang diterima.
@@ -106,6 +117,7 @@ async def read_all_users(
     search: Optional[str] = None,
     role_id: Optional[int] = None,
     db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user),  # PROTECTED
 ):
     """
     Mengambil daftar semua user dengan paginasi dan filter.
@@ -135,7 +147,11 @@ async def read_all_users(
 
 
 @router.get("/{user_id}", response_model=UserSchema)
-async def get_user_by_id(user_id: int, db: AsyncSession = Depends(get_db)):
+async def get_user_by_id(
+    user_id: int, 
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user)  # PROTECTED
+):
     # Gunakan eager loading untuk mengambil satu user
     query = (
         select(UserModel)
@@ -150,7 +166,12 @@ async def get_user_by_id(user_id: int, db: AsyncSession = Depends(get_db)):
 
 
 @router.patch("/{user_id}", response_model=UserSchema)
-async def update_user(user_id: int, user_update: UserUpdate, db: AsyncSession = Depends(get_db)):
+async def update_user(
+    user_id: int, 
+    user_update: UserUpdate, 
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user)  # PROTECTED
+):
     db_user = await db.get(UserModel, user_id)
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -216,7 +237,11 @@ async def update_user(user_id: int, user_update: UserUpdate, db: AsyncSession = 
 
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_user(user_id: int, db: AsyncSession = Depends(get_db)):
+async def delete_user(
+    user_id: int, 
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user)  # PROTECTED
+):
     db_user = await db.get(UserModel, user_id)
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")

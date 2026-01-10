@@ -185,7 +185,7 @@
             prepend-icon="mdi-file-excel"
             class="text-none font-weight-bold"
           >
-            Export Payment Links
+            Export Laporan Komprehensif
           </v-btn>
         </div>
       </div>
@@ -243,7 +243,7 @@
                   <v-icon color="white" size="16">mdi-account</v-icon>
                 </v-avatar>
                 <div>
-                  <div class="font-weight-medium">{{ getPelangganName(item.pelanggan_id) }}</div>
+                  <div class="font-weight-medium">{{ getPelangganName(item.pelanggan_id, item) }}</div>
                   <div class="text-caption text-medium-emphasis">
                     <v-icon size="12" class="me-1">mdi-identifier</v-icon>
                     ID: {{ item.id_pelanggan }}
@@ -262,15 +262,28 @@
           </template>
 
           <template v-slot:item.status_invoice="{ item }">
-            <v-chip
-              :color="getStatusColor(item.payment_link_status || item.status_invoice)"
-              variant="elevated"
-              size="small"
-              class="font-weight-bold status-chip"
-              :prepend-icon="getStatusIcon(item.payment_link_status || item.status_invoice)"
-            >
-              {{ item.payment_link_status || item.status_invoice }}
-            </v-chip>
+            <div class="d-flex align-center gap-1">
+              <v-chip
+                :color="getStatusColor(item.payment_link_status || item.status_invoice)"
+                variant="elevated"
+                size="small"
+                class="font-weight-bold status-chip"
+                :prepend-icon="getStatusIcon(item.payment_link_status || item.status_invoice)"
+              >
+                {{ item.payment_link_status || item.status_invoice }}
+              </v-chip>
+
+              <!-- Badge untuk Reinvoice -->
+              <v-chip
+                v-if="item.is_reinvoice"
+                color="purple"
+                variant="elevated"
+                size="x-small"
+                class="font-weight-bold"
+              >
+                Reinvoice
+              </v-chip>
+            </div>
           </template>
 
           <template v-slot:item.tgl_jatuh_tempo="{ item }">
@@ -353,18 +366,34 @@
 
               <v-tooltip location="top" v-if="auth.hasPermission('edit_invoices')">
                   <template v-slot:activator="{ props }">
-                    <v-btn 
+                    <v-btn
                       v-if="item.status_invoice !== 'Lunas'"
-                      icon="mdi-check-decagram" 
+                      icon="mdi-check-decagram"
                       v-bind="props"
-                      variant="text" 
-                      size="small" 
-                      color="success" 
+                      variant="text"
+                      size="small"
+                      color="success"
                       @click="openMarkAsPaidDialog(item)"
                     ></v-btn>
                   </template>
                   <span>Tandai Lunas</span>
                 </v-tooltip>
+
+                <!-- Button Buat Reinvoice -->
+<v-tooltip location="top" v-if="auth.hasPermission('create_invoices')">
+  <template v-slot:activator="{ props }">
+    <v-btn
+      v-if="canCreateReinvoice(item)"
+      icon="mdi-refresh"
+      v-bind="props"
+      variant="text"
+      size="small"
+      color="warning"
+      @click="createReinvoice(item)"
+    ></v-btn>
+  </template>
+  <span>Buat Reinvoice</span>
+</v-tooltip>
 
             </div>
           </template>
@@ -402,15 +431,15 @@
                 hide-details
                 class="flex-grow-0"
               ></v-checkbox-btn>
-              <div class="ms-2 flex-grow-1" @click="openDetailDialog(item)">
-                <div class="font-weight-bold text-primary">{{ item.invoice_number }}</div>
-                <div class="text-caption text-medium-emphasis">{{ getPelangganName(item.pelanggan_id) }}</div>
+              <div class="ms-2 flex-grow-1" @click="openDetailDialog(item)" style="min-width: 0;">
+                <div class="font-weight-bold text-primary text-truncate">{{ item.invoice_number }}</div>
+                <div class="text-caption text-medium-emphasis text-truncate">{{ getPelangganName(item.pelanggan_id, item) }}</div>
               </div>
               <v-chip
                 :color="getStatusColor(item.payment_link_status || item.status_invoice)"
                 variant="elevated"
                 size="small"
-                class="font-weight-bold ms-2 me-2"
+                class="font-weight-bold ms-2 me-2 flex-shrink-0"
                 label
               >
                 {{ item.payment_link_status || item.status_invoice }}
@@ -475,6 +504,11 @@
               <v-tooltip text="Tandai Lunas" v-if="auth.hasPermission('edit_invoices') && item.status_invoice !== 'Lunas'">
                 <template v-slot:activator="{ props }">
                   <v-btn v-bind="props" icon variant="text" size="small" color="success" @click="openMarkAsPaidDialog(item)"><v-icon>mdi-check-decagram</v-icon></v-btn>
+                </template>
+              </v-tooltip>
+              <v-tooltip text="Buat Reinvoice" v-if="auth.hasPermission('create_invoices') && canCreateReinvoice(item)">
+                <template v-slot:activator="{ props }">
+                  <v-btn v-bind="props" icon variant="text" size="small" color="warning" @click="createReinvoice(item)"><v-icon>mdi-refresh</v-icon></v-btn>
                 </template>
               </v-tooltip>
               <v-tooltip text="Hapus" v-if="auth.hasPermission('delete_invoices')">
@@ -656,6 +690,49 @@
       </v-card>
     </v-dialog>
 
+    <v-dialog v-model="dialogReinvoice" max-width="500px" persistent>
+      <v-card class="rounded-xl">
+        <v-card-title class="text-h5 d-flex align-center bg-warning text-white">
+          <v-icon start color="white">mdi-refresh-circle</v-icon>
+          Konfirmasi Reinvoice
+        </v-card-title>
+        <v-card-text class="pt-6">
+          <div class="mb-4">
+            Apakah Anda yakin ingin membuat reinvoice untuk invoice
+            <strong>{{ itemToReinvoice?.invoice_number }}</strong>?
+          </div>
+          <v-alert
+            type="info"
+            variant="tonal"
+            density="compact"
+            class="mb-0 text-caption"
+            icon="mdi-information"
+          >
+            Invoice baru akan dibuat dengan data langganan yang sama untuk periode bulan ini.
+          </v-alert>
+        </v-card-text>
+        <v-card-actions class="px-6 pb-6">
+          <v-spacer></v-spacer>
+          <v-btn
+            variant="outlined"
+            @click="closeReinvoiceDialog"
+            class="text-none"
+          >
+            Batal
+          </v-btn>
+          <v-btn
+            color="warning"
+            variant="elevated"
+            @click="confirmReinvoice"
+            :loading="creatingReinvoice"
+            class="text-none font-weight-bold"
+          >
+            Ya, Buat Reinvoice
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
     <v-snackbar 
       v-model="snackbar.show" 
       :color="snackbar.color" 
@@ -702,6 +779,7 @@ const invoicesForExistingUserCheck = ref<Invoice[]>([]); // Khusus untuk cek exi
 const pelangganList = ref<PelangganSelectItem[]>([]);
 const langgananList = ref<any[]>([]);
 const loading = ref(true);
+
 // const customerList = ref([]);
 const generating = ref(false);
 const searchQuery = ref('');
@@ -715,6 +793,9 @@ const deleting = ref(false);
 const itemToDelete = ref<Invoice | null>(null);
 const selectedInvoices = ref<Invoice[]>([]);
 const dialogBulkDelete = ref(false);
+const dialogReinvoice = ref(false);
+const creatingReinvoice = ref(false);
+const itemToReinvoice = ref<Invoice | null>(null);
 const dialogMarkAsPaid = ref(false);
 const markingAsPaid = ref(false);
 const itemToMark = ref<Invoice | null>(null);
@@ -722,10 +803,11 @@ const paymentMethod = ref('Cash');
 const selectedStatus = ref<string | null>(null);
 const startDate = ref<string | null>(null);
 const endDate = ref<string | null>(null);
-const statusOptions = ref(['Lunas', 'Belum Dibayar', 'Kadaluarsa']);
+const statusOptions = ref(['Lunas', 'Belum Dibayar', 'Kadaluarsa', 'Expired']);
 const showPaidInvoices = ref(false);
-const selectedLimit = ref(100);
+const selectedLimit = ref(10);
 const limitOptions = ref([
+  { title: '10 item', value: 10 },
   { title: '50 item', value: 50 },
   { title: '100 item', value: 100 },
   { title: '200 item', value: 200 },
@@ -749,7 +831,6 @@ const headers = [
 
 
 
-
 // --- Computed Properties ---
 const langgananForSelect = computed(() => {
   if (!langgananList.value || loading.value) return [];
@@ -764,29 +845,17 @@ const langgananForSelect = computed(() => {
       return true;
     })
     .map(langganan => {
-      // Cari pelanggan yang sesuai dengan langganan ini
-      const pelanggan = pelangganList.value?.find(p => p.id === langganan.pelanggan_id);
+      // Cari pelanggan yang SESUAI (Sekarang sudah embedded dari Backend join)
+      // Tidak perlu lookup ke pelangganList lagi untuk scalability > 2000 user
+      const pelanggan = langganan.pelanggan;
 
-      // Handle kasus ketika pelanggan tidak ditemukan
+      // Handle kasus ketika pelanggan tidak ditemukan (meski jarang terjadi jika embedded)
       if (!pelanggan) {
-        console.error(`❌ Data tidak konsisten: Langganan ID ${langganan.id} mereferensikan pelanggan_id ${langganan.pelanggan_id} yang tidak ada di database pelanggan.`);
-        // Tampilkan dengan informasi error yang jelas
-        return {
-          id: langganan.id,
-          title: `❌ ERROR: ID ${langganan.id} - Pelanggan ID ${langganan.pelanggan_id} tidak ditemukan`,
-          raw: {
-            ...langganan,
-            pelanggan: null,
-            is_new_user: false,
-            has_error: true,
-            error_message: `Pelanggan ID ${langganan.pelanggan_id} tidak ditemukan di database`
-          },
-          disabled: true // Non-aktifkan pilihan ini
-        };
+        console.warn(`⚠️ Data Orphan: Langganan ID ${langganan.id} kehilangan referensi pelanggan.`);
+        return null;
       }
 
       // Check apakah user sudah existing (pernah ada invoice)
-      // Gabungkan data dari invoices.value (current) dan invoicesForExistingUserCheck.value (history)
       const allInvoicesForCheck = [
         ...(invoices.value || []),
         ...(invoicesForExistingUserCheck.value || [])
@@ -795,12 +864,9 @@ const langgananForSelect = computed(() => {
       const existingInvoices = allInvoicesForCheck.filter(inv => inv.pelanggan_id === pelanggan.id);
       const hasHistoryInvoices = existingInvoices.length > 0;
 
-      
-      // NEW USER hanya untuk user yang benar-benar baru (belum pernah ada invoice sama sekali)
+      // NEW USER hanya untuk user yang benar-benar baru
       const isNewUser = !hasHistoryInvoices;
-
       
-      // Buat title dengan format yang diinginkan
       const pelangganName = pelanggan.nama || `ID: ${pelanggan.id}`;
 
       // Build title dengan format yang diinginkan
@@ -811,35 +877,29 @@ const langgananForSelect = computed(() => {
       return {
         // properti 'id' diperlukan untuk item-value
         id: langganan.id,
-
         // Properti 'title' dengan format yang lebih informatif
         title: title,
-
-        
-        // Objek item mentah (raw item) untuk diakses di template slot
+        // Objek item mentah (raw item) unruk diakses di template slot
         raw: {
           ...langganan,
           pelanggan: pelanggan,
-          // Hitung NEW USER secara client-side (lebih akurat)
           is_new_user: isNewUser,
           has_error: false
         }
       };
     })
-    .filter(item => item !== null); // Filter out null items (jika ada)
+    .filter(item => item !== null);
 });
 
 const selectedLanggananDetails = computed(() => {
   if (!selectedLanggananId.value || !langgananList.value) return null;
   const langganan = langgananList.value.find(lang => lang.id === selectedLanggananId.value);
   
-  // Tambahkan pengecekan tambahan
   if (!langganan) return null;
   
-  // Tambahkan data pelanggan jika tersedia
-  const pelanggan = pelangganList.value?.find(p => p.id === langganan.pelanggan_id) || null;
+  // Gunakan embedded pelanggan langsung
+  const pelanggan = langganan.pelanggan || null;
   
-  // Pastikan semua field yang dibutuhkan tersedia
   return {
     ...langganan,
     pelanggan: pelanggan,
@@ -848,7 +908,6 @@ const selectedLanggananDetails = computed(() => {
   };
 });
 
-// --- REVISI UTAMA DIMULAI DI SINI ---
 
 // --- Stats Methods --- (Menjadi lebih sederhana)
 const getPaidCount = () => {
@@ -867,7 +926,11 @@ const getOverdueCount = () => {
 };
 
 // --- Helper Functions --- (Menjadi lebih sederhana)
-function getPelangganName(pelangganId: number): string {
+function getPelangganName(pelangganId: number, item?: Invoice): string {
+  // 1. Prioritaskan nama yang sudah ada di object invoice (dari backend)
+  if (item && item.pelanggan_nama) return item.pelanggan_nama;
+
+  // 2. Coba cari di local list (fallback)
   if (!pelangganList.value) return `ID: ${pelangganId}`;
   const pelanggan = pelangganList.value.find(p => p.id === pelangganId);
   return pelanggan?.nama || `ID: ${pelangganId}`;
@@ -891,11 +954,13 @@ const filteredInvoices = computed(() => {
   // Filter data di client-side untuk mengecek payment link status yang expired
   let filtered = invoices.value;
 
-  // Jika switch "Tampilkan Lunas & Kadaluarsa" tidak aktif, exclude invoice dengan payment link expired
+  // Jika switch "Tampilkan Lunas & Kadaluarsa" tidak aktif, exclude invoice yang lunas saja
+  // TAPI TETAP TAMPILKAN invoice kadaluarsa agar bisa direinvoice
   if (!showPaidInvoices.value && filtered) {
     filtered = filtered.filter(invoice => {
-      // Exclude invoice yang payment link status-nya "Expired"
-      return invoice.payment_link_status !== 'Expired';
+      // Exclude invoice yang sudah lunas saja
+      // Invoice kadaluarsa tetap ditampilkan agar bisa direinvoice
+      return invoice.status_invoice !== 'Lunas';
     });
   }
 
@@ -948,14 +1013,13 @@ function formatCurrency(value: number): string {
   return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(value);
 }
 
-// --- REVISI UTAMA SELESAI DI SINI ---
 
 
 
 // --- Methods --- (Tidak ada perubahan di bawah ini, biarkan seperti semula)
 onMounted(() => {
   fetchInvoices();
-  fetchPelangganForSelect();
+  // fetchPelangganForSelect();
   fetchLanggananForSelect();
   fetchAllInvoicesForExistingUserCheck(); // Load history invoice untuk accurate NEW user detection
   window.addEventListener('new-notification', handleNewNotification);
@@ -980,9 +1044,10 @@ async function fetchInvoices() {
       if (!selectedStatus.value) {  // Jika tidak ada filter status spesifik
         params.append('status_invoice', 'Belum Dibayar');
       }
-      // Gunakan limit yang dipilih oleh user
-      params.append('limit', selectedLimit.value.toString());
     }
+    
+    // Always append limit based on user selection from dropdown
+    params.append('limit', selectedLimit.value.toString());
 
     const response = await apiClient.get<Invoice[]>(`/invoices/?${params.toString()}`);
     invoices.value = response.data.sort((a, b) => b.id - a.id);
@@ -1119,7 +1184,7 @@ async function fetchLanggananForSelect() {
   try {
     // QUICK FIX: Tambahkan limit besar untuk memastikan semua data ter-load
     const response = await apiClient.get<any>(
-      '/langganan/?for_invoice_selection=true&limit=1000'
+      '/langganan/?for_invoice_selection=true&limit=5000'
     );
     const data = Array.isArray(response.data) ? response.data : response.data.data;
 
@@ -1185,7 +1250,7 @@ async function generateManualInvoice() {
       // Refresh data untuk memperbarui tampilan
       await Promise.all([
         fetchLanggananForSelect(),
-        fetchPelangganForSelect()
+        // fetchPelangganForSelect()
       ]);
     } else {
       showSnackbar(detail, 'error');
@@ -1303,33 +1368,102 @@ async function confirmMarkAsPaid() {
   }
 }
 
-function exportPaymentLinksExcel() {
+async function exportPaymentLinksExcel() {
   try {
+    showSnackbar('Memproses export...', 'info');
+
     // Bangun URL dengan parameter filter
     let url = '/invoices/export-payment-links-excel';
     const params = new URLSearchParams();
-    
+
     if (searchQuery.value) params.append('search', searchQuery.value);
     if (selectedStatus.value) params.append('status_invoice', selectedStatus.value);
     if (startDate.value) params.append('start_date', startDate.value);
     if (endDate.value) params.append('end_date', endDate.value);
-    
+
     // Jika switch "Tampilkan Lunas & Kadaluarsa" tidak aktif dan tidak ada filter status spesifik,
     // maka kita hanya ingin mengekspor invoice yang belum dibayar
     if (!showPaidInvoices.value && !selectedStatus.value) {
       params.append('status_invoice', 'Belum Dibayar');
     }
-    
-    if (params.toString()) {
-      url += '?' + params.toString();
-    }
-    
-    // Unduh file
-    window.open(apiClient.defaults.baseURL + url, '_blank');
-    showSnackbar('File Excel sedang diunduh...', 'success');
-  } catch (error) {
+
+    // Gunakan apiClient untuk request dengan authorization
+    const response = await apiClient.get(url, {
+      params: Object.fromEntries(params),
+      responseType: 'blob' // Penting untuk download file
+    });
+
+    // Buat blob URL dan trigger download
+    const blobUrl = window.URL.createObjectURL(new Blob([response.data], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    }));
+
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    link.setAttribute('download', `payment-links-${new Date().toISOString().split('T')[0]}.xlsx`);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(blobUrl);
+
+    showSnackbar('File Excel berhasil diunduh', 'success');
+  } catch (error: any) {
     console.error('Error exporting payment links:', error);
-    showSnackbar('Gagal mengunduh file Excel', 'error');
+    showSnackbar(error.response?.data?.detail || 'Gagal mengunduh file Excel', 'error');
+  }
+}
+
+// Function untuk cek apakah invoice bisa direinvoice
+function canCreateReinvoice(item: Invoice): boolean {
+  const today = new Date();
+  const dueDate = new Date(item.tgl_jatuh_tempo);
+
+  // Bisa direinvoice jika:
+  // 1. Statusnya Expired atau Kadaluarsa
+  // 2. Atau status Belum Dibayar dan sudah lewat jatuh tempo
+  // 3. Dan bukan reinvoice sebelumnya
+  return (
+    (item.status_invoice === 'Expired' ||
+     item.status_invoice === 'Kadaluarsa' ||
+    (item.status_invoice === 'Belum Dibayar' && today > dueDate)) &&
+    !item.is_reinvoice
+  );
+}
+
+// Function untuk membuat reinvoice
+// Function untuk membuka dialog reinvoice
+function createReinvoice(invoice: Invoice) {
+  itemToReinvoice.value = invoice;
+  dialogReinvoice.value = true;
+}
+
+function closeReinvoiceDialog() {
+  dialogReinvoice.value = false;
+  itemToReinvoice.value = null;
+}
+
+// Function untuk melakukan reinvoice (dipindah dari createReinvoice lama)
+async function confirmReinvoice() {
+  if (!itemToReinvoice.value) return;
+
+  try {
+    creatingReinvoice.value = true;
+
+    await apiClient.post(`/invoices/create_reinvoice/${itemToReinvoice.value.id}`);
+
+    showSnackbar('Reinvoice berhasil dibuat!', 'success');
+
+    // Refresh data
+    await fetchInvoices();
+    await fetchTotalCount();
+    closeReinvoiceDialog();
+
+  } catch (error: any) {
+    console.error('Error creating reinvoice:', error);
+    const errorMessage = error.response?.data?.detail || 'Gagal membuat reinvoice';
+    showSnackbar(errorMessage, 'error');
+  } finally {
+    creatingReinvoice.value = false;
   }
 }
 </script>
@@ -1357,6 +1491,15 @@ function exportPaymentLinksExcel() {
 .invoice-card-mobile .v-list-item__append {
   font-size: 0.9rem;
   font-weight: 500;
+}
+/* Mobile card header text truncation */
+.invoice-card-mobile .d-flex.align-center.pa-2 {
+  position: relative;
+}
+.invoice-card-mobile .text-truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 /* ------------------------------------------- */
 
@@ -1708,9 +1851,22 @@ function exportPaymentLinksExcel() {
   padding: 4px 0;
 }
 
+/* Invoice number dengan text truncation untuk menghandle nomor panjang */
+.invoice-number-cell {
+  max-width: 250px;
+  overflow: hidden;
+}
+
+.invoice-number-cell > div {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .status-chip {
   min-width: 100px;
   border-radius: 12px !important;
+  flex-shrink: 0;
 }
 
 .action-buttons {

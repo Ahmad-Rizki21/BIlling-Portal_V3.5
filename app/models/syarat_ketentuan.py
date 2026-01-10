@@ -22,7 +22,7 @@ class SyaratKetentuan(Base):
     versi: Mapped[str | None] = mapped_column(String(50), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
-    # Tambahkan indeks untuk optimasi
+    # Menambahkan indeks untuk optimasi
     __table_args__ = (
         Index("ix_syarat_ketentuan_id", "id"),
     )

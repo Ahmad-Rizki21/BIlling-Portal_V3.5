@@ -8,7 +8,7 @@ import io
 from datetime import datetime, date
 import chardet
 from pydantic import BaseModel, ValidationError
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, selectinload
 import logging
 from io import BytesIO
 from collections import Counter
@@ -42,6 +42,7 @@ from ..schemas.data_teknis import (
     IPCheckRequest,  # <-- Import dari data_teknis.py, bukan pelanggan.py
     IPCheckResponse,
 )
+from ..utils.export import create_data_teknis_export_response
 
 
 class ProfileUsage(BaseModel):
@@ -79,7 +80,12 @@ async def create_data_teknis(data_teknis: DataTeknisCreate, db: AsyncSession = D
     data_dict.pop("odp", None)  # Secara eksplisit hapus field 'odp' yang salah
 
     # Validasi: Pastikan pelanggan dengan ID yang diberikan ada
-    pelanggan = await db.get(PelangganModel, pelanggan_id)
+    # Eager load harga_layanan to prevent MissingGreenlet error during response serialization
+    pelanggan = await db.get(
+        PelangganModel,
+        pelanggan_id,
+        options=[selectinload(PelangganModel.harga_layanan)]
+    )
     if not pelanggan:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -159,7 +165,10 @@ async def read_data_teknis_by_pelanggan(pelanggan_id: int, db: AsyncSession = De
     """
     Mengambil data teknis berdasarkan ID pelanggan.
     """
-    query = select(DataTeknisModel).options(joinedload(DataTeknisModel.pelanggan)).where(DataTeknisModel.pelanggan_id == pelanggan_id)
+    # Eager load pelanggan and harga_layanan to prevent MissingGreenlet error
+    query = select(DataTeknisModel).options(
+        joinedload(DataTeknisModel.pelanggan).selectinload(PelangganModel.harga_layanan)
+    ).where(DataTeknisModel.pelanggan_id == pelanggan_id)
     result = await db.execute(query)
     data_teknis_list = list(result.scalars().all())
     return data_teknis_list
@@ -180,7 +189,10 @@ async def read_all_data_teknis(
     """
     Mengambil daftar semua data teknis dengan paginasi, filter, dan total hitungan.
     """
-    query = select(DataTeknisModel).options(joinedload(DataTeknisModel.pelanggan))
+    # Eager load pelanggan and harga_layanan to prevent MissingGreenlet error
+    query = select(DataTeknisModel).options(
+        joinedload(DataTeknisModel.pelanggan).selectinload(PelangganModel.harga_layanan)
+    )
     count_query = select(func.count(DataTeknisModel.id))
 
     if search:
@@ -262,7 +274,7 @@ async def get_available_olt(db: AsyncSession = Depends(get_db)):
         result = await db.execute(query)
         olt_list = result.scalars().all()
 
-        # Tambahkan opsi "Semua" di awal
+        # Menambahkan opsi "Semua" di awal
         all_options = ["Semua"] + [olt for olt in olt_list if olt]
 
         return all_options
@@ -287,7 +299,7 @@ async def get_all_available_profiles(db: AsyncSession = Depends(get_db)):
         result = await db.execute(query)
         profiles = result.scalars().all()
 
-        # Tambahkan opsi "Semua" di awal
+        # Menambahkan opsi "Semua" di awal
         all_options = ["Semua"] + [profile for profile in profiles if profile]
 
         return all_options
@@ -312,7 +324,7 @@ async def get_available_vlans(db: AsyncSession = Depends(get_db)):
         result = await db.execute(query)
         vlans = result.scalars().all()
 
-        # Tambahkan opsi "Semua" di awal
+        # Menambahkan opsi "Semua" di awal
         all_options = ["Semua"] + [vlan for vlan in vlans if vlan]
 
         return all_options
@@ -392,6 +404,117 @@ async def get_onu_power_ranges(db: AsyncSession = Depends(get_db)):
         )
 
 
+# GET /data_teknis/export - Export data teknis ke CSV atau Excel
+# Buat export data teknis ke file dengan format yang dipilih (CSV/Excel) dengan filter yang sama seperti list
+# Query parameters:
+# - skip: offset untuk pagination (default: 0)
+# - limit: maksimal 10,000 records per export (biar ga crash)
+# - search: filter pencarian (sama seperti di list)
+# - olt: filter berdasarkan OLT
+# - profile: filter berdasarkan profile PPPoE
+# - vlan: filter berdasarkan VLAN
+# - onu_power_min: filter power ONU minimum
+# - onu_power_max: filter power ONU maksimum
+# - format: format export (csv atau excel), default csv
+# Response: file export dengan semua field data teknis
+# Performance optimization: pagination dan eager loading biar ga memory issues
+# Format file: CSV dengan BOM atau Excel dengan formatting, timestamp di filename
+@router.get("/export", response_class=StreamingResponse)
+async def export_data_teknis(
+    skip: int = 0,
+    limit: int = Query(default=1000, le=10000, description="Maximum 10,000 records per export with progress indicator"),  # Production-ready
+    search: Optional[str] = None,
+    olt: Optional[str] = None,
+    profile: Optional[str] = None,
+    vlan: Optional[str] = None,
+    onu_power_min: Optional[int] = None,
+    onu_power_max: Optional[int] = None,
+    format: str = Query("csv", description="Export format: csv atau excel"),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Mengekspor data teknis ke CSV atau Excel dengan data relasi yang mudah dibaca dan filter.
+    PERFORMANCE OPTIMIZATION: Added pagination to prevent memory issues with large datasets.
+    """
+    # Validate format
+    if format.lower() not in ["csv", "excel", "xlsx"]:
+        raise HTTPException(status_code=400, detail="Format tidak valid. Pilih 'csv' atau 'excel'.")
+
+    # PERFORMANCE MONITORING: Log export parameters
+    print(f"📊 Exporting data teknis {format}: skip={skip}, limit={limit}, search={search}, olt={olt}")
+
+    query = (
+        select(DataTeknisModel)
+        .options(
+            joinedload(DataTeknisModel.pelanggan).selectinload(PelangganModel.harga_layanan),
+            joinedload(DataTeknisModel.mikrotik_server),
+            joinedload(DataTeknisModel.odp),
+        )
+        .offset(skip)
+        .limit(limit)
+    )
+
+    if search:
+        search_term = f"%{search}%"
+        query = query.join(PelangganModel, DataTeknisModel.pelanggan_id == PelangganModel.id).where(
+            or_(
+                func.coalesce(PelangganModel.nama, "").ilike(search_term),
+                func.coalesce(DataTeknisModel.id_pelanggan, "").ilike(search_term),
+                func.coalesce(DataTeknisModel.ip_pelanggan, "").ilike(search_term),
+                func.coalesce(DataTeknisModel.sn, "").ilike(search_term),
+            )
+        )
+
+    if olt and olt != "Semua":
+        query = query.where(DataTeknisModel.olt == olt)
+
+    if profile and profile != "Semua":
+        query = query.where(DataTeknisModel.profile_pppoe == profile)
+
+    if vlan and vlan != "Semua":
+        query = query.where(DataTeknisModel.id_vlan == vlan)
+
+    if onu_power_min is not None:
+        query = query.where(DataTeknisModel.onu_power >= onu_power_min)
+
+    if onu_power_max is not None:
+        query = query.where(DataTeknisModel.onu_power <= onu_power_max)
+
+    query = query.order_by(DataTeknisModel.id.desc())
+
+    result = await db.execute(query)
+    data_list = result.scalars().unique().all()
+
+    if not data_list:
+        raise HTTPException(status_code=404, detail="Tidak ada data teknis untuk diekspor dengan filter yang diberikan.")
+
+    # Prepare data untuk export dengan format yang sesuai (lengkap seperti sebelumnya)
+    export_data = []
+    for d in data_list:
+        export_data.append({
+            "id_pelanggan": d.id_pelanggan,
+            "pelanggan_nama": d.pelanggan.nama if d.pelanggan else "N/A",
+            "email_pelanggan": d.pelanggan.email if d.pelanggan else "N/A",
+            "alamat": d.pelanggan.alamat if d.pelanggan else "N/A",
+            "alamat_2": d.pelanggan.alamat_2 if d.pelanggan else "N/A",
+            "no_telp": d.pelanggan.no_telp if d.pelanggan else "N/A",
+            "ip_pelanggan": d.ip_pelanggan,
+            "profile_pppoe": d.profile_pppoe,
+            "vlan": d.id_vlan,
+            "sn": d.sn,
+            "nama_mikrotik_server": d.mikrotik_server.name if d.mikrotik_server else "N/A",
+            "kode_odp": d.odp.kode_odp if d.odp else "N/A",
+            "port_odp": d.port_odp,
+            "olt_custom": d.olt_custom,
+            "pon": d.pon,
+            "otb": d.otb,
+            "odc": d.odc,
+            "onu_power": d.onu_power,
+            "status": "Aktif" if d.ip_pelanggan else "Tidak Aktif",
+        })
+
+    # Gunakan export utility yang sudah dioptimasi
+    return create_data_teknis_export_response(export_data, format.lower())
 
 
 @router.get("/{data_teknis_id}", response_model=DataTeknisSchema)
@@ -399,7 +522,12 @@ async def read_data_teknis_by_id(data_teknis_id: int, db: AsyncSession = Depends
     """
     Mengambil satu data teknis berdasarkan ID.
     """
-    db_data_teknis = await db.get(DataTeknisModel, data_teknis_id)
+    # Eager load pelanggan and harga_layanan to prevent MissingGreenlet error
+    db_data_teknis = await db.get(
+        DataTeknisModel,
+        data_teknis_id,
+        options=[joinedload(DataTeknisModel.pelanggan).selectinload(PelangganModel.harga_layanan)]
+    )
     if db_data_teknis is None:
         raise HTTPException(status_code=404, detail="Data Teknis not found")
     return db_data_teknis
@@ -414,10 +542,14 @@ async def update_data_teknis(
     """
     Memperbarui data teknis secara parsial DAN mentrigger update ke Mikrotik.
     """
+    # Eager load pelanggan with harga_layanan for response serialization, and langganan for Mikrotik trigger
     db_data_teknis = await db.get(
         DataTeknisModel,
         data_teknis_id,
-        options=[joinedload(DataTeknisModel.pelanggan).joinedload(PelangganModel.langganan)],
+        options=[
+            joinedload(DataTeknisModel.pelanggan).selectinload(PelangganModel.harga_layanan),
+            joinedload(DataTeknisModel.pelanggan).joinedload(PelangganModel.langganan),
+        ],
     )
     if not db_data_teknis:
         raise HTTPException(status_code=404, detail="Data Teknis not found")
@@ -600,8 +732,8 @@ async def download_csv_template_teknis():
     )
 
 
-@router.get("/export/csv", response_class=StreamingResponse)
-async def export_to_csv_teknis(
+@router.get("/export", response_class=StreamingResponse)
+async def export_data_teknis(
     skip: int = 0,
     limit: int = Query(default=1000, le=10000, description="Maximum 10,000 records per export with progress indicator"),  # Production-ready
     search: Optional[str] = None,
@@ -610,19 +742,24 @@ async def export_to_csv_teknis(
     vlan: Optional[str] = None,
     onu_power_min: Optional[int] = None,
     onu_power_max: Optional[int] = None,
+    format: str = Query("csv", description="Export format: csv atau excel"),
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Mengekspor data teknis ke CSV dengan data relasi yang mudah dibaca dan filter.
+    Mengekspor data teknis ke CSV atau Excel dengan data relasi yang mudah dibaca dan filter.
     PERFORMANCE OPTIMIZATION: Added pagination to prevent memory issues with large datasets.
     """
+    # Validate format
+    if format.lower() not in ["csv", "excel", "xlsx"]:
+        raise HTTPException(status_code=400, detail="Format tidak valid. Pilih 'csv' atau 'excel'.")
+
     # PERFORMANCE MONITORING: Log export parameters
-    print(f"📊 Exporting data teknis CSV: skip={skip}, limit={limit}, search={search}, olt={olt}")
+    print(f"📊 Exporting data teknis {format}: skip={skip}, limit={limit}, search={search}, olt={olt}")
 
     query = (
         select(DataTeknisModel)
         .options(
-            joinedload(DataTeknisModel.pelanggan),
+            joinedload(DataTeknisModel.pelanggan).selectinload(PelangganModel.harga_layanan),
             joinedload(DataTeknisModel.mikrotik_server),
             joinedload(DataTeknisModel.odp),
         )
@@ -664,46 +801,33 @@ async def export_to_csv_teknis(
     if not data_list:
         raise HTTPException(status_code=404, detail="Tidak ada data teknis untuk diekspor dengan filter yang diberikan.")
 
-    output = io.StringIO()
-    output.write("\ufeff")
-
-    rows_to_write = []
+    # Prepare data untuk export dengan format yang sesuai (lengkap seperti sebelumnya)
+    export_data = []
     for d in data_list:
-        rows_to_write.append(
-            {
-                "Nama Pelanggan": d.pelanggan.nama if d.pelanggan else "N/A",
-                "Email Pelanggan": d.pelanggan.email if d.pelanggan else "N/A",
-                "ID Pelanggan (PPPoE)": d.id_pelanggan,
-                "IP Pelanggan": d.ip_pelanggan,
-                "Profile PPPoE": d.profile_pppoe,
-                "VLAN": d.id_vlan,
-                "Nama Mikrotik Server": (d.mikrotik_server.name if d.mikrotik_server else "N/A"),
-                "Kode ODP": d.odp.kode_odp if d.odp else "N/A",
-                "Port ODP": d.port_odp,
-                "OLT Custom": d.olt_custom,
-                "PON": d.pon,
-                "OTB": d.otb,
-                "ODC": d.odc,
-                "ONU Power (dBm)": d.onu_power,
-                "Serial Number": d.sn,
-            }
-        )
+        export_data.append({
+            "id_pelanggan": d.id_pelanggan,
+            "pelanggan_nama": d.pelanggan.nama if d.pelanggan else "N/A",
+            "email_pelanggan": d.pelanggan.email if d.pelanggan else "N/A",
+            "alamat": d.pelanggan.alamat if d.pelanggan else "N/A",
+            "alamat_2": d.pelanggan.alamat_2 if d.pelanggan else "N/A",
+            "no_telp": d.pelanggan.no_telp if d.pelanggan else "N/A",
+            "ip_pelanggan": d.ip_pelanggan,
+            "profile_pppoe": d.profile_pppoe,
+            "vlan": d.id_vlan,
+            "sn": d.sn,
+            "nama_mikrotik_server": d.mikrotik_server.name if d.mikrotik_server else "N/A",
+            "kode_odp": d.odp.kode_odp if d.odp else "N/A",
+            "port_odp": d.port_odp,
+            "olt_custom": d.olt_custom,
+            "pon": d.pon,
+            "otb": d.otb,
+            "odc": d.odc,
+            "onu_power": d.onu_power,
+            "status": "Aktif" if d.ip_pelanggan else "Tidak Aktif",
+        })
 
-    if not rows_to_write:
-        raise HTTPException(status_code=404, detail="Tidak ada data valid untuk diekspor.")
-
-    writer = csv.DictWriter(output, fieldnames=rows_to_write[0].keys())
-    writer.writeheader()
-    writer.writerows(rows_to_write)
-    output.seek(0)
-
-    filename = f"export_data_teknis_{datetime.now().strftime('%Y%m%d')}.csv"
-    response_headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
-    return StreamingResponse(
-        io.BytesIO(output.getvalue().encode("utf-8")),
-        headers=response_headers,
-        media_type="text/csv; charset=utf-8",
-    )
+    # Gunakan export utility yang sudah dioptimasi
+    return create_data_teknis_export_response(export_data, format.lower())
 
 
 @router.post("/import/csv")

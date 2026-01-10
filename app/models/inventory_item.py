@@ -53,9 +53,9 @@ class InventoryItem(Base):
     
     item_type: Mapped["InventoryItemType"] = relationship()
     status: Mapped["InventoryStatus"] = relationship()
-    # Tambahkan relasi ke pelanggan
+    # Menambahkan relasi ke pelanggan
     pelanggan: Mapped["Pelanggan"] = relationship(back_populates="inventory_items")
-    # Tambahkan relasi ke inventory history dengan cascade delete
+    # Menambahkan relasi ke inventory history dengan cascade delete
     inventory_histories: Mapped[list["InventoryHistory"]] = relationship(
         back_populates="inventory_item",
         cascade="all, delete-orphan"

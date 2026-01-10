@@ -103,33 +103,115 @@
 
                 <!-- Sub Items -->
                 <v-list-item
-                  v-for="subItem in item.children"
-                  :key="subItem.value + '-sub'"
-                  :title="subItem.title"
-                  :to="subItem.to"
-                  :prepend-icon="subItem.icon"
+                  v-for="subItem in (item as any).children"
+                  :key="(subItem as any).value + '-sub'"
+                  :value="(subItem as any).value"
+                  :to="(subItem as any).to"
+                  :prepend-icon="(subItem as any).icon"
                   class="menu-item sub-item"
                 >
+                  <v-list-item-title class="item-title">
+                    {{ (subItem as any).title }}
+                  </v-list-item-title>
+
+                  <!-- Badge Section for Sub Items -->
+                  <template v-slot:append v-if="!rail || isMobile">
+                    <div class="badges-wrapper">
+                      <!-- Langganan Badges -->
+                      <template v-if="(subItem as any).value === 'langganan'">
+                        <v-tooltip location="top" v-if="suspendedCount > 0">
+                          <template v-slot:activator="{ props }">
+                            <v-badge
+                              color="error"
+                              :content="suspendedCount"
+                              inline
+                              v-bind="props"
+                              class="badge-item badge-suspended"
+                            ></v-badge>
+                          </template>
+                          <span>{{ suspendedCount }} langganan berstatus "Suspended"</span>
+                        </v-tooltip>
+
+                        <v-tooltip location="top" v-if="stoppedCount > 0">
+                          <template v-slot:activator="{ props }">
+                            <v-badge
+                              color="grey"
+                              :content="stoppedCount"
+                              inline
+                              v-bind="props"
+                              class="badge-item ms-1 badge-stopped"
+                            ></v-badge>
+                          </template>
+                          <span>{{ stoppedCount }} langganan berstatus "Berhenti"</span>
+                        </v-tooltip>
+                      </template>
+
+                      <!-- Invoice Badge -->
+                      <template v-if="(subItem as any).value === 'invoices'">
+                        <v-tooltip location="top" v-if="unpaidInvoiceCount > 0">
+                          <template v-slot:activator="{ props }">
+                            <v-badge
+                              color="warning"
+                              :content="unpaidInvoiceCount"
+                              inline
+                              v-bind="props"
+                              class="badge-item badge-unpaid"
+                            ></v-badge>
+                          </template>
+                          <span>{{ unpaidInvoiceCount }} invoice belum dibayar</span>
+                        </v-tooltip>
+
+                        <v-tooltip location="top" v-if="totalInvoiceCount > 0">
+                          <template v-slot:activator="{ props }">
+                            <v-badge
+                              color="info"
+                              :content="totalInvoiceCount"
+                              inline
+                              v-bind="props"
+                              class="badge-item ms-1 badge-total"
+                            ></v-badge>
+                          </template>
+                          <span>Total {{ totalInvoiceCount }} invoice</span>
+                        </v-tooltip>
+                      </template>
+
+                      <!-- Trouble Ticket Badge -->
+                      <template v-if="(subItem as any).value === 'trouble-tickets' && openTicketsCount > 0">
+                        <v-tooltip location="top">
+                          <template v-slot:activator="{ props }">
+                            <v-badge
+                              color="warning"
+                              :content="openTicketsCount"
+                              inline
+                              v-bind="props"
+                              class="badge-item badge-tickets"
+                            ></v-badge>
+                          </template>
+                          <span>{{ openTicketsCount }} tiket gangguan terbuka</span>
+                        </v-tooltip>
+                      </template>
+                    </div>
+                  </template>
                 </v-list-item>
               </v-list-group>
 
               <!-- Single Item -->
               <v-list-item
                 v-else
-                :prepend-icon="item.icon"
-                :value="item.value"
-                :to="item.to"
+                :prepend-icon="(item as any).icon"
+                :value="(item as any).value"
+                :to="(item as any).to"
                 class="menu-item single-item"
-                :key="'item-' + item.value"
+                :key="'item-' + (item as any).value"
               >
                 <v-list-item-title class="item-title">
-                  {{ item.title }}
+                  {{ (item as any).title }}
                 </v-list-item-title>
 
                 <!-- Badges -->
                 <template v-slot:append>
                   <div class="badges-wrapper">
-                    <v-tooltip location="top" v-if="item.value === 'langganan' && suspendedCount > 0">
+                    <v-tooltip location="top" v-if="(item as any).value === 'langganan' && suspendedCount > 0">
                       <template v-slot:activator="{ props }">
                         <v-badge
                           color="error"
@@ -142,7 +224,7 @@
                       <span>{{ suspendedCount }} langganan berstatus "Suspended"</span>
                     </v-tooltip>
 
-                    <v-tooltip location="top" v-if="item.value === 'langganan' && stoppedCount > 0">
+                    <v-tooltip location="top" v-if="(item as any).value === 'langganan' && stoppedCount > 0">
                       <template v-slot:activator="{ props }">
                         <v-badge
                           color="grey"
@@ -155,7 +237,7 @@
                       <span>{{ stoppedCount }} langganan berstatus "Berhenti"</span>
                     </v-tooltip>
 
-                    <v-tooltip location="top" v-if="item.value === 'invoices' && unpaidInvoiceCount > 0">
+                    <v-tooltip location="top" v-if="(item as any).value === 'invoices' && unpaidInvoiceCount > 0">
                       <template v-slot:activator="{ props }">
                         <v-badge
                           color="warning"
@@ -439,6 +521,7 @@ const notifications = ref<any[]>([]);
 const suspendedCount = ref(0);
 const unpaidInvoiceCount = ref(0);
 const stoppedCount = ref(0);
+const totalInvoiceCount = ref(0);
 const openTicketsCount = ref(0);
 const userCount = ref(0);
 const roleCount = ref(0);
@@ -605,38 +688,47 @@ const menuGroups = ref([
     title: 'FTTH', 
     items: [
       { 
-        title: 'Data Pelanggan', 
-        icon: 'mdi-account-group-outline', 
-        value: 'pelanggan', 
-        to: '/pelanggan', 
-        permission: 'view_pelanggan',
-        description: 'Kelola data pelanggan'
-      },
-      { 
-        title: 'Langganan', 
-        icon: 'mdi-wifi-star', 
-        value: 'langganan', 
-        to: '/langganan', 
-        badge: suspendedCount, 
-        badgeColor: 'orange', 
-        permission: 'view_langganan',
-        description: 'Status & paket langganan'
-      },
-      { 
-        title: 'Data Teknis', 
-        icon: 'mdi-lan-connect', 
-        value: 'teknis', 
-        to: '/data-teknis', 
-        permission: 'view_data_teknis',
-        description: 'Konfigurasi teknis jaringan'
-      },
-      { 
-        title: 'Brand & Paket', 
-        icon: 'mdi-package-variant', 
-        value: 'harga', 
-        to: '/harga-layanan', 
-        permission: 'view_brand_&_paket',
-        description: 'Daftar paket & harga layanan'
+        title: 'Management Pelanggan', 
+        icon: 'mdi-account-network-outline', 
+        value: 'management-pelanggan',
+        description: 'Kelola data pelanggan & layanan',
+        permission: null,
+        children: [
+          { 
+            title: 'Pelanggan', 
+            icon: 'mdi-account-group-outline', 
+            value: 'pelanggan', 
+            to: '/pelanggan', 
+            permission: 'view_pelanggan',
+            description: 'Kelola data pelanggan'
+          },
+          { 
+            title: 'Data Teknis', 
+            icon: 'mdi-lan-connect', 
+            value: 'teknis', 
+            to: '/data-teknis', 
+            permission: 'view_data_teknis',
+            description: 'Konfigurasi teknis jaringan'
+          },
+          { 
+            title: 'Langganan', 
+            icon: 'mdi-wifi-star', 
+            value: 'langganan', 
+            to: '/langganan', 
+            badge: suspendedCount, 
+            badgeColor: 'orange', 
+            permission: 'view_langganan',
+            description: 'Status & paket langganan'
+          },
+          { 
+            title: 'Brand & Paket', 
+            icon: 'mdi-package-variant', 
+            value: 'harga', 
+            to: '/harga-layanan', 
+            permission: 'view_brand_&_paket',
+            description: 'Daftar paket & harga layanan'
+          },
+        ]
       },
     ]
   },
@@ -645,23 +737,32 @@ const menuGroups = ref([
     title: 'BILLING', 
     items: [
       { 
-        title: 'Invoices', 
-        icon: 'mdi-receipt-text-outline', 
-        value: 'invoices', 
-        to: '/invoices', 
-        badge: 0, 
-        badgeColor: 'grey-darken-1', 
-        permission: 'view_invoices',
-        description: 'Tagihan & pembayaran'
+        title: 'Billing & Reports', 
+        icon: 'mdi-cash-multiple', 
+        value: 'billing-group',
+        description: 'Kelola tagihan & laporan',
+        permission: null,
+        children: [
+          { 
+            title: 'Invoices', 
+            icon: 'mdi-receipt-text-outline', 
+            value: 'invoices', 
+            to: '/invoices', 
+            badge: 0, 
+            badgeColor: 'grey-darken-1', 
+            permission: 'view_invoices',
+            description: 'Tagihan & pembayaran'
+          },
+          { 
+            title: 'Laporan Pendapatan', 
+            icon: 'mdi-chart-line', 
+            value: 'revenue-report', 
+            to: '/reports/revenue', 
+            permission: 'view_reports_revenue',
+            description: 'Analisis pendapatan'
+          }
+        ]
       },
-      { 
-        title: 'Laporan Pendapatan', 
-        icon: 'mdi-chart-line', 
-        value: 'revenue-report', 
-        to: '/reports/revenue', 
-        permission: 'view_reports_revenue',
-        description: 'Analisis pendapatan'
-      }
     ]
   },
 
@@ -669,21 +770,30 @@ const menuGroups = ref([
     title: 'LAINNYA', 
     items: [
       { 
-        title: 'Simulasi Harga', 
-        icon: 'mdi-calculator-variant-outline', 
-        value: 'kalkulator', 
-        to: '/kalkulator', 
-        permission: 'view_simulasi_harga',
-        description: 'Hitung estimasi biaya'
-      },
-      { 
-        title: 'S&K', 
-        icon: 'mdi-file-document-outline', 
-        value: 'sk', 
-        to: '/syarat-ketentuan', 
+        title: 'Tools & Resources', 
+        icon: 'mdi-toolbox-outline', 
+        value: 'tools-group',
+        description: 'Alat bantu & sumber daya',
         permission: null,
-        description: 'Syarat & ketentuan layanan'
-      }
+        children: [
+          { 
+            title: 'Simulasi Harga', 
+            icon: 'mdi-calculator-variant-outline', 
+            value: 'kalkulator', 
+            to: '/kalkulator', 
+            permission: 'view_simulasi_harga',
+            description: 'Hitung estimasi biaya'
+          },
+          { 
+            title: 'S&K', 
+            icon: 'mdi-file-document-outline', 
+            value: 'sk', 
+            to: '/syarat-ketentuan', 
+            permission: null,
+            description: 'Syarat & ketentuan layanan'
+          }
+        ]
+      },
     ]
   },
 
@@ -691,20 +801,29 @@ const menuGroups = ref([
     title: 'SUPPORT', 
     items: [
       { 
-        title: 'Trouble Tickets', 
-        icon: 'mdi-lifebuoy', 
-        value: 'trouble-tickets', 
-        to: '/trouble-tickets', 
-        permission: 'view_trouble_tickets',
-        description: 'Kelola tiket gangguan'
-      },
-      { 
-        title: 'Ticket Reports', 
-        icon: 'mdi-chart-box-outline', 
-        value: 'trouble-ticket-reports', 
-        to: '/trouble-tickets/reports', 
-        permission: 'view_trouble_tickets',
-        description: 'Laporan tiket support'
+        title: 'Customer Support', 
+        icon: 'mdi-headset', 
+        value: 'support-group',
+        description: 'Layanan dukungan pelanggan',
+        permission: null,
+        children: [
+          { 
+            title: 'Trouble Tickets', 
+            icon: 'mdi-lifebuoy', 
+            value: 'trouble-tickets', 
+            to: '/trouble-tickets', 
+            permission: 'view_trouble_tickets',
+            description: 'Kelola tiket gangguan'
+          },
+          { 
+            title: 'Ticket Reports', 
+            icon: 'mdi-chart-box-outline', 
+            value: 'trouble-ticket-reports', 
+            to: '/trouble-tickets/reports', 
+            permission: 'view_trouble_tickets',
+            description: 'Laporan tiket support'
+          },
+        ]
       },
     ]
   },
@@ -714,103 +833,121 @@ const menuGroups = ref([
     title: 'NETWORK MANAGEMENT', 
     items: [
       { 
-        title: 'Mikrotik Servers', 
-        icon: 'mdi-server-network', 
-        value: 'mikrotik', 
-        to: '/mikrotik', 
-        permission: 'view_mikrotik_servers',
-        description: 'Kelola server Mikrotik'
+        title: 'Network Management', 
+        icon: 'mdi-network-outline', 
+        value: 'network-management-group',
+        description: 'Kelola infrastruktur jaringan',
+        permission: null,
+        children: [
+          { 
+            title: 'Mikrotik Servers', 
+            icon: 'mdi-server-network', 
+            value: 'mikrotik', 
+            to: '/mikrotik', 
+            permission: 'view_mikrotik_servers',
+            description: 'Kelola server Mikrotik'
+          },
+          { 
+            title: 'Traffic Monitoring', 
+            icon: 'mdi-chart-timeline-variant', 
+            value: 'traffic-monitoring', 
+            to: '/traffic-monitoring', 
+            permission: 'view_traffic_monitoring',
+            description: 'Monitor trafik jaringan'
+          },
+          { 
+            title: 'OLT Management', 
+            icon: 'mdi-router-network', 
+            value: 'olt', 
+            to: '/network-management/olt', 
+            permission: 'view_olt',
+            description: 'Kelola perangkat OLT'
+          },
+          { 
+            title: 'ODP Management', 
+            icon: 'mdi-sitemap-outline', 
+            value: 'odp', 
+            to: '/odp-management', 
+            permission: 'view_odp_management',
+            description: 'Kelola titik distribusi optik'
+          },
+          {
+            title: 'Manajemen Inventaris',
+            icon: 'mdi-archive-outline',
+            value: 'inventory',
+            to: '/inventory',
+            permission: 'view_inventory',
+            description: 'Stok perangkat & material'
+          },
+        ]
       },
-      { 
-        title: 'Traffic Monitoring', 
-        icon: 'mdi-chart-timeline-variant', 
-        value: 'traffic-monitoring', 
-        to: '/traffic-monitoring', 
-        permission: 'view_traffic_monitoring',
-        description: 'Monitor trafik jaringan'
-      },
-      { 
-        title: 'OLT Management', 
-        icon: 'mdi-router-network', 
-        value: 'olt', 
-        to: '/network-management/olt', 
-        permission: 'view_olt',
-        description: 'Kelola perangkat OLT'
-      },
-      { 
-        title: 'ODP Management', 
-        icon: 'mdi-sitemap-outline', 
-        value: 'odp', 
-        to: '/odp-management', 
-        permission: 'view_odp_management',
-        description: 'Kelola titik distribusi optik'
-      },
-      {
-        title: 'Manajemen Inventaris',
-        icon: 'mdi-archive-outline',
-        value: 'inventory',
-        to: '/inventory',
-        permission: 'view_inventory',
-        description: 'Stok perangkat & material'
-      },
-      ]
+    ]
   },
 
   { 
     title: 'MANAGEMENT', 
     items: [
       { 
-        title: 'Users', 
-        icon: 'mdi-account-cog-outline', 
-        value: 'users', 
-        to: '/users', 
-        badge: userCount, 
-        badgeColor: 'primary', 
-        permission: 'view_users',
-        description: 'Kelola pengguna sistem'
-      },
-      { 
-        title: 'Roles', 
-        icon: 'mdi-shield-account-outline', 
-        value: 'roles', 
-        to: '/roles', 
-        badge: roleCount, 
-        badgeColor: 'primary', 
-        permission: 'view_roles',
-        description: 'Atur peran & akses'
-      },
-      { 
-        title: 'Permissions', 
-        icon: 'mdi-shield-key-outline', 
-        value: 'permissions', 
-        to: '/permissions', 
-        permission: 'view_permissions',
-        description: 'Hak akses sistem'
-      },
-      { 
-        title: 'Activity Log', 
-        icon: 'mdi-history', 
-        value: 'activity-logs', 
-        to: '/activity-logs', 
-        permission: 'view_activity_log',
-        description: 'Riwayat aktivitas pengguna'
-      },
-      { 
-        title: 'Kelola S&K', 
-        icon: 'mdi-file-edit-outline', 
-        value: 'sk-management', 
-        to: '/management/sk', 
-        permission: 'manage_sk',
-        description: 'Edit syarat & ketentuan'
-      },
-      { 
-        title: 'Pengaturan', 
+        title: 'System Management', 
         icon: 'mdi-cog-outline', 
-        value: 'settings', 
-        to: '/management/settings', 
-        permission: 'manage_settings',
-        description: 'Konfigurasi sistem'
-      }
+        value: 'system-management-group',
+        description: 'Kelola sistem & pengguna',
+        permission: null,
+        children: [
+          { 
+            title: 'Users', 
+            icon: 'mdi-account-cog-outline', 
+            value: 'users', 
+            to: '/users', 
+            badge: userCount, 
+            badgeColor: 'primary', 
+            permission: 'view_users',
+            description: 'Kelola pengguna sistem'
+          },
+          { 
+            title: 'Roles', 
+            icon: 'mdi-shield-account-outline', 
+            value: 'roles', 
+            to: '/roles', 
+            badge: roleCount, 
+            badgeColor: 'primary', 
+            permission: 'view_roles',
+            description: 'Atur peran & akses'
+          },
+          { 
+            title: 'Permissions', 
+            icon: 'mdi-shield-key-outline', 
+            value: 'permissions', 
+            to: '/permissions', 
+            permission: 'view_permissions',
+            description: 'Hak akses sistem'
+          },
+          { 
+            title: 'Activity Log', 
+            icon: 'mdi-history', 
+            value: 'activity-logs', 
+            to: '/activity-logs', 
+            permission: 'view_activity_log',
+            description: 'Riwayat aktivitas pengguna'
+          },
+          { 
+            title: 'Kelola S&K', 
+            icon: 'mdi-file-edit-outline', 
+            value: 'sk-management', 
+            to: '/management/sk', 
+            permission: 'manage_sk',
+            description: 'Edit syarat & ketentuan'
+          },
+          { 
+            title: 'Pengaturan', 
+            icon: 'mdi-cog-outline', 
+            value: 'settings', 
+            to: '/management/settings', 
+            permission: 'manage_settings',
+            description: 'Konfigurasi sistem'
+          }
+        ]
+      },
     ]
   },
 ]);
@@ -826,8 +963,28 @@ const filteredMenuGroups = computed(() => {
 
   const filtered = menuGroups.value.map(group => {
     const allowedItems = group.items.filter(item => {
-      const hasPermission = !item.permission || userPermissions.value.includes(item.permission);
+      // If item has children, check if any child has permission
+      if ('children' in item && item.children) {
+        const allowedChildren = item.children.filter(child => 
+          !('permission' in child) || !child.permission || userPermissions.value.includes(child.permission)
+        );
+        return allowedChildren.length > 0;
+      }
+      
+      // For items without children, check their own permission
+      const hasPermission = !('permission' in item) || !item.permission || userPermissions.value.includes(item.permission);
       return hasPermission;
+    }).map(item => {
+      // Filter children if item has them
+      if ('children' in item && item.children) {
+        return {
+          ...item,
+          children: item.children.filter(child => 
+            !('permission' in child) || !child.permission || userPermissions.value.includes(child.permission)
+          )
+        };
+      }
+      return item;
     });
 
     return {
@@ -924,6 +1081,7 @@ async function fetchSidebarBadges() {
     suspendedCount.value = response.data.suspended_count;
     unpaidInvoiceCount.value = response.data.unpaid_invoice_count;
     stoppedCount.value = response.data.stopped_count;
+    totalInvoiceCount.value = response.data.total_invoice_count;
     openTicketsCount.value = response.data.open_tickets_count || 0;
   } catch (error) {
     console.error("Gagal mengambil data badge sidebar:", error);
@@ -1194,6 +1352,9 @@ function connectWebSocket() {
         }
 
         notifications.value.unshift(data);
+
+        // Update badge sidebar secara real-time
+        fetchSidebarBadges();
 
         if (notifications.value.length > 20) {
           notifications.value = notifications.value.slice(0, 20);
@@ -1508,42 +1669,37 @@ onUnmounted(() => {
 /* ==================== SIDEBAR STYLES ==================== */
 
 .modern-drawer {
-  border-right: none !important;
-  background: rgb(var(--v-theme-surface));
-  box-shadow: var(--shadow-md);
-  transition: all var(--transition-speed) cubic-bezier(0.4, 0, 0.2, 1);
+  background: #fafafa !important;
+  border-right: 1px solid #e0e0e0 !important;
+  box-shadow: none !important;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .modern-drawer :deep(.v-navigation-drawer__content) {
-  overflow: hidden !important;
   display: flex;
   flex-direction: column;
   height: 100%;
+  overflow: hidden;
 }
 
-/* Sidebar Header - PERBAIKAN SEJAJAR DENGAN HEADER */
+/* Header Section - Minimalist */
 .sidebar-header-modern {
-  height: var(--header-height) !important;
-  min-height: var(--header-height) !important;
-  padding: 0 var(--spacing-md);
-  border-bottom: 1px solid rgba(var(--v-border-color), 0.12);
-  background: linear-gradient(135deg,
-    rgba(var(--v-theme-primary), 0.05) 0%,
-    rgba(var(--v-theme-secondary), 0.05) 100%
-  );
-  transition: all var(--transition-speed) ease;
+  height: var(--header-height);
+  min-height: var(--header-height);
+  padding: 0 23px;
+  background: #ffffff !important;
+  border-bottom: none;
   display: flex;
   align-items: center;
+  gap: 13px;
+  transition: all 0.3s ease;
 }
 
 .sidebar-header-modern.rail-mode {
-  padding: 0;
-  display: flex;
+  padding: 0 8px;
   justify-content: center;
-  align-items: center;
 }
 
-/* Header Content - PERBAIKAN SPACING */
 .header-content {
   display: flex;
   align-items: center;
@@ -1551,90 +1707,73 @@ onUnmounted(() => {
   width: 100%;
 }
 
-/* Logo Wrapper */
+/* Logo */
 .logo-wrapper {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 6px;
-  border-radius: var(--radius-md);
-  transition: all var(--transition-speed) ease;
   cursor: pointer;
+  transition: all 0.3s ease;
+  flex-shrink: 0;
 }
 
 .logo-wrapper:hover {
-  background-color: rgba(var(--v-theme-primary), 0.1);
-  transform: scale(1.02);
+  opacity: 0.8;
 }
 
 .sidebar-logo {
-  height: 56px;
+  height: 48px;
   width: auto;
   object-fit: contain;
-  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
-  transition: all var(--transition-speed) ease;
-  border-radius: var(--radius-sm);
 }
 
-.v-theme--dark .sidebar-logo {
-  filter: drop-shadow(0 2px 4px rgba(255, 255, 255, 0.1)) brightness(1.1);
-}
-
-/* Title Wrapper - PERBAIKAN */
+/* Title */
 .title-wrapper {
   flex: 1;
   min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
 }
 
 .app-title {
   font-size: 1.25rem;
   font-weight: 700;
-  color: rgb(var(--v-theme-on-surface));
-  line-height: 1.2;
+  color: #1a1a1a;
   margin: 0;
+  line-height: 1.3;
   letter-spacing: -0.02em;
 }
 
 .app-subtitle {
   font-size: 0.75rem;
-  font-weight: 600;
-  color: rgba(var(--v-theme-on-surface), 0.6);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+  color: #757575;
   margin: 0;
-  line-height: 1.2;
+  font-weight: 500;
+  line-height: 1.3;
 }
 
+/* Toggle Button */
 .toggle-btn,
 .close-btn {
-  flex-shrink: 0;
-  opacity: 0.7;
-  transition: all var(--transition-speed) ease;
-  margin-left: auto;
+  opacity: 0.6;
+  transition: all 0.2s ease;
 }
 
 .toggle-btn:hover,
 .close-btn:hover {
   opacity: 1;
-  background-color: rgba(var(--v-theme-primary), 0.1);
+  background-color: #f5f5f5 !important;
 }
 
 /* Navigation Container */
 .navigation-container {
   flex: 1;
-  overflow-y: auto;
+  overflow-y: auto !important;
   overflow-x: hidden;
-  padding: var(--spacing-md) 0;
+  padding: 16px 0;
   scrollbar-width: thin;
-  scrollbar-color: rgba(var(--v-theme-on-surface), 0.2) transparent;
+  scrollbar-color: rgba(33, 150, 243, 0.3) transparent;
+  height: 100%;
+  max-height: calc(100vh - 180px);
 }
 
 .navigation-container::-webkit-scrollbar {
-  width: 6px;
+  width: 4px;
 }
 
 .navigation-container::-webkit-scrollbar-track {
@@ -1642,203 +1781,234 @@ onUnmounted(() => {
 }
 
 .navigation-container::-webkit-scrollbar-thumb {
-  background-color: rgba(var(--v-theme-on-surface), 0.2);
-  border-radius: 3px;
+  background-color: #d0d0d0;
+  border-radius: 2px;
 }
 
 .navigation-container::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(var(--v-theme-on-surface), 0.3);
+  background-color: #b0b0b0;
 }
 
 .navigation-list {
-  padding: 0 var(--spacing-md);
+  padding: 0 12px;
 }
 
-/* Menu Group Header */
+/* Menu Group Header - Minimalist */
 .menu-group-header {
-  margin: var(--spacing-lg) 0 var(--spacing-sm) 0;
-  padding: 0 var(--spacing-sm);
+  margin: 24px 0 8px 0;
+  padding: 0 8px;
 }
 
 .menu-group-header:first-child {
   margin-top: 0;
+  padding-top: 0;
 }
 
 .group-title {
-  font-size: 0.7rem;
-  font-weight: 900;
-  color: rgba(var(--v-theme-on-surface), 0.6);
+  font-size: 0.6875rem;
+  font-weight: 800;
+  color: #1a1a1a;
   text-transform: uppercase;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.08em;
   display: block;
-  margin-bottom: var(--spacing-xs);
-  margin-left: 12px;
-  margin-top: 8px;
+  margin-bottom: 8px;
 }
 
 .group-divider {
-  opacity: 0.12;
+  display: none;
 }
 
-/* Menu Items - KEMBALI KE STYLE ORIGINAL */
+/* Menu Items - Clean & Simple */
 .menu-item {
-  border-radius: var(--radius-md);
-  margin-bottom: var(--spacing-xs);
-  min-height: 48px;
-  transition: all var(--transition-speed) cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 8px;
+  margin-bottom: 4px;
+  min-height: 40px;
+  transition: all 0.2s ease;
   position: relative;
-  overflow: hidden;
+  overflow: visible;
+  background: transparent;
 }
 
 .menu-item :deep(.v-list-item__prepend) {
-  margin-inline-end: 16px !important;
-  width: 24px;
+  margin-inline-end: 12px !important;
+  width: 20px;
   display: flex;
   justify-content: center;
 }
 
-.menu-item::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 0;
-  height: 100%;
-  width: 3px;
-  background: linear-gradient(135deg, 
-    rgb(var(--v-theme-primary)) 0%, 
-    rgb(var(--v-theme-secondary)) 100%
-  );
-  transform: scaleY(0);
-  transition: transform var(--transition-speed) cubic-bezier(0.4, 0, 0.2, 1);
+.menu-item :deep(.v-icon) {
+  font-size: 20px;
+  color: #1976D2;
+  transition: all 0.2s ease;
 }
 
-.menu-item:hover::before {
-  transform: scaleY(1);
+.menu-item::before {
+  display: none;
 }
 
 .menu-item:not(.v-list-item--active):hover {
-  background-color: rgba(var(--v-theme-primary), 0.08);
-  transform: translateX(4px);
+  background-color: rgba(33, 150, 243, 0.08);
+  transform: none;
 }
 
+.menu-item:not(.v-list-item--active):hover :deep(.v-icon) {
+  color: #1565C0;
+}
+
+/* Active Menu Item - Simple & Clean */
 .menu-item.v-list-item--active {
-  background: linear-gradient(135deg,
-    rgb(var(--v-theme-primary)) 0%,
-    rgba(var(--v-theme-primary), 0.8) 25%,
-    rgba(var(--v-theme-secondary), 0.9) 50%,
-    rgba(var(--v-theme-primary), 0.7) 75%,
-    rgb(var(--v-theme-primary)) 100%
-  );
-  color: white !important;
-  font-weight: 700;
-  box-shadow:
-    0 8px 24px rgba(var(--v-theme-primary), 0.5),
-    0 4px 12px rgba(var(--v-theme-primary), 0.3),
-    inset 0 2px 4px rgba(255, 255, 255, 0.3),
-    inset 0 -1px 2px rgba(0, 0, 0, 0.1),
-    inset 0 0 0 2px rgba(255, 255, 255, 0.4);
-  border: 3px solid rgba(255, 255, 255, 0.3);
-  border-radius: 12px;
+  background: rgba(33, 150, 243, 0.1) !important;
+  color: #1976D2 !important;
+  font-weight: 600;
+  box-shadow: none;
+  border: none;
+  border-radius: 8px;
   position: relative;
-  overflow: hidden;
-  transform: translateY(-2px);
-  margin: 2px 4px;
+  overflow: visible;
+  transform: none;
+  margin: 0;
+  animation: none;
 }
-
 
 .menu-item.v-list-item--active::before {
-  transform: scaleY(1);
-  background: linear-gradient(135deg,
-    rgb(var(--v-theme-primary)) 0%,
-    rgb(var(--v-theme-secondary)) 100%
-  );
-  box-shadow: 0 0 8px rgba(var(--v-theme-primary), 0.5);
+  display: none;
 }
 
-/* Add strong pulse effect for active menu */
-.menu-item.v-list-item--active {
-  animation: activePulse 2s ease-in-out infinite;
+.menu-item.v-list-item--active :deep(.v-icon) {
+  color: #1976D2;
 }
 
-
-/* Strong pulse animation */
-@keyframes activePulse {
-  0%, 100% {
-    box-shadow:
-      0 8px 24px rgba(var(--v-theme-primary), 0.5),
-      0 4px 12px rgba(var(--v-theme-primary), 0.3),
-      inset 0 2px 4px rgba(255, 255, 255, 0.3),
-      inset 0 -1px 2px rgba(0, 0, 0, 0.1),
-      inset 0 0 0 2px rgba(255, 255, 255, 0.4);
-    transform: translateY(-2px) scale(1);
-  }
-  50% {
-    box-shadow:
-      0 12px 32px rgba(var(--v-theme-primary), 0.7),
-      0 6px 16px rgba(var(--v-theme-primary), 0.4),
-      inset 0 2px 4px rgba(255, 255, 255, 0.4),
-      inset 0 -1px 2px rgba(0, 0, 0, 0.1),
-      inset 0 0 0 3px rgba(255, 255, 255, 0.5);
-    transform: translateY(-3px) scale(1.01);
-  }
+.menu-item.v-list-item--active::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 20px;
+  background: #1976D2;
+  border-radius: 0 2px 2px 0;
 }
 
 .item-title {
-  font-size: 0.9375rem;
+  font-size: 0.875rem;
   font-weight: 500;
   line-height: 1.4;
+  color: #424242;
+}
+
+.menu-item.v-list-item--active .item-title {
+  color: #1976D2;
+  font-weight: 600;
 }
 
 .item-description {
-  font-size: 0.75rem;
-  color: rgba(var(--v-theme-on-surface), 0.5);
-  line-height: 1.3;
-  margin-top: 2px;
-  white-space: normal;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  -webkit-box-orient: vertical;
+  display: none;
 }
 
-/* Sub Items */
+/* Parent Menu Items (with dropdown) */
+.parent-item {
+  font-weight: 500;
+}
+
+.parent-item :deep(.v-list-group__header__append) {
+  margin-inline-start: auto !important;
+}
+
+.parent-item :deep(.v-list-group__header__append .v-icon) {
+  font-size: 18px;
+  color: #9e9e9e;
+}
+
+/* Sub Items - Clean */
 .sub-item {
-  padding-left: calc(var(--spacing-lg) * 3 + var(--spacing-md) + var(--spacing-lg)) !important;
-  min-height: 44px;
+  padding-left: 48px !important;
+  min-height: 36px;
+  margin-bottom: 2px;
 }
 
-.sub-item-description {
-  font-size: 0.6875rem;
-  color: rgba(var(--v-theme-on-surface), 0.5);
-  line-height: 1.3;
-  margin-top: 2px;
+.sub-item .item-title {
+  font-size: 0.8125rem;
+  font-weight: 400;
+}
+
+.sub-item:hover {
+  background-color: #fafafa;
+}
+
+.sub-item.v-list-item--active {
+  background: rgba(33, 150, 243, 0.08) !important;
+}
+
+.sub-item.v-list-item--active::after {
+  left: 36px;
+  height: 16px;
 }
 
 /* Menu Group */
 .menu-group :deep(.v-list-group__items) {
   --indent-padding: 0px;
+  padding-top: 4px;
+  padding-bottom: 4px;
 }
 
-/* Badges */
+/* Badges - Premium Look (Matching User Image) */
 .badges-wrapper {
   display: flex;
   align-items: center;
-  gap: var(--spacing-xs);
+  gap: 4px;
 }
 
 .badge-item :deep(.v-badge__badge) {
-  font-size: 0.6875rem;
-  font-weight: 600;
-  min-width: 20px;
-  height: 20px;
-  padding: 0 6px;
+  font-size: 0.65rem !important;
+  font-weight: 800 !important;
+  min-width: 20px !important;
+  height: 20px !important;
+  padding: 0 6px !important;
+  border-radius: 10px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08) !important;
 }
 
-/* PERBAIKAN RAIL MODE - FIX ICON TIDAK TERLIHAT */
+/* Specific Badge Styles (Outlined Style like example image) */
+.badge-suspended :deep(.v-badge__badge) {
+  background-color: #FFF5F5 !important;
+  color: #E53E3E !important;
+  border: 1.5px solid #FEB2B2 !important;
+}
+
+.badge-stopped :deep(.v-badge__badge) {
+  background-color: #F7FAFC !important;
+  color: #4A5568 !important;
+  border: 1.5px solid #CBD5E0 !important;
+}
+
+.badge-unpaid :deep(.v-badge__badge) {
+  background-color: #FFFAF0 !important;
+  color: #DD6B20 !important;
+  border: 1.5px solid #FBD38D !important;
+}
+
+.badge-total :deep(.v-badge__badge) {
+  background-color: #EBF8FF !important;
+  color: #3182CE !important;
+  border: 1.5px solid #90CDF4 !important;
+}
+
+.badge-tickets :deep(.v-badge__badge) {
+  background-color: #FFF5F5 !important;
+  color: #C53030 !important;
+  border: 1.5px solid #FC8181 !important;
+}
+
+/* Rail Mode */
 .v-navigation-drawer--rail .navigation-list {
-  padding: 0 var(--spacing-xs);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .v-navigation-drawer--rail .menu-group-header {
@@ -1847,12 +2017,21 @@ onUnmounted(() => {
 
 .v-navigation-drawer--rail .menu-item {
   justify-content: center;
-  padding: 0 30px !important;
-  margin-left: 10px;
+  padding: 0 !important;
+  margin: 4px 0;
+  width: 64px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  border-radius: 8px;
 }
 
 .v-navigation-drawer--rail .menu-item :deep(.v-list-item__prepend) {
   margin-inline-end: 0 !important;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
 .v-navigation-drawer--rail .menu-item :deep(.v-list-item__content) {
@@ -1867,50 +2046,64 @@ onUnmounted(() => {
   display: none;
 }
 
-/* Pastikan icon terlihat di rail mode */
 .v-navigation-drawer--rail .menu-item :deep(.v-icon) {
   opacity: 1 !important;
-  font-size: 18px !important;
-  margin-left: 0 !important;
-  margin-right: 0 !important;
+  font-size: 22px !important;
+  margin: 0 auto !important;
 }
 
-/* Logout Section */
+.v-navigation-drawer--rail .menu-item.v-list-item--active::after {
+  display: none;
+}
+
+.v-navigation-drawer--rail .menu-item.v-list-item--active {
+  background: rgba(33, 150, 243, 0.15) !important;
+}
+
+/* Logout Section - Minimalist */
 .logout-container {
-  padding: 4px;
-  background: rgba(var(--v-theme-surface), 0.5);
-  backdrop-filter: blur(10px);
+  padding: 12px 23px;
+  background: transparent;
+  backdrop-filter: none;
+  border-top: none;
 }
 
 .logout-btn {
-  border-radius: 12px !important;
+  border-radius: 8px !important;
   font-weight: 600;
+  font-size: 0.875rem;
   display: flex !important;
   min-height: 40px;
   margin: 0;
   padding: 0 16px !important;
+  background: #ffffff !important;
+  color: #d32f2f !important;
+  border: 1px solid #e0e0e0;
 }
 
 .logout-btn:hover {
-  box-shadow: 0 8px 20px rgba(239, 68, 68, 0.3);
-  transform: translateY(-2px);
+  background: #ffebee !important;
+  border-color: #d32f2f;
+  box-shadow: none;
+  transform: none;
 }
 
-/* Logout button di rail mode */
 .v-navigation-drawer--rail .logout-container {
-  padding: 2px;
+  padding: 8px 4px;
 }
 
 .v-navigation-drawer--rail .logout-btn {
-  min-width: 40px;
-  width: 40px;
-  height: 40px;
-  padding: 0;
+  min-width: 48px;
+  width: 48px;
+  height: 48px;
+  padding: 0 !important;
   border-radius: 8px;
-  margin: 0;
+  margin: 0 auto;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
-/* Center avatar J in rail mode */
 .v-navigation-drawer--rail .logo-wrapper {
   display: flex;
   justify-content: center;
@@ -2429,35 +2622,203 @@ onUnmounted(() => {
 }
 
 .v-theme--dark .modern-drawer {
-  background: #151b2d;
+  background: #1a1f2e !important;
+  border-right: 1px solid rgba(255, 255, 255, 0.08) !important;
   box-shadow: 0 0 24px rgba(0, 0, 0, 0.4);
 }
 
 .v-theme--dark .sidebar-header-modern {
-  background: linear-gradient(135deg, 
-    rgba(var(--v-theme-primary), 0.08) 0%, 
-    rgba(var(--v-theme-secondary), 0.08) 100%
-  );
-  border-bottom-color: rgba(255, 255, 255, 0.08);
+  background: #151b2d !important;
+  border-bottom: none;
 }
 
+.v-theme--dark .app-title {
+  color: #ffffff;
+}
+
+.v-theme--dark .app-subtitle {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.v-theme--dark .toggle-btn:hover,
+.v-theme--dark .close-btn:hover {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* Navigation Container Dark Mode */
+.v-theme--dark .navigation-container::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+.v-theme--dark .navigation-container::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255, 255, 255, 0.3);
+}
+
+/* Menu Group Header Dark Mode */
+.v-theme--dark .group-title {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+/* Menu Items Dark Mode */
+.v-theme--dark .menu-item {
+  color: rgba(255, 255, 255, 0.87);
+}
+
+.v-theme--dark .menu-item:hover {
+  background: rgba(255, 255, 255, 0.05) !important;
+}
+
+.v-theme--dark .menu-item.v-list-item--active {
+  background: rgba(33, 150, 243, 0.15) !important;
+  color: rgb(var(--v-theme-primary));
+}
+
+.v-theme--dark .menu-item.v-list-item--active::after {
+  background: rgb(var(--v-theme-primary));
+}
+
+.v-theme--dark .item-title {
+  color: rgba(255, 255, 255, 0.87);
+}
+
+.v-theme--dark .menu-item.v-list-item--active .item-title {
+  color: rgb(var(--v-theme-primary));
+}
+
+.v-theme--dark .menu-item :deep(.v-icon) {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.v-theme--dark .menu-item.v-list-item--active :deep(.v-icon) {
+  color: rgb(var(--v-theme-primary));
+}
+
+.v-theme--dark .menu-item:hover :deep(.v-icon) {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+/* Sub Items Dark Mode */
+.v-theme--dark .sub-item {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.v-theme--dark .sub-item:hover {
+  background: rgba(255, 255, 255, 0.05) !important;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.v-theme--dark .sub-item.v-list-item--active {
+  background: rgba(33, 150, 243, 0.1) !important;
+  color: rgb(var(--v-theme-primary));
+}
+
+/* Logout Button Dark Mode */
+.v-theme--dark .logout-container {
+  background: rgba(10, 14, 26, 0.5);
+}
+
+.v-theme--dark .logout-btn {
+  background: rgba(211, 47, 47, 0.15) !important;
+  color: #ef5350 !important;
+  border: 1px solid rgba(211, 47, 47, 0.3);
+}
+
+.v-theme--dark .logout-btn:hover {
+  background: rgba(211, 47, 47, 0.25) !important;
+  border-color: #ef5350;
+}
+
+/* App Bar Dark Mode */
 .v-theme--dark .modern-app-bar {
   background: #151b2d !important;
   border-bottom-color: rgba(255, 255, 255, 0.08);
 }
 
-.v-theme--dark .logout-container {
-  background: rgba(10, 14, 26, 0.5);
+.v-theme--dark .app-bar-title {
+  color: rgba(255, 255, 255, 0.9);
 }
 
+.v-theme--dark .header-icon-btn:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Mobile Bottom Nav Dark Mode */
 .v-theme--dark .mobile-bottom-nav {
   background: #151b2d !important;
   border-top-color: rgba(255, 255, 255, 0.08);
 }
 
+.v-theme--dark .mobile-bottom-nav :deep(.v-btn) {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.v-theme--dark .mobile-bottom-nav :deep(.v-btn--active) {
+  color: rgb(var(--v-theme-primary)) !important;
+}
+
+/* Footer Dark Mode */
 .v-theme--dark .modern-footer {
   background: #151b2d;
   border-top-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.v-theme--dark .footer-content {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* Notification Dark Mode */
+.v-theme--dark .modern-notification-container {
+  background: #1a1f2e;
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.v-theme--dark .notification-header-section {
+  background: linear-gradient(135deg,
+    rgba(var(--v-theme-primary), 0.15) 0%,
+    rgba(var(--v-theme-secondary), 0.08) 100%
+  );
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+
+.v-theme--dark .notification-main-title {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.v-theme--dark .notification-subtitle {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.v-theme--dark .modern-notification-item {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.v-theme--dark .modern-notification-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.v-theme--dark .modern-notification-item.notification-item-unread {
+  background: rgba(var(--v-theme-primary), 0.08);
+}
+
+.v-theme--dark .notification-title {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.v-theme--dark .notification-message {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.v-theme--dark .notification-time {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.v-theme--dark .empty-title {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.v-theme--dark .empty-subtitle {
+  color: rgba(255, 255, 255, 0.6);
 }
 
 /* ==================== RESPONSIVE DESIGN ==================== */

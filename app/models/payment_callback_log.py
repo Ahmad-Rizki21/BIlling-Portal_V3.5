@@ -24,7 +24,7 @@ class PaymentCallbackLog(Base):
     processed_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
-    # Tambahkan indeks untuk optimasi pencarian
+    # Menambahkan indeks untuk optimasi pencarian
     __table_args__ = (
         Index("idx_callback_log_xendit_id", "xendit_id"),
         Index("idx_callback_log_external_id", "external_id"),

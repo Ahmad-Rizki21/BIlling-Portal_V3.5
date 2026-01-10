@@ -57,6 +57,7 @@ class PelangganInLangganan(BaseModel):
     nama: str = Field(..., min_length=1, max_length=100, description="Nama pelanggan")
     alamat: str = Field(..., min_length=1, max_length=200, description="Alamat pelanggan")
     no_telp: Optional[str] = Field(None, max_length=50, description="Nomor telepon pelanggan")
+    id_brand: Optional[str] = Field(None, max_length=50, description="ID Brand pelanggan")
     harga_layanan: Optional[HargaLayananInPelanggan] = None
 
     class Config:
@@ -117,10 +118,12 @@ class LanggananBase(BaseModel):
     tgl_jatuh_tempo: Optional[date] = Field(None, description="Tanggal jatuh tempo")
     tgl_invoice_terakhir: Optional[date] = Field(None, description="Tanggal invoice terakhir")
     tgl_mulai_langganan: Optional[date] = Field(None, description="Tanggal mulai langganan")
+    tgl_berhenti: Optional[date] = Field(None, description="Tanggal berhenti langganan")
     alasan_berhenti: Optional[str] = Field(None, max_length=500, description="Alasan berhenti (opsional)")
     status_modem: Optional[str] = Field(None, max_length=50, description="Status modem (Terpasang/Diambil)")
     whatsapp_status: Optional[str] = Field(None, max_length=50, description="Status WhatsApp (sent/pending)")
     last_whatsapp_sent: Optional[datetime] = Field(None, description="Terakhir kali WhatsApp dikirim")
+    riwayat_tgl_berhenti: Optional[str] = Field(None, max_length=2000, description="Riwayat tanggal berhenti dalam format JSON")
 
     @validator("pelanggan_id", pre=True)
     def validate_pelanggan_id(cls, v):
@@ -291,10 +294,12 @@ class LanggananUpdate(BaseModel):
     tgl_jatuh_tempo: Optional[date] = Field(None, description="Tanggal jatuh tempo")
     metode_pembayaran: Optional[str] = Field(None, max_length=50, description="Metode pembayaran")
     harga_awal: Optional[float] = Field(None, ge=0, description="Harga awal langganan")
+    tgl_berhenti: Optional[date] = Field(None, description="Tanggal berhenti langganan")
     alasan_berhenti: Optional[str] = Field(None, max_length=500, description="Alasan berhenti (opsional)")
     status_modem: Optional[str] = Field(None, max_length=50, description="Status modem (Terpasang/Diambil)")
     whatsapp_status: Optional[str] = Field(None, max_length=50, description="Status WhatsApp (sent/pending)")
     last_whatsapp_sent: Optional[datetime] = Field(None, description="Terakhir kali WhatsApp dikirim")
+    riwayat_tgl_berhenti: Optional[str] = Field(None, max_length=2000, description="Riwayat tanggal berhenti dalam format JSON")
 
     @validator("paket_layanan_id", pre=True)
     def validate_paket_layanan_id_update(cls, v):

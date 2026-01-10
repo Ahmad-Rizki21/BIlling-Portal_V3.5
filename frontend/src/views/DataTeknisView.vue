@@ -27,17 +27,36 @@
           >
             Import
           </v-btn>
-          <v-btn
-            color="primary"
-            @click="exportData"
-            :loading="exporting"
-            prepend-icon="mdi-file-download-outline"
-            class="header-action-btn action-btn text-none mobile-btn"
-            size="default"
-            block
-          >
-            Export
-          </v-btn>
+          <v-menu>
+            <template v-slot:activator="{ props }">
+              <v-btn
+                color="primary"
+                v-bind="props"
+                :loading="exporting"
+                prepend-icon="mdi-file-download-outline"
+                class="header-action-btn action-btn text-none mobile-btn"
+                size="default"
+                block
+              >
+                Export
+                <v-icon end>mdi-menu-down</v-icon>
+              </v-btn>
+            </template>
+            <v-list>
+              <v-list-item @click="exportData('csv')">
+                <v-list-item-title>
+                  <v-icon class="mr-2">mdi-file-delimited</v-icon>
+                  Export sebagai CSV
+                </v-list-item-title>
+              </v-list-item>
+              <v-list-item @click="exportData('excel')">
+                <v-list-item-title>
+                  <v-icon class="mr-2">mdi-file-excel</v-icon>
+                  Export sebagai Excel
+                </v-list-item-title>
+              </v-list-item>
+            </v-list>
+          </v-menu>
           <v-btn
             color="primary"
             @click="openDialog()"
@@ -239,10 +258,10 @@
       :style="{
         borderRadius: '20px',
         backdropFilter: 'blur(20px)',
-        background: $vuetify.theme.current.dark 
+        background: theme.global.current.value.dark 
           ? 'rgba(30, 30, 30, 0.8)' 
           : 'rgba(255, 255, 255, 0.9)',
-        border: $vuetify.theme.current.dark 
+        border: theme.global.current.value.dark 
           ? '1px solid rgba(255, 255, 255, 0.1)' 
           : '1px solid rgba(0, 0, 0, 0.05)'
       }"
@@ -306,7 +325,7 @@
                 <span class="text-white font-weight-bold">{{ getPelangganInitials(item.pelanggan_id) }}</span>
               </v-avatar>
               <div>
-                <div class="font-weight-bold text-body-1">{{ getPelangganName(item.pelanggan_id) }}</div>
+                <div class="font-weight-bold text-body-1">{{ item.pelanggan?.nama || getPelangganName(item.pelanggan_id) }}</div>
                 <div class="text-caption text-medium-emphasis">ID: {{ item.id_pelanggan }}</div>
               </div>
             </div>
@@ -521,7 +540,7 @@
                 <span class="text-white font-weight-bold">{{ getPelangganInitials(item.pelanggan_id) }}</span>
               </v-avatar>
               <div class="ms-3 flex-grow-1" @click="expanded = expanded.includes(item.id) ? [] : [item.id]">
-                <div class="font-weight-bold">{{ getPelangganName(item.pelanggan_id) }}</div>
+                <div class="font-weight-bold">{{ item.pelanggan?.nama || getPelangganName(item.pelanggan_id) }}</div>
                 <div class="text-caption text-medium-emphasis">ID: {{ item.id_pelanggan }}</div>
               </div>
                <v-btn
@@ -623,7 +642,7 @@
     <v-dialog 
         v-model="dialog"
         max-width="900px"
-        :fullscreen="$vuetify.display.smAndDown"
+        :fullscreen="display.smAndDown.value"
       >
       <v-card class="d-flex flex-column" style="height: 100vh;">
         
@@ -638,7 +657,7 @@
         </v-card-title>
 
         <v-card-text class="flex-grow-1 pa-0" style="overflow-y: auto;">
-          <v-stepper v-model="currentStep" class="elevation-0" style="height: 100%; background: transparent;">
+          <v-stepper v-model="currentStep" class="elevation-0" style="background: transparent;">
             <v-stepper-header class="px-sm-6 px-2 pt-6">
               <v-stepper-item title="Jaringan" :value="1" editable :complete="currentStep > 1"></v-stepper-item>
               <v-divider></v-divider>
@@ -670,25 +689,24 @@
                             <v-icon color="white" size="16">mdi-account</v-icon>
                           </v-avatar>
                         </template>
-                        <!-- Override title untuk menambahkan chip, gunakan append untuk menambah chip -->
                         <template v-slot:title>
                           <div class="font-weight-medium d-flex align-center">
                             <span class="flex-grow-1">{{ item.title }}</span>
-                            <!-- Tampilkan chip NEW USER dengan warna untuk pelanggan yang belum ada data teknis -->
                             <v-chip
-                              v-if="isPelangganDataTeknisBaru(item.raw.id)"
+                              v-if="item.raw.created_at && isNewUser(item.raw.created_at)"
                               size="x-small"
                               color="success"
-                              variant="elevated"
-                              class="ms-2 flex-shrink-0"
+                              class="ms-2 font-weight-bold"
+                              variant="flat"
                             >
-                              NEW USER
+                              BARU
                             </v-chip>
                           </div>
                         </template>
                       </v-list-item>
                     </template>
                   </v-select>
+
                   <v-row>
                 <v-col cols="12" sm="6">
                   <v-select
@@ -706,20 +724,32 @@
                   </v-select>
                 </v-col>
                     <v-col cols="12" sm="6">
-                      <v-text-field v-model="editedItem.id_pelanggan" label="ID Pelanggan (PPPoE)" variant="outlined">
+                      <v-text-field
+                        v-model="editedItem.id_pelanggan"
+                        label="ID Pelanggan (PPPoE)"
+                        variant="outlined"
+                        :rules="idPelangganRules"
+                        placeholder="Contoh: user123"
+                        hint="ID Pelanggan tidak boleh mengandung spasi. Gunakan format: user123, test-service, client_01"
+                        persistent-hint
+                      >
                         <template v-slot:label>
                           ID Pelanggan (PPPoE) <span class="text-error">*</span>
                         </template>
                       </v-text-field>
                     </v-col>
                     <v-col cols="12" sm="6">
-                      <v-text-field 
-                        v-model="editedItem.password_pppoe" 
-                        label="Password PPPoE" 
-                        :type="showPppoePassword ? 'text' : 'password'" 
+                      <v-text-field
+                        v-model="editedItem.password_pppoe"
+                        label="Password PPPoE"
+                        :type="showPppoePassword ? 'text' : 'password'"
                         variant="outlined"
                         :append-inner-icon="showPppoePassword ? 'mdi-eye-off' : 'mdi-eye'"
                         @click:append-inner="showPppoePassword = !showPppoePassword"
+                        :rules="passwordRules"
+                        placeholder="Contoh: support123.!!"
+                        hint="Password tidak boleh mengandung spasi. Contoh format: support123.!!"
+                        persistent-hint
                       ></v-text-field>
                     </v-col>
                     <v-col cols="12" sm="6">
@@ -898,7 +928,13 @@
           <v-btn color="grey" variant="outlined" @click="closeDialog">
             Batal
           </v-btn>
-          <v-btn v-if="currentStep < 3" color="primary" variant="flat" @click="currentStep++">
+          <v-btn
+            v-if="currentStep < 3"
+            color="primary"
+            variant="flat"
+            @click="currentStep++"
+            :disabled="currentStep === 1 && !isInformasiJaringanValid"
+          >
             Lanjut
           </v-btn>
           <v-btn v-else color="primary" variant="flat" @click="saveDataTeknis" :loading="saving">
@@ -976,7 +1012,7 @@
   </v-container>
 
     <!-- Import Dialog -->
-    <v-dialog v-model="dialogImport" max-width="800px" :fullscreen="$vuetify.display.mobile" persistent class="import-dialog">
+    <v-dialog v-model="dialogImport" max-width="800px" :fullscreen="display.mobile.value" persistent class="import-dialog">
       <v-card class="import-card">
         <div class="import-header">
           <v-icon class="mr-3">mdi-upload</v-icon>
@@ -1016,7 +1052,7 @@
                 download
                 prepend-icon="mdi-download"
                 class="template-btn"
-                :block="$vuetify.display.mobile"
+                :block="display.mobile.value"
               >
                 Unduh Template
               </v-btn>
@@ -1111,10 +1147,14 @@
 <script setup lang="ts">
 // --- SCRIPT ANDA TETAP SAMA, TIDAK ADA PERUBAHAN ---
 import { ref, onMounted, computed, watch, nextTick } from 'vue';
+import { useTheme, useDisplay } from 'vuetify';
 import apiClient from '@/services/api';
 import { debounce } from 'lodash-es';
 import { useAuthStore } from '@/stores/auth';
 import SkeletonLoader from '@/components/SkeletonLoader.vue';
+
+const theme = useTheme();
+const display = useDisplay();
 
 // --- Interfaces ---
 interface DataTeknis {
@@ -1137,10 +1177,12 @@ interface DataTeknis {
   onu_power: number;
   mikrotik_server_id: number;
   sn?: string | null;
+  pelanggan?: Pelanggan;
 }
 interface Pelanggan {
   id: number;
   nama: string;
+  created_at?: string;
 }
 
 interface MikrotikServer {
@@ -1234,27 +1276,27 @@ const isEditMode = computed(() => !!editedItem.value.id);
 const formTitle = computed(() => isEditMode.value ? 'Edit Data Teknis' : 'Tambah Data Teknis');
 
 const availablePppoeProfiles = computed(() => {
-  // 1. Buat array objects dengan informasi lengkap (nama + slot tersedia)
+  // 1. Buat array objects dengan informasi lengkap (nama + jumlah user aktif)
+  // Tidak ada batasan 5 user lagi, tampilkan semua profile yang sesuai kecepatan
   const profilesWithInfo = profilesFromApi.value
-    .filter(p => p.usage_count < 5) // Hanya profile yang masih tersedia
     .map(p => ({
-      title: `${p.profile_name} (${5 - p.usage_count} slot tersedia)`,
+      title: `${p.profile_name} (Digunakan oleh ${p.usage_count} user)`,
       value: p.profile_name,
-      usageCount: p.usage_count,
-      slotsLeft: 5 - p.usage_count
+      usageCount: p.usage_count
     }));
 
   // 2. Ambil profile yang sedang digunakan oleh user yang diedit
   const currentProfile = editedItem.value.profile_pppoe;
-  const currentProfileData = profilesFromApi.value.find(p => p.profile_name === currentProfile);
-
-  // 3. Jika profile saat ini ada DAN sudah penuh, tetap tampilkan dengan indikator
-  if (currentProfile && currentProfileData && !profilesWithInfo.find(p => p.value === currentProfile)) {
+  
+  // 3. Pastikan profile yang sedang digunakan tetap muncul di list (meskipun logic di atas sudah cover semua, ini safety net)
+  if (currentProfile && !profilesWithInfo.find(p => p.value === currentProfile)) {
+    const currentProfileData = profilesFromApi.value.find(p => p.profile_name === currentProfile);
+    const usage = currentProfileData ? currentProfileData.usage_count : '?'; // Tanda tanya jika data real-time tidak ada
+    
     profilesWithInfo.unshift({
-      title: `${currentProfile} (saat ini digunakan - ${currentProfileData.usage_count}/5 terpakai)`,
+      title: `${currentProfile} (Digunakan oleh ${usage} user)`,
       value: currentProfile,
-      usageCount: currentProfileData.usage_count,
-      slotsLeft: 5 - currentProfileData.usage_count
+      usageCount: typeof usage === 'number' ? usage : 0
     });
   }
 
@@ -1288,6 +1330,30 @@ const ipRules = [
   }
 ];
 
+// Validation rules untuk Password PPPoE field
+const passwordRules = [
+  (v: string) => {
+    if (!v) return 'Password PPPoE wajib diisi';
+    if (v.includes(' ')) return 'Password PPPoE tidak boleh mengandung spasi. Contoh: support123.!!';
+    if (v.length > 100) return 'Password PPPoE maksimal 100 karakter';
+    return true;
+  }
+];
+
+// Validation rules untuk ID Pelanggan PPPoE field
+const idPelangganRules = [
+  (v: string) => {
+    if (!v) return 'ID Pelanggan PPPoE wajib diisi';
+    if (v.includes(' ')) return 'ID Pelanggan PPPoE tidak boleh mengandung spasi. Gunakan format: user123, test-service, client_01';
+    if (v.length > 100) return 'ID Pelanggan PPPoE maksimal 100 karakter';
+    // Validasi karakter yang diperbolehkan
+    if (!/^[a-zA-Z0-9\-_\.]+$/.test(v)) {
+      return 'ID Pelanggan hanya boleh mengandung huruf, angka, dash (-), underscore (_), dan titik (.)';
+    }
+    return true;
+  }
+];
+
 const lastIpInfo = ref({
   last_ip: null,
   last_octet: 0,
@@ -1296,113 +1362,13 @@ const lastIpInfo = ref({
   source: ''
 });
 
-// Cache untuk hasil pengecekan pelanggan data teknis
-const pelangganDataTeknisBaruCache = new Map<number, boolean>();
+
 
 const pelangganForSelect = computed(() => {
-  if (isEditMode.value) {
-    return pelangganList.value;
-  }
-
-  // Filter pelanggan yang belum memiliki data teknis
-  return pelangganList.value.filter(pelanggan => isPelangganDataTeknisBaru(pelanggan.id));
+  return pelangganList.value;
 });
 
-// Cache untuk langganan pelanggan
-const langgananCache = ref<any[]>([]);
 
-// Fungsi: Cek apakah pelanggan benar-benar baru (baru saja ditambah di Pelanggan)
-function isPelangganDataTeknisBaru(pelangganId: number): boolean {
-  if (!pelangganId) return false;
-
-  // Cek cache dulu
-  if (pelangganDataTeknisBaruCache.has(pelangganId)) {
-    return pelangganDataTeknisBaruCache.get(pelangganId)!;
-  }
-
-  // Cek apakah pelanggan sudah pernah memiliki langganan (berarti pelanggan lama)
-  const hasLanggananSebelumnya = langgananCache.value.some(l => l.pelanggan_id === pelangganId);
-
-  // Jika sudah ada langganan, ini pelanggan lama
-  if (hasLanggananSebelumnya) {
-    pelangganDataTeknisBaruCache.set(pelangganId, false);
-    return false;
-  }
-
-  // Cek di dataTeknisList yang sudah dimuat (current page)
-  const hasDataTeknisSebelumnya = dataTeknisList.value.some(dt => dt.pelanggan_id === pelangganId);
-
-  // Cache hasilnya
-  pelangganDataTeknisBaruCache.set(pelangganId, !hasDataTeknisSebelumnya);
-
-  // Jika belum pernah ada data teknis sama sekali, ini adalah pelanggan benar-benar baru
-  return !hasDataTeknisSebelumnya;
-}
-
-// Fungsi untuk mengambil data langganan
-async function fetchLanggananForCache() {
-  try {
-    // Load semua langganan tanpa limit
-    const response = await apiClient.get('/langganan/?limit=10000');
-    langgananCache.value = response.data.data || response.data;
-  } catch (error) {
-    console.warn('Gagal mengambil data langganan untuk cache:', error);
-    langgananCache.value = [];
-  }
-}
-
-// Fungsi untuk mengupdate cache pelanggan data teknis baru secara asynchronous
-async function updatePelangganDataTeknisBaruCache() {
-  // Clear cache lama
-  pelangganDataTeknisBaruCache.clear();
-
-  // Tunggu sampai pelangganList dan langgananCache ada datanya
-  if (!pelangganList.value || pelangganList.value.length === 0 || !langgananCache.value) {
-    return;
-  }
-
-  try {
-    // Load semua data teknis tanpa pagination untuk checking yang akurat
-    const response = await apiClient.get('/data_teknis/?limit=500');
-    const allDataTeknis = response.data.data || response.data;
-
-    if (Array.isArray(allDataTeknis)) {
-      // Buat Set dari semua pelanggan_id yang sudah ada data teknis
-      const existingDataTeknisIds = new Set(allDataTeknis.map((dt: any) => dt.pelanggan_id));
-
-      // Buat Set dari semua pelanggan_id yang sudah ada langganan (pelanggan lama)
-      const existingLanggananIds = new Set(langgananCache.value.map(l => l.pelanggan_id));
-
-      // Update cache untuk semua pelanggan
-      pelangganList.value.forEach(pelanggan => {
-        // Pelanggan benar-benar baru = belum ada langganan DAN belum ada data teknis
-        const isBenarBenarBaru = !existingLanggananIds.has(pelanggan.id) && !existingDataTeknisIds.has(pelanggan.id);
-        pelangganDataTeknisBaruCache.set(pelanggan.id, isBenarBenarBaru);
-      });
-    } else {
-      // Fallback: gunakan data dari current page
-      const existingDataTeknisIds = new Set(dataTeknisList.value.map(dt => dt.pelanggan_id));
-      const existingLanggananIds = new Set(langgananCache.value.map(l => l.pelanggan_id));
-
-      pelangganList.value.forEach(pelanggan => {
-        const isBenarBenarBaru = !existingLanggananIds.has(pelanggan.id) && !existingDataTeknisIds.has(pelanggan.id);
-        pelangganDataTeknisBaruCache.set(pelanggan.id, isBenarBenarBaru);
-      });
-    }
-  } catch (error) {
-    console.warn('Gagal mengupdate cache pelanggan data teknis baru, menggunakan fallback:', error);
-    // Fallback: gunakan data dari current page
-    if (dataTeknisList.value && pelangganList.value && langgananCache.value) {
-      const existingDataTeknisIds = new Set(dataTeknisList.value.map(dt => dt.pelanggan_id));
-      const existingLanggananIds = new Set(langgananCache.value.map(l => l.pelanggan_id));
-
-      pelangganList.value.forEach(pelanggan => {
-        const isBenarBenarBaru = !existingLanggananIds.has(pelanggan.id) && !existingDataTeknisIds.has(pelanggan.id);
-        pelangganDataTeknisBaruCache.set(pelanggan.id, isBenarBenarBaru);
-      });
-    }
-  }
-}
 
 const oltOptions = ref<string[]>([]);
 
@@ -1447,6 +1413,32 @@ const isNocUser = computed(() => {
   return false;
 });
 
+// Validasi form Informasi Jaringan (Step 1)
+const isInformasiJaringanValid = computed(() => {
+  const item = editedItem.value;
+
+  // Validasi field wajib di Informasi Jaringan
+  if (!item.pelanggan_id) return false;
+  if (!item.mikrotik_server_id) return false;
+  if (!item.id_pelanggan || item.id_pelanggan.trim() === '' || item.id_pelanggan.includes(' ')) return false;
+  if (!item.password_pppoe || item.password_pppoe.trim() === '' || item.password_pppoe.includes(' ')) return false;
+  if (!item.ip_pelanggan || item.ip_pelanggan.trim() === '') return false;
+  if (!item.profile_pppoe || item.profile_pppoe.trim() === '') return false;
+  if (!item.id_vlan || item.id_vlan.trim() === '') return false;
+
+  // Validasi format IP
+  const ipFormatValidation = validateIpFormat(item.ip_pelanggan);
+  if (!ipFormatValidation.isValid) return false;
+
+  // Validasi IP sudah tersedia atau tidak (jika sudah ada hasil pengecekan)
+  if (ipValidation.value.color === 'error') return false;
+
+  // Validasi karakter ID Pelanggan
+  if (!/^[a-zA-Z0-9\-_\.]+$/.test(item.id_pelanggan)) return false;
+
+  return true;
+});
+
 
 function handleOltSelection(serverId: number) {
   const selectedServer = mikrotikServers.value.find(s => s.id === serverId);
@@ -1488,8 +1480,7 @@ async function fetchLastUsedIp(serverId: number) {
 
 // --- Methods ---
 onMounted(() => {
-  fetchPelanggan(); // Load pelanggan dulu untuk cache
-  fetchLanggananForCache(); // Load langganan untuk pengecekan pelanggan baru
+  fetchPelanggan(); // Load pelanggan (unconfigured)
   fetchMikrotikServers();
   fetchPaketLayananForSelect();
   fetchOdpList();
@@ -1548,9 +1539,6 @@ async function fetchDataTeknis(isLoadMore = false, preservePage = false) {
       dataTeknisList.value = newData;
       // Hitung ulang statistik setelah data baru di-load
       calculateStatisticsFromExistingData();
-
-      // Update cache pelanggan data teknis baru ketika data berubah (bukan loadMore)
-      updatePelangganDataTeknisBaruCache();
     }
 
     // Selalu update total count untuk pagination yang benar
@@ -1714,22 +1702,23 @@ function calculateStatisticsFromExistingData() {
 
 async function fetchPelanggan() {
   try {
-    // PERBAIKAN: Ambil semua pelanggan tanpa limit untuk pemetaan nama
-    // Ini tidak ideal, tapi untuk sementara bisa jalan.
-    // Solusi idealnya adalah membuat endpoint khusus untuk mengambil nama berdasarkan ID.
-    const response = await apiClient.get('/pelanggan/?limit=10000');
+    // OPTIMIZED: Hanya ambil pelanggan yang BELUM dikonfigurasi data teknisnya (untuk dropdown)
+    // Server-side filtering, jauh lebih cepat & payload lebih kecil
+    // Request created_at juga untuk badge "BARU"
+    const response = await apiClient.get('/pelanggan/?connection_status=unconfigured&limit=1000&use_minimal_loading=true&fields=id,nama,created_at');
+    
     // Response is paginated, so the actual data is in response.data.data
     pelangganList.value = response.data.data || response.data;
+
+    // Untuk pelangganMap, kita hanya memetakan yang baru diambil.
+    // Untuk display tabel, kita akan gunakan item.pelanggan.nama langsung dari backend join.
+    // Namun kita tetap maintain map untuk fallback.
     const newMap = new Map<number, Pelanggan>();
     const pelangganData = response.data.data || response.data;
     for (const pelanggan of pelangganData) {
       newMap.set(pelanggan.id, pelanggan);
     }
     pelangganMap.value = newMap;
-
-    // Update cache pelanggan data teknis baru
-    updatePelangganDataTeknisBaruCache();
-
   } catch(error) {
     console.error("Gagal mengambil daftar pelanggan:", error);
   }
@@ -1756,6 +1745,14 @@ function openDialog(item?: DataTeknis) {
   if (item) {
     // Mode Edit: Gunakan data yang ada
     editedItem.value = { ...item };
+    // Jika dalam mode edit, pastikan pelanggan yang sedang diedit ada di list pilihan
+    if (item.pelanggan) {
+        const exists = pelangganList.value.some(p => p.id === item.pelanggan?.id);
+        if (!exists) {
+            pelangganList.value.push(item.pelanggan);
+        }
+    }
+
     // Jika dalam mode edit, ambil informasi IP terakhir untuk server yang dipilih
     if (item.mikrotik_server_id) {
       fetchLastUsedIp(item.mikrotik_server_id);
@@ -2056,7 +2053,14 @@ async function confirmDelete() {
 }
 
 function getPelangganName(pelangganId: number) {
-  return pelangganMap.value.get(pelangganId)?.nama || 'Tidak Ditemukan';
+  // Try to find in the list/map first
+  const fromMap = pelangganMap.value.get(pelangganId)?.nama;
+  if (fromMap) return fromMap;
+  
+  // If not in map (because map only has unconfigured users), check dataTeknisList
+  // Since we now have nested object, we can try to find it in the loaded data list
+  const inList = dataTeknisList.value.find(dt => dt.pelanggan_id === pelangganId);
+  return inList?.pelanggan?.nama || 'Tidak Ditemukan';
 }
 
 function getPelangganInitials(pelangganId: number) {
@@ -2065,9 +2069,23 @@ function getPelangganInitials(pelangganId: number) {
   return name.split(' ').map(word => word.charAt(0)).join('').substring(0, 2).toUpperCase();
 }
 
+function isNewUser(dateStr?: string) {
+  if (!dateStr) return false;
+  try {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffTime = Math.abs(now.getTime() - date.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+    return diffDays <= 3; // Kriteria baru: <= 3 hari
+  } catch (e) {
+    return false;
+  }
+}
+
 function getAvatarColor(pelangganId: number) {
   const colors = ['primary', 'secondary', 'accent', 'success', 'info', 'warning', 'error'];
-  return colors[pelangganId % colors.length];
+  // Ensure non-negative index
+  return colors[Math.abs(pelangganId) % colors.length];
 }
 
 function getOnuPowerColor(power: number) {
@@ -2092,7 +2110,7 @@ function getOnuPowerStatus(power: number) {
 }
 
 
-async function exportData() {
+async function exportData(format = 'csv') {
   exporting.value = true;
   try {
     // Bangun URL dengan parameter filter agar export mengikuti filter yang sedang aktif
@@ -2116,19 +2134,20 @@ async function exportData() {
         params.append('onu_power_max', selectedRange.max.toString());
       }
     }
-    // Tambahkan parameter untuk export semua data (tanpa pagination)
-    params.append('export_all', 'true');
+    // Tambahkan parameter untuk format export
+    params.append('format', format);
 
     const queryString = params.toString();
-    const exportUrl = `/data_teknis/export/csv${queryString ? '?' + queryString : ''}`;
-    
+    const exportUrl = `/data_teknis/export${queryString ? '?' + queryString : ''}`;
+
     const response = await apiClient.get(exportUrl, {
       responseType: 'blob',
     });
     const url = window.URL.createObjectURL(new Blob([response.data]));
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', 'data_teknis.csv');
+    const fileExtension = format === 'excel' ? 'xlsx' : 'csv';
+    link.setAttribute('download', `data_teknis.${fileExtension}`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -2850,15 +2869,47 @@ function getOnuPowerError() {
 }
 
 .modern-table {
-  background: transparent !important;
+  background: #ffffff !important;
+  border-radius: 16px !important;
+  overflow: hidden;
+  box-shadow: none !important;
+  border: 1px solid #e0e0e0 !important;
 }
 
-.modern-table :deep(.v-data-table-header) {
-  background: rgba(0, 172, 193, 0.05) !important;
+.modern-table :deep(thead) {
+  background: #fafafa !important;
 }
 
-.modern-table :deep(.v-data-table__tr:hover) {
-  background: rgba(0, 172, 193, 0.05) !important;
+.modern-table :deep(th) {
+  font-weight: 700 !important;
+  font-size: 0.75rem !important;
+  color: #424242 !important;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 16px 12px !important;
+  border-bottom: 2px solid #e0e0e0 !important;
+  white-space: nowrap;
+}
+
+.modern-table :deep(td) {
+  padding: 14px 12px !important;
+  border-bottom: 1px solid #f5f5f5 !important;
+  font-size: 0.875rem;
+  color: #616161 !important;
+  vertical-align: middle;
+}
+
+.modern-table :deep(tbody tr) {
+  transition: all 0.2s ease;
+  background: #ffffff !important;
+}
+
+.modern-table :deep(tbody tr:hover) {
+  background-color: #fafafa !important;
+}
+
+.modern-table :deep(tbody tr:last-child td) {
+  border-bottom: none !important;
 }
 
 /* Only apply custom styling to action buttons that are NOT Import/Export and NOT header-action-btn */
@@ -3390,4 +3441,87 @@ div.v-container > div.header-card > div.action-buttons-container > v-btn.header-
   visibility: visible !important;
   display: flex !important;
 }
+
+/* ============================================
+   DARK MODE SUPPORT
+   ============================================ */
+
+/* Table Dark Mode */
+.v-theme--dark .v-data-table {
+  background: rgba(26, 31, 46, 0.6) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+.v-theme--dark .v-data-table :deep(thead) {
+  background: rgba(21, 27, 45, 0.8) !important;
+}
+
+.v-theme--dark .v-data-table :deep(th) {
+  color: rgba(255, 255, 255, 0.95) !important;
+  border-bottom-color: rgba(255, 255, 255, 0.15) !important;
+  font-weight: 700 !important;
+}
+
+.v-theme--dark .v-data-table :deep(td) {
+  color: rgba(255, 255, 255, 0.8) !important;
+  border-bottom-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+.v-theme--dark .v-data-table :deep(tbody tr) {
+  background: rgba(26, 31, 46, 0.4) !important;
+}
+
+.v-theme--dark .v-data-table :deep(tbody tr:hover) {
+  background-color: rgba(33, 150, 243, 0.08) !important;
+}
+
+/* VLAN Information Card Dark Mode */
+.v-theme--dark .v-card-title.bg-grey-lighten-4 {
+  background: rgba(21, 27, 45, 0.8) !important;
+  color: rgba(255, 255, 255, 0.95) !important;
+}
+
+.v-theme--dark .v-card-title.bg-grey-lighten-4 .v-icon {
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+
+.v-theme--dark .v-card-title.bg-grey-lighten-4 .text-subtitle-1 {
+  color: rgba(255, 255, 255, 0.95) !important;
+}
+
+/* Filter Card Dark Mode */
+.v-theme--dark .filter-card {
+  background: rgba(26, 31, 46, 0.6) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+/* Stats Cards Dark Mode */
+.v-theme--dark .stats-card {
+  background: rgba(26, 31, 46, 0.6) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+.v-theme--dark .stats-card .text-h5 {
+  color: rgba(255, 255, 255, 0.95) !important;
+}
+
+.v-theme--dark .stats-card .text-caption {
+  color: rgba(255, 255, 255, 0.7) !important;
+}
+
+/* Card Text Dark Mode */
+.v-theme--dark .v-card-text {
+  color: rgba(255, 255, 255, 0.87) !important;
+}
+
+/* Chips Dark Mode */
+.v-theme--dark .v-chip {
+  background: rgba(33, 150, 243, 0.2) !important;
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+
+.v-theme--dark .v-chip .v-icon {
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+
 </style>

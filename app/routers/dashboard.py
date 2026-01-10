@@ -26,6 +26,7 @@ from ..models import (
     PaketLayanan,
     Langganan,
     DataTeknis,
+    TroubleTicket,
 )
 from sqlalchemy.orm import selectinload
 from ..models.user import User as UserModel
@@ -208,8 +209,8 @@ async def get_dashboard_data(
     API Response Optimization: Cache control untuk mengurangi request frequency.
     """
     # API Response Optimization: Add cache headers untuk 5 menit
-    response.headers["Cache-Control"] = "public, max-age=300"
-
+    # response.headers["Cache-Control"] = "public, max-age=300"  
+    
     # PERFORMANCE OPTIMIZATION: Add query timeout monitoring
     import time
 
@@ -389,7 +390,8 @@ async def get_dashboard_data(
             try:
                 six_months_ago = datetime.now() - timedelta(days=180)
 
-                # Query untuk invoice chart - Fixed SQLAlchemy syntax
+                
+                # Query untuk invoice chart - Updated to include invoice types
                 invoice_stmt = (
                     select(
                         func.year(Invoice.tgl_invoice).label("year"),
@@ -397,9 +399,13 @@ async def get_dashboard_data(
                         func.count(Invoice.id).label("total"),
                         func.sum(case((Invoice.status_invoice == "Lunas", 1), else_=0)).label("lunas"),
                         func.sum(case((Invoice.status_invoice == "Belum Dibayar", 1), else_=0)).label("menunggu"),
-                        func.sum(case((Invoice.status_invoice == "Kadaluarsa", 1), else_=0)).label("kadaluarsa"),
+                        func.sum(case((Invoice.status_invoice == "Expired", 1), else_=0)).label("kadaluarsa"),
+                        func.sum(case((Invoice.invoice_type == "automatic", 1), else_=0)).label("otomatis"),
+                        func.sum(case((Invoice.invoice_type == "manual", 1), else_=0)).label("manual"),
+                        func.sum(case((Invoice.is_reinvoice == True, 1), else_=0)).label("reinvoice"),
                     )
                     .where(Invoice.tgl_invoice >= six_months_ago)
+                    .where(Invoice.deleted_at.is_(None))
                     .group_by(func.year(Invoice.tgl_invoice), func.month(Invoice.tgl_invoice))
                     .order_by(func.year(Invoice.tgl_invoice), func.month(Invoice.tgl_invoice))
                 )
@@ -413,6 +419,9 @@ async def get_dashboard_data(
                         lunas=[item.lunas or 0 for item in invoice_data],
                         menunggu=[item.menunggu or 0 for item in invoice_data],
                         kadaluarsa=[item.kadaluarsa or 0 for item in invoice_data],
+                        otomatis=[item.otomatis or 0 for item in invoice_data],
+                        manual=[item.manual or 0 for item in invoice_data],
+                        reinvoice=[item.reinvoice or 0 for item in invoice_data],
                     )
                     print(f"✅ Invoice chart loaded successfully with {len(invoice_data)} data points")
                 else:
@@ -430,6 +439,9 @@ async def get_dashboard_data(
                         lunas=[0, 0, 0, 0, 0, 0],
                         menunggu=[0, 0, 0, 0, 0, 0],
                         kadaluarsa=[0, 0, 0, 0, 0, 0],
+                        otomatis=[0, 0, 0, 0, 0, 0],
+                        manual=[0, 0, 0, 0, 0, 0],
+                        reinvoice=[0, 0, 0, 0, 0, 0],
                     )
 
             except Exception as e:
@@ -516,9 +528,11 @@ class SidebarBadgeResponse(BaseModel):
     suspended_count: int
     unpaid_invoice_count: int
     stopped_count: int
+    total_invoice_count: int
+    open_tickets_count: int
 
 
-# Tambahkan ini ke file dashboard.py di router dashboard
+# Menambahkan ini ke file dashboard.py di router dashboard
 
 
 @router.get("/loyalitas-users-by-segment")
@@ -669,11 +683,21 @@ async def get_sidebar_badges(db: AsyncSession = Depends(get_db)):
     stopped_result = await db.execute(stopped_query)
     stopped_count = stopped_result.scalar_one_or_none() or 0
 
+    total_invoice_query = select(func.count(Invoice.id)).where(Invoice.deleted_at.is_(None))
+    total_invoice_result = await db.execute(total_invoice_query)
+    total_invoice_count = total_invoice_result.scalar_one_or_none() or 0
+
+    open_tickets_query = select(func.count(TroubleTicket.id)).where(TroubleTicket.status == "Open")
+    open_tickets_result = await db.execute(open_tickets_query)
+    open_tickets_count = open_tickets_result.scalar_one_or_none() or 0
+
     # Generate response dan cache
     response_data = SidebarBadgeResponse(
         suspended_count=suspended_count,
         unpaid_invoice_count=unpaid_count,
         stopped_count=stopped_count,
+        total_invoice_count=total_invoice_count,
+        open_tickets_count=open_tickets_count,
     )
 
     # Simpan ke cache
@@ -920,4 +944,181 @@ async def get_websocket_metrics(
             "role_based_broadcasting": True,
             "automatic_cleanup": True,
         },
+    }
+
+
+# ====================================================================
+# INVOICE GENERATION MONITORING WIDGET
+# ====================================================================
+
+@router.get("/invoice-generation-monitor")
+async def get_invoice_generation_monitor(
+    target_date: str = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user)
+):
+    """
+    Widget dashboard untuk monitoring invoice generation.
+    Menampilkan summary skipped invoices untuk bulan depan atau tanggal spesifik.
+
+    Required roles: superadmin, admin, manager
+    """
+    from ..config import settings
+
+    # Check user permissions using config
+    # Handle both string role and Role object
+    user_role_name = current_user.role.name if hasattr(current_user.role, 'name') else str(current_user.role)
+    if not settings.can_access_widget("invoice_generation_monitor", user_role_name):
+        raise HTTPException(
+            status_code=403,
+            detail="Anda tidak memiliki izin untuk mengakses widget monitoring invoice"
+        )
+
+    from datetime import date, timedelta
+
+    # Calculate target date (tanggal 1 bulan depan jika tidak ditentukan)
+    if target_date:
+        target_date_obj = date.fromisoformat(target_date)
+    else:
+        today = date.today()
+        if today.month == 12:
+            target_date_obj = date(today.year + 1, 1, 1)
+        else:
+            target_date_obj = date(today.year, today.month + 1, 1)
+
+    # Get langganan yang seharusnya dapat invoice
+    should_have_stmt = (
+        select(func.count(Langganan.id))
+        .where(
+            Langganan.tgl_jatuh_tempo == target_date_obj.day,
+            Langganan.status == "Aktif"
+        )
+    )
+    total_should_have = (await db.execute(should_have_stmt)).scalar() or 0
+
+    # Get invoice yang sudah di-generate untuk periode ini
+    target_year, target_month = target_date_obj.year, target_date_obj.month
+    start_of_month = date(target_year, target_month, 1)
+    if target_month == 12:
+        end_of_month = date(target_year + 1, 1, 1) - timedelta(days=1)
+    else:
+        end_of_month = date(target_year, target_month + 1, 1) - timedelta(days=1)
+
+    existing_invoices_stmt = (
+        select(func.count(func.distinct(Invoice.pelanggan_id)))
+        .where(Invoice.tgl_jatuh_tempo.between(start_of_month, end_of_month))
+    )
+    total_generated = (await db.execute(existing_invoices_stmt)).scalar() or 0
+
+    total_skipped = total_should_have - total_generated
+    success_rate = round((total_generated / total_should_have * 100) if total_should_have > 0 else 100, 1)
+
+    # Status
+    if total_skipped == 0:
+        status, status_color, status_icon = "HEALTHY", "success", "✅"
+    elif total_skipped <= 5:
+        status, status_color, status_icon = "NEEDS_ATTENTION", "warning", "⚠️"
+    else:
+        status, status_color, status_icon = "CRITICAL", "error", "🔴"
+
+    return {
+        "target_date": target_date_obj.isoformat(),
+        "total_should_have": total_should_have,
+        "total_generated": total_generated,
+        "total_skipped": total_skipped,
+        "success_rate": success_rate,
+        "status": status,
+        "status_color": status_color,
+        "status_icon": status_icon,
+        "message": f"{status_icon} {total_skipped} pelanggan terlewat" if total_skipped > 0 else f"{status_icon} Semua invoice berhasil di-generate",
+        "detail_url": f"/invoices/skipped-invoice-generation?target_date={target_date_obj.isoformat()}"
+    }
+
+
+@router.get("/future-invoice-projection")
+async def get_future_invoice_projection(
+    target_date: str = "2026-01-01",
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user)
+):
+    """
+    Mendapatkan proyeksi invoice untuk tanggal di masa depan.
+    Untuk monitoring persiapan sistem.
+
+    Required roles: superadmin, admin, manager
+    """
+    from ..config import settings
+
+    # Check user permissions using config
+    # Handle both string role and Role object
+    user_role_name = current_user.role.name if hasattr(current_user.role, 'name') else str(current_user.role)
+    if not settings.can_access_widget("future_invoice_projection", user_role_name):
+        raise HTTPException(
+            status_code=403,
+            detail="Anda tidak memiliki izin untuk mengakses widget proyeksi invoice"
+        )
+    from datetime import date, timedelta
+
+    target_date_obj = date.fromisoformat(target_date)
+    today = date.today()
+
+    # Hitung hari hingga target date
+    days_until = (target_date_obj - today).days if target_date_obj > today else 0
+
+    # Get estimasi pelanggan (yang punya jatuh tempo tanggal yang sama)
+    estimated_customers_stmt = (
+        select(func.count(Langganan.id))
+        .where(
+            Langganan.tgl_jatuh_tempo == target_date_obj.day,
+            Langganan.status == "Aktif"
+        )
+    )
+    estimated_customers = (await db.execute(estimated_customers_stmt)).scalar() or 0
+
+    # Get total active customers untuk perhitungan
+    total_active_stmt = (
+        select(func.count(Langganan.id))
+        .where(Langganan.status == "Aktif")
+    )
+    total_active = (await db.execute(total_active_stmt)).scalar() or 0
+
+    # Calculate projection date (H-5)
+    projection_date = target_date_obj - timedelta(days=5)
+
+    # Status sistem logic updated
+    if today >= projection_date:
+        # Check if invoices have been generated
+        # Logic matches invoice-generation-monitor
+        target_year, target_month = target_date_obj.year, target_date_obj.month
+        start_of_month = date(target_year, target_month, 1)
+        if target_month == 12:
+            end_of_month = date(target_year + 1, 1, 1) - timedelta(days=1)
+        else:
+            end_of_month = date(target_year, target_month + 1, 1) - timedelta(days=1)
+
+        existing_invoices_stmt = (
+            select(func.count(func.distinct(Invoice.pelanggan_id)))
+            .where(Invoice.tgl_jatuh_tempo.between(start_of_month, end_of_month))
+        )
+        total_generated = (await db.execute(existing_invoices_stmt)).scalar() or 0
+        
+        if total_generated > 0:
+            if total_generated >= (estimated_customers * 0.9): # 90% threshold
+                system_status = "Selesai"
+            else:
+                system_status = "Sebagian Selesai"
+        else:
+             system_status = "Terlewat" if today > projection_date else "Menunggu Jadwal"
+    else:
+        system_status = "Siap" if days_until > 30 else "Persiapan"
+
+    return {
+        "target_date": target_date,
+        "estimated_customers": estimated_customers,
+        "total_active_customers": total_active,
+        "days_until": days_until,
+        "generation_date": projection_date.isoformat(),
+        "system_status": system_status,
+        "is_future": days_until > 0,
+        "percentage_of_active": round((estimated_customers / total_active * 100) if total_active > 0 else 0, 1)
     }

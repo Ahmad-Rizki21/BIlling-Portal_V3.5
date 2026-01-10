@@ -27,17 +27,36 @@
           >
             Import Data
           </v-btn>
-          <v-btn
-            color="primary"
-            @click="exportToCsv"
-            :loading="exporting"
-            prepend-icon="mdi-file-download-outline"
-            class="action-btn text-none mobile-btn"
-            size="default"
-            block
-          >
-            Export Data
-          </v-btn>
+          <v-menu>
+            <template v-slot:activator="{ props }">
+              <v-btn
+                color="primary"
+                v-bind="props"
+                :loading="exporting"
+                prepend-icon="mdi-file-download-outline"
+                class="action-btn text-none mobile-btn"
+                size="default"
+                block
+              >
+                Export Data
+                <v-icon end>mdi-menu-down</v-icon>
+              </v-btn>
+            </template>
+            <v-list>
+              <v-list-item @click="exportData('csv')">
+                <v-list-item-title>
+                  <v-icon class="mr-2">mdi-file-delimited</v-icon>
+                  Export sebagai CSV
+                </v-list-item-title>
+              </v-list-item>
+              <v-list-item @click="exportData('excel')">
+                <v-list-item-title>
+                  <v-icon class="mr-2">mdi-file-excel</v-icon>
+                  Export sebagai Excel
+                </v-list-item-title>
+              </v-list-item>
+            </v-list>
+          </v-menu>
           <v-btn 
             color="primary" 
             @click="openDialog()" 
@@ -1314,7 +1333,7 @@ async function downloadCsvTemplate() {
   }
 }
 
-async function exportToCsv() {
+async function exportData(format = 'csv') {
   exporting.value = true;
   try {
     // Bangun URL dengan parameter filter agar export mengikuti filter yang sedang aktif
@@ -1328,15 +1347,16 @@ async function exportToCsv() {
     if (selectedBrand.value) {
       params.append('id_brand', selectedBrand.value);
     }
-    // Tambahkan parameter untuk export semua data (tanpa pagination)
-    params.append('export_all', 'true');
+    // Tambahkan parameter untuk format export
+    params.append('format', format);
 
     const queryString = params.toString();
-    const exportUrl = `/pelanggan/export/csv${queryString ? '?' + queryString : ''}`;
-    
+    const exportUrl = `/pelanggan/export${queryString ? '?' + queryString : ''}`;
+
     const response = await apiClient.get(exportUrl, { responseType: 'blob' });
     const date = new Date().toISOString().split('T')[0];
-    downloadFile(response.data, `export_pelanggan_${date}.csv`);
+    const fileExtension = format === 'excel' ? 'xlsx' : 'csv';
+    downloadFile(response.data, `export_pelanggan_${date}.${fileExtension}`);
   } catch (error) {
     console.error("Gagal mengekspor data:", error);
     showSnackbar('Tidak ada data untuk diekspor atau terjadi kesalahan.', 'error');
@@ -1618,41 +1638,67 @@ function showSnackbar(text: string, color: 'success' | 'error' | 'warning') {
   flex: 1;
 }
 
-/* Desktop Table Styles */
+/* Desktop Table Styles - Clean & Minimalist */
 .elegant-table {
-  background: transparent !important;
+  background: #ffffff !important;
+}
+
+.elegant-table :deep(thead) {
+  background: #fafafa;
 }
 
 .elegant-table :deep(th) {
-  font-weight: 600 !important;
-  font-size: 0.875rem !important;
-  color: rgb(var(--v-theme-on-surface)) !important;
-  opacity: 0.8;
-  border-bottom: 1px solid rgb(var(--v-theme-outline-variant)) !important;
+  font-weight: 700 !important;
+  font-size: 0.75rem !important;
+  color: #424242 !important;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 16px 12px !important;
+  border-bottom: 2px solid #e0e0e0 !important;
+  white-space: nowrap;
 }
 
 .elegant-table :deep(td) {
-  border-bottom: 1px solid rgb(var(--v-theme-outline-variant)) !important;
+  padding: 14px 12px !important;
+  border-bottom: 1px solid #f5f5f5 !important;
+  font-size: 0.875rem;
+  color: #616161;
+  vertical-align: middle;
+}
+
+.elegant-table :deep(tbody tr) {
+  transition: all 0.2s ease;
+}
+
+.elegant-table :deep(tbody tr:hover) {
+  background-color: #fafafa !important;
+}
+
+.elegant-table :deep(tbody tr:last-child td) {
+  border-bottom: none !important;
 }
 
 .customer-name {
   font-weight: 600;
-  color: rgb(var(--v-theme-on-surface));
+  color: #1a1a1a;
+  font-size: 0.875rem;
 }
 
 .customer-email {
-  font-size: 0.85rem;
-  color: rgb(var(--v-theme-on-surface));
-  opacity: 0.7;
+  font-size: 0.8125rem;
+  color: #757575;
+  margin-top: 2px;
 }
 
 .action-buttons {
   display: flex;
-  gap: 8px;
+  gap: 6px;
+  justify-content: flex-end;
 }
 
 .action-btn-small {
-  min-width: 32px;
+  min-width: 36px;
+  height: 36px;
 }
 
 /* No Data State */

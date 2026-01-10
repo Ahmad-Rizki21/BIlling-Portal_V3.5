@@ -59,6 +59,9 @@ class InvoiceSummary(BaseModel):
     lunas: List[int]
     menunggu: List[int]
     kadaluarsa: List[int]
+    otomatis: List[int] = []
+    manual: List[int] = []
+    reinvoice: List[int] = []
 
     class Config:
         # Izinkan field yang tidak didefinisikan dalam model

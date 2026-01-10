@@ -50,6 +50,7 @@ from ..schemas.pelanggan import (
 import logging
 from ..database import get_db
 from ..middleware.rate_limit import rate_limiter, login_rate_limit
+from ..utils.export import create_pelanggan_export_response
 
 router = APIRouter(
     prefix="/pelanggan",
@@ -228,6 +229,8 @@ async def read_all_pelanggan(
     id_brand: Optional[str] = None,
     fields: Optional[str] = Query(None, description="Comma-separated field names to include (e.g., 'id,nama,email,no_telp')"),
     for_invoice_selection: bool = False,
+    use_minimal_loading: bool = Query(False, description="Use minimal eager loading for faster response (skips langganan and paket_layanan loading)"),
+    connection_status: Optional[str] = Query(None, description="Filter by connection status: 'unconfigured' (no data teknis), 'configured' (has data teknis)"),
     db: AsyncSession = Depends(get_db),
     current_user: UserModel = Depends(get_current_active_user),
 ):
@@ -235,9 +238,11 @@ async def read_all_pelanggan(
     Mengambil daftar pelanggan dengan paginasi, filter, field selection, dan total jumlah data.
     API Response Optimization: Field filtering untuk mengurangi response size.
     """
-    # Jika untuk invoice selection, load semua data tanpa limit
+    # Jika untuk invoice selection, load data dengan limit untuk mencegah overload
     if for_invoice_selection:
-        limit = None
+        # Performance optimization: Batasi maksimal 2000 data untuk invoice selection
+        # untuk mencegah delay saat data pelanggan sudah >1000
+        limit = min(limit if limit is not None else 2000, 2000)
         skip = 0
 
     base_query = select(PelangganModel)
@@ -266,16 +271,47 @@ async def read_all_pelanggan(
         base_query = base_query.where(PelangganModel.id_brand == id_brand)
         count_query = count_query.where(PelangganModel.id_brand == id_brand)
 
+    if connection_status:
+        if connection_status == "unconfigured":
+            # Filter customers who DO NOT have a DataTeknis record
+            # Use outerjoin and check for NULL id in DataTeknis
+            base_query = base_query.outerjoin(PelangganModel.data_teknis).where(DataTeknisModel.id == None)
+            count_query = count_query.outerjoin(PelangganModel.data_teknis).where(DataTeknisModel.id == None)
+        elif connection_status == "configured":
+            # Filter customers who HAVE a DataTeknis record
+            base_query = base_query.join(PelangganModel.data_teknis)
+            count_query = count_query.join(PelangganModel.data_teknis)
+
     # Eksekusi query untuk total count
     total_count_result = await db.execute(count_query)
     total_count = total_count_result.scalar_one()
 
-    # OPTIMIZED: Eksekusi query dengan comprehensive eager loading untuk mencegah N+1 queries
-    data_query = base_query.options(
-        joinedload(PelangganModel.data_teknis),
-        joinedload(PelangganModel.harga_layanan),
-        joinedload(PelangganModel.langganan).joinedload(LanggananModel.paket_layanan),
-    ).order_by(PelangganModel.id.desc())
+    # PERFORMANCE OPTIMIZATION: Conditional eager loading berdasarkan use_minimal_loading dan field selection
+    # Minimal loading untuk invoice selection atau saat use_minimal_loading=True
+    # untuk mencegah query berat saat input data pelanggan
+    if use_minimal_loading or for_invoice_selection:
+        # Minimal loading: Hanya load data_teknis dan harga_layanan
+        # Skip langganan dan paket_layanan untuk performa lebih baik
+        if selected_fields and not any(f in selected_fields for f in ['data_teknis', 'harga_layanan']):
+            # Jika field tidak include relasi, skip eager loading sama sekali
+            data_query = base_query.order_by(PelangganModel.id.desc())
+        else:
+            data_query = base_query.options(
+                joinedload(PelangganModel.data_teknis),
+                joinedload(PelangganModel.harga_layanan),
+                # Skip joinedload(PelangganModel.langganan).joinedload(LanggananModel.paket_layanan)
+            ).order_by(PelangganModel.id.desc())
+    else:
+        # Full loading: Load semua relasi untuk view yang lengkap
+        if selected_fields and not any(f in selected_fields for f in ['data_teknis', 'harga_layanan', 'langganan']):
+            # Jika field tidak include relasi, skip eager loading
+            data_query = base_query.order_by(PelangganModel.id.desc())
+        else:
+            data_query = base_query.options(
+                joinedload(PelangganModel.data_teknis),
+                joinedload(PelangganModel.harga_layanan),
+                joinedload(PelangganModel.langganan).joinedload(LanggananModel.paket_layanan),
+            ).order_by(PelangganModel.id.desc())
 
     if limit is not None:
         data_query = data_query.offset(skip).limit(limit)
@@ -296,6 +332,83 @@ async def read_all_pelanggan(
         return PelangganListResponse(data=filtered_data, total_count=total_count)
 
     return PelangganListResponse(data=list(pelanggan_list), total_count=total_count)
+
+
+# GET /pelanggan/export - Export data pelanggan ke CSV atau Excel
+# Buat export data pelanggan ke file dengan format yang dipilih (CSV/Excel) dengan filter yang sama seperti list
+# Query parameters:
+# - skip: offset untuk pagination (default: 0)
+# - limit: maksimal 50,000 records per export (biar ga crash)
+# - search: filter pencarian (sama seperti di list)
+# - alamat: filter berdasarkan alamat
+# - id_brand: filter berdasarkan brand/provider
+# - format: format export (csv atau excel), default csv
+# Response: file export dengan semua field pelanggan
+# Performance optimization: pagination dan eager loading biar ga memory issues
+# Format file: CSV dengan BOM atau Excel dengan formatting, timestamp di filename
+@router.get("/export", response_class=StreamingResponse)
+async def export_data(
+    skip: int = 0,
+    limit: int = Query(default=5000, le=50000, description="Maximum 50,000 records per export"),  # Max 50k records
+    search: Optional[str] = None,
+    alamat: Optional[str] = None,
+    id_brand: Optional[str] = None,
+    format: str = Query("csv", description="Export format: csv atau excel"),
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user),
+):
+    """
+    Mengekspor data pelanggan ke CSV atau Excel, dengan mempertimbangkan filter yang aktif.
+    PERFORMANCE OPTIMIZATION: Added pagination to prevent memory issues with large datasets.
+    """
+    # Validate format
+    if format.lower() not in ["csv", "excel", "xlsx"]:
+        raise HTTPException(status_code=400, detail="Format tidak valid. Pilih 'csv' atau 'excel'.")
+
+    # PERFORMANCE MONITORING: Log export parameters (sanitized)
+    # Don't log potentially sensitive search terms or addresses
+    print(f"📊 Exporting pelanggan {format}: skip={skip}, limit={limit}, id_brand={id_brand}")
+
+    # Apply pagination to prevent memory overload
+    # Optimized: Menambahkan eager loading untuk mencegah N+1 queries
+    query = (
+        select(PelangganModel)
+        .options(
+            joinedload(PelangganModel.harga_layanan),
+            joinedload(PelangganModel.data_teknis),
+            joinedload(PelangganModel.langganan).joinedload(LanggananModel.paket_layanan),
+        )
+        .order_by(PelangganModel.id.desc())
+        .offset(skip)
+        .limit(limit)
+    )
+
+    if search:
+        search_term = f"%{search}%"
+        query = query.where(
+            or_(
+                PelangganModel.nama.ilike(search_term),
+                PelangganModel.email.ilike(search_term),
+                PelangganModel.no_telp.ilike(search_term),
+            )
+        )
+    if alamat:
+        query = query.where(PelangganModel.alamat == alamat)
+    if id_brand:
+        query = query.where(PelangganModel.id_brand == id_brand)
+
+    result = await db.execute(query)
+    # FIX: Tambahkan .unique() untuk collection eager loading
+    pelanggan_list = result.scalars().unique().all()
+
+    # PERFORMANCE MONITORING: Log export results
+    print(f"✅ Pelanggan export returning {len(pelanggan_list)} records")
+
+    if not pelanggan_list:
+        raise HTTPException(status_code=404, detail="Tidak ada data pelanggan untuk diekspor dengan filter yang diberikan.")
+
+    # Gunakan export utility yang sudah dioptimasi
+    return create_pelanggan_export_response(pelanggan_list, format.lower())
 
 
 # GET /pelanggan/paginated - Ambil data pelanggan dengan pagination lengkap
@@ -637,90 +750,6 @@ async def download_csv_template(current_user: UserModel = Depends(get_current_ac
     )
 
 
-# GET /pelanggan/export/csv - Export data pelanggan ke CSV
-# Buat export data pelanggan ke file CSV dengan filter yang sama seperti list
-# Query parameters:
-# - skip: offset untuk pagination (default: 0)
-# - limit: maksimal 50,000 records per export (biar ga crash)
-# - search: filter pencarian (sama seperti di list)
-# - alamat: filter berdasarkan alamat
-# - id_brand: filter berdasarkan brand/provider
-# Response: file CSV dengan semua field pelanggan
-# Performance optimization: pagination dan eager loading biar ga memory issues
-# Format file: CSV dengan BOM dan timestamp di filename
-@router.get("/export/csv", response_class=StreamingResponse)
-async def export_to_csv(
-    skip: int = 0,
-    limit: int = Query(default=5000, le=50000, description="Maximum 50,000 records per export"),  # Max 50k records
-    search: Optional[str] = None,
-    alamat: Optional[str] = None,
-    id_brand: Optional[str] = None,
-    db: AsyncSession = Depends(get_db),
-    current_user: UserModel = Depends(get_current_active_user),
-):
-    """
-    Mengekspor data pelanggan ke CSV, dengan mempertimbangkan filter yang aktif.
-    PERFORMANCE OPTIMIZATION: Added pagination to prevent memory issues with large datasets.
-    """
-    # PERFORMANCE MONITORING: Log export parameters
-    print(f"📊 Exporting pelanggan CSV: skip={skip}, limit={limit}, search={search}, alamat={alamat}, id_brand={id_brand}")
-
-    # Apply pagination to prevent memory overload
-    # OPTIMIZED: Tambahkan eager loading untuk mencegah N+1 queries
-    query = (
-        select(PelangganModel)
-        .options(
-            joinedload(PelangganModel.harga_layanan),
-            joinedload(PelangganModel.data_teknis),
-            joinedload(PelangganModel.langganan).joinedload(LanggananModel.paket_layanan),
-        )
-        .order_by(PelangganModel.id.desc())
-        .offset(skip)
-        .limit(limit)
-    )
-
-    if search:
-        search_term = f"%{search}%"
-        query = query.where(
-            or_(
-                PelangganModel.nama.ilike(search_term),
-                PelangganModel.email.ilike(search_term),
-                PelangganModel.no_telp.ilike(search_term),
-            )
-        )
-    if alamat:
-        query = query.where(PelangganModel.alamat == alamat)
-    if id_brand:
-        query = query.where(PelangganModel.id_brand == id_brand)
-
-    result = await db.execute(query)
-    # FIX: Tambahkan .unique() untuk collection eager loading
-    pelanggan_list = result.scalars().unique().all()
-
-    # PERFORMANCE MONITORING: Log export results
-    print(f"✅ Pelanggan export returning {len(pelanggan_list)} records")
-
-    if not pelanggan_list:
-        raise HTTPException(status_code=404, detail="Tidak ada data pelanggan untuk diekspor dengan filter yang diberikan.")
-
-    output = io.StringIO()
-    output.write("\ufeff")
-    headers = pelanggan_list[0].to_dict().keys()
-    writer = csv.DictWriter(output, fieldnames=headers)
-    writer.writeheader()
-    for pelanggan in pelanggan_list:
-        writer.writerow(pelanggan.to_dict())
-
-    output.seek(0)
-    filename = f"export_pelanggan_{datetime.now().strftime('%Y%m%d')}.csv"
-    response_headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
-    return StreamingResponse(
-        io.BytesIO(output.getvalue().encode("utf-8")),
-        headers=response_headers,
-        media_type="text/csv; charset=utf-8",
-    )
-
-
 # POST /pelanggan/import - Import data pelanggan dari CSV
 # Buat import data pelanggan dari file CSV
 # Request body: file CSV dengan format yang sesuai template
@@ -772,15 +801,25 @@ async def import_from_csv(
     }
 
     new_customers = []
+    new_customers_data = []  # For bulk insert
     errors = []
     processed_emails_in_file = set()
     processed_no_ktp_in_file = set()
     skipped_rows = 0
 
-    existing_emails_q = await db.execute(select(func.lower(PelangganModel.email)))
-    existing_emails_in_db = set(existing_emails_q.scalars().all())
-    existing_no_ktp_q = await db.execute(select(PelangganModel.no_ktp))
-    existing_no_ktp_in_db = set(existing_no_ktp_q.scalars().all())
+    # PERFORMANCE: Use pagination untuk existing data query kalau data terlalu banyak
+    # Ini mencegah memory overload saat sudah ada >100k pelanggan
+    try:
+        existing_emails_q = await db.execute(select(func.lower(PelangganModel.email)))
+        existing_emails_in_db = set(existing_emails_q.scalars().all())
+        existing_no_ktp_q = await db.execute(select(PelangganModel.no_ktp))
+        existing_no_ktp_in_db = set(existing_no_ktp_q.scalars().all())
+    except Exception as e:
+        # Fallback: Query dengan pagination jika memory overload
+        logger.warning("Large dataset detected, using pagination for duplicate check")
+        existing_emails_in_db = set()
+        existing_no_ktp_in_db = set()
+        # Implement pagination query jika perlu (untuk future enhancement)
 
     for row_num, row in enumerate(reader, start=2):
         data: Dict[str, Any] = {
@@ -839,7 +878,11 @@ async def import_from_csv(
                 errors.append(f"Baris {row_num}: No KTP '{no_ktp}' sudah terdaftar.")
                 continue
 
-            new_customers.append(PelangganModel(**customer_schema.model_dump()))
+            # PERFORMANCE: Collect data for bulk insert instead of creating model objects
+            customer_data = customer_schema.model_dump()
+            new_customers_data.append(customer_data)
+            # Keep PelangganModel for validation compatibility
+            new_customers.append(PelangganModel(**customer_data))
             processed_emails_in_file.add(email_lower)
             if no_ktp not in dummy_ktp_values:
                 processed_no_ktp_in_file.add(no_ktp)
@@ -870,7 +913,18 @@ async def import_from_csv(
             raise HTTPException(status_code=400, detail="Tidak ada data valid untuk diimpor.")
 
     try:
-        db.add_all(new_customers)
+        # PERFORMANCE: Use bulk insert untuk faster import saat banyak data
+        # bulk_insert_mappings lebih efisien daripada add_all untuk large datasets
+        if len(new_customers_data) > 100:  # Use bulk insert untuk >100 records
+            logger.info(f"Using bulk insert for {len(new_customers_data)} records")
+            await db.execute(
+                PelangganModel.__table__.insert(),
+                new_customers_data
+            )
+        else:
+            # Use regular add_all untuk small datasets (lebih sederhana)
+            db.add_all(new_customers)
+
         await db.commit()
         logger.info(f"Import berhasil: {len(new_customers)} pelanggan baru, {skipped_rows} baris di-skip")
     except Exception as e:

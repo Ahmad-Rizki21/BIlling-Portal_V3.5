@@ -46,6 +46,9 @@ from typing import List
 from ..models.permission import Permission as PermissionModel
 from ..database import get_db
 from ..schemas.permission import Permission as PermissionSchema
+# tambahkan import untuk auth
+from ..models.user import User as UserModel
+from ..auth import get_current_active_user
 
 # --- PERBAIKAN DI SINI ---
 from ..config import settings  # Impor 'settings' bukan 'MENUS'
@@ -58,47 +61,12 @@ router = APIRouter(
 
 
 @router.post("/generate", response_model=List[PermissionSchema])
-async def generate_permissions(db: AsyncSession = Depends(get_db)):
+async def generate_permissions(
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user)  # PROTECTED
+):
     """
     Generate All System Permissions - Otomatis buat permission dari config
-
-    Function ini generate semua permissions yang dibutuhkan sistem berdasarkan
-    configuration dari settings.py. Ini一次性buat semua permission buat menus,
-    widgets, dan system features.
-
-    Generation Logic:
-    1. Menu Permissions: CRUD operations untuk setiap menu
-    2. Widget Permissions: View access untuk setiap dashboard widget
-    3. System Feature Permissions: CRUD untuk fitur sistem lainnya
-
-    Permission Patterns:
-    - Menus: {action}_{menu_name} (create_dashboard, edit_billing, dll)
-    - Widgets: view_widget_{widget_name} (view_widget_stats, dll)
-    - Features: {action}_{feature_name} (create_user, delete_role, dll)
-
-    Idempotent Operation:
-    - Cek existing permission sebelum create
-    - Hanya buat permission yang belum ada
-    - Safe buat dijalankan berulang kali
-    - Return list permission yang baru dibuat
-
-    Use Cases:
-    - Initial setup aplikasi baru
-    - Add new menu/widget/feature
-    - Permission system maintenance
-    - Development environment setup
-
-    Security Features:
-    - Comprehensive permission coverage
-    - Consistent naming conventions
-    - No duplicate permissions
-    - Atomic database operations
-
-    Returns:
-        List[PermissionSchema]: Permission yang baru dibuat (kosong kalau semua sudah ada)
-
-    Raises:
-        HTTPException 200: Kalau semua permission sudah ada
     """
     permissions_created = []
 
@@ -162,7 +130,10 @@ async def generate_permissions(db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/", response_model=List[PermissionSchema])
-async def get_permissions(db: AsyncSession = Depends(get_db)):
+async def get_permissions(
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user)  # PROTECTED
+):
     """
     Get All Permissions - Retrieve complete permission list
 

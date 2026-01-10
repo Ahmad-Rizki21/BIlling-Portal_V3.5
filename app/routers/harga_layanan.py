@@ -51,7 +51,7 @@ async def get_all_brands(response: Response, db: AsyncSession = Depends(get_db))
     Cache Strategy: Static data di-cache selama 1 jam untuk mengurangi database load.
     """
     # Add cache headers untuk browser cache
-    response.headers["Cache-Control"] = "public, max-age=300"  # 5 menit browser cache
+    # response.headers["Cache-Control"] = "public, max-age=300"  # REMOVED to fix stale data issues
 
     # Try to get from cache first
     try:

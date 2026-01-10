@@ -100,10 +100,16 @@ async def generate_single_invoice(db: AsyncSession, langganan: LanggananModel) -
             "tgl_invoice": date.today(),
             "tgl_jatuh_tempo": langganan.tgl_jatuh_tempo,
             "status_invoice": "Belum Dibayar",
+            "invoice_type": "automatic",  # Invoice dari background job
         }
 
         db_invoice = InvoiceModel(**new_invoice_data)
-        # ... (rest of the function)
+        
+        # PENTING: Add & Flush dulu supaya object db_invoice mendapatkan ID dari database
+        # Ini mencegah issue "external_id" berujung "None" di Xendit (contoh: .../PARAMA/None)
+        db.add(db_invoice)
+        await db.flush()
+        await db.refresh(db_invoice)
 
         deskripsi_xendit = ""
         jatuh_tempo_str_lengkap = datetime.combine(date.fromisoformat(str(db_invoice.tgl_jatuh_tempo)), datetime.min.time()).strftime("%d/%m/%Y")
@@ -122,7 +128,9 @@ async def generate_single_invoice(db: AsyncSession, langganan: LanggananModel) -
 
                 start_day = invoice_date.day
                 end_day = jatuh_tempo_date.day
-                periode_prorate_str = datetime.combine(jatuh_tempo_date, datetime.min.time()).strftime("%B %Y")
+                # FIX: Periode prorate harus diambil dari invoice_date, bukan jatuh_tempo_date
+                # karena invoice_date adalah tanggal mulai langganan (tanggal pembuatan invoice)
+                periode_prorate_str = datetime.combine(invoice_date, datetime.min.time()).strftime("%B %Y")
                 periode_berikutnya_str = datetime.combine(jatuh_tempo_date + relativedelta(months=1), datetime.min.time()).strftime("%B %Y")
 
                 deskripsi_xendit = (
@@ -137,7 +145,9 @@ async def generate_single_invoice(db: AsyncSession, langganan: LanggananModel) -
 
                 start_day = invoice_date.day
                 end_day = jatuh_tempo_date.day
-                periode_str = datetime.combine(jatuh_tempo_date, datetime.min.time()).strftime("%B %Y")
+                # FIX: Periode prorate harus diambil dari invoice_date, bukan jatuh_tempo_date
+                # karena invoice_date adalah tanggal mulai langganan (tanggal pembuatan invoice)
+                periode_str = datetime.combine(invoice_date, datetime.min.time()).strftime("%B %Y")
                 deskripsi_xendit = (
                     f"Biaya berlangganan internet up to {paket.kecepatan} Mbps, "
                     f"Periode Tgl {start_day}-{end_day} {periode_str}"
@@ -289,10 +299,23 @@ async def job_generate_invoices() -> None:
                 for langganan in subscriptions_batch:
                     # Cek dari data yang sudah di-prefetch, bukan query baru
                     if langganan.pelanggan_id not in existing_invoices_pelanggan_ids:
-                        await generate_single_invoice(db, langganan)
-                        total_invoices_created += 1
+                        # FIX RACE CONDITION: Commit per invoice
+                        # Masalah: Jika pakai batch commit, ada jeda waktu dimana invoice sudah terkirim ke Xendit (dan User)
+                        # tapi BELUM ada di DB. Jika user bayar kilat, callback masuk dan invoice "Not Found".
+                        try:
+                            # Generate dan kirim ke Xendit
+                            await generate_single_invoice(db, langganan)
+                            
+                            # COMMIT SEGERA!
+                            # Supaya saat user terima WA dan bayar, invoice sudah ready di DB untuk terima callback.
+                            await db.commit()
+                            total_invoices_created += 1
+                            
+                        except Exception as e:
+                            # Error handling per item
+                            logger.error(f"❌ Gagal generate invoice untuk Langganan ID {langganan.id}: {e}")
+                            await db.rollback()
 
-                await db.commit()
                 offset += BATCH_SIZE
 
             except Exception as e:
@@ -367,7 +390,7 @@ async def job_suspend_services() -> None:
     # Cek apakah hari ini adalah tanggal 5 untuk melakukan suspend utama
     is_main_suspend_day = current_date.day == 5
 
-    # Tambahkan retroactive mechanism untuk tanggal 6-10 (jika scheduler gagal tanggal 5)
+    # Menambahkan retroactive mechanism untuk tanggal 6-10 (jika scheduler gagal tanggal 5)
     is_retroactive_day = 6 <= current_date.day <= 10
 
     if not (is_main_suspend_day or is_retroactive_day):
@@ -452,20 +475,29 @@ async def job_suspend_services() -> None:
                     data_teknis = langganan.pelanggan.data_teknis
                     mikrotik_success = False
                     mikrotik_error_msg = None
+                    mikrotik_server_info = None
+                    original_status = langganan.status  # Simpan status original untuk rollback
 
-                    # Opsi 2: Database First - Coba Mikrotik dulu tapi DB priority
+                    # STEP 1: SUSPEND KE MIKROTIK DULU
                     if data_teknis:
                         try:
-                            # 1. Coba update Mikrotik DULU (tapi tidak akan rollback DB jika gagal)
-                            logger.info(f"🔄 Mencoba update Mikrotik untuk Langganan ID: {langganan.id}...")
+                            # Simpan info Mikrotik server untuk rollback nanti jika perlu
+                            server_id = data_teknis.mikrotik_server_id
+                            if server_id:
+                                from ..models.mikrotik_server import MikrotikServer as MikrotikServerModel
+                                mikrotik_server_info = await db.get(MikrotikServerModel, server_id)
+                            
+                            # Update Mikrotik: disable + profile SUSPENDED
+                            logger.info(f"🔄 [STEP 1/2] Suspend ke Mikrotik untuk Langganan ID: {langganan.id}...")
                             await mikrotik_service.trigger_mikrotik_update(db, langganan, data_teknis, data_teknis.id_pelanggan)
                             mikrotik_success = True
-                            logger.info(f"✅ Mikrotik update SUKSES untuk Langganan ID: {langganan.id}")
+                            logger.info(f"✅ [STEP 1/2] Mikrotik suspend SUKSES untuk Langganan ID: {langganan.id}")
 
                         except Exception as mikrotik_error:
-                            # Log error tapi LANJUTKAN proses DB (business priority)
+                            # Mikrotik gagal, tapi tetap lanjut update DB
                             mikrotik_error_msg = str(mikrotik_error)
-                            logger.error(f"❌ Mikrotik update GAGAL untuk Langganan ID: {langganan.id}, tetapi suspend di DB akan tetap dijalankan. Error: {mikrotik_error}")
+                            logger.error(f"❌ [STEP 1/2] Mikrotik suspend GAGAL untuk Langganan ID: {langganan.id}. Error: {mikrotik_error}")
+                            logger.info(f"📝 Suspend di DB akan tetap dijalankan (business priority)")
 
                             # Tandai untuk retry otomatis nanti
                             if data_teknis:
@@ -475,8 +507,11 @@ async def job_suspend_services() -> None:
                     else:
                         logger.warning(f"⚠️ Data Teknis tidak ditemukan untuk langganan ID {langganan.id}, suspend hanya di DB.")
 
-                    # 2. UPDATE DATABASE (Priority - pastikan ini selalu jalan)
+                    # STEP 2: UPDATE DATABASE
+                    db_success = False
                     try:
+                        logger.info(f"🔄 [STEP 2/2] Update database untuk Langganan ID: {langganan.id}...")
+                        
                         # Update invoice menjadi kadaluarsa
                         update_invoice_stmt = (
                             update(InvoiceModel)
@@ -487,28 +522,67 @@ async def job_suspend_services() -> None:
                         invoice_update_result: Result = await db.execute(update_invoice_stmt)
                         total_invoices_overdue += invoice_update_result.rowcount  # type: ignore
 
-                        # Update langganan menjadi Suspended (ini PASTI jalan)
+                        # Update langganan menjadi Suspended
                         langganan.status = "Suspended"
                         db.add(langganan)
 
                         # Commit perubahan DB
                         await db.commit()
-                        logger.info(f"✅ DB update SUKSES untuk Langganan ID: {langganan.id}. Status = Suspended.")
+                        db_success = True
+                        logger.info(f"✅ [STEP 2/2] Database update SUKSES untuk Langganan ID: {langganan.id}. Status = Suspended.")
 
                         total_services_suspended += 1
 
+                        # Log hasil akhir
                         if mikrotik_success:
-                            logger.info(f"🔒 Layanan SUKSES di-suspend lengkap (DB + Mikrotik) untuk: {langganan.pelanggan.nama}")
+                            logger.info(f"🔒 ✅ SUSPEND LENGKAP (Mikrotik + DB) untuk: {langganan.pelanggan.nama}")
                         else:
-                            logger.warning(f"⚠️ Layanan di-suspend di DB saja (Mikrotik gagal) untuk: {langganan.pelanggan.nama}")
+                            logger.warning(f"⚠️ SUSPEND PARTIAL (DB saja, Mikrotik gagal) untuk: {langganan.pelanggan.nama}")
                             if mikrotik_error_msg:
-                                logger.warning(f"📝 Mikrotik error detail: {mikrotik_error_msg}")
+                                logger.warning(f"📝 Mikrotik error: {mikrotik_error_msg}")
 
                     except Exception as db_error:
-                        # Ini ERROR SEVERE - tidak bisa update DB
-                        logger.error(f"❌ KRITIK: Gagal update DB untuk Langganan ID {langganan.id}. Error: {db_error}")
+                        # DATABASE GAGAL - INI CRITICAL!
+                        logger.error(f"❌ CRITICAL: Database update GAGAL untuk Langganan ID {langganan.id}. Error: {db_error}")
                         await db.rollback()
-                        logger.error(f"🔄 Rollback DB SELESAI untuk Langganan ID: {langganan.id}.")
+                        logger.error(f"🔄 Database rollback SELESAI untuk Langganan ID: {langganan.id}")
+
+                        # ROLLBACK MIKROTIK jika sebelumnya sukses
+                        if mikrotik_success and data_teknis and mikrotik_server_info:
+                            try:
+                                logger.warning(f"🔄 [ROLLBACK] Mencoba re-enable user di Mikrotik karena DB gagal...")
+                                
+                                # Kembalikan status ke original untuk trigger re-enable
+                                langganan.status = original_status
+                                
+                                # Trigger update ke Mikrotik untuk re-enable
+                                await mikrotik_service.trigger_mikrotik_update(
+                                    db, 
+                                    langganan, 
+                                    data_teknis, 
+                                    data_teknis.id_pelanggan
+                                )
+                                
+                                logger.info(f"✅ [ROLLBACK] Mikrotik rollback SUKSES - User di-enable kembali: {langganan.pelanggan.nama}")
+                                logger.info(f"📊 Status konsisten: Mikrotik={original_status}, DB={original_status}")
+                                
+                            except Exception as rollback_error:
+                                # Rollback Mikrotik juga gagal - ini VERY CRITICAL!
+                                logger.error(f"❌ VERY CRITICAL: Mikrotik rollback GAGAL untuk Langganan ID {langganan.id}!")
+                                logger.error(f"📝 Rollback error: {rollback_error}")
+                                logger.error(f"⚠️ INCONSISTENT STATE: User suspended di Mikrotik tapi DB masih {original_status}")
+                                logger.error(f"🔧 ACTION REQUIRED: Manual intervention needed untuk user: {langganan.pelanggan.nama}")
+                                
+                                # Tandai untuk manual review
+                                if data_teknis:
+                                    data_teknis.mikrotik_sync_pending = True
+                                    try:
+                                        db.add(data_teknis)
+                                        await db.commit()
+                                        logger.info(f"🚨 Ditandai untuk manual review: Langganan ID {langganan.id}")
+                                    except:
+                                        pass  # Ignore jika commit gagal lagi
+                        
                         # Lanjut ke pelanggan berikutnya
                         continue
 
@@ -1336,3 +1410,44 @@ async def job_suspend_services_by_location() -> None:
             await db.rollback()
             logger.error(f"❌ Critical error in location-based suspend: {str(e)}")
             raise
+
+
+async def job_archive_historical_invoices() -> None:
+    """
+    Job scheduler untuk mengarsipkan invoice lama ke tabel invoices_archive.
+    Jalan secara berkala (misalnya sekali seminggu atau sebulan) untuk
+    memindahkan invoice yang sudah Lunas/Kadaluarsa/Batal dan lebih lama
+    dari threshold (default 12 bulan) ke tabel arsip.
+
+    Tujuan:
+    - Mengurangi ukuran tabel invoices utama.
+    - Meningkatkan performa query operasional harian.
+    - Menyimpan data historis untuk keperluan laporan.
+
+    Args:
+        months_threshold (int): Ambang batas usia invoice dalam bulan.
+                                Default 12 bulan.
+    """
+    from app.archive_invoice_job import archive_old_invoices
+    log_scheduler_event(logger, "job_archive_historical_invoices", "started")
+    logger.info("Memulai proses arsip invoice historis...")
+
+    MONTHS_THRESHOLD = 12  # Ambang batas default 12 bulan
+
+    try:
+        await archive_old_invoices(months_threshold=MONTHS_THRESHOLD)
+        log_scheduler_event(
+            logger,
+            "job_archive_historical_invoices",
+            "completed",
+            f"Berhasil mengarsipkan invoice lebih lama dari {MONTHS_THRESHOLD} bulan.",
+        )
+    except Exception as e:
+        logger.error(f"[FAIL] Scheduler 'job_archive_historical_invoices' gagal. Error: {e}")
+        log_scheduler_event(
+            logger,
+            "job_archive_historical_invoices",
+            "failed",
+            f"Gagal mengarsipkan invoice: {e}",
+        )
+        # Tidak perlu rollback karena archive_old_invoices handle session sendiri

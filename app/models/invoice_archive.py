@@ -1,27 +1,11 @@
-# ====================================================================
-# MODEL INVOICE - BILLING & PAYMENT MANAGEMENT
-# ====================================================================
-# Model ini mendefinisikan tabel invoices untuk menyimpan semua data
-# tagihan/invoice pelanggan layanan internet FTTH.
-#
-# Hubungan dengan tabel lain:
-# - pelanggan : Customer yang punya invoice ini
-#
-# Status Invoice:
-# - Belum Dibayar : Invoice baru yang belum dibayar pelanggan
-# - Lunas        : Invoice yang sudah dibayar penuh
-# - Expired      : Invoice yang melewati batas waktu pembayaran
-# - Batal        : Invoice yang dibatalkan
-#
-# Payment Gateway Integration:
-# - Xendit API untuk pembayaran online
-# - Link pembayaran yang kadaluarsa otomatis
-# - Callback system untuk update status pembayaran
-# ====================================================================
-
+"""
+Model untuk tabel arsip invoice.
+Digunakan untuk menyimpan data invoice lama yang jarang diakses
+untuk mengurangi beban tabel invoices utama.
+"""
 from __future__ import annotations
 from typing import TYPE_CHECKING
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from sqlalchemy import (
     BigInteger,
     String,
@@ -44,61 +28,33 @@ else:
     from ..database import Base
 
 if TYPE_CHECKING:
-    from .pelanggan import Pelanggan
+    from .pelanggan import Pelanggan # Tidak digunakan di arsip, tapi tetap bisa diimpor jika diperlukan
 
 
-class Invoice(Base):
+class InvoiceArchive(Base):
     """
-    Model tabel Invoice - nyimpen semua data tagihan pelanggan.
-    Ini adalah tabel krusial buat sistem billing dan pembayaran.
+    Model tabel InvoiceArchive - nyimpen data invoice historis.
+    Struktur disamakan dengan Invoice utama untuk kemudahan migrasi dan pencarian.
     """
-    __tablename__ = "invoices"
+    __tablename__ = "invoices_archive"
 
-    # ====================================================================
-    # DATABASE INDEXES - OPTIMIZED FOR BILLING PERFORMANCE
-    # ====================================================================
-    # Index strategy yang dioptimasi buat operasi billing dan dashboard finance.
-    # Total: 10 indexes buat balance antara query performance dan write speed.
-    # Dari 15+ index jadi 10 aja biar operasi invoice lebih cepat.
+    # Pastikan nama indeks berbeda jika dibutuhkan untuk menghindari konflik
     __table_args__ = (
-        # Constraint untuk validasi data
-        CheckConstraint("pelanggan_id IS NOT NULL", name="ck_invoice_pelanggan_id_not_null"),  # Pastikan pelanggan_id tidak kosong
-
-        # Index buat query CORE yang sering dipake finance team
-        Index("idx_invoice_customer_status", "pelanggan_id", "status_invoice"),  # Dashboard pelanggan per status
-        Index("idx_invoice_status_brand", "status_invoice", "brand"),              # Filter invoice berdasarkan brand
-        Index("idx_invoice_date_range", "tgl_invoice", "tgl_jatuh_tempo"),        # Filter invoice berdasarkan tanggal
-        Index("idx_invoice_payment_tracking", "status_invoice", "paid_at"),        # Tracking pembayaran
-
-        # Index buat PERFORMANCE dashboard dan laporan keuangan
-        Index("idx_invoice_revenue_analysis", "status_invoice", "tgl_invoice", "total_harga"),  # Analisis pendapatan
-        Index("idx_invoice_late_payment", "paid_at", "tgl_jatuh_tempo"),                          # Analisis pembayaran terlambat
-        Index("idx_invoice_brand_revenue", "brand", "tgl_invoice", "total_harga"),               # Laporan pendapatan per brand
-
-        # Index buat INTEGRASI payment gateway
-        Index("idx_invoice_xendit_lookup", "xendit_id", "status_invoice"),        # Lookup invoice dari Xendit callback
-        Index("idx_invoice_number_lookup", "invoice_number", "status_invoice"),    # Search invoice by number
-        Index("idx_invoice_payment_method", "metode_pembayaran", "status_invoice"), # Analisis metode pembayaran
-
-        # Index tambahan untuk optimasi dashboard loyalty query
-        Index("idx_invoice_late_payment_analysis", "pelanggan_id", "paid_at", "tgl_jatuh_tempo"),  # Loyalty analysis
-        Index("idx_invoice_outstanding_analysis", "pelanggan_id", "status_invoice"),                   # Outstanding analysis
-
-        # Index untuk Reinvoice Tracking System
-        Index("idx_invoice_reinvoice_tracking", "is_reinvoice", "status_invoice"),                    # Tracking reinvoice
-        Index("idx_invoice_original_lookup", "original_invoice_id", "is_reinvoice"),                   # Lookup invoice asli dari reinvoice
+        # Constraint untuk validasi data (jika relevan)
+        CheckConstraint("pelanggan_id IS NOT NULL", name="ck_invoice_archive_pelanggan_id_not_null"),
+        # Indeks bisa disesuaikan, mungkin tidak perlu semua untuk arsip
+        Index("idx_archive_pelanggan_status", "pelanggan_id", "status_invoice"),  # Untuk pencarian pelanggan
+        Index("idx_archive_status_tanggal", "status_invoice", "tgl_invoice"),     # Untuk laporan historis
+        Index("idx_archive_tanggal", "tgl_invoice"),                              # Filter rentang waktu
+        Index("idx_archive_invoice_number", "invoice_number"),                    # Cari berdasarkan nomor
     )
 
-    # ====================================================================
-    # FIELD DEFINITIONS - DATA INVOICE
-    # ====================================================================
-
-    # Primary Key - ID unik buat setiap invoice
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, index=True)
+    # Field disalin dari model Invoice utama
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, index=True, autoincrement=True) # Pastikan auto-increment
 
     # Data Identitas Invoice
-    invoice_number: Mapped[str] = mapped_column(String(191), unique=True, index=True)  # Nomor invoice unik (contoh: "INV/2024/001")
-    pelanggan_id: Mapped[int] = mapped_column(ForeignKey("pelanggan.id"), nullable=False)  # Foreign key ke pelanggan
+    invoice_number: Mapped[str] = mapped_column(String(191), unique=True, index=True)
+    pelanggan_id: Mapped[int] = mapped_column(ForeignKey("pelanggan.id"), nullable=False)  # Foreign key ke pelanggan - Harus nullable=False seperti di Invoice
 
     # Data Pelanggan (Redundant buat performance & history)
     id_pelanggan: Mapped[str] = mapped_column(String(255))  # ID pelanggan (disimpan buat history)
@@ -119,12 +75,12 @@ class Invoice(Base):
     paid_amount: Mapped[float | None] = mapped_column(Numeric(15, 2))    # Jumlah yang sudah dibayar
     paid_at: Mapped[datetime | None] = mapped_column(TIMESTAMP)          # Waktu pembayaran dilakukan
 
-    # Data Payment Gateway (Xendit Integration)
+    # Data Payment Gateway (Xendit Integration) - Mungkin sudah tidak relevan di arsip
     xendit_id: Mapped[str | None] = mapped_column(String(191))           # ID dari Xendit API
     xendit_external_id: Mapped[str | None] = mapped_column(String(191))  # External ID buat Xendit
     is_processing: Mapped[bool] = mapped_column(Boolean, default=False)  # Flag buat hindari duplicate processing
 
-    # Retry System - Tracking Invoice Gagal
+    # Retry System - Mungkin sudah tidak relevan di arsip
     xendit_retry_count: Mapped[int] = mapped_column(BigInteger, default=0)  # Jumlah retry yang sudah dilakukan
     xendit_last_retry: Mapped[datetime | None] = mapped_column(DateTime)   # Waktu retry terakhir
     xendit_error_message: Mapped[str | None] = mapped_column(Text)         # Error message terakhir
@@ -143,14 +99,10 @@ class Invoice(Base):
     updated_at: Mapped[datetime | None] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now()
     )  # Waktu invoice diupdate
-    deleted_at: Mapped[datetime | None] = mapped_column(TIMESTAMP)  # Waktu invoice dihapus (soft delete)
+    # deleted_at: Mapped[datetime | None] = mapped_column(TIMESTAMP)  # Soft delete (jika diperlukan di arsip, atau biarkan NULL)
 
-    # ====================================================================
-    # RELATIONSHIPS - HUBUNGAN TABEL
-    # ====================================================================
-
-    # Relasi ke Pelanggan - Customer yang punya invoice ini
-    pelanggan = relationship("Pelanggan", back_populates="invoices")
+    # Relasi ke Pelanggan - Penting untuk search by name di Archive
+    pelanggan: Mapped["Pelanggan"] = relationship("Pelanggan")
 
     def to_dict(self):
         return {c.name: getattr(self, c.name) for c in self.__table__.columns}
@@ -162,7 +114,7 @@ class Invoice(Base):
         - Jika hari ini <= tanggal 6 bulan berikutnya: "Belum Dibayar" (link aktif)
         - Jika hari ini >= tanggal 7 bulan berikutnya: "Expired" (link tidak aktif)
         """
-        from datetime import date
+        from datetime import date, timedelta, datetime
 
         today = date.today()
 
@@ -230,4 +182,3 @@ class Invoice(Base):
         Memudahkan serialisasi ke schema tanpa lookup list di frontend.
         """
         return self.pelanggan.nama if self.pelanggan else None
-

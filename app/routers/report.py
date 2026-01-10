@@ -10,6 +10,7 @@ from typing import List, Optional
 # Impor model, skema, dan dependensi yang relevan
 from ..schemas.report import RevenueReportResponse, InvoiceReportItem
 from ..models.invoice import Invoice as InvoiceModel
+from ..models.invoice_archive import InvoiceArchive as InvoiceArchiveModel
 from ..models.pelanggan import Pelanggan as PelangganModel
 from ..models.user import User as UserModel
 from ..database import get_db
@@ -46,6 +47,9 @@ async def get_revenue_report(
         filter_conditions.append(PelangganModel.id_brand == id_brand)
 
     # --- QUERY UNTUK SUMMARY (TOTAL PENDAPATAN & JUMLAH INVOICE) ---
+    # --- QUERY UNTUK SUMMARY (TOTAL PENDAPATAN & JUMLAH INVOICE) ---
+    
+    # 1. Query Active Invoices
     summary_query = (
         select(
             func.coalesce(func.sum(InvoiceModel.total_harga), 0.0),
@@ -54,7 +58,31 @@ async def get_revenue_report(
         .join(InvoiceModel.pelanggan)
         .where(and_(*filter_conditions))
     )
-    total_pendapatan, total_invoices = (await db.execute(summary_query)).one()
+    active_pendapatan, active_invoices = (await db.execute(summary_query)).one()
+
+    # 2. Query Archive Invoices
+    archive_filter_conditions = [
+        InvoiceArchiveModel.status_invoice == "Lunas",
+        InvoiceArchiveModel.paid_at.between(start_datetime, end_datetime),
+    ]
+    if alamat:
+        archive_filter_conditions.append(PelangganModel.alamat == alamat)
+    if id_brand:
+        archive_filter_conditions.append(PelangganModel.id_brand == id_brand)
+
+    archive_summary_query = (
+        select(
+            func.coalesce(func.sum(InvoiceArchiveModel.total_harga), 0.0),
+            func.count(InvoiceArchiveModel.id),
+        )
+        .join(InvoiceArchiveModel.pelanggan)
+        .where(and_(*archive_filter_conditions))
+    )
+    archive_pendapatan, archive_invoices = (await db.execute(archive_summary_query)).one()
+
+    # 3. Combine Results
+    total_pendapatan = (active_pendapatan or 0) + (archive_pendapatan or 0)
+    total_invoices = (active_invoices or 0) + (archive_invoices or 0)
 
     # HAPUS SEMUA LOGIKA UNTUK MENGAMBIL RINCIAN DARI ENDPOINT INI
     # KITA AKAN BUAT ENDPOINT BARU UNTUK ITU
@@ -94,8 +122,9 @@ async def get_revenue_report_details(
         filter_conditions.append(PelangganModel.id_brand == id_brand)
 
     # --- QUERY UNTUK RINCIAN INVOICE (DENGAN PAGINASI) ---
-    # Query untuk mendapatkan invoice dan informasi pelanggan sekaligus
-    invoices_query = (
+    
+    # 1. Query Active Invoices (Tanpa limit/offset dulu)
+    active_query = (
         select(
             InvoiceModel.id,
             InvoiceModel.invoice_number,
@@ -110,15 +139,54 @@ async def get_revenue_report_details(
         )
         .join(InvoiceModel.pelanggan)
         .where(and_(*filter_conditions))
-        .order_by(InvoiceModel.paid_at.desc())
-        .offset(skip)
     )
 
-    if limit is not None:
-        invoices_query = invoices_query.limit(limit)
+    # 2. Query Archive Invoices
+    archive_filter_conditions = [
+        InvoiceArchiveModel.status_invoice == "Lunas",
+        InvoiceArchiveModel.paid_at.between(start_datetime, end_datetime),
+    ]
+    if alamat:
+        archive_filter_conditions.append(PelangganModel.alamat == alamat)
+    if id_brand:
+        archive_filter_conditions.append(PelangganModel.id_brand == id_brand)
 
-    invoices_result = await db.execute(invoices_query)
-    invoice_pelanggan_data = invoices_result.fetchall()
+    archive_query = (
+        select(
+            InvoiceArchiveModel.id,
+            InvoiceArchiveModel.invoice_number,
+            InvoiceArchiveModel.total_harga,
+            InvoiceArchiveModel.paid_at,
+            InvoiceArchiveModel.metode_pembayaran,
+            InvoiceArchiveModel.tgl_jatuh_tempo,
+            InvoiceArchiveModel.pelanggan_id,
+            PelangganModel.nama,
+            PelangganModel.alamat,
+            PelangganModel.id_brand,
+        )
+        .join(InvoiceArchiveModel.pelanggan)
+        .where(and_(*archive_filter_conditions))
+    )
+
+    # Execute both queries
+    active_result = await db.execute(active_query)
+    archive_result = await db.execute(archive_query)
+    
+    active_data = active_result.fetchall()
+    archive_data = archive_result.fetchall()
+
+    # 3. Combine and Sort
+    all_data = active_data + archive_data
+    # Sort by paid_at desc
+    all_data.sort(key=lambda x: x.paid_at if x.paid_at else datetime.min, reverse=True)
+
+    # 4. Apply Pagination
+    if limit is not None:
+        start_idx = skip
+        end_idx = skip + limit
+        invoice_pelanggan_data = all_data[start_idx:end_idx]
+    else:
+        invoice_pelanggan_data = all_data
 
     rincian_invoice_list = []
     wib_timezone = pytz.timezone("Asia/Jakarta")

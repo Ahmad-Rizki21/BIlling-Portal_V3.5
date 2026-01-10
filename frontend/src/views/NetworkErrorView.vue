@@ -289,12 +289,14 @@ const currentTime = computed(() => {
 // Methods
 const retryConnection = async () => {
   isRetrying.value = true
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 10000)
 
   try {
     // Try to ping the backend
     const response = await fetch('/api/health', {
       method: 'GET',
-      timeout: 10000
+      signal: controller.signal
     })
 
     if (response.ok) {
@@ -306,6 +308,7 @@ const retryConnection = async () => {
   } catch (error) {
     console.error('Retry failed:', error)
   } finally {
+    clearTimeout(timeoutId)
     isRetrying.value = false
   }
 }

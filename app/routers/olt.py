@@ -70,7 +70,7 @@ def _perform_netmiko_connection(olt_details: dict):
     Fungsi synchronous terpisah untuk menangani koneksi Netmiko.
     """
     try:
-        # TAMBAHKAN 'session_log' untuk debugging
+        # Menambahkan 'session_log' untuk debugging
         olt_details["session_log"] = "netmiko_session.log"
         olt_details["global_delay_factor"] = 2  # Memberi jeda lebih lama antar perintah
         olt_details["banner_timeout"] = 20  # Waktu tunggu lebih lama untuk banner login

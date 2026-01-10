@@ -90,7 +90,7 @@ def optimize_pelanggan_query_with_stats(query):
         - Export operations
         - Reports generation
         """
-    # Tambahkan subquery untuk menghitung jumlah invoice per pelanggan
+    # Menambahkan subquery untuk menghitung jumlah invoice per pelanggan
     invoice_count_subq = (
         select(
             Invoice.pelanggan_id,
@@ -101,7 +101,7 @@ def optimize_pelanggan_query_with_stats(query):
         .subquery()
     )
 
-    # Tambahkan subquery untuk menghitung jumlah langganan per pelanggan
+    # Menambahkan subquery untuk menghitung jumlah langganan per pelanggan
     langganan_count_subq = (
         select(Langganan.pelanggan_id, func.count(Langganan.id).label("langganan_count"))
         .group_by(Langganan.pelanggan_id)

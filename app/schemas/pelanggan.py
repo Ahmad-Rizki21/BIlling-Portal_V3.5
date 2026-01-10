@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr, validator, Field
-from datetime import date
+from datetime import date, datetime
 from typing import Optional, List
 import re
 
@@ -224,18 +224,20 @@ class PelangganCreate(BaseModel):
 # Skema untuk menampilkan data Pelanggan
 class Pelanggan(BaseModel):
     id: int
-    no_ktp: str
-    nama: str
-    alamat: str
+    no_ktp: Optional[str] = None
+    nama: Optional[str] = None
+    alamat: Optional[str] = None
     alamat_2: Optional[str] = None
     tgl_instalasi: Optional[date] = None
-    blok: str
-    unit: str
-    no_telp: str
-    email: EmailStr
+    blok: Optional[str] = None
+    unit: Optional[str] = None
+    no_telp: Optional[str] = None
+    email: Optional[EmailStr] = None
     id_brand: Optional[str] = None
     layanan: Optional[str] = None
     harga_layanan: Optional[HargaLayananSchema] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
     class Config:  # type: ignore
         from_attributes = True

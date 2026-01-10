@@ -338,24 +338,10 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue';
 import apiClient from '@/services/api';
-import { Chart, ChartConfiguration, DoughnutController, ArcElement, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, BarElement, LineController, BarController, Filler } from 'chart.js';
+import Chart from 'chart.js/auto';
+import type { ChartConfiguration } from 'chart.js';
 
-// Register Chart.js components
-Chart.register(
-  DoughnutController,
-  ArcElement,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  BarElement,
-  LineController,
-  BarController,
-  Filler,
-  Title,
-  Tooltip,
-  Legend
-);
+// No need to manually register components when using chart.js/auto
 
 const loading = ref(true);
 const revenueTimeframe = ref('6m');

@@ -7,7 +7,7 @@
           <v-btn
             icon
             variant="text"
-            @click="$router.back()"
+            @click="router.back()"
             class="me-3 back-btn"
             size="large"
           >
@@ -838,7 +838,7 @@
 <script setup lang="ts">
 // Keep ALL existing script code - NO CHANGES TO LOGIC
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import apiClient from '@/services/api'
 import ActionHistoryForm from '@/components/trouble-ticket/ActionHistoryForm.vue'
 import TicketAssignmentDialog from '@/components/trouble-ticket/TicketAssignmentDialog.vue'
@@ -846,6 +846,7 @@ import TicketStatusDialog from '@/components/trouble-ticket/TicketStatusDialog.v
 import TicketActionDialog from '@/components/trouble-ticket/TicketActionDialog.vue'
 
 const route = useRoute()
+const router = useRouter()
 
 interface TroubleTicket {
   id: number

@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 class TokenBlacklist(Base):
     __tablename__ = "token_blacklist"
 
-    # Tambahkan index untuk query yang sering digunakan
+    # Menambahkan index untuk query yang sering digunakan
     __table_args__ = (
         Index("idx_token_blacklist_jti", "jti"),
         Index("idx_token_blacklist_user_id", "user_id"),

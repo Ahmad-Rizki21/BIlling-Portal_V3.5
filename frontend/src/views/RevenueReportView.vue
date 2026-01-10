@@ -126,10 +126,10 @@
             @click="exportToExcel"
             :disabled="!reportSummary || reportSummary.total_invoices === 0 || exporting"
             size="large"
-            class="text-none modern-btn"
+            class="text-none modern-btn text-white"
             prepend-icon="mdi-microsoft-excel"
             rounded="lg"
-            variant="outlined"
+            variant="elevated"
           >
             Ekspor
             <v-progress-circular v-if="exporting" indeterminate size="20" class="ms-2"></v-progress-circular>
@@ -192,7 +192,7 @@
         <v-divider class="mx-4 mx-md-6"></v-divider>
         
         <!-- Mobile Card View -->
-        <div v-if="!$vuetify.display.mdAndUp">
+        <div v-if="!display.mdAndUp.value">
           <div v-if="invoiceDetails.length === 0" class="text-center pa-8">
             <v-icon size="48" color="grey-lighten-1" class="mb-4">mdi-receipt-text-off</v-icon>
             <p class="text-body-1 text-medium-emphasis">Tidak ada data invoice untuk periode ini</p>
@@ -265,8 +265,10 @@
         </div>
 
         <!-- Desktop Table View -->
-        <div v-if="$vuetify.display.mdAndUp" class="w-100">
+        <div v-if="display.mdAndUp.value" class="w-100">
           <v-data-table-server
+            v-model:page="currentPage"
+            v-model:items-per-page="itemsPerPage"
             :headers="headers"
             :items="invoiceDetails"
             :items-length="reportSummary?.total_invoices || 0"
@@ -359,6 +361,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, computed} from 'vue';
+import { useDisplay } from 'vuetify';
 import { debounce } from 'lodash-es';
 import apiClient from '@/services/api';
 // XLSX akan di-import secara dinamis saat fungsi export dipanggil
@@ -375,6 +378,7 @@ interface InvoiceReportItem {
 }
 
 // --- Reactive Data ---
+const display = useDisplay();
 const startDate = ref(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
 const endDate = ref(new Date());
 const menuStart = ref(false);
@@ -555,6 +559,14 @@ async function fetchReport() {
 
     const response = await apiClient.get('/reports/revenue', { params });
     reportSummary.value = response.data;
+
+    // Trigger initial fetch for details (Page 1)
+    // This fixes the issue on mobile where details don't load automatically
+    await fetchInvoiceDetails({ 
+      page: 1, 
+      itemsPerPage: itemsPerPage.value, 
+      sortBy: [] 
+    });
 
   } catch (error) {
     console.error("Gagal mengambil data laporan:", error);
@@ -796,6 +808,10 @@ onMounted(async () => {
   border-bottom: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
 }
 
+.table-header .text-h6 {
+  color: rgb(var(--v-theme-on-surface));
+}
+
 .modern-table :deep(.v-data-table__tr) {
   transition: all 0.2s ease;
 }
@@ -811,6 +827,10 @@ onMounted(async () => {
 .modern-table :deep(.v-data-table-header__content) {
   font-weight: 600;
   color: rgb(var(--v-theme-on-surface));
+}
+
+.modern-table :deep(.v-data-table__thead) {
+  background-color: rgba(var(--v-theme-surface), 0.8);
 }
 
 /* Revenue Table Specific Styles */
@@ -922,21 +942,56 @@ onMounted(async () => {
 
 /* Dark Theme Adjustments */
 .v-theme--dark .modern-card {
-  background: rgb(var(--v-theme-surface-variant));
-  border-color: rgba(255, 255, 255, 0.08);
+  background: rgb(var(--v-theme-surface)) !important;
+  border-color: rgba(255, 255, 255, 0.12);
 }
 
 .v-theme--dark .table-header {
-  background: rgba(var(--v-theme-surface-variant), 0.8);
+  background: rgb(var(--v-theme-surface)) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.v-theme--dark .table-header .text-h6 {
+  color: rgba(255, 255, 255, 0.95) !important;
+}
+
+.v-theme--dark .table-header .v-icon {
+  color: rgb(var(--v-theme-primary)) !important;
+}
+
+.v-theme--dark .modern-table :deep(.v-data-table-header) {
+  background-color: rgb(var(--v-theme-surface)) !important;
+}
+
+.v-theme--dark .modern-table :deep(.v-data-table-header__content) {
+  color: rgba(255, 255, 255, 0.95) !important;
+  font-weight: 600;
+}
+
+.v-theme--dark .modern-table :deep(.v-data-table__thead) {
+  background-color: rgb(var(--v-theme-surface)) !important;
+}
+
+.v-theme--dark .modern-table :deep(.v-data-table__th) {
+  color: rgba(255, 255, 255, 0.95) !important;
+  background-color: rgb(var(--v-theme-surface)) !important;
+}
+
+.v-theme--dark .modern-table :deep(.v-data-table__tr) {
+  background-color: rgb(var(--v-theme-surface));
 }
 
 .v-theme--dark .modern-table :deep(.v-data-table__tr:hover) {
   background-color: rgba(var(--v-theme-primary), 0.08);
 }
 
+.v-theme--dark .modern-table :deep(.v-data-table__td) {
+  color: rgba(255, 255, 255, 0.87);
+}
+
 .v-theme--dark .mobile-invoice-card {
-  background: rgb(var(--v-theme-surface-variant));
-  border-color: rgba(255, 255, 255, 0.08);
+  background: rgb(var(--v-theme-surface));
+  border-color: rgba(255, 255, 255, 0.12);
 }
 
 /* Responsive Design */

@@ -11,7 +11,7 @@
       <v-text-field
         v-model="searchQuery"
         v-bind="props"
-        placeholder="🔍 Cari pelanggan, pengguna, invoice, dll..."
+        placeholder="Cari pelanggan, pengguna, invoice, dll..."
         variant="solo"
         density="comfortable"
         prepend-inner-icon="mdi-magnify"
@@ -24,7 +24,6 @@
         @keyup.enter="() => performSearch()"
         @update:model-value="handleSearchInput"
         ref="searchField"
-        bg-color="white"
         rounded="pill"
         elevation="0"
       >
@@ -692,13 +691,32 @@ onUnmounted(() => {
 
 /* Dark Theme */
 .v-theme--dark .global-search-field :deep(.v-field) {
-  background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.1);
+  background: rgb(var(--v-theme-surface)) !important;
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.v-theme--dark .global-search-field:hover :deep(.v-field) {
+  border-color: rgba(var(--v-theme-primary), 0.5);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.v-theme--dark .global-search-field :deep(.v-field--focused) {
+  border-color: rgb(var(--v-theme-primary));
+  box-shadow: 0 4px 16px rgba(var(--v-theme-primary), 0.3);
+}
+
+.v-theme--dark .global-search-field :deep(.v-field__input) {
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.v-theme--dark .global-search-field :deep(.v-field__input::placeholder) {
+  color: rgba(255, 255, 255, 0.5);
 }
 
 .v-theme--dark .global-search-card {
-  background: #1e1e1e;
-  border-color: rgba(255, 255, 255, 0.1);
+  background: rgb(var(--v-theme-surface));
+  border-color: rgba(255, 255, 255, 0.12);
 }
 
 .v-theme--dark .search-header,
@@ -706,17 +724,55 @@ onUnmounted(() => {
 .v-theme--dark .search-footer,
 .v-theme--dark .show-more-section,
 .v-theme--dark .no-results {
-  background: #1e1e1e;
-  border-color: rgba(255, 255, 255, 0.1);
+  background: rgb(var(--v-theme-surface));
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+/* Text Colors in Dark Mode */
+.v-theme--dark .search-header .text-subtitle-2,
+.v-theme--dark .search-header .text-grey-darken-2 {
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+
+.v-theme--dark .category-header .text-caption {
+  color: rgba(255, 255, 255, 0.7) !important;
+}
+
+.v-theme--dark .search-result-item .v-list-item-title,
+.v-theme--dark .search-result-item .text-grey-darken-3 {
+  color: rgba(255, 255, 255, 0.95) !important;
+}
+
+.v-theme--dark .search-result-item .v-list-item-subtitle,
+.v-theme--dark .search-result-item .text-grey-darken-1 {
+  color: rgba(255, 255, 255, 0.7) !important;
+}
+
+.v-theme--dark .no-results .text-h6 {
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+
+.v-theme--dark .no-results .text-grey,
+.v-theme--dark .no-results .text-body-2 {
+  color: rgba(255, 255, 255, 0.6) !important;
+}
+
+.v-theme--dark .search-tips .text-grey-darken-1 {
+  color: rgba(255, 255, 255, 0.8) !important;
 }
 
 .v-theme--dark .tip-card {
   background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.v-theme--dark .tip-card .text-caption {
+  color: rgba(255, 255, 255, 0.85) !important;
 }
 
 .v-theme--dark .tip-card:hover {
   background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(var(--v-theme-primary), 0.3);
 }
 
 .v-theme--dark .search-icon-wrapper {
@@ -725,6 +781,14 @@ onUnmounted(() => {
 
 .v-theme--dark .search-result-item:hover {
   background: rgba(var(--v-theme-primary), 0.1) !important;
+}
+
+.v-theme--dark .search-results::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.v-theme--dark .search-results::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
 }
 
 /* Animations */

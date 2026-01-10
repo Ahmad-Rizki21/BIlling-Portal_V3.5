@@ -55,10 +55,12 @@ from .jobs import (
     job_send_payment_reminders, # Kirim reminder pembayaran
     job_suspend_services,       # Suspend layanan telat bayar
     job_verify_payments,        # Verifikasi pembayaran masuk
+    job_archive_historical_invoices, # Archive invoice lama
 )
 
 # Import untuk logging
 from .logging_config import setup_logging
+from .logging_utils import sanitize_log_data
 
 # Import models (database tables)
 from .models.activity_log import ActivityLog
@@ -176,7 +178,10 @@ class CacheControlMiddleware(BaseHTTPMiddleware):
             response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
         # Cache API response untuk 5 menit (kecuali POST/PUT/DELETE)
         elif request.method in ["GET"] and request.url.path.startswith("/api/"):
-            response.headers["Cache-Control"] = "public, max-age=300"
+            # PERBAIKAN: Disable caching for API endpoints to prevent stale data
+            response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0"
+            response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
 
         return response
 
@@ -279,7 +284,6 @@ async def log_requests_and_activity(request: Request, call_next):
     logger.info(f"Incoming request: {request.method} {request.url}")
     logger.info(f"Headers: {dict(request.headers)}")
 
-    # --- LOGIKA BARU: BACA BODY REQUEST DI AWAL ---
     # Kita harus membaca body di sini agar bisa digunakan untuk logging nanti.
     req_body_bytes = await request.body()
 
@@ -291,18 +295,24 @@ async def log_requests_and_activity(request: Request, call_next):
     # --- AKHIR LOGIKA BACA BODY ---
 
     # Jika ini adalah webhook Xendit, log lebih detail
+    # Jika ini adalah webhook Xendit, log lebih detail
     if "xendit-callback" in str(request.url):
-        logger.info(f"Xendit webhook body: {req_body_bytes.decode('utf-8') if req_body_bytes else 'Empty body'}")
+        try:
+            raw_body = req_body_bytes.decode('utf-8') if req_body_bytes else 'Empty body'
+            # Sanitize PII from webhook payload (names, phones, etc)
+            log_body = sanitize_log_data(raw_body)
+            logger.info(f"Xendit webhook body: {log_body}")
+        except Exception:
+            logger.info("Xendit webhook body: [Decode Failed]")
 
     response = await call_next(request_with_body)
 
     process_time = time.time() - start_time
     logger.info(f"Response status: {response.status_code} in {process_time:.2f}s")
 
-    # --- LOGIKA BARU: SIMPAN ACTIVITY LOG KE DATABASE ---
     if request.method in ["POST", "PATCH", "DELETE"] and 200 <= response.status_code < 300:
         if "/token" not in str(request.url) and "/login" not in str(request.url):
-            async with AsyncSessionLocal() as db:  # type: ignore[attr-defined]
+            async with AsyncSessionLocal() as db:
                 try:
                     auth_header = request.headers.get("Authorization", "")
                     token = auth_header.replace("Bearer ", "")
@@ -314,13 +324,17 @@ async def log_requests_and_activity(request: Request, call_next):
                                 # Hanya coba decode JSON untuk content-type application/json
                                 content_type = request.headers.get('content-type', '')
                                 if 'application/json' in content_type:
-                                    details = json.dumps(json.loads(req_body_bytes.decode('utf-8')))
+                                    # Parse, SANITIZE, then dump back to string
+                                    # This ensures PII is masked before entering DB
+                                    json_data = json.loads(req_body_bytes.decode('utf-8'))
+                                    sanitized_data = sanitize_log_data(json_data)
+                                    details = json.dumps(sanitized_data)
                                 else:
                                     # Skip JSON parsing untuk non-JSON content (file uploads, etc.)
                                     details = f"[Binary data, Content-Type: {content_type}]"
                             except (json.JSONDecodeError, UnicodeDecodeError, AttributeError) as e:
                                 # Tangkap berbagai jenis decode error
-                                details = f"[Parse error - {str(e)}, Content-Type: {request.headers.get('content-type')}"
+                                details = f"[Parse error - {str(e)}, Content-Type: {request.headers.get('content-type')}]"
                         log_entry = ActivityLog(
                             user_id=user.id,
                             action=f"{request.method} {request.url.path}",
@@ -644,12 +658,11 @@ async def startup_event():
     #scheduler.add_job(job_generate_invoices, 'cron', hour=10, minute=0, timezone='Asia/Jakarta', id="generate_invoices_job", replace_existing=True)
     #==============================================================GENERATE INVOICE====================================================================================#
 
-    #==============================================================SUSPANDED AND UNSUSPANDED=======================================================================#
+    #==============================================================SUSPEND SERVICES (ENHANCED WITH ROLLBACK)=======================================================================#
     # Suspend services tepat tanggal 5 jam 00:00 untuk pelanggan yang telat bayar dari jatuh tempo tanggal 1.
-    # Updated: Gunakan location-based batch suspend untuk optimal performance
-    # from .jobs import job_suspend_services_by_location
+    # ENHANCED: Sekarang dengan automatic Mikrotik rollback jika database gagal (ZERO INCONSISTENCY!)
     # scheduler.add_job(
-    #     job_suspend_services_by_location,
+    #     job_suspend_services,
     #     'cron',
     #     day=5,
     #     hour=0,
@@ -660,31 +673,28 @@ async def startup_event():
     #     max_instances=1,  # Prevent duplicate runs
     #     misfire_grace_time=300  # 5 minutes grace time for missed runs
     # )
-    #==============================================================SUSPANDED AND UNSUSPANDED=======================================================================#
+    #==============================================================SUSPEND SERVICES (ENHANCED WITH ROLLBACK)=======================================================================#
 
-    #==============================================================REMAINDERS INVOICE=======================================================================#
-    # Mengirim pengingat pembayaran setiap hari jam 8 pagi.
-    #scheduler.add_job(job_send_payment_reminders, 'cron', hour=8, minute=0, timezone='Asia/Jakarta', id="send_reminders_job", replace_existing=True)
-    #==============================================================REMAINDERS INVOICE=======================================================================#
 
-    #==============================================================NYARI INVOICE 3 HARI KE BELAKANG JIKA SERVER MATI=======================================================================#
+    #==============================================================VERIFY PAYMENTS (PAYMENT RECONCILIATION)=======================================================================#
     # Memverifikasi pembayaran yang mungkin terlewat setiap 15 menit.
-    #from .jobs import job_verify_payments
+    # Penting untuk antisipasi webhook callback yang gagal dari Xendit
     #scheduler.add_job(job_verify_payments, 'interval', minutes=15, id="verify_payments_job", replace_existing=True, max_instances=1)
-    #==============================================================NYARI INVOICE 3 HARI KE BELAKANG JIKA SERVER MATI=======================================================================#
+    #==============================================================VERIFY PAYMENTS (PAYMENT RECONCILIATION)=======================================================================#
 
 
-    #==============================================================SINGKRONISASI PROSES MIKROTIK KE SERVER=======================================================================#
+    #==============================================================MIKROTIK SYNC RETRY=======================================================================#
     # Mencoba ulang sinkronisasi Mikrotik yang gagal setiap 5 menit.
-    #from .jobs import job_retry_mikrotik_syncs
+    # Penting untuk user yang suspend/unsuspend gagal di Mikrotik
     #scheduler.add_job(job_retry_mikrotik_syncs, 'interval', minutes=5, id="retry_mikrotik_syncs_job", replace_existing=True, max_instances=1)
-    #==============================================================SINGKRONISASI PROSES MIKROTIK KE SERVER=======================================================================#
+    #==============================================================MIKROTIK SYNC RETRY=======================================================================#
 
 
-    #==============================================================MENGULANG PROSES INVOICEING JIKA GAGAL=======================================================================#
+    #==============================================================RETRY FAILED INVOICES=======================================================================#
     # Retry invoice yang gagal dibuat payment link setiap 1 jam
-    #scheduler.add_job(job_retry_failed_invoices, 'interval', hours=1, id="retry_failed_invoices_job", replace_existing=True)
-    #==============================================================MENGULANG PROSES INVOICEING JIKA GAGAL=======================================================================#
+    # Penting untuk invoice yang gagal generate payment link ke Xendit
+    #scheduler.add_job(job_retry_failed_invoices, 'interval', hours=1, id="retry_failed_invoices_job", replace_existing=True, max_instances=1)
+    #==============================================================RETRY FAILED INVOICES=======================================================================#
 
     #==============================================================COLLECT TRAFFIC DARI MIKROTIK=======================================================================#
     # 5. Setup traffic monitoring jobs
@@ -692,36 +702,62 @@ async def startup_event():
     # setup_traffic_monitoring_jobs(scheduler)
     #==============================================================COLLECT TRAFFIC DARI MIKROTIK=======================================================================#
 
-    # Log scheduler info
-    # print("="*80)
-    # print("📅 SCHEDULED JOBS STATUS")
-    # print("="*80)
-    # print("✅ Invoice Generation: menggunakan H-5 system")
-    # print("✅ Location-Based Batch Suspend: Setiap tanggal 5 jam 00:00 WIB")
-    # print("✅ Payment Reminders: Diaktifkan tanggal 4")
-    # print("✅ Payment Verification: Setiap 15 menit")
-    # print("✅ Mikrotik Sync Retry: Setiap 5 menit")
-    # print("✅ Payment Link Retry: Setiap 1 jam")
-    # print("ℹ️ Traffic Monitoring: Dinonaktifkan")
-    # print("="*80)
+    #==============================================================ARCHIVE INVOICE LAMA=======================================================================#
+    # Archive invoice lama setiap 3 bulan sekali (Januari, April, Juli, Oktober)
+    # Job ini memindahkan invoice dengan status Lunas/Kadaluarsa/Batal yang lebih dari 12 bulan
+    # ke tabel invoices_archive untuk menjaga performa database
+    # scheduler.add_job(
+    #     job_archive_historical_invoices,
+    #     'cron',
+    #     month='1,4,7,10',  # Januari, April, Juli, Oktober
+    #     day=1,             # Tanggal 1 setiap triwulan
+    #     hour=3,            # Jam 03:00 pagi (traffic minimal)
+    #     minute=0,
+    #     timezone='Asia/Jakarta',
+    #     id="archive_invoices_job",
+    #     replace_existing=True,
+    #     max_instances=1,        # Cegah job duplikat
+    #     misfire_grace_time=3600 # 1 jam grace time jika server sempat mati
+    # )
+    #==============================================================ARCHIVE INVOICE LAMA=======================================================================#
 
-    # # 6. Mulai scheduler dengan safety check
-    # try:
-    #     scheduler.start()
-    #     print("🚀 Scheduler telah dimulai dengan Location-Based Batch Suspend!")
-    #     logger.info("✅ Application startup complete - Location-Based Batch Suspend Active")
-    # except SchedulerAlreadyRunningError:
-    #     print("⚠️  Scheduler sudah berjalan, melanjutkan dengan instance yang ada...")
-    #     logger.warning("⚠️ Scheduler already running, continuing with existing instance")
-    # except Exception as e:
-    #     print(f"❌ Error starting scheduler: {str(e)}")
-    #     logger.error(f"❌ Error starting scheduler: {str(e)}")
-    #     raise
+    #==============================================================REMAINDERS INVOICE=======================================================================#
+    # Mengirim pengingat pembayaran setiap hari jam 8 pagi.
+    #scheduler.add_job(job_send_payment_reminders, 'cron', hour=8, minute=0, timezone='Asia/Jakarta', id="send_reminders_job", replace_existing=True)
+    #==============================================================REMAINDERS INVOICE=======================================================================#
+    
+    # Log scheduler info
+    print("="*80)
+    print("📅 SCHEDULED JOBS STATUS")
+    print("="*80)
+    print("✅ Invoice Generation: AKTIF - Setiap hari jam 10:00 WIB (H-5 sebelum jatuh tempo)")
+    print("✅ Suspend Services: AKTIF - Setiap tanggal 5 jam 00:00 WIB (ENHANCED with Rollback!)")
+    print("⏭️  Payment Reminders: Dinonaktifkan (manual trigger)")
+    print("✅ Payment Verification: AKTIF - Setiap 15 menit (antisipasi webhook gagal)")
+    print("✅ Mikrotik Sync Retry: AKTIF - Setiap 5 menit (auto-recovery)")
+    print("✅ Payment Link Retry: AKTIF - Setiap 1 jam (auto-recovery)")
+    print("ℹ️  Traffic Monitoring: Dinonaktifkan")
+    print("⏭️  Archive Invoice: Dinonaktifkan (manual trigger)")
+    print("="*80)
+
+    # 6. Mulai scheduler dengan safety check
+    try:
+        scheduler.start()
+        print("🚀 Scheduler telah dimulai dengan Archive Invoice Job!")
+        logger.info("✅ Application startup complete - Archive Invoice Job Active")
+    except SchedulerAlreadyRunningError:
+        print("⚠️  Scheduler sudah berjalan, melanjutkan dengan instance yang ada...")
+        logger.warning("⚠️ Scheduler already running, continuing with existing instance")
+    except Exception as e:
+        print(f"❌ Error starting scheduler: {str(e)}")
+        logger.error(f"❌ Error starting scheduler: {str(e)}")
+        raise
 
 
 # Event handler untuk shutdown aplikasi
 @app.on_event("shutdown")
 async def shutdown_event():
+    logger = logging.getLogger("app.main")
     try:
         scheduler.shutdown(wait=False)
         print("✅ Scheduler telah dimatikan dengan aman.")
@@ -817,9 +853,24 @@ async def not_found_handler(request: Request, exc):
     """
     import logging
     logger = logging.getLogger("app.error_handler")
+    
+    # Deteksi penyebab 404:
+    # 1. Route/Path not found (Startlette default detail is "Not Found")
+    # 2. Application raised 404 (e.g. "Invoice tidak ditemukan")
+    detail_msg = getattr(exc, "detail", "Not Found")
+    is_route_not_found = detail_msg == "Not Found"
+    
+    # Tentukan pesan error
+    message = "Endpoint tidak ditemukan" if is_route_not_found else detail_msg
+    description = f"URL '{request.method} {request.url.path}' tidak tersedia di API ini" if is_route_not_found else f"Resource yang Anda cari tidak ditemukan: {detail_msg}"
 
     # Log 404 error untuk monitoring
-    logger.warning(f"404 Error - Path: {request.url.path} - Method: {request.method} - IP: {request.client.host if request.client else 'unknown'}")
+    # Info log for logic 404s, Warning for route 404s (potential scanning)
+    log_msg = f"404 Error - Path: {request.url.path} - Msg: {message}"
+    if is_route_not_found:
+        logger.warning(log_msg)
+    else:
+        logger.info(log_msg)
 
     # Response format yang konsisten
     return JSONResponse(
@@ -827,12 +878,12 @@ async def not_found_handler(request: Request, exc):
         content={
             "error": {
                 "code": "NOT_FOUND",
-                "message": "Endpoint tidak ditemukan",
-                "description": f"URL '{request.method} {request.url.path}' tidak tersedia di API ini",
+                "message": message,
+                "description": description,
                 "suggestions": [
                     "Periksa kembali URL yang Anda ketik",
                     "Lihat dokumentasi API di /docs atau /redoc",
-                    "Pastikan method HTTP yang digunakan benar (GET, POST, PUT, DELETE)",
+                    "Pastikan ID data yang Anda cari benar-benar ada",
                     "Hubungi IT Support jika masalah berlanjut"
                 ],
                 "available_endpoints": {

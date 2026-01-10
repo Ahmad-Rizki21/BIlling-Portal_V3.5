@@ -6,8 +6,8 @@
         <div class="header-content">
           <div class="d-flex align-center">
             <div class="d-flex align-center">
-              <v-avatar class="me-4 elevation-4" color="gradient" size="80">
-                <v-icon color="white" size="40">mdi-file-document-outline</v-icon>
+              <v-avatar class="me-4 elevation-4" color="white" size="80">
+                <v-icon color="primary" size="40">mdi-file-document-outline</v-icon>
               </v-avatar>
               <div>
                 <h1 class="text-h4 font-weight-bold text-white mb-2">Syarat & Ketentuan</h1>
@@ -172,7 +172,7 @@
               <div v-if="expandedItems.includes(item.id)" class="document-content-wrapper">
                 <v-divider class="mb-5"></v-divider>
                 
-                <div class="document-content" v-html="item.konten"></div>
+                <div class="document-content" v-html="formatContent(item.konten)"></div>
                 
                 <div class="document-footer mt-5">
                   <div class="footer-info">
@@ -304,6 +304,14 @@ function formatDateShort(dateString: string) {
     month: 'short', 
     year: 'numeric'
   });
+}
+
+function formatContent(content: string) {
+  if (!content) return '';
+  // Mengganti literal \n dan newline karakter dengan <br>
+  return content
+    .replace(/\\n/g, '<br>')
+    .replace(/\n/g, '<br>');
 }
 
 function formatLastUpdate() {
@@ -527,10 +535,10 @@ onMounted(fetchSK);
 }
 
 
-.stat-icon-primary { background: linear-gradient(135deg, rgb(var(--v-theme-primary)), rgb(var(--v-theme-primary-lighten-1))); }
-.stat-icon-success { background: linear-gradient(135deg, rgb(var(--v-theme-success)), rgb(var(--v-theme-success-lighten-1))); }
-.stat-icon-info { background: linear-gradient(135deg, rgb(var(--v-theme-info)), rgb(var(--v-theme-info-lighten-1))); }
-.stat-icon-warning { background: linear-gradient(135deg, rgb(var(--v-theme-warning)), rgb(var(--v-theme-warning-lighten-1))); }
+.stat-icon-primary { background: linear-gradient(135deg, rgb(var(--v-theme-primary)), rgba(var(--v-theme-primary), 0.8)); }
+.stat-icon-success { background: linear-gradient(135deg, rgb(var(--v-theme-success)), rgba(var(--v-theme-success), 0.8)); }
+.stat-icon-info { background: linear-gradient(135deg, rgb(var(--v-theme-info)), rgba(var(--v-theme-info), 0.8)); }
+.stat-icon-warning { background: linear-gradient(135deg, rgb(var(--v-theme-warning)), rgba(var(--v-theme-warning), 0.8)); }
 
 
 

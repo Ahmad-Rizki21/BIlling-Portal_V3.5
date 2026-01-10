@@ -1,6 +1,6 @@
 # 📦 Enhanced Package.json Scripts
 
-## Tambahkan scripts ini di package.json:
+## Menambahkan scripts ini di package.json:
 
 ```json
 {
@@ -57,6 +57,7 @@
 ## 🎯 Command Berdasarkan Use Case:
 
 ### **🔧 Daily Development**
+
 ```bash
 npm run dev          # Development server
 npm run dev:tsc      # Development + type checking
@@ -65,6 +66,7 @@ npm run format       # Format code
 ```
 
 ### **🧪 Quality Assurance**
+
 ```bash
 npm run type-check   # Check TypeScript
 npm run lint:check   # Check linting (no fix)
@@ -74,6 +76,7 @@ npm run pre-commit   # All checks before commit
 ```
 
 ### **🚀 Build Production**
+
 ```bash
 # Fast build (untuk testing cepat)
 npm run build:fast
@@ -89,6 +92,7 @@ npm run build:performance
 ```
 
 ### **📊 Analysis & Monitoring**
+
 ```bash
 npm run analyze:bundle    # Deep bundle analysis
 npm run analyze:size      # Track bundle size
@@ -97,6 +101,7 @@ npm run build:report      # Full build report
 ```
 
 ### **🧹 Maintenance**
+
 ```bash
 npm run clean         # Clean build cache
 npm run clean:full    # Full reset
@@ -105,6 +110,7 @@ npm run clean:full    # Full reset
 ## 📋 Recommended Workflow:
 
 ### **1. Development Cycle**
+
 ```bash
 # Start development
 npm run dev:tsc
@@ -115,11 +121,13 @@ npm run format
 ```
 
 ### **2. Before Commit**
+
 ```bash
 npm run pre-commit
 ```
 
 ### **3. Pre-Deployment**
+
 ```bash
 npm run build:prod
 npm run analyze:bundle
@@ -127,6 +135,7 @@ npm run lighthouse
 ```
 
 ### **4. Production Deploy**
+
 ```bash
 npm run deploy:production
 ```

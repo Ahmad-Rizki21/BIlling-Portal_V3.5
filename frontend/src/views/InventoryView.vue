@@ -1764,6 +1764,17 @@
       @multiple-detected="handleMultipleDetected"
     />
 
+    <v-snackbar
+      v-model="snackbar.show"
+      :color="snackbar.color"
+      timeout="3000"
+      location="top right" 
+    >
+      {{ snackbar.message }}
+      <template v-slot:actions>
+        <v-btn variant="text" @click="snackbar.show = false">Tutup</v-btn>
+      </template>
+    </v-snackbar>
   </v-container>
 </template>
 
@@ -2342,6 +2353,21 @@ function formatDateTime(timestamp: string | Date): string {
     hour: '2-digit',
     minute: '2-digit'
   });
+}
+
+// Snackbar State
+const snackbar = ref({
+  show: false,
+  message: '',
+  color: 'success'
+});
+
+function showSnackbar(message: string, color: string = 'success') {
+  snackbar.value = {
+    show: true,
+    message,
+    color
+  };
 }
 
 onMounted(fetchData);

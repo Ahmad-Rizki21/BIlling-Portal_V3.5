@@ -2,24 +2,23 @@
   <v-container fluid class="edit-langganan-container">
     <!-- Header Section -->
     <div class="page-header">
+      <div class="header-pattern"></div>
       <div class="header-content">
         <v-btn
           icon="mdi-arrow-left"
           variant="text"
           color="white"
-          size="large"
-          @click="$router.go(-1)"
-          class="back-btn"
+          class="back-btn glass-btn"
+          @click="router.go(-1)"
         ></v-btn>
         
-        <div class="header-info">
-          <div class="header-icon">
-            <v-icon size="32" color="white">mdi-pencil</v-icon>
+        <div class="header-info ms-4">
+          <div class="header-badge mb-2">
+            <v-icon size="14" start>mdi-pencil</v-icon>
+            EDIT MODE
           </div>
-          <div class="header-text">
-            <h1 class="header-title">Edit Langganan</h1>
-            <p class="header-subtitle">Perbarui informasi langganan pelanggan</p>
-          </div>
+          <h1 class="header-title">Edit Langganan</h1>
+          <p class="header-subtitle">Perbarui informasi dan status langganan pelanggan</p>
         </div>
       </div>
     </div>
@@ -27,16 +26,9 @@
     <!-- Main Content -->
     <div class="content-wrapper">
       <!-- Loading State -->
-      <div v-if="loading" class="loading-container">
-        <div class="loading-content">
-          <v-progress-circular
-            indeterminate
-            color="primary"
-            size="64"
-            width="4"
-          ></v-progress-circular>
-          <p class="loading-text mt-4">Memuat data langganan...</p>
-        </div>
+      <div v-if="loading" class="loading-state">
+        <v-progress-circular indeterminate color="primary" size="64" width="6"></v-progress-circular>
+        <p class="mt-4 text-h6 text-medium-emphasis">Memuat data langganan...</p>
       </div>
 
       <!-- Error State -->
@@ -44,346 +36,324 @@
         v-else-if="error"
         type="error"
         variant="tonal"
-        prominent
-        class="error-alert"
+        class="mb-6 rounded-xl"
         border="start"
+        prominent
       >
         <template v-slot:prepend>
-          <v-icon size="24">mdi-alert-circle</v-icon>
+          <div class="alert-icon-wrapper error">
+            <v-icon color="error">mdi-alert-circle</v-icon>
+          </div>
         </template>
-        <v-alert-title class="text-h6 mb-2">Terjadi Kesalahan</v-alert-title>
+        <div class="text-h6 font-weight-bold mb-1">Terjadi Kesalahan</div>
         <div class="text-body-1">{{ error }}</div>
         <template v-slot:append>
-          <v-btn
-            color="error"
-            variant="outlined"
-            size="small"
-            @click="fetchLanggananDetail"
-            class="mt-2"
-          >
-            <v-icon start size="18">mdi-refresh</v-icon>
+          <v-btn color="error" variant="flat" @click="fetchLanggananDetail" class="rounded-lg px-4">
             Coba Lagi
           </v-btn>
         </template>
       </v-alert>
 
       <!-- Edit Form -->
-      <div v-else-if="editedItem" class="form-wrapper">
-        <v-card class="form-card" elevation="0" border>
-          <v-card-text class="form-content">
+      <div v-else-if="editedItem" class="form-container">
+        <v-row>
+          <!-- Left Column: Main Form -->
+          <v-col cols="12" lg="9">
             <v-form ref="formRef" v-model="formValid" lazy-validation>
               
-              <!-- Customer Information Section -->
-              <div class="form-section">
-                <div class="section-header">
-                  <div class="section-icon">
-                    <v-icon color="primary" size="20">mdi-account</v-icon>
+              <!-- Customer Profile Card -->
+              <v-card class="mb-6 rounded-xl overflow-hidden" elevation="2" border>
+                <div class="customer-card-header">
+                  <v-icon size="24" class="me-3">mdi-account-circle</v-icon>
+                  <span class="text-subtitle-1 font-weight-bold">Informasi Pelanggan</span>
+                </div>
+                <v-card-text class="pa-6">
+                  <div class="d-flex align-start gap-4">
+                    <v-avatar color="primary" size="72" class="elevation-2">
+                      <span class="text-h4 font-weight-bold text-white">
+                        {{ getPelangganName(editedItem.pelanggan_id).charAt(0).toUpperCase() }}
+                      </span>
+                    </v-avatar>
+                    
+                    <div class="flex-grow-1 min-w-0">
+                      <h3 class="text-h6 font-weight-bold mb-2">
+                        {{ getPelangganName(editedItem.pelanggan_id) }}
+                      </h3>
+                      
+                      <div class="d-flex flex-wrap gap-2 mb-3">
+                        <v-chip size="small" color="primary" variant="tonal" class="font-weight-medium">
+                          <v-icon start size="16">mdi-identifier</v-icon>
+                          ID: {{ editedItem.pelanggan_id }}
+                        </v-chip>
+                        <v-chip size="small" color="success" variant="tonal" class="font-weight-medium">
+                          <v-icon start size="16">mdi-phone</v-icon>
+                          {{ getPelangganPhone(editedItem.pelanggan_id) }}
+                        </v-chip>
+                      </div>
+                      
+                      <div class="d-flex align-start">
+                        <v-icon size="18" class="me-2 mt-1 text-medium-emphasis">mdi-map-marker</v-icon>
+                        <span class="text-body-2 text-medium-emphasis" style="line-height: 1.6;">
+                          {{ getPelangganAddress(editedItem.pelanggan_id) }}
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                  <h3 class="section-title">Informasi Pelanggan</h3>
-                </div>
+                </v-card-text>
+              </v-card>
 
-                <div class="field-group">
-                  <label class="field-label">
-                    Pelanggan
-                    <span class="required-indicator">*</span>
-                  </label>
-                  <v-text-field
-                    :model-value="getPelangganName(editedItem.pelanggan_id)"
-                    variant="outlined"
-                    prepend-inner-icon="mdi-account"
-                    readonly
-                    density="comfortable"
-                    hide-details="auto"
-                    bg-color="primary-lighten-5"
-                    class="readonly-field"
-                  ></v-text-field>
-                </div>
-              </div>
-
-              <!-- Package and Payment Section -->
-              <div class="form-section">
-                <div class="section-header">
-                  <div class="section-icon">
-                    <v-icon color="primary" size="20">mdi-wifi</v-icon>
-                  </div>
-                  <h3 class="section-title">Paket & Pembayaran</h3>
-                </div>
-
-                <v-row class="field-row">
-                  <v-col cols="12" lg="6" md="6">
-                    <div class="field-group">
-                      <label class="field-label">
-                        Paket Layanan
-                        <span class="required-indicator">*</span>
-                      </label>
-                      <v-select
+              <!-- Package & Payment -->
+              <v-card class="mb-6 rounded-xl" elevation="0" border>
+                <v-card-title class="d-flex align-center user-select-none px-6 pt-6 pb-2">
+                  <v-icon color="primary" class="me-3">mdi-wifi-star</v-icon>
+                  <span class="text-h6 font-weight-bold">Paket & Pembayaran</span>
+                </v-card-title>
+                
+                <v-card-text class="px-6 pb-6">
+                  <v-row>
+                    <v-col cols="12">
+                       <label class="text-caption font-weight-bold text-medium-emphasis mb-2 d-block">PAKET LAYANAN</label>
+                       <v-select
                         v-model="editedItem.paket_layanan_id"
                         :items="filteredPaketLayanan"
                         :loading="paketLoading"
                         item-title="nama_paket"
                         item-value="id"
-                        placeholder="Pilih paket layanan"
                         variant="outlined"
-                        prepend-inner-icon="mdi-wifi-star"
+                        placeholder="Pilih paket layanan"
+                        color="primary"
                         :rules="[rules.required]"
-                        density="comfortable"
                         hide-details="auto"
-                        class="select-field"
+                        class="mb-4 custom-select"
+                        readonly
+                        disabled
                       >
-                        <template v-slot:item="{ props, item }">
-                          <v-list-item v-bind="props" class="package-item">
-                            <template v-slot:prepend>
-                              <v-avatar color="primary" size="36" class="package-avatar">
-                                <v-icon color="white" size="18">mdi-wifi</v-icon>
-                              </v-avatar>
-                            </template>
-                            <v-list-item-title class="package-name">{{ item.raw.nama_paket }}</v-list-item-title>
-                            <v-list-item-subtitle class="package-details">{{ item.raw.kecepatan }} Mbps - {{ formatCurrency(item.raw.harga) }}</v-list-item-subtitle>
-                          </v-list-item>
-                        </template>
+                         <template v-slot:selection="{ item }">
+                           <div class="d-flex align-center" style="width: 100%">
+                              <span class="font-weight-medium text-truncate">{{ item.raw.nama_paket || 'Paket Tidak Dikenal' }}</span>
+                              <v-spacer></v-spacer>
+                              <v-chip v-if="item.raw.kecepatan" size="x-small" color="success" variant="flat" class="font-weight-bold ms-2">
+                                {{ item.raw.kecepatan }} Mbps
+                              </v-chip>
+                           </div>
+                         </template>
+                         <template v-slot:item="{ props, item }">
+                            <v-list-item v-bind="props" rounded="lg" class="mb-1">
+                               <template v-slot:append>
+                                  <span class="text-primary font-weight-bold">{{ formatCurrency(item.raw.harga) }}</span>
+                               </template>
+                               <v-list-item-subtitle class="mt-1">
+                                  <v-chip size="x-small" color="success" variant="tonal">{{ item.raw.kecepatan }} Mbps</v-chip>
+                               </v-list-item-subtitle>
+                            </v-list-item>
+                         </template>
                       </v-select>
-                    </div>
-                  </v-col>
+                    </v-col>
 
-                  <v-col cols="12" lg="6" md="6">
-                    <div class="field-group">
-                      <label class="field-label">
-                        Metode Pembayaran
-                        <span class="required-indicator">*</span>
-                      </label>
-                      <v-select
+                    <v-col cols="12" md="6">
+                       <label class="text-caption font-weight-bold text-medium-emphasis mb-2 d-block">METODE PEMBAYARAN</label>
+                       <v-select
                         v-model="editedItem.metode_pembayaran"
                         :items="[
-                          { title: 'Otomatis (Bulanan)', value: 'Otomatis' },
-                          { title: 'Prorate (Proporsional)', value: 'Prorate' }
+                          { title: 'Otomatis (Bulanan)', value: 'Otomatis', icon: 'mdi-calendar-sync' },
+                          { title: 'Prorate (Proporsional)', value: 'Prorate', icon: 'mdi-calculator' }
                         ]"
                         variant="outlined"
-                        prepend-inner-icon="mdi-cash-multiple"
-                        density="comfortable"
+                        color="primary"
                         hide-details="auto"
-                        class="select-field"
-                      ></v-select>
-                    </div>
-                  </v-col>
-                </v-row>
-
-                <!-- Pricing Display -->
-                <div v-if="editedItem.metode_pembayaran === 'Otomatis'" class="pricing-section">
-                  <div class="field-group">
-                    <label class="field-label">Total Harga Bulanan</label>
-                    <v-text-field
-                      :model-value="formatCurrency(editedItem.harga_awal)"
-                      variant="outlined"
-                      prepend-inner-icon="mdi-currency-usd"
-                      readonly
-                      density="comfortable"
-                      hide-details="auto"
-                      bg-color="success-lighten-5"
-                      class="price-field"
-                    ></v-text-field>
-                  </div>
-                </div>
-
-                <!-- Prorate Options -->
-                <template v-if="editedItem.metode_pembayaran === 'Prorate'">
-                  <v-row class="field-row">
-                    <v-col cols="12" lg="6" md="6">
-                      <div class="field-group">
-                        <label class="field-label">Tanggal Mulai Langganan</label>
-                        <v-text-field
+                        class="custom-select"
+                      >
+                         <template v-slot:item="{ props, item }">
+                            <v-list-item v-bind="props" rounded="lg">
+                               <template v-slot:prepend>
+                                  <v-icon color="primary" class="me-2">{{ item.raw.icon }}</v-icon>
+                               </template>
+                            </v-list-item>
+                         </template>
+                      </v-select>
+                    </v-col>
+                    
+                    <v-col cols="12" md="6" v-if="editedItem.metode_pembayaran === 'Prorate'">
+                       <label class="text-caption font-weight-bold text-medium-emphasis mb-2 d-block">TANGGAL MULAI</label>
+                       <v-text-field
                           v-model="editedItem.tgl_mulai_langganan"
                           type="date"
                           variant="outlined"
-                          prepend-inner-icon="mdi-calendar-start"
-                          density="comfortable"
-                          hide-details="auto"
-                        ></v-text-field>
-                      </div>
-                    </v-col>
-
-                    <v-col cols="12" lg="6" md="6" class="d-flex align-center">
-                      <div class="switch-group">
-                        <v-switch
-                          v-model="isProratePlusFull"
                           color="primary"
-                          label="Sertakan tagihan penuh bulan depan"
-                          inset
-                          hide-details
-                          density="comfortable"
-                        ></v-switch>
-                      </div>
+                          hide-details="auto"
+                       ></v-text-field>
+                    </v-col>
+                    
+                    <v-col cols="12" v-if="editedItem.metode_pembayaran === 'Prorate'">
+                      <v-checkbox
+                        v-model="isProratePlusFull"
+                        color="primary"
+                        hide-details
+                        density="compact"
+                      >
+                        <template v-slot:label>
+                          <span class="text-body-2 font-weight-medium">Sertakan tagihan penuh bulan depan</span>
+                        </template>
+                      </v-checkbox>
                     </v-col>
                   </v-row>
+                </v-card-text>
+              </v-card>
 
-                  <!-- Prorate Pricing Info -->
-                  <div class="pricing-section">
-                    <v-alert
-                      v-if="isProratePlusFull && hargaProrate > 0"
-                      variant="tonal"
-                      color="info"
-                      density="compact"
-                      class="prorate-info"
-                      border="start"
-                    >
-                      <template v-slot:prepend>
-                        <v-icon size="20">mdi-information-outline</v-icon>
-                      </template>
-                      <div class="info-content">
-                        <div class="info-title">Rincian Tagihan Pertama:</div>
-                        <div class="info-details">
-                          <div class="info-item">• Biaya Prorate: {{ formatCurrency(hargaProrate) }}</div>
-                          <div class="info-item">• Biaya Bulan Depan: {{ formatCurrency(hargaNormal) }}</div>
-                        </div>
-                      </div>
-                    </v-alert>
-
-                    <div class="field-group">
-                      <label class="field-label">
-                        {{ isProratePlusFull ? 'Total Tagihan Pertama' : 'Total Harga Prorate' }}
-                      </label>
-                      <v-text-field
-                        :model-value="formatCurrency(editedItem.harga_awal)"
-                        variant="outlined"
-                        prepend-inner-icon="mdi-currency-usd-circle"
-                        readonly
-                        density="comfortable"
-                        hide-details="auto"
-                        bg-color="info-lighten-5"
-                        class="price-field"
-                      ></v-text-field>
-                    </div>
-                  </div>
-                </template>
-              </div>
-
-              <!-- Status and Schedule Section -->
-              <div class="form-section">
-                <div class="section-header">
-                  <div class="section-icon">
-                    <v-icon color="primary" size="20">mdi-cog</v-icon>
-                  </div>
-                  <h3 class="section-title">Status & Jadwal</h3>
-                </div>
-
-                <v-row class="field-row">
-                  <v-col cols="12" lg="6" md="6">
-                    <div class="field-group">
-                      <label class="field-label">
-                        Status Langganan
-                        <span class="required-indicator">*</span>
-                      </label>
+              <!-- Status & Schedule -->
+              <v-card class="mb-6 rounded-xl" elevation="0" border>
+                <v-card-title class="d-flex align-center user-select-none px-6 pt-6 pb-2">
+                  <v-icon color="primary" class="me-3">mdi-check-network</v-icon>
+                  <span class="text-h6 font-weight-bold">Status & Jadwal</span>
+                </v-card-title>
+                
+                <v-card-text class="px-6 pb-6">
+                  <v-row>
+                    <v-col cols="12" md="6">
+                      <label class="text-caption font-weight-bold text-medium-emphasis mb-2 d-block">STATUS LANGGANAN</label>
                       <v-select
                         v-model="editedItem.status"
-                        :items="[
-                          { title: 'Aktif', value: 'Aktif' },
-                          { title: 'Suspended', value: 'Suspended' },
-                          { title: 'Berhenti', value: 'Berhenti' }
-                        ]"
+                        :items="['Aktif', 'Suspended', 'Berhenti']"
                         variant="outlined"
-                        prepend-inner-icon="mdi-check-circle-outline"
+                        color="primary"
                         :rules="[rules.required]"
-                        density="comfortable"
                         hide-details="auto"
-                        class="select-field"
-                      ></v-select>
-                    </div>
-                  </v-col>
-
-                  <v-col cols="12" lg="6" md="6">
-                    <div class="field-group">
-                      <label class="field-label">
-                        Tanggal Jatuh Tempo
-                        <span class="required-indicator">*</span>
-                      </label>
+                      >
+                         <template v-slot:selection="{ item }">
+                            <v-chip 
+                              :color="getStatusColor(item.raw)" 
+                              variant="elevated" 
+                              size="small" 
+                              class="font-weight-bold uppercase"
+                            >
+                               {{ item.raw }}
+                            </v-chip>
+                         </template>
+                      </v-select>
+                    </v-col>
+                    
+                    <v-col cols="12" md="6">
+                      <label class="text-caption font-weight-bold text-medium-emphasis mb-2 d-block">JATUH TEMPO</label>
                       <v-text-field
                         v-model="editedItem.tgl_jatuh_tempo"
                         type="date"
                         variant="outlined"
-                        prepend-inner-icon="mdi-calendar-alert"
+                        color="primary"
                         :rules="[rules.required]"
-                        density="comfortable"
                         hide-details="auto"
                       ></v-text-field>
-                    </div>
-                  </v-col>
-                </v-row>
+                    </v-col>
+                    
+                    <v-col cols="12">
+                      <v-expand-transition>
+                        <div v-if="editedItem.status === 'Aktif' || editedItem.status === 'Berhenti'">
+                          <label class="text-caption font-weight-bold text-medium-emphasis mb-2 d-block">
+                             STATUS MODEM <span class="text-error">*</span>
+                          </label>
+                          <v-select
+                            v-model="editedItem.status_modem"
+                            :items="getStatusModemOptions(editedItem.status || '')"
+                            item-title="title"
+                            item-value="value"
+                            variant="outlined"
+                            color="primary"
+                            hide-details="auto"
+                            placeholder="Pilih kondisi modem"
+                          ></v-select>
+                        </div>
+                      </v-expand-transition>
+                    </v-col>
+                    
+                    <v-col cols="12">
+                       <v-expand-transition>
+                         <div v-if="editedItem.status === 'Berhenti'">
+                           <div class="d-flex align-center mb-2 mt-2">
+                              <label class="text-caption font-weight-bold text-medium-emphasis">ALASAN BERHENTI</label>
+                           </div>
+                           <v-textarea
+                             v-model="editedItem.alasan_berhenti"
+                             variant="outlined"
+                             rows="3"
+                             auto-grow
+                             color="error"
+                             placeholder="Contoh: Pindah rumah, tidak puas dengan layanan..."
+                             hide-details="auto"
+                             class="mb-2"
+                           ></v-textarea>
+                         </div>
+                       </v-expand-transition>
+                    </v-col>
+                  </v-row>
+                </v-card-text>
+              </v-card>
 
-                <!-- Status Modem Section -->
-                <v-expand-transition>
-                  <div v-if="editedItem.status === 'Aktif' || editedItem.status === 'Berhenti'" class="conditional-section">
-                    <div class="field-group">
-                      <label class="field-label">
-                        Status Modem
-                        <span class="field-hint">(Wajib diisi)</span>
-                      </label>
-                      <v-select
-                        v-model="editedItem.status_modem"
-                        :items="getStatusModemOptions(editedItem.status || '')"
-                        item-title="title"
-                        item-value="value"
-                        variant="outlined"
-                        prepend-inner-icon="mdi-wifi-router"
-                        density="comfortable"
-                        hide-details="auto"
-                        class="select-field"
-                      ></v-select>
-                    </div>
-                  </div>
-                </v-expand-transition>
-
-                <!-- Alasan Berhenti Section -->
-                <v-expand-transition>
-                  <div v-if="editedItem.status === 'Berhenti'" class="conditional-section">
-                    <div class="field-group">
-                      <label class="field-label">
-                        Alasan Berhenti
-                        <span class="field-hint">(Opsional)</span>
-                      </label>
-                      <v-textarea
-                        v-model="editedItem.alasan_berhenti"
-                        variant="outlined"
-                        prepend-inner-icon="mdi-text-box-outline"
-                        rows="3"
-                        auto-grow
-                        density="comfortable"
-                        hide-details="auto"
-                        placeholder="Contoh: Pindah rumah, tidak puas dengan layanan, alasan ekonomi, dll."
-                        class="textarea-field"
-                      ></v-textarea>
-                    </div>
-                  </div>
-                </v-expand-transition>
-              </div>
             </v-form>
-          </v-card-text>
+          </v-col>
 
-          <!-- Action Buttons -->
-          <v-card-actions class="form-actions">
-            <v-spacer></v-spacer>
-            <v-btn
-              variant="outlined"
-              color="primary-darken-1"
-              size="large"
-              @click="$router.go(-1)"
-              class="action-btn cancel-btn"
-            >
-              <v-icon start size="18">mdi-close</v-icon>
-              Batal
-            </v-btn>
-            <v-btn
-              color="primary"
-              variant="flat"
-              size="large"
-              @click="saveLangganan"
-              :loading="saving"
-              :disabled="!isFormValid"
-              class="action-btn save-btn"
-            >
-              <v-icon start size="18">mdi-content-save</v-icon>
-              Simpan Perubahan
-            </v-btn>
-          </v-card-actions>
-        </v-card>
+          <!-- Right Column: Summary Sticky -->
+          <v-col cols="12" lg="3">
+            <div class="sticky-summary">
+              <!-- Price Receipt Card -->
+              <v-card class="rounded-xl overflow-hidden pricing-card" elevation="4">
+                <div class="receipt-header">
+                  <div class="text-overline text-white opacity-80 mb-1">TOTAL ESTIMASI</div>
+                  <div class="text-h4 font-weight-bold text-white receipt-amount">
+                    {{ formatCurrency(editedItem.harga_awal) }}
+                  </div>
+                  <div class="text-caption text-white opacity-70 mt-1">
+                    {{ editedItem.metode_pembayaran === 'Otomatis' ? '/ bulan' : 'tagihan pertama' }}
+                  </div>
+                </div>
+                
+                <!-- Prorate Details -->
+                <div class="px-6 py-4 bg-surface" v-if="editedItem.metode_pembayaran === 'Prorate' && isProratePlusFull && hargaProrate > 0">
+                   <div class="d-flex justify-space-between mb-2 text-body-2">
+                      <span class="text-medium-emphasis">Biaya Prorate</span>
+                      <span class="font-weight-medium">{{ formatCurrency(hargaProrate) }}</span>
+                   </div>
+                   <div class="d-flex justify-space-between text-body-2">
+                      <span class="text-medium-emphasis">Bulan Depan</span>
+                      <span class="font-weight-medium">{{ formatCurrency(hargaNormal) }}</span>
+                   </div>
+                   <v-divider class="my-3 border-dashed"></v-divider>
+                   <div class="d-flex align-top gap-2">
+                      <v-icon size="16" color="info" class="mt-1">mdi-information</v-icon>
+                      <span class="text-caption text-medium-emphasis">Tagihan mencakup sisa hari bulan ini ditambah satu bulan penuh berikutnya.</span>
+                   </div>
+                </div>
+
+                <v-divider></v-divider>
+                
+                <v-card-actions class="pa-4 bg-surface">
+                   <v-btn
+                      block
+                      color="primary"
+                      size="large"
+                      variant="elevated"
+                      height="48"
+                      @click="saveLangganan"
+                      :loading="saving"
+                      :disabled="!isFormValid"
+                      class="font-weight-bold text-none rounded-lg"
+                   >
+                      <v-icon start>mdi-content-save-check</v-icon>
+                      Simpan Perubahan
+                   </v-btn>
+                </v-card-actions>
+              </v-card>
+              
+              <v-btn
+                block
+                variant="text"
+                color="medium-emphasis"
+                class="mt-4 text-none"
+                @click="router.go(-1)"
+              >
+                Batalkan Perubahan
+              </v-btn>
+            </div>
+          </v-col>
+        </v-row>
       </div>
     </div>
   </v-container>
@@ -407,8 +377,10 @@ interface Langganan {
   harga_awal: number | null;
   harga_final: number;
   tgl_mulai_langganan?: string | null;
+  tgl_berhenti?: string | null;
   alasan_berhenti?: string | null;
   status_modem?: string | null;
+  riwayat_tgl_berhenti?: string | null;
 }
 
 interface PelangganData {
@@ -445,7 +417,7 @@ const error = ref<string | null>(null);
 const saving = ref(false);
 const formValid = ref(false);
 const formRef = ref();
-const paketLoading = ref(true);
+const paketLoading = ref(false);
 
 const langgananData = ref<Langganan | null>(null);
 const pelangganSelectList = ref<PelangganSelectItem[]>([]);
@@ -538,6 +510,8 @@ async function fetchPaketLayananForSelect() {
 }
 
 async function filterPaketForCustomer(pelangganId: number) {
+  paketLoading.value = true; // Set to true at start
+  
   if (!pelangganId) {
     filteredPaketLayanan.value = [];
     paketLoading.value = false;
@@ -564,12 +538,20 @@ async function filterPaketForCustomer(pelangganId: number) {
     if (filteredPaketLayanan.value.length === 0) {
       filteredPaketLayanan.value = [...paketLayananSelectList.value];
     }
-
-    paketLoading.value = false;
+    
+    // Ensure currently selected package is in the list (even if it doesn't match filter)
+    const currentPaketId = editedItem.value.paket_layanan_id;
+    if (currentPaketId && !filteredPaketLayanan.value.some(p => p.id === currentPaketId)) {
+      const currentPaket = paketLayananSelectList.value.find(p => p.id === currentPaketId);
+      if (currentPaket) {
+        filteredPaketLayanan.value.push(currentPaket);
+      }
+    }
   } catch (error: any) {
     console.error("Gagal mengambil detail pelanggan:", error);
-    filteredPaketLayanan.value = [];
-    paketLoading.value = false;
+    filteredPaketLayanan.value = [...paketLayananSelectList.value]; // Show all on error
+  } finally {
+    paketLoading.value = false; // Always set to false
   }
 }
 
@@ -646,6 +628,7 @@ async function saveLangganan() {
     metode_pembayaran: editedItem.value.metode_pembayaran,
     tgl_jatuh_tempo: editedItem.value.tgl_jatuh_tempo,
     harga_awal: editedItem.value.harga_awal,
+    tgl_berhenti: editedItem.value.tgl_berhenti || null,
     alasan_berhenti: editedItem.value.alasan_berhenti || null,
     status_modem: editedItem.value.status_modem || null
   };
@@ -665,12 +648,53 @@ async function saveLangganan() {
 
 // --- Helper Functions ---
 function getPelangganName(pelangganId: number | undefined): string {
+  // First try to get from editedItem.pelanggan (loaded subscription data)
+  if (editedItem.value?.pelanggan?.nama) {
+    return editedItem.value.pelanggan.nama;
+  }
+  
+  // Fallback to pelangganSelectList
   if (!pelangganId) return 'N/A';
   if (!Array.isArray(pelangganSelectList.value)) {
     return `ID ${pelangganId}`;
   }
   const pelanggan = pelangganSelectList.value.find(p => p.id === pelangganId);
   return pelanggan?.nama || `ID ${pelangganId}`;
+}
+
+function getPelangganPhone(pelangganId: number | undefined): string {
+  // First try to get from editedItem.pelanggan
+  if (editedItem.value?.pelanggan?.no_telp) {
+    return editedItem.value.pelanggan.no_telp;
+  }
+  
+  // Fallback to pelangganSelectList
+  if (!pelangganId) return '-';
+  const pelanggan = pelangganSelectList.value.find(p => p.id === pelangganId);
+  return pelanggan?.no_telp || '-';
+}
+
+function getPelangganAddress(pelangganId: number | undefined): string {
+  // First try to get from editedItem.pelanggan
+  if (editedItem.value?.pelanggan?.alamat) {
+    return editedItem.value.pelanggan.alamat;
+  }
+  
+  // Fallback to pelangganSelectList
+  if (!pelangganId) return '-';
+  const pelanggan = pelangganSelectList.value.find(p => p.id === pelangganId);
+  return pelanggan?.alamat || '-';
+}
+
+function getStatusColor(status: string | undefined): string {
+  if (!status) return 'grey';
+  switch (status) {
+    case 'Aktif': return 'success';
+    case 'Berhenti': return 'error';
+    case 'Isolir': return 'warning';
+    case 'Non-Aktif': return 'grey-darken-1';
+    default: return 'grey';
+  }
 }
 
 function formatCurrency(value: number | null | undefined): string {
@@ -702,816 +726,255 @@ function getStatusModemOptions(langgananStatus: string): Array<{title: string, v
 </script>
 
 <style scoped>
+
 /* Container */
 .edit-langganan-container {
   min-height: 100vh;
-  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+  background: #f8fafc;
   padding: 0;
+  padding-bottom: 2rem;
 }
 
 /* Header */
 .page-header {
   background: linear-gradient(135deg, rgb(var(--v-theme-primary)) 0%, rgb(var(--v-theme-secondary)) 100%);
   color: white;
-  padding: 2rem 1.5rem;
-  margin-bottom: 2rem;
+  padding: 2.5rem 2rem 2rem;
+  margin-bottom: 0;
   position: relative;
   overflow: hidden;
 }
 
-.page-header::before {
-  content: '';
+@media (max-width: 768px) {
+  .page-header {
+    padding: 2rem 1rem 1.5rem;
+  }
+}
+
+.header-pattern {
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.05'%3E%3Ccircle cx='30' cy='30' r='4'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E") repeat;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.1) 1px, transparent 1px);
+  background-size: 20px 20px;
   pointer-events: none;
 }
 
 .header-content {
   display: flex;
-  align-items: center;
-  gap: 1rem;
+  align-items: flex-start;
   position: relative;
   z-index: 1;
-  max-width: 1400px;
-  margin: 0 auto;
-  padding: 0 1.5rem;
 }
 
-/* Header responsive adjustments */
-@media (min-width: 1200px) {
-  .header-content {
-    max-width: 1700px;
-    padding: 0 2rem;
-  }
-}
-
-@media (min-width: 1400px) {
-  .header-content {
-    max-width: 1900px;
-    padding: 0 2.5rem;
-  }
-}
-
-@media (min-width: 1600px) {
-  .header-content {
-    max-width: 2100px;
-    padding: 0 3rem;
-  }
-}
-
-@media (min-width: 1920px) {
-  .header-content {
-    max-width: 2400px;
-    padding: 0 4rem;
-  }
-}
-
-@media (min-width: 2560px) {
-  .header-content {
-    max-width: 2800px;
-    padding: 0 5rem;
-  }
-}
-
-@media (min-width: 3840px) {
-  .header-content {
-    max-width: 3200px;
-    padding: 0 6rem;
-  }
-}
-
-.back-btn {
-  background: rgba(255, 255, 255, 0.15);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  transition: all 0.3s ease;
-}
-
-.back-btn:hover {
-  background: rgba(255, 255, 255, 0.25);
-  transform: translateX(-2px);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
-}
-
-.header-info {
-  display: flex;
+.header-badge {
+  display: inline-flex;
   align-items: center;
-  gap: 1rem;
-}
-
-.header-icon {
+  padding: 4px 12px;
   background: rgba(255, 255, 255, 0.15);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 50%;
-  padding: 1.2rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-}
-
-/* Desktop header icon improvements */
-@media (min-width: 1200px) {
-  .header-icon {
-    padding: 1.3rem;
-  }
-}
-
-@media (min-width: 1400px) {
-  .header-icon {
-    padding: 1.4rem;
-  }
-}
-
-@media (min-width: 1600px) {
-  .header-icon {
-    padding: 1.5rem;
-  }
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  backdrop-filter: blur(4px);
 }
 
 .header-title {
-  font-size: 2.2rem;
+  font-size: 2rem;
   font-weight: 700;
-  margin: 0 0 0.25rem 0;
+  margin: 0.5rem 0 0.25rem;
   line-height: 1.2;
   letter-spacing: -0.02em;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
 .header-subtitle {
-  font-size: 1.1rem;
+  font-size: 1rem;
   opacity: 0.9;
   margin: 0;
-  line-height: 1.4;
   font-weight: 400;
-}
-
-/* Desktop header improvements */
-@media (min-width: 1200px) {
-  .header-title {
-    font-size: 2.4rem;
-  }
-
-  .header-subtitle {
-    font-size: 1.2rem;
-  }
-}
-
-@media (min-width: 1400px) {
-  .header-title {
-    font-size: 2.6rem;
-  }
-
-  .header-subtitle {
-    font-size: 1.25rem;
-  }
-}
-
-@media (min-width: 1600px) {
-  .header-title {
-    font-size: 2.8rem;
-  }
-
-  .header-subtitle {
-    font-size: 1.3rem;
-  }
-}
-
-/* Content Wrapper */
-.content-wrapper {
-  max-width: 1400px;
-  margin: 0 auto;
-  padding: 0 2rem 2rem;
-}
-
-/* Desktop-specific layout */
-@media (min-width: 1200px) {
-  .content-wrapper {
-    max-width: 1700px;
-    padding: 0 2.5rem 2rem;
-  }
-}
-
-@media (min-width: 1400px) {
-  .content-wrapper {
-    max-width: 1900px;
-    padding: 0 3rem 2rem;
-  }
-}
-
-/* Ultra-wide screens */
-@media (min-width: 1600px) {
-  .content-wrapper {
-    max-width: 2100px;
-    padding: 0 4rem 2rem;
-  }
-}
-
-/* Super ultra-wide screens */
-@media (min-width: 1920px) {
-  .content-wrapper {
-    max-width: 2400px;
-    padding: 0 5rem 2rem;
-  }
-}
-
-/* 4K screens */
-@media (min-width: 2560px) {
-  .content-wrapper {
-    max-width: 2800px;
-    padding: 0 6rem 2rem;
-  }
-}
-
-/* Ultra-wide 4K+ screens */
-@media (min-width: 3840px) {
-  .content-wrapper {
-    max-width: 3200px;
-    padding: 0 8rem 2rem;
-  }
-}
-
-/* Loading */
-.loading-container {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  min-height: 400px;
-}
-
-.loading-content {
-  text-align: center;
-}
-
-.loading-text {
-  color: rgb(var(--v-theme-on-surface));
-  font-size: 1rem;
-  font-weight: 500;
-}
-
-/* Error Alert */
-.error-alert {
-  margin-bottom: 2rem;
-  border-radius: 16px;
-}
-
-/* Form */
-.form-wrapper {
-  width: 100%;
-}
-
-.form-card {
-  border-radius: 20px;
-  background: rgb(var(--v-theme-surface));
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
-  border: 1px solid rgba(var(--v-theme-outline), 0.12);
-  overflow: hidden;
-}
-
-.form-content {
-  padding: 2.5rem;
-}
-
-/* Desktop-wide form layout */
-@media (min-width: 1200px) {
-  .form-content {
-    padding: 3rem;
-  }
-}
-
-@media (min-width: 1400px) {
-  .form-content {
-    padding: 3.5rem;
-  }
-}
-
-/* Ultra-wide screen optimization */
-@media (min-width: 1600px) {
-  .form-content {
-    padding: 4rem;
-  }
-}
-
-/* Form Sections */
-.form-section {
-  margin-bottom: 2.5rem;
-}
-
-.form-section:last-child {
-  margin-bottom: 0;
-}
-
-.section-header {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 1.5rem;
-  padding-bottom: 0.75rem;
-  border-bottom: 2px solid rgba(var(--v-theme-primary), 0.1);
-}
-
-.section-icon {
-  background: rgba(var(--v-theme-primary), 0.1);
-  border-radius: 8px;
-  padding: 0.5rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.section-title {
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: rgb(var(--v-theme-on-surface));
-  margin: 0;
-}
-
-/* Field Groups */
-.field-group {
-  margin-bottom: 1.5rem;
-}
-
-.field-group:last-child {
-  margin-bottom: 0;
-}
-
-/* Desktop field spacing */
-@media (min-width: 1200px) {
-  .field-group {
-    margin-bottom: 1.75rem;
-  }
-}
-
-@media (min-width: 1400px) {
-  .field-group {
-    margin-bottom: 2rem;
-  }
-}
-
-/* Ultra-wide field spacing */
-@media (min-width: 1600px) {
-  .field-group {
-    margin-bottom: 2.25rem;
-  }
-}
-
-.field-label {
-  display: block;
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: rgb(var(--v-theme-on-surface));
-  margin-bottom: 0.5rem;
-  line-height: 1.4;
-}
-
-.required-indicator {
-  color: rgb(var(--v-theme-error));
-  font-weight: 700;
-  margin-left: 0.25rem;
-}
-
-.field-hint {
-  color: rgba(var(--v-theme-on-surface), 0.6);
-  font-weight: 400;
-  font-size: 0.8rem;
-  margin-left: 0.5rem;
-}
-
-.field-row {
-  margin: 0 -0.75rem;
-}
-
-.field-row .v-col {
-  padding: 0 0.75rem;
-}
-
-/* Desktop field row optimization */
-@media (min-width: 1200px) {
-  .field-row {
-    margin: 0 -1rem;
-  }
-
-  .field-row .v-col {
-    padding: 0 1rem;
-  }
-}
-
-@media (min-width: 1400px) {
-  .field-row {
-    margin: 0 -1.25rem;
-  }
-
-  .field-row .v-col {
-    padding: 0 1.25rem;
-  }
-}
-
-/* Ultra-wide screen field layout */
-@media (min-width: 1600px) {
-  .field-row {
-    margin: 0 -1.5rem;
-  }
-
-  .field-row .v-col {
-    padding: 0 1.5rem;
-  }
-}
-
-/* Field Styling */
-.readonly-field :deep(.v-field) {
-  background: linear-gradient(135deg,
-    rgba(var(--v-theme-primary), 0.08) 0%,
-    rgba(var(--v-theme-secondary), 0.05) 100%
-  );
-  border: 1px solid rgba(var(--v-theme-primary), 0.2);
-}
-
-.select-field :deep(.v-field),
-.price-field :deep(.v-field),
-.textarea-field :deep(.v-field) {
-  border-radius: 12px;
-  transition: all 0.3s ease;
-}
-
-.select-field :deep(.v-field:hover),
-.textarea-field :deep(.v-field:hover) {
-  box-shadow: 0 4px 12px rgba(var(--v-theme-primary), 0.15);
-}
-
-.price-field :deep(.v-field) {
-  background: rgba(var(--v-theme-success), 0.05);
-  border: 1px solid rgba(var(--v-theme-success), 0.2);
-}
-
-.price-field :deep(.v-field-input) {
-  font-weight: 600;
-  font-size: 1.1rem;
-}
-
-/* Package Item Styling */
-.package-item {
-  padding: 1rem;
-  border-radius: 12px;
-  margin: 0.25rem 0;
-  transition: all 0.3s ease;
-}
-
-.package-item:hover {
-  background: rgba(var(--v-theme-primary), 0.05);
-}
-
-.package-avatar {
-  margin-right: 0.75rem;
-}
-
-.package-name {
-  font-weight: 600;
-  font-size: 1rem;
-}
-
-.package-details {
-  font-size: 0.875rem;
-  color: rgba(var(--v-theme-on-surface), 0.7);
-}
-
-/* Pricing Section */
-.pricing-section {
-  margin-top: 1.5rem;
-  padding: 1rem;
-  background: linear-gradient(135deg,
-    rgba(var(--v-theme-primary), 0.06) 0%,
-    rgba(var(--v-theme-secondary), 0.03) 100%
-  );
-  border-radius: 16px;
-  border: 1px solid rgba(var(--v-theme-primary), 0.15);
-  box-shadow: 0 2px 8px rgba(var(--v-theme-primary), 0.05);
-}
-
-/* Switch Group */
-.switch-group {
-  background: linear-gradient(135deg,
-    rgba(var(--v-theme-primary), 0.05) 0%,
-    rgba(var(--v-theme-secondary), 0.03) 100%
-  );
-  border-radius: 12px;
-  padding: 1rem;
-  border: 1px solid rgba(var(--v-theme-primary), 0.15);
-  box-shadow: 0 2px 8px rgba(var(--v-theme-primary), 0.05);
-}
-
-/* Prorate Info */
-.prorate-info {
-  border-radius: 12px;
-  margin-bottom: 1rem;
-}
-
-.info-content {
-  line-height: 1.5;
-}
-
-.info-title {
-  font-weight: 600;
-  margin-bottom: 0.5rem;
-}
-
-.info-details {
-  margin-left: 0.5rem;
-}
-
-.info-item {
-  margin-bottom: 0.25rem;
-  font-size: 0.875rem;
-}
-
-/* Conditional Sections */
-.conditional-section {
-  margin-top: 1.5rem;
-  padding: 1rem;
-  background: linear-gradient(135deg,
-    rgba(var(--v-theme-primary), 0.06) 0%,
-    rgba(var(--v-theme-secondary), 0.03) 100%
-  );
-  border-radius: 16px;
-  border: 1px solid rgba(var(--v-theme-primary), 0.15);
-  box-shadow: 0 2px 8px rgba(var(--v-theme-primary), 0.05);
-}
-
-/* Form Actions */
-.form-actions {
-  background: linear-gradient(135deg,
-    rgba(var(--v-theme-primary), 0.1) 0%,
-    rgba(var(--v-theme-secondary), 0.06) 100%
-  );
-  padding: 1.5rem 2.5rem;
-  border-top: 1px solid rgba(var(--v-theme-primary), 0.2);
-  box-shadow: 0 -2px 8px rgba(var(--v-theme-primary), 0.05);
-}
-
-/* Desktop form actions */
-@media (min-width: 1200px) {
-  .form-actions {
-    padding: 2rem 3rem;
-  }
-}
-
-@media (min-width: 1400px) {
-  .form-actions {
-    padding: 2.5rem 3.5rem;
-  }
-}
-
-/* Ultra-wide form actions */
-@media (min-width: 1600px) {
-  .form-actions {
-    padding: 3rem 4rem;
-  }
-}
-
-.action-btn {
-  min-width: 140px;
-  height: 48px;
-  border-radius: 12px;
-  font-size: 0.875rem;
-  font-weight: 600;
-  text-transform: none;
-  letter-spacing: 0.025em;
-  transition: all 0.3s ease;
-}
-
-/* Desktop action buttons */
-@media (min-width: 1200px) {
-  .action-btn {
-    min-width: 160px;
-    height: 52px;
-    font-size: 0.95rem;
-  }
-}
-
-@media (min-width: 1400px) {
-  .action-btn {
-    min-width: 180px;
-    height: 56px;
-    font-size: 1rem;
-  }
-}
-
-/* Ultra-wide action buttons */
-@media (min-width: 1600px) {
-  .action-btn {
-    min-width: 200px;
-    height: 60px;
-    font-size: 1.05rem;
-  }
-}
-
-.cancel-btn {
-  margin-right: 1rem;
-}
-
-.cancel-btn:hover {
-  background: rgba(var(--v-theme-error), 0.1);
-  color: rgb(var(--v-theme-error));
-  border-color: rgb(var(--v-theme-error));
-}
-
-.save-btn {
-  background: linear-gradient(135deg, rgb(var(--v-theme-primary)) 0%, rgb(var(--v-theme-secondary)) 100%);
-  box-shadow: 0 4px 16px rgba(var(--v-theme-primary), 0.3);
-}
-
-.save-btn:hover {
-  box-shadow: 0 6px 20px rgba(var(--v-theme-primary), 0.4);
-  transform: translateY(-1px);
-}
-
-.save-btn:disabled {
-  background: rgba(var(--v-theme-on-surface), 0.12);
-  box-shadow: none;
-  transform: none;
-}
-
-/* Dark Theme */
-.v-theme--dark .edit-langganan-container {
-  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-}
-
-.v-theme--dark .form-card {
-  background: #1e293b;
-  border-color: #334155;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-}
-
-.v-theme--dark .pricing-section,
-.v-theme--dark .conditional-section,
-.v-theme--dark .switch-group {
-  background: linear-gradient(135deg,
-    rgba(var(--v-theme-primary), 0.12) 0%,
-    rgba(var(--v-theme-secondary), 0.08) 100%
-  );
-  border-color: rgba(var(--v-theme-primary), 0.3);
-  box-shadow: 0 2px 8px rgba(var(--v-theme-primary), 0.08);
-}
-
-.v-theme--dark .form-actions {
-  background: linear-gradient(135deg,
-    rgba(var(--v-theme-primary), 0.18) 0%,
-    rgba(var(--v-theme-secondary), 0.12) 100%
-  );
-  border-color: rgba(var(--v-theme-primary), 0.3);
-  box-shadow: 0 -2px 8px rgba(var(--v-theme-primary), 0.08);
-}
-
-.v-theme--dark .readonly-field :deep(.v-field) {
-  background: linear-gradient(135deg,
-    rgba(var(--v-theme-primary), 0.1) 0%,
-    rgba(var(--v-theme-secondary), 0.06) 100%
-  );
-  border-color: rgba(var(--v-theme-primary), 0.2);
-}
-
-/* Responsive Design */
-@media (max-width: 1024px) {
-  .content-wrapper {
-    padding: 0 1rem 2rem;
-  }
-  
-  .form-content {
-    padding: 2rem;
-  }
-  
-  .form-actions {
-    padding: 1.25rem 2rem;
-  }
 }
 
 @media (max-width: 768px) {
-  .page-header {
-    padding: 1.5rem 1rem;
-    margin-bottom: 1.5rem;
-  }
-  
-  .header-title {
-    font-size: 1.75rem;
-  }
-  
-  .header-subtitle {
-    font-size: 0.9rem;
-  }
-  
-  .content-wrapper {
-    padding: 0 0.75rem 1.5rem;
-  }
-  
-  .form-content {
-    padding: 1.5rem;
-  }
-  
-  .form-actions {
-    padding: 1rem 1.5rem;
-    flex-direction: column;
-    gap: 0.75rem;
-  }
-  
-  .action-btn {
-    width: 100%;
-    margin: 0;
-  }
-  
-  .section-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.5rem;
-  }
-  
-  .field-row {
-    margin: 0 -0.5rem;
-  }
-  
-  .field-row .v-col {
-    padding: 0 0.5rem;
-  }
-}
-
-@media (max-width: 480px) {
-  .page-header {
-    padding: 1.25rem 0.75rem;
-  }
-  
-  .header-content {
-    gap: 0.75rem;
-  }
-  
-  .header-info {
-    gap: 0.75rem;
-  }
-  
   .header-title {
     font-size: 1.5rem;
   }
   
   .header-subtitle {
-    font-size: 0.85rem;
-  }
-  
-  .content-wrapper {
-    padding: 0 0.5rem 1rem;
-  }
-  
-  .form-content {
-    padding: 1.25rem;
-  }
-  
-  .form-actions {
-    padding: 1rem 1.25rem;
-  }
-  
-  .section-title {
-    font-size: 1.1rem;
-  }
-  
-  .form-section {
-    margin-bottom: 2rem;
-  }
-  
-  .pricing-section,
-  .conditional-section,
-  .switch-group {
-    padding: 0.75rem;
+    font-size: 0.875rem;
   }
 }
 
-@media (max-width: 360px) {
-  .page-header {
-    padding: 1rem 0.5rem;
+/* Glass Button */
+.glass-btn {
+  background: rgba(255, 255, 255, 0.2) !important;
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.glass-btn:hover {
+  background: rgba(255, 255, 255, 0.3) !important;
+  transform: translateY(-2px);
+}
+
+/* Content Wrapper */
+.content-wrapper {
+  width: 100%;
+  margin-top: 3rem;
+  padding: 0 2rem;
+  position: relative;
+  z-index: 2;
+}
+
+/* Mobile responsive padding */
+@media (max-width: 768px) {
+  .content-wrapper {
+    padding: 0 1rem;
+  }
+}
+
+/* Loading & Error */
+.loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  background: white;
+  border-radius: 24px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.alert-icon-wrapper {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 16px;
+}
+
+.alert-icon-wrapper.error {
+  background: rgba(var(--v-theme-error), 0.1);
+}
+
+/* Customer Card */
+.customer-card-header {
+  background: linear-gradient(135deg, rgb(var(--v-theme-primary)) 0%, rgb(var(--v-theme-secondary)) 100%);
+  padding: 16px 24px;
+  display: flex;
+  align-items: center;
+  color: white;
+}
+
+
+/* Custom Select & Inputs */
+.custom-select :deep(.v-field),
+.v-text-field :deep(.v-field),
+.v-textarea :deep(.v-field) {
+  border-radius: 12px;
+  border-color: rgba(var(--v-theme-outline), 0.2);
+  transition: all 0.3s ease;
+}
+
+.custom-select :deep(.v-field:hover),
+.v-text-field :deep(.v-field:hover) {
+  border-color: rgb(var(--v-theme-primary));
+  box-shadow: 0 0 0 4px rgba(var(--v-theme-primary), 0.05);
+}
+
+.custom-select :deep(.v-field.v-field--focused),
+.v-text-field :deep(.v-field.v-field--focused) {
+  box-shadow: 0 0 0 4px rgba(var(--v-theme-primary), 0.1);
+  border-color: rgb(var(--v-theme-primary));
+}
+
+/* Pricing Card */
+.pricing-card {
+  border: none;
+  background: white;
+}
+
+.receipt-header {
+  background: #1e293b;
+  padding: 2rem 1.5rem;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.receipt-header::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 6px;
+  background: radial-gradient(circle, transparent 50%, #1e293b 50%) 0 0/12px 12px repeat-x;
+  transform: translateY(3px);
+}
+
+.receipt-amount {
+  letter-spacing: -1px;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+}
+
+/* Sticky Summary */
+.sticky-summary {
+  position: sticky;
+  top: 2rem;
+}
+
+/* Dark Mode Adjustments */
+.v-theme--dark .edit-langganan-container {
+  background: #0f172a;
+}
+
+.v-theme--dark .loading-state {
+  background: #1e293b;
+}
+
+.v-theme--dark .receipt-header {
+  background: #0f172a;
+}
+
+.v-theme--dark .receipt-header::after {
+  background: radial-gradient(circle, transparent 50%, #0f172a 50%) 0 0/12px 12px repeat-x;
+}
+
+/* Mobile Responsive */
+@media (max-width: 960px) {
+  .header-title {
+    font-size: 2rem;
   }
   
+  .sticky-summary {
+    position: static;
+    margin-top: 2rem;
+  }
+  
+  .page-header {
+    padding-bottom: 3rem;
+  }
+}
+
+@media (max-width: 600px) {
   .header-title {
-    font-size: 1.375rem;
+    font-size: 1.75rem;
   }
   
   .content-wrapper {
-    padding: 0 0.25rem 0.75rem;
+    padding: 0 1rem;
   }
   
-  .form-content {
-    padding: 1rem;
-  }
-  
-  .form-actions {
-    padding: 0.75rem 1rem;
-  }
-  
-  .field-row {
-    margin: 0 -0.25rem;
-  }
-  
-  .field-row .v-col {
-    padding: 0 0.25rem;
+  .customer-avatar {
+    width: 64px !important;
+    height: 64px !important;
+    margin-top: -32px;
   }
 }
 

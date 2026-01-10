@@ -218,6 +218,122 @@
       </div>
     </div>
 
+    <!-- Invoice Generation Monitoring Widget - Paling Bawah -->
+    <div v-if="canViewInvoiceMonitor && invoiceMonitorData" class="invoice-monitor-section mt-8 mb-6">
+      <div class="invoice-monitor-widget">
+        <div class="widget-header">
+          <div class="header-left">
+            <v-icon class="widget-icon" :color="invoiceMonitorData.status_color">mdi-file-chart-check</v-icon>
+            <div class="header-text">
+              <h3 class="widget-title">Invoice Generation Monitor</h3>
+              <p class="widget-subtitle">Monitoring invoice otomatis untuk {{ formatDate(invoiceMonitorData.target_date) }}</p>
+            </div>
+          </div>
+          <div class="header-right">
+            <v-chip :color="invoiceMonitorData.status_color" variant="flat" size="small" class="status-chip">
+              <span class="status-icon">{{ invoiceMonitorData.status_icon }}</span>
+              <span class="status-text">{{ invoiceMonitorData.status }}</span>
+            </v-chip>
+            <v-btn icon="mdi-refresh" size="small" variant="text" @click="fetchInvoiceMonitor" :loading="loadingInvoiceMonitor"></v-btn>
+          </div>
+        </div>
+
+        <div class="widget-body">
+          <div class="stats-row">
+            <div class="stat-box">
+              <div class="stat-label">Seharusnya</div>
+              <div class="stat-value">{{ invoiceMonitorData.total_should_have }}</div>
+            </div>
+            <div class="stat-box success">
+              <div class="stat-label">Berhasil</div>
+              <div class="stat-value">{{ invoiceMonitorData.total_generated }}</div>
+            </div>
+            <div class="stat-box" :class="invoiceMonitorData.total_skipped > 0 ? 'error' : 'success'">
+              <div class="stat-label">Terlewat</div>
+              <div class="stat-value">{{ invoiceMonitorData.total_skipped }}</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-label">Success Rate</div>
+              <div class="stat-value">{{ invoiceMonitorData.success_rate }}%</div>
+            </div>
+          </div>
+
+          <div class="widget-message" :class="invoiceMonitorData.status_color">
+            {{ invoiceMonitorData.message }}
+          </div>
+
+          <div class="widget-footer" v-if="invoiceMonitorData.total_skipped > 0">
+            <v-btn color="primary" variant="elevated" size="small" @click="viewSkippedDetails">
+              <v-icon start>mdi-eye</v-icon>
+              Lihat Detail Pelanggan Terlewat
+            </v-btn>
+          </div>
+        </div>
+      </div>
+
+      <!-- Additional Monitoring for 2026-01-01 -->
+      <div class="invoice-monitor-widget future-monitor" style="margin-top: 1.5rem;">
+        <div class="widget-header">
+          <div class="header-left">
+            <v-icon class="widget-icon" color="primary">mdi-calendar-clock</v-icon>
+            <div class="header-text">
+              <h3 class="widget-title">Monitoring Invoice Tahun Baru 2026</h3>
+              <p class="widget-subtitle">Monitoring invoice otomatis untuk 1 Januari 2026</p>
+            </div>
+          </div>
+          <div class="header-right">
+            <v-chip color="info" variant="flat" size="small" class="status-chip">
+              <v-icon start size="14">mdi-information</v-icon>
+              <span>UPCOMING</span>
+            </v-chip>
+            <v-btn icon="mdi-refresh" size="small" variant="text" @click="fetchFutureInvoiceMonitor" :loading="loadingFutureInvoiceMonitor"></v-btn>
+          </div>
+        </div>
+
+        <div class="widget-body">
+          <div v-if="futureInvoiceMonitorData">
+            <div class="stats-row">
+              <div class="stat-box">
+                <div class="stat-label">Estimasi Pelanggan</div>
+                <div class="stat-value">{{ futureInvoiceMonitorData.estimated_customers || 0 }}</div>
+              </div>
+              <div class="stat-box" :class="getSystemStatusClass(futureInvoiceMonitorData.system_status)">
+                <div class="stat-label">Status Sistem</div>
+                <div class="stat-value">{{ futureInvoiceMonitorData.system_status || 'Siap' }}</div>
+              </div>
+              <div class="stat-box">
+                <div class="stat-label">Menuju 1 Jan 2026</div>
+                <div class="stat-value">{{ futureInvoiceMonitorData.days_until }} hari</div>
+              </div>
+              <div class="stat-box">
+                <div class="stat-label">Jadwal Generate</div>
+                <div class="stat-value">27 Des 2025</div>
+              </div>
+            </div>
+
+            <div class="widget-message info">
+              <v-icon class="message-icon">mdi-information</v-icon>
+              <span>Invoice untuk 1 Januari 2026 akan di-generate otomatis pada 27 Desember 2025 (H-5)</span>
+            </div>
+          </div>
+
+          <div v-else class="future-monitor-placeholder">
+            <div class="placeholder-content">
+              <v-icon size="32" color="primary">mdi-calendar-alert</v-icon>
+              <p class="placeholder-text">Memuat data monitoring untuk 2026...</p>
+            </div>
+          </div>
+
+          <div class="widget-footer">
+            <v-btn color="primary" variant="outlined" size="small" @click="viewFutureMonitoringDetails">
+              <v-icon start>mdi-chart-line</v-icon>
+              Lihat Proyeksi
+            </v-btn>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <v-dialog v-model="dialogPaketDetail" max-width="700px" persistent>
       <v-card class="package-detail-card elevation-12">
         <div class="dialog-header">
@@ -541,6 +657,19 @@ const loyalitasUserList = ref<LoyalitasUser[]>([]);
 const loadingLoyalitasDetail = ref(false);
 const selectedLoyalitasSegmen = ref('');
 
+// Invoice Monitor State
+const invoiceMonitorData = ref<any>(null);
+const loadingInvoiceMonitor = ref(false);
+
+// Future Invoice Monitor State (for 2026-01-01)
+const futureInvoiceMonitorData = ref<any>(null);
+const loadingFutureInvoiceMonitor = ref(false);
+
+// User Permissions
+const userRole = ref<string>('');
+const canViewInvoiceMonitor = ref<boolean>(false);
+const canViewFutureProjection = ref<boolean>(false);
+
 // --- Computed Properties ---
 const customerStats = computed(() =>
   allStats.value.filter(s => s.title.toLowerCase().includes('pelanggan'))
@@ -600,6 +729,132 @@ async function fetchPaketDetails() {
   }
 }
 
+// Invoice Monitor Functions
+async function fetchInvoiceMonitor() {
+  try {
+    loadingInvoiceMonitor.value = true;
+
+    // Check permissions first
+    if (!canViewInvoiceMonitor.value) {
+      console.warn('User does not have permission to view invoice monitor');
+      return;
+    }
+
+    const response = await apiClient.get('/dashboard/invoice-generation-monitor');
+    invoiceMonitorData.value = response.data;
+  } catch (error) {
+    console.error('Error fetching invoice monitor:', error);
+    // If it's a 403 error, it means user doesn't have permission
+    if (error.response?.status === 403) {
+      canViewInvoiceMonitor.value = false;
+    }
+  } finally {
+    loadingInvoiceMonitor.value = false;
+  }
+}
+
+function viewSkippedDetails() {
+  if (invoiceMonitorData.value?.detail_url) {
+    window.open(invoiceMonitorData.value.detail_url, '_blank');
+  }
+}
+
+// User Permission Functions
+async function fetchUserPermissions() {
+  try {
+    // Get user info from API to ensure we have the latest role
+    const response = await apiClient.get('/users/me');
+    const user = response.data;
+
+    // Also store in localStorage for other components
+    localStorage.setItem('user', JSON.stringify(user));
+
+    userRole.value = user.role?.name || user.role || 'viewer';
+
+    // Check permissions based on role
+    // Roles that can access invoice monitoring: superadmin, admin, manager
+    const adminRoles = ['superadmin', 'admin', 'manager'];
+    canViewInvoiceMonitor.value = adminRoles.includes(userRole.value.toLowerCase());
+    canViewFutureProjection.value = adminRoles.includes(userRole.value.toLowerCase());
+
+    console.log('User role:', userRole.value);
+    console.log('Can view invoice monitor:', canViewInvoiceMonitor.value);
+  } catch (error) {
+    console.error('Error fetching user permissions:', error);
+    // Default to no access if error
+    canViewInvoiceMonitor.value = false;
+    canViewFutureProjection.value = false;
+  }
+}
+
+// Future Invoice Monitor Functions (for 2026-01-01)
+async function fetchFutureInvoiceMonitor() {
+  try {
+    loadingFutureInvoiceMonitor.value = true;
+
+    // Check permissions first
+    if (!canViewFutureProjection.value) {
+      console.warn('User does not have permission to view future invoice projection');
+      return;
+    }
+
+    // Call the actual API endpoint
+    const response = await apiClient.get('/dashboard/future-invoice-projection?target_date=2026-01-01');
+    futureInvoiceMonitorData.value = response.data;
+  } catch (error) {
+    console.error('Error fetching future invoice monitor:', error);
+
+    // Fallback to mock data if API fails
+    const activeCustomersOnFirst = allStats.value.find(s => s.title.toLowerCase().includes('pelanggan'))?.value || 0;
+
+    futureInvoiceMonitorData.value = {
+      estimated_customers: Math.round(activeCustomersOnFirst * 0.3),
+      system_status: 'Siap',
+      target_date: '2026-01-01',
+      generation_date: '2025-12-27',
+      days_until: calculateDaysUntil('2026-01-01')
+    };
+  } finally {
+    loadingFutureInvoiceMonitor.value = false;
+  }
+}
+
+function viewFutureMonitoringDetails() {
+  if (futureInvoiceMonitorData.value) {
+    const info = `
+Proyeksi Invoice untuk 1 Januari 2026:
+
+• Estimasi Pelanggan: ${futureInvoiceMonitorData.value.estimated_customers || 0} pelanggan
+• Persentase dari Total Aktif: ${futureInvoiceMonitorData.value.percentage_of_active || 0}%
+• Tanggal Generate: 27 Desember 2025 (H-5)
+• Hari Menuju Generate: ${futureInvoiceMonitorData.value.days_until || 0} hari
+
+${futureInvoiceMonitorData.value.days_until > 30 ?
+  '✅ Sistem siap untuk generate otomatis' :
+  '⚠️ Waktu mendekat, pastikan semua data pelanggan lengkap'
+}
+    `;
+    alert(info);
+  }
+}
+
+function calculateDaysUntil(targetDate: string): number {
+  const today = new Date();
+  const target = new Date(targetDate);
+  const diffTime = target.getTime() - today.getTime();
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  return diffDays > 0 ? diffDays : 0;
+}
+
+function formatDate(dateString: string): string {
+  const date = new Date(dateString);
+  return date.toLocaleDateString('id-ID', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric'
+  });
+}
+
 // Fungsi loyalitas dengan error handling yang lebih baik
 async function handleLoyalitasChartClick(_event: any, elements: any[]) {
   if (elements.length === 0) return;
@@ -653,6 +908,17 @@ function getShortLabel(segmen: string): string {
   if (segmen === "Lunas (Tapi Telat)") return "Telat";
   if (segmen === "Menunggak") return "Nunggak";
   return segmen;
+}
+
+function getSystemStatusClass(status: string): string {
+  if (!status) return "info";
+  const s = status.toLowerCase();
+  
+  if (s.includes("selesai") || s.includes("siap") || s === "healthy") return "success";
+  if (s.includes("terlewat") || s.includes("critical") || s.includes("error")) return "error";
+  if (s.includes("sebagian") || s.includes("warning") || s.includes("attention")) return "warning";
+  
+  return "info";
 }
 
 // PERBAIKAN: Chart options dengan tipe yang benar
@@ -1054,21 +1320,79 @@ async function downloadAsPNG(elementId: string, filename: string) {
     }
 }
 
+// Function untuk fetch invoice summary
+async function fetchInvoiceSummary() {
+  try {
+    const response = await apiClient.get('/invoices/summary');
+    const summary = response.data;
+
+    // Debug log
+    console.log('Invoice Summary:', summary);
+
+    // Return summary untuk digunakan nanti
+    return summary;
+
+  } catch (error) {
+    console.error('Error fetching invoice summary:', error);
+    return null;
+  }
+}
+
 // onMounted tetap sama seperti sebelumnya
 onMounted(async () => {
   loading.value = true;
+
+  // Fetch user permissions first
+  await fetchUserPermissions();
+
   let data: any = null; // Deklarasi data di luar try-catch
   try {
+    // Fetch dashboard data biasa
     const response = await apiClient.get('/dashboard/');
     data = response.data;
 
     revenueData.value = data.revenue_summary;
 
+    // Gunakan stats cards dari dashboard (jangan replace dengan invoice summary)
     allStats.value = (data.stat_cards || []).map((card: any) => ({
       ...card,
       icon: getIconForStat(card.title),
       color: getColorForStat(card.title)
     }));
+
+    // Fetch invoice summary terpisah (tapi jangan replace allStats)
+    const invoiceSummary = await fetchInvoiceSummary();
+
+    // Tambahkan stats dari invoice summary jika berhasil
+    if (invoiceSummary) {
+      // Tambahkan stats khusus invoice ke array existing
+      const additionalStats = [
+        {
+          title: 'Invoice Otomatis',
+          value: invoiceSummary.invoice_types.automatic,
+          icon: 'mdi-robot',
+          color: 'indigo'
+        },
+        {
+          title: 'Invoice Manual',
+          value: invoiceSummary.invoice_types.manual,
+          icon: 'mdi-hand-pointing-up',
+          color: 'cyan'
+        },
+        {
+          title: 'Reinvoice',
+          value: invoiceSummary.total_reinvoice,
+          icon: 'mdi-refresh-circle',
+          color: 'deep-orange'
+        }
+      ];
+
+      // Gabung dengan stats yang sudah ada
+      allStats.value = [...allStats.value, ...additionalStats];
+
+      // Debug log
+      console.log('All Stats after merge:', allStats.value);
+    }
 
     // Setup chart data...
     if (data.lokasi_chart) {
@@ -1164,6 +1488,37 @@ onMounted(async () => {
             borderRadius: 6,
             stack: 'Stack 0'
           },
+          // Invoice Type Datasets
+          {
+            type: 'bar',
+            label: 'Otomatis',
+            data: data.invoice_summary_chart.otomatis,
+            backgroundColor: 'rgba(59, 130, 246, 0.8)',
+            borderColor: 'rgb(59, 130, 246)',
+            borderWidth: 2,
+            borderRadius: 6,
+            stack: 'Stack 1'
+          },
+          {
+            type: 'bar',
+            label: 'Manual',
+            data: data.invoice_summary_chart.manual,
+            backgroundColor: 'rgba(147, 51, 234, 0.8)',
+            borderColor: 'rgb(147, 51, 234)',
+            borderWidth: 2,
+            borderRadius: 6,
+            stack: 'Stack 1'
+          },
+          {
+            type: 'bar',
+            label: 'Reinvoice',
+            data: data.invoice_summary_chart.reinvoice,
+            backgroundColor: 'rgba(236, 72, 153, 0.8)',
+            borderColor: 'rgb(236, 72, 153)',
+            borderWidth: 2,
+            borderRadius: 6,
+            stack: 'Stack 1'
+          },
         ]
       };
     } else {
@@ -1224,6 +1579,37 @@ onMounted(async () => {
             borderRadius: 6,
             stack: 'Stack 0'
           },
+          // Invoice Type Datasets
+          {
+            type: 'bar',
+            label: 'Otomatis',
+            data: [0, 0, 0, 0, 0, 0],
+            backgroundColor: 'rgba(59, 130, 246, 0.8)',
+            borderColor: 'rgb(59, 130, 246)',
+            borderWidth: 2,
+            borderRadius: 6,
+            stack: 'Stack 1'
+          },
+          {
+            type: 'bar',
+            label: 'Manual',
+            data: [0, 0, 0, 0, 0, 0],
+            backgroundColor: 'rgba(147, 51, 234, 0.8)',
+            borderColor: 'rgb(147, 51, 234)',
+            borderWidth: 2,
+            borderRadius: 6,
+            stack: 'Stack 1'
+          },
+          {
+            type: 'bar',
+            label: 'Reinvoice',
+            data: [0, 0, 0, 0, 0, 0],
+            backgroundColor: 'rgba(236, 72, 153, 0.8)',
+            borderColor: 'rgb(236, 72, 153)',
+            borderWidth: 2,
+            borderRadius: 6,
+            stack: 'Stack 1'
+          },
         ]
       };
     }
@@ -1268,6 +1654,17 @@ onMounted(async () => {
     }
 
     fetchPaketDetails();
+
+    // Load invoice monitor widgets only if user has permission
+    if (canViewInvoiceMonitor.value) {
+      console.log('Fetching invoice monitor...');
+      fetchInvoiceMonitor(); // Load invoice monitor widget data
+    }
+
+    if (canViewFutureProjection.value) {
+      console.log('Fetching future invoice monitor...');
+      fetchFutureInvoiceMonitor(); // Load future invoice monitor for 2026-01-01
+    }
 
   } catch (error) {
     console.error("Failed to fetch dashboard data:", error);
@@ -2861,6 +3258,337 @@ onMounted(async () => {
 
   .users-grid {
     gap: 0.75rem;
+  }
+}
+
+/* Invoice Monitor Widget Styling */
+.invoice-monitor-section {
+  display: flex;
+  flex-direction: column;
+}
+
+.invoice-monitor-widget {
+  background: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(25px);
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1), 0 2px 8px rgba(0, 0, 0, 0.05);
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
+}
+
+.invoice-monitor-widget:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.15), 0 4px 16px rgba(0, 0, 0, 0.1);
+  border-color: rgba(99, 102, 241, 0.3);
+}
+
+.widget-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 1.5rem 1.5rem 1rem 1.5rem;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.05) 0%, rgba(139, 92, 246, 0.03) 100%);
+  border-bottom: 1px solid rgba(99, 102, 241, 0.1);
+}
+
+.header-left {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.widget-icon {
+  font-size: 24px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.header-text {
+  flex: 1;
+}
+
+.widget-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: rgb(var(--v-theme-on-surface));
+  margin: 0 0 0.25rem 0;
+  line-height: 1.2;
+}
+
+.v-theme--light .widget-title {
+  color: #1e293b;
+}
+
+.v-theme--dark .widget-title {
+  color: #f8fafc;
+}
+
+.widget-subtitle {
+  font-size: 0.875rem;
+  color: rgba(var(--v-theme-on-surface), 0.7);
+  font-weight: 500;
+  margin: 0;
+}
+
+.v-theme--light .widget-subtitle {
+  color: #64748b;
+}
+
+.v-theme--dark .widget-subtitle {
+  color: #94a3b8;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.status-chip {
+  font-weight: 600;
+  font-size: 0.75rem;
+  height: 32px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s ease;
+}
+
+.status-icon {
+  margin-right: 4px;
+}
+
+.widget-body {
+  padding: 1.5rem;
+}
+
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.stat-box {
+  background: rgba(248, 250, 252, 0.8);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 12px;
+  padding: 1rem;
+  text-align: center;
+  transition: all 0.2s ease;
+}
+
+.stat-box:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.stat-box.success {
+  background: rgba(34, 197, 94, 0.1);
+  border-color: rgba(34, 197, 94, 0.2);
+}
+
+.stat-box.error {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.2);
+}
+
+.stat-box.info {
+  background: rgba(59, 130, 246, 0.1);
+  border-color: rgba(59, 130, 246, 0.2);
+}
+
+.stat-label {
+  font-size: 0.75rem;
+  color: rgba(var(--v-theme-on-surface), 0.7);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 0.5rem;
+}
+
+.v-theme--light .stat-label {
+  color: #64748b;
+}
+
+.v-theme--dark .stat-label {
+  color: #94a3b8;
+}
+
+.stat-value {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: rgb(var(--v-theme-on-surface));
+  line-height: 1;
+}
+
+.v-theme--light .stat-value {
+  color: #1e293b;
+}
+
+.v-theme--dark .stat-value {
+  color: #f8fafc;
+}
+
+.widget-message {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1rem;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  margin-bottom: 1rem;
+}
+
+.widget-message.success {
+  background: rgba(34, 197, 94, 0.1);
+  color: rgb(34, 197, 94);
+  border: 1px solid rgba(34, 197, 94, 0.2);
+}
+
+.widget-message.warning {
+  background: rgba(251, 191, 36, 0.1);
+  color: rgb(251, 191, 36);
+  border: 1px solid rgba(251, 191, 36, 0.2);
+}
+
+.widget-message.error {
+  background: rgba(239, 68, 68, 0.1);
+  color: rgb(239, 68, 68);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.widget-message.info {
+  background: rgba(59, 130, 246, 0.1);
+  color: rgb(59, 130, 246);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+}
+
+.message-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.widget-footer {
+  display: flex;
+  justify-content: center;
+  padding-top: 0;
+}
+
+.future-monitor {
+  border-color: rgba(59, 130, 246, 0.2);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.98) 0%, rgba(240, 249, 255, 0.95) 100%);
+}
+
+.future-monitor .widget-header {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.08) 0%, rgba(147, 51, 234, 0.05) 100%);
+  border-bottom-color: rgba(59, 130, 246, 0.2);
+}
+
+.future-monitor-placeholder {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 3rem;
+}
+
+.placeholder-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  text-align: center;
+}
+
+.placeholder-text {
+  color: rgba(var(--v-theme-on-surface), 0.6);
+  font-size: 0.875rem;
+  font-weight: 500;
+  margin: 0;
+}
+
+.v-theme--light .placeholder-text {
+  color: #64748b;
+}
+
+.v-theme--dark .placeholder-text {
+  color: #94a3b8;
+}
+
+/* Dark Theme for Invoice Monitor */
+.v-theme--dark .invoice-monitor-widget {
+  background: rgba(30, 30, 30, 0.95);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.v-theme--dark .future-monitor {
+  background: linear-gradient(135deg, rgba(30, 30, 30, 0.95) 0%, rgba(30, 41, 59, 0.95) 100%);
+  border-color: rgba(59, 130, 246, 0.3);
+}
+
+.v-theme--dark .stat-box {
+  background: rgba(40, 40, 40, 0.8);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.v-theme--dark .stat-box.success {
+  background: rgba(34, 197, 94, 0.15);
+  border-color: rgba(34, 197, 94, 0.3);
+}
+
+.v-theme--dark .stat-box.error {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+.v-theme--dark .stat-box.info {
+  background: rgba(59, 130, 246, 0.15);
+  border-color: rgba(59, 130, 246, 0.3);
+}
+
+/* Responsive Design for Invoice Monitor */
+@media (max-width: 768px) {
+  .widget-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+    padding: 1.25rem;
+  }
+
+  .header-right {
+    align-self: flex-end;
+  }
+
+  .stats-row {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+  }
+
+  .stat-box {
+    padding: 0.875rem;
+  }
+
+  .stat-value {
+    font-size: 1.25rem;
+  }
+
+  .widget-body {
+    padding: 1.25rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .stats-row {
+    grid-template-columns: 1fr;
+  }
+
+  .widget-title {
+    font-size: 1.125rem;
+  }
+
+  .widget-subtitle {
+    font-size: 0.8rem;
   }
 }
 

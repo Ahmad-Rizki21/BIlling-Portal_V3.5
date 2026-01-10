@@ -31,6 +31,7 @@ from pydantic import ValidationError
 import logging
 
 from ..models.invoice import Invoice as InvoiceModel
+from ..models.invoice_archive import InvoiceArchive as InvoiceArchiveModel
 from ..models.langganan import Langganan as LanggananModel
 from ..models.pelanggan import Pelanggan as PelangganModel
 from ..schemas.invoice import (
@@ -132,14 +133,15 @@ router = APIRouter(
 @router.get("/", response_model=List[InvoiceSchema])
 async def get_all_invoices(
     db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user),  # PROTECTED
     search: Optional[str] = None,
     status_invoice: Optional[str] = None,
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
-    show_active_only: Optional[bool] = False,  # <-- FILTER untuk link pembayaran aktif saja
-    exclude_expired: Optional[bool] = False,  # <-- FILTER untuk exclude invoice expired
-    skip: int = 0,  # <-- TAMBAHKAN INI
-    limit: Optional[int] = None,  # <-- Tidak mengubah default untuk menjaga logika bisnis
+    show_active_only: Optional[bool] = False,  
+    exclude_expired: Optional[bool] = False, 
+    skip: int = 0, 
+    limit: Optional[int] = None,
 ):
     """Mengambil semua data invoice dengan filter."""
     # OPTIMIZED: Query dengan comprehensive eager loading untuk mencegah semua N+1 problems
@@ -158,11 +160,17 @@ async def get_all_invoices(
 
     if search:
         search_term = f"%{search}%"
+        # Cek apakah search term adalah angka (untuk pelanggan_id)
+        is_numeric_search = search.strip().isdigit()
+
         query = query.where(
             or_(
                 InvoiceModel.invoice_number.ilike(search_term),
                 PelangganModel.nama.ilike(search_term),
                 InvoiceModel.id_pelanggan.ilike(search_term),
+                # Tambahkan filter langsung untuk pelanggan_id (BigInteger foreign key)
+                # Ini memperbaiki bug di mana riwayat pembayaran di view langganan tidak muncul
+                InvoiceModel.pelanggan_id == int(search.strip()) if is_numeric_search else False,
             )
         )
 
@@ -205,13 +213,77 @@ async def get_all_invoices(
             )
         ).order_by(InvoiceModel.tgl_invoice.desc())
 
-    # Optimized: Tambahkan order by untuk konsistent pagination
+    # Optimized: Menambahkan order by untuk konsistent pagination
     if show_active_only:
         query = query.order_by(InvoiceModel.tgl_invoice.desc())
     else:
         query = query.order_by(InvoiceModel.created_at.desc())
 
-    # Terapkan paginasi setelah semua filter
+    # Logic penentuan apakah perlu cek arsip
+    # Kita cek arsip jika:
+    # 1. Ada pencarian (search text)
+    # 2. Filter status adalah 'Lunas', 'Kadaluarsa', atau 'Expired' (karena data ini biasanya diarsipkan)
+    # 3. Rentang tanggal diberikan (karena mungkin data lama)
+    check_archive = False
+    if search:
+        check_archive = True
+    elif status_invoice in ['Lunas', 'Kadaluarsa', 'Expired']:
+        check_archive = True
+    elif start_date or end_date:
+        check_archive = True
+
+    # Jika perlu cek arsip, kita gunakan logic gabungan
+    if check_archive:
+        # Eksekusi query utama dulu (tanpa pagination limit/offset di sini)
+        result_main = await db.execute(query)
+        invoices_main = result_main.scalars().unique().all()
+
+        # Query untuk arsip
+        query_archive = (
+            select(InvoiceArchiveModel).join(InvoiceArchiveModel.pelanggan)
+            .options(
+                joinedload(InvoiceArchiveModel.pelanggan)
+            )
+        )
+        
+        # Apply filters to archive query
+        if search:
+            search_term = f"%{search}%"
+            query_archive = query_archive.where(
+                or_(
+                    InvoiceArchiveModel.invoice_number.ilike(search_term),
+                    PelangganModel.nama.ilike(search_term),
+                    InvoiceArchiveModel.id_pelanggan.ilike(search_term),
+                )
+            )
+        
+        if status_invoice:
+            query_archive = query_archive.where(InvoiceArchiveModel.status_invoice == status_invoice)
+            
+        if start_date:
+            query_archive = query_archive.where(InvoiceArchiveModel.tgl_jatuh_tempo >= start_date)
+        if end_date:
+            query_archive = query_archive.where(InvoiceArchiveModel.tgl_jatuh_tempo <= end_date)
+
+        # Execute archive query
+        result_archive = await db.execute(query_archive)
+        invoices_archive = result_archive.scalars().unique().all()
+        
+        # Gabungkan hasil
+        all_invoices = list(invoices_main) + list(invoices_archive)
+        
+        # Sortir gabungan (default by created_at desc, atau tgl_invoice desc)
+        # Handle created_at is None in archive if any
+        # Menggunakan tgl_invoice sebagai primary sort key karena lebih reliable untuk invoice lama
+        all_invoices.sort(key=lambda x: x.tgl_invoice or x.created_at or datetime.min, reverse=True)
+        
+        # Manual Pagination slice
+        start_idx = skip
+        end_idx = skip + (limit if limit else len(all_invoices))
+        return all_invoices[start_idx:end_idx]
+
+    # Terapkan paginasi setelah semua filter (jika tidak cek arsip)
+    query = query.order_by(InvoiceModel.created_at.desc()) # Ensure default sort
     query = query.offset(skip).limit(limit)
     # ---------------------------
 
@@ -297,7 +369,17 @@ async def _process_successful_payment(db: AsyncSession, invoice: InvoiceModel, p
             langganan.harga_awal = round(harga_normal_full, 0)
 
     else:  # Skenario 3: Jika sudah Otomatis (PEMBAYARAN BULANAN NORMAL)
-        current_due_date = langganan.tgl_jatuh_tempo or date.today()
+        # FIX LOGIC: Gunakan invoice.tgl_jatuh_tempo sebagai basis perhitungan, BUKAN langganan.tgl_jatuh_tempo.
+        # Menggunakan langganan.tgl_jatuh_tempo (mutable) berisiko jika callback diproses 2x (misal user bayar double klik atau retry),
+        # yang menyebabkan tanggal loncat 2 bulan (Des -> Jan -> Feb).
+        # Dengan pakai invoice.tgl_jatuh_tempo (fixed), hasilnya selalu konsisten (Des + 1 bulan = Jan).
+        current_due_date = invoice.tgl_jatuh_tempo
+        
+        # Fallback safety jika data lama tidak punya tgl_jatuh_tempo
+        if not current_due_date:
+            current_due_date = date.today()
+            logger.warning(f"Invoice {invoice.invoice_number} tidak punya tgl_jatuh_tempo, pakai today: {current_due_date}")
+
         # Convert Date to datetime untuk relativedelta - handle SQLAlchemy Date
         current_due_datetime = safe_to_datetime(current_due_date)
         next_due_datetime = current_due_datetime + relativedelta(months=1)
@@ -363,7 +445,7 @@ async def _process_successful_payment(db: AsyncSession, invoice: InvoiceModel, p
                     "timestamp": datetime.now().isoformat(),
                 },
             }
-            # Tambahkan log ini untuk memastikan user ID ditemukan
+            # Menambahkan log ini untuk memastikan user ID ditemukan
             logger.info(f"Mencoba mengirim notifikasi pembayaran ke user IDs: {target_user_ids}")
             # Convert ke list untuk broadcast_to_roles
             user_ids_list = list(target_user_ids)
@@ -614,6 +696,118 @@ async def handle_xendit_callback(
     return {"message": "Callback processed successfully"}
 
 
+# POST /invoices/create_reinvoice/{expired_invoice_id} - Buat reinvoice dari invoice expired
+# Buat reinvoice dari invoice yang sudah expired
+# Path parameters:
+# - expired_invoice_id: ID invoice yang mau direinvoice
+# Response: data invoice baru + invoice lama yang diupdate
+# Permission: butuh login (authenticated user)
+# Fitur:
+# - Copy data dari invoice expired
+# - Update tanggal jatuh tempo ke bulan depan
+# - Set flag is_reinvoice=True
+# - Link ke invoice asli via original_invoice_id
+# - Update status invoice lama jadi Expired
+# Validation:
+# - Cek invoice expired ada
+# - Cek pelanggan punya langganan aktif
+# Error handling: 404 kalo invoice/langganan nggak ada, 500 kalo gagal create
+@router.post("/create_reinvoice/{expired_invoice_id}")
+async def create_reinvoice(
+    expired_invoice_id: int,
+    current_user: UserModel = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Buat reinvoice dari invoice yang sudah expired.
+    Otomatis menyalin data dan menambahkan flag reinvoice.
+    """
+    try:
+        # Query invoice yang expired
+        stmt = select(InvoiceModel).where(InvoiceModel.id == expired_invoice_id).options(
+            joinedload(InvoiceModel.pelanggan).options(
+                joinedload(PelangganModel.langganan),
+                joinedload(PelangganModel.harga_layanan),
+                joinedload(PelangganModel.data_teknis),
+            )
+        )
+        result = await db.execute(stmt)
+        expired_invoice = result.unique().scalar_one_or_none()
+
+        if not expired_invoice:
+            raise HTTPException(status_code=404, detail="Invoice tidak ditemukan")
+
+        # Cari langganan untuk pelanggan ini (TIDAK PEDULI status - bisa Aktif/Suspended/Suspend)
+        # Reinvoice harus bisa dibuat untuk langganan dengan status apapun
+        langganan = None
+        if expired_invoice.pelanggan and expired_invoice.pelanggan.langganan:
+            # Ambil langganan pertama yang ada (biasanya pelanggan hanya punya 1 langganan aktif)
+            # Prioritas: Aktif > Suspended > Suspend > Berhenti
+            status_priority = {"Aktif": 1, "Suspended": 2, "Suspend": 3, "Berhenti": 4}
+            sorted_langganan = sorted(
+                expired_invoice.pelanggan.langganan,
+                key=lambda x: status_priority.get(x.status, 99)
+            )
+            langganan = sorted_langganan[0] if sorted_langganan else None
+
+        if not langganan:
+            raise HTTPException(status_code=404, detail="Tidak ada langganan untuk pelanggan ini")
+
+        # Update tanggal jatuh tempo ke bulan depan
+        from datetime import date
+        from dateutil.relativedelta import relativedelta
+
+        current_due = date.fromisoformat(str(expired_invoice.tgl_jatuh_tempo))
+        new_due = current_due + relativedelta(months=1)
+        langganan.tgl_jatuh_tempo = new_due
+
+        # Buat data invoice generate
+        # generate_manual_invoice akan otomatis menghitung harga berdasarkan metode_pembayaran langganan
+        # (Otomatis = harga penuh, Prorate = harga proporsional)
+        from ..schemas.invoice import InvoiceGenerate
+        invoice_data = InvoiceGenerate(
+            langganan_id=langganan.id,
+            is_reinvoice=True,
+            original_invoice_id=expired_invoice_id,
+            reinvoice_reason="expired"
+        )
+
+        # Generate invoice baru - panggil fungsi yang sudah ada
+        new_invoice = await generate_manual_invoice(invoice_data, db)
+
+        # Update status invoice lama menjadi Expired jika belum
+        if expired_invoice.status_invoice != "Expired":
+            expired_invoice.status_invoice = "Expired"
+
+        await db.commit()
+
+        # Convert ke dictionary untuk response
+        return {
+            "message": "Reinvoice berhasil dibuat",
+            "new_invoice": {
+                "id": new_invoice.id,
+                "invoice_number": new_invoice.invoice_number,
+                "status_invoice": new_invoice.status_invoice,
+                "total_harga": new_invoice.total_harga,
+                "tgl_jatuh_tempo": str(new_invoice.tgl_jatuh_tempo),
+                "is_reinvoice": new_invoice.is_reinvoice,
+                "original_invoice_id": new_invoice.original_invoice_id
+            },
+            "expired_invoice": {
+                "id": expired_invoice.id,
+                "invoice_number": expired_invoice.invoice_number,
+                "status_invoice": expired_invoice.status_invoice
+            }
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating reinvoice: {e}")
+        await db.rollback()
+        raise HTTPException(status_code=500, detail="Gagal membuat reinvoice")
+
+
 # POST /invoices/generate - Generate invoice manual
 # Buat bikin invoice baru secara manual berdasarkan langganan yang udah ada
 # Request body: langganan_id
@@ -697,12 +891,15 @@ async def generate_manual_invoice(invoice_data: InvoiceGenerate, db: AsyncSessio
     if not paket.harga or not brand.pajak:
         raise HTTPException(status_code=400, detail="Harga paket atau pajak tidak valid")
 
-    existing_invoice_stmt = select(InvoiceModel.id).where(
-        InvoiceModel.pelanggan_id == langganan.pelanggan_id,
-        InvoiceModel.tgl_jatuh_tempo == langganan.tgl_jatuh_tempo,
-    )
-    if (await db.execute(existing_invoice_stmt)).scalar_one_or_none():
-        raise HTTPException(status_code=409, detail="Invoice untuk periode ini sudah ada.")
+    # Check existing invoice - tapi allow jika status expired/kadaluarsa dan ini adalah reinvoice
+    if not invoice_data.is_reinvoice:
+        existing_invoice_stmt = select(InvoiceModel.id).where(
+            InvoiceModel.pelanggan_id == langganan.pelanggan_id,
+            InvoiceModel.tgl_jatuh_tempo == langganan.tgl_jatuh_tempo,
+        )
+        existing = (await db.execute(existing_invoice_stmt)).scalar_one_or_none()
+        if existing:
+            raise HTTPException(status_code=409, detail="Invoice untuk periode ini sudah ada.")
 
     # Handle SQLAlchemy Date untuk formatting
     jatuh_tempo_date = langganan.tgl_jatuh_tempo
@@ -720,10 +917,18 @@ async def generate_manual_invoice(invoice_data: InvoiceGenerate, db: AsyncSessio
     jatuh_tempo_python_date = date.fromisoformat(str(langganan.tgl_jatuh_tempo))
     bulan_tahun = datetime.combine(jatuh_tempo_python_date, datetime.min.time()).strftime("%B-%Y").upper()
 
-    # 2. Generate new invoice number in format: BRAND/LAYANAN/NAMA_PELANGGAN/BULAN_TAHUN/ALAMAT_SINGKAT/IDPELANGGAN_LAST3
-    nomor_invoice = f"{brand_singkat}/ftth/{nama_pelanggan_singkat}/{bulan_tahun}/{alamat_singkat}/{str(data_teknis.id_pelanggan)[-3:]}"
+    # 2. Generate ID suffix - gunakan id_pelanggan jika ada, fallback ke invoice.id
+    # Ini mencegah issue "external_id" berujung "None" di Xendit (contoh: .../PARAMA/None)
+    if data_teknis.id_pelanggan:
+        id_suffix = str(data_teknis.id_pelanggan)[-3:]  # 3 digit terakhir id_pelanggan
+    else:
+        # Fallback: gunakan temporary placeholder yang akan diganti setelah invoice dibuat
+        id_suffix = "TMP"
+    
+    # 3. Generate new invoice number in format: BRAND/LAYANAN/NAMA_PELANGGAN/BULAN_TAHUN/ALAMAT_SINGKAT/ID_SUFFIX
+    nomor_invoice = f"{brand_singkat}/ftth/{nama_pelanggan_singkat}/{bulan_tahun}/{alamat_singkat}/{id_suffix}"
 
-    # 3. Check for duplicate invoice number and add timestamp if needed
+    # 4. Check for duplicate invoice number and add timestamp if needed
     existing_invoice_number = (await db.execute(
         select(InvoiceModel.id).where(InvoiceModel.invoice_number == nomor_invoice)
     )).scalar_one_or_none()
@@ -750,22 +955,41 @@ async def generate_manual_invoice(invoice_data: InvoiceGenerate, db: AsyncSessio
     # Pastikan harga dasar untuk item di Xendit juga konsisten.
     harga_dasar = total_harga - pajak
 
+    # Tentukan tipe invoice
+    invoice_type = "manual"
+    if invoice_data.is_reinvoice:
+        invoice_type = "reinvoice"
+
     new_invoice_data = {
-        "invoice_number": nomor_invoice,
-        "pelanggan_id": pelanggan.id,
-        "id_pelanggan": data_teknis.id_pelanggan,
-        "brand": brand.brand,
-        "total_harga": total_harga,
-        "no_telp": pelanggan.no_telp,
-        "email": pelanggan.email,
-        "tgl_invoice": date.today(),
-        "tgl_jatuh_tempo": langganan.tgl_jatuh_tempo,
-        "status_invoice": "Belum Dibayar",
-    }
+            "invoice_number": nomor_invoice,
+            "pelanggan_id": pelanggan.id,
+            "id_pelanggan": data_teknis.id_pelanggan,
+            "brand": brand.brand,
+            "total_harga": total_harga,
+            "no_telp": pelanggan.no_telp,
+            "email": pelanggan.email,
+            "tgl_invoice": date.today(),
+            "tgl_jatuh_tempo": langganan.tgl_jatuh_tempo,
+            "status_invoice": "Belum Dibayar",
+            # Tipe invoice
+            "invoice_type": invoice_type,
+            # Menambahkan field reinvoice tracking
+            "is_reinvoice": invoice_data.is_reinvoice if hasattr(invoice_data, 'is_reinvoice') else False,
+            "original_invoice_id": invoice_data.original_invoice_id if hasattr(invoice_data, 'original_invoice_id') else None,
+            "reinvoice_reason": invoice_data.reinvoice_reason if hasattr(invoice_data, 'reinvoice_reason') else None,
+        }
 
     db_invoice = InvoiceModel(**new_invoice_data)
     db.add(db_invoice)
     await db.flush()
+    
+    # Jika menggunakan placeholder TMP (karena id_pelanggan None), ganti dengan invoice.id
+    if id_suffix == "TMP":
+        # Update invoice_number dengan invoice.id yang sebenarnya
+        id_suffix_final = str(db_invoice.id)[-3:].zfill(3)  # 3 digit terakhir, pad dengan 0 jika perlu
+        db_invoice.invoice_number = f"{brand_singkat}/ftth/{nama_pelanggan_singkat}/{bulan_tahun}/{alamat_singkat}/{id_suffix_final}"
+        logger.warning(f"⚠️ id_pelanggan is None for {pelanggan.nama}, using invoice.id instead: {db_invoice.invoice_number}")
+
 
     try:
         deskripsi_xendit = ""
@@ -791,7 +1015,9 @@ async def generate_manual_invoice(invoice_data: InvoiceGenerate, db: AsyncSessio
                 # INI TAGIHAN GABUNGAN
                 start_day = safe_get_day(invoice_date)
                 end_day = safe_get_day(due_date)
-                periode_prorate_str = safe_format_date(due_date, "%B %Y")
+                # FIX: Periode prorate harus diambil dari invoice_date, bukan due_date
+                # karena invoice_date adalah tanggal mulai langganan (tanggal pembuatan invoice)
+                periode_prorate_str = safe_format_date(invoice_date, "%B %Y")
                 due_date_datetime = safe_to_datetime(due_date)
                 next_month_date = due_date_datetime + relativedelta(months=1)
                 periode_berikutnya_str = safe_format_date(next_month_date.date(), "%B %Y")
@@ -805,7 +1031,9 @@ async def generate_manual_invoice(invoice_data: InvoiceGenerate, db: AsyncSessio
                 # INI TAGIHAN PRORATE BIASA
                 start_day = safe_get_day(invoice_date)
                 end_day = safe_get_day(due_date)
-                periode_str = safe_format_date(due_date, "%B %Y")
+                # FIX: Periode prorate harus diambil dari invoice_date, bukan due_date
+                # karena invoice_date adalah tanggal mulai langganan (tanggal pembuatan invoice)
+                periode_str = safe_format_date(invoice_date, "%B %Y")
                 deskripsi_xendit = (
                     f"Biaya berlangganan internet up to {paket.kecepatan} Mbps, "
                     f"Periode Tgl {start_day}-{end_day} {periode_str}"
@@ -862,7 +1090,23 @@ async def generate_manual_invoice(invoice_data: InvoiceGenerate, db: AsyncSessio
         logger.error(f"Gagal membuat invoice di Xendit: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Gagal membuat invoice di Xendit: {str(e)}")
 
-    return db_invoice
+    # FIX: Eager load pelanggan sebelum return untuk menghindari MissingGreenlet error
+    # saat FastAPI serialize response
+    stmt_reload = (
+        select(InvoiceModel)
+        .where(InvoiceModel.id == db_invoice.id)
+        .options(
+            joinedload(InvoiceModel.pelanggan).options(
+                joinedload(PelangganModel.harga_layanan),
+                joinedload(PelangganModel.langganan).joinedload(LanggananModel.paket_layanan),
+                joinedload(PelangganModel.data_teknis),
+            )
+        )
+    )
+    result_reload = await db.execute(stmt_reload)
+    db_invoice_loaded = result_reload.unique().scalar_one()
+
+    return db_invoice_loaded
 
 
 # POST /invoices/{invoice_id}/mark-as-paid - Tandai invoice lunas manual
@@ -926,6 +1170,8 @@ async def mark_invoice_as_paid(invoice_id: int, payload: MarkAsPaidRequest, db: 
         pass  # Fallback jika import gagal
 
     logger.info(f"Invoice {invoice.invoice_number} ditandai lunas secara manual via {payload.metode_pembayaran}")
+    
+    return invoice
 
 
 @router.get("/missing-payment-links", response_model=List[InvoiceSchema])
@@ -1030,10 +1276,12 @@ async def retry_invoice_xendit(
         jatuh_tempo_str = datetime.combine(jatuh_tempo_date, datetime.min.time()).strftime("%d/%m/%Y")
 
         if pelanggan.langganan[0].metode_pembayaran == "Prorate":
+            # FIX: Periode prorate harus diambil dari invoice_date, bukan jatuh_tempo_date
+            # karena invoice_date adalah tanggal mulai langganan (tanggal pembuatan invoice)
             deskripsi_xendit = (
                 f"Biaya berlangganan internet up to {paket.kecepatan} Mbps, "
                 f"Periode Tgl {invoice_date.day}-{jatuh_tempo_date.day} "
-                f"{jatuh_tempo_date.strftime('%B %Y')}"
+                f"{invoice_date.strftime('%B %Y')}"
             )
         else:  # Otomatis
             deskripsi_xendit = (
@@ -1199,10 +1447,12 @@ async def batch_retry_failed_invoices(
             jatuh_tempo_str = datetime.combine(jatuh_tempo_date, datetime.min.time()).strftime("%d/%m/%Y")
 
             if pelanggan.langganan[0].metode_pembayaran == "Prorate":
+                # FIX: Periode prorate harus diambil dari invoice_date, bukan jatuh_tempo_date
+                # karena invoice_date adalah tanggal mulai langganan (tanggal pembuatan invoice)
                 deskripsi_xendit = (
                     f"Biaya berlangganan internet up to {paket.kecepatan} Mbps, "
                     f"Periode Tgl {invoice_date.day}-{jatuh_tempo_date.day} "
-                    f"{jatuh_tempo_date.strftime('%B %Y')}"
+                    f"{invoice_date.strftime('%B %Y')}"
                 )
             else:
                 deskripsi_xendit = (
@@ -1425,12 +1675,15 @@ async def update_overdue_invoices(db: AsyncSession = Depends(get_db)):
 @router.get("/export-payment-links-excel")
 async def export_payment_links_excel(
     db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user),  # PROTECTED
     search: Optional[str] = None,
     status_invoice: Optional[str] = None,
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
 ):
     """Export payment links dari invoice ke file Excel."""
+    from datetime import datetime
+
     query = (
         select(InvoiceModel)
         .join(InvoiceModel.pelanggan)
@@ -1439,11 +1692,17 @@ async def export_payment_links_excel(
 
     if search:
         search_term = f"%{search}%"
+        # Cek apakah search term adalah angka (untuk pelanggan_id)
+        is_numeric_search = search.strip().isdigit()
+
         query = query.where(
             or_(
                 InvoiceModel.invoice_number.ilike(search_term),
                 PelangganModel.nama.ilike(search_term),
                 InvoiceModel.id_pelanggan.ilike(search_term),
+                # Tambahkan filter langsung untuk pelanggan_id (BigInteger foreign key)
+                # Ini memperbaiki bug di mana riwayat pembayaran di view langganan tidak muncul
+                InvoiceModel.pelanggan_id == int(search.strip()) if is_numeric_search else False,
             )
         )
 
@@ -1477,6 +1736,7 @@ async def export_payment_links_excel(
         "Alamat Pelanggan",
         "Total Harga",
         "Status Invoice",
+        "Tipe Invoice",  # Kolom baru untuk jenis invoice
         "Tanggal Invoice",
         "Tanggal Jatuh Tempo",
         "Payment Link",
@@ -1485,7 +1745,7 @@ async def export_payment_links_excel(
         "Brand",
     ]
 
-    # Tambahkan header ke worksheet (dengan null check)
+    # Menambahkan header ke worksheet (dengan null check)
     if ws is not None:
         for col_num, header in enumerate(headers, 1):
             cell = ws.cell(row=1, column=col_num, value=header)
@@ -1507,17 +1767,29 @@ async def export_payment_links_excel(
             ws.cell(row=row_num, column=6, value=float(invoice.total_harga) if invoice.total_harga else 0)
             ws.cell(row=row_num, column=7, value=invoice.status_invoice)
 
+            # Tipe invoice dengan mapping yang user-friendly
+            # Prioritaskan reinvoice check dulu
+            if getattr(invoice, 'is_reinvoice', False):
+                invoice_type_display = "Reinvoice"
+            else:
+                invoice_type_display = invoice.invoice_type or "manual"
+                if invoice_type_display == "automatic":
+                    invoice_type_display = "Otomatis"
+                elif invoice_type_display == "manual":
+                    invoice_type_display = "Manual"
+            ws.cell(row=row_num, column=8, value=invoice_type_display)
+
             # Handle SQLAlchemy Date untuk Excel export
             invoice_date = invoice.tgl_invoice
             due_date = invoice.tgl_jatuh_tempo
 
-            ws.cell(row=row_num, column=8, value=safe_format_date(invoice_date, "%Y-%m-%d"))
-            ws.cell(row=row_num, column=9, value=safe_format_date(due_date, "%Y-%m-%d"))
+            ws.cell(row=row_num, column=9, value=safe_format_date(invoice_date, "%Y-%m-%d"))
+            ws.cell(row=row_num, column=10, value=safe_format_date(due_date, "%Y-%m-%d"))
 
-            ws.cell(row=row_num, column=10, value=invoice.payment_link)
-            ws.cell(row=row_num, column=11, value=invoice.email or "")
-            ws.cell(row=row_num, column=12, value=invoice.no_telp or "")
-            ws.cell(row=row_num, column=13, value=invoice.brand or "")
+            ws.cell(row=row_num, column=11, value=invoice.payment_link)
+            ws.cell(row=row_num, column=12, value=invoice.email or "")
+            ws.cell(row=row_num, column=13, value=invoice.no_telp or "")
+            ws.cell(row=row_num, column=14, value=invoice.brand or "")
 
         # Auto-adjust column width (dengan null check)
         from openpyxl.utils import get_column_letter
@@ -1550,10 +1822,20 @@ async def export_payment_links_excel(
             belum_dibayar_count = len([inv for inv in invoices if inv.status_invoice == 'Belum Dibayar'])
             kadaluarsa_count = len([inv for inv in invoices if inv.status_invoice == 'Kadaluarsa'])
 
-            # Hitung persentase
+            # Hitung berdasarkan tipe invoice
+            otomatis_count = len([inv for inv in invoices if inv.invoice_type == 'automatic'])
+            manual_count = len([inv for inv in invoices if inv.invoice_type == 'manual'])
+            reinvoice_count = len([inv for inv in invoices if getattr(inv, 'is_reinvoice', False)])
+
+            # Hitung persentase status
             lunas_percent = (lunas_count / total_invoices) * 100
             belum_dibayar_percent = (belum_dibayar_count / total_invoices) * 100
             kadaluarsa_percent = (kadaluarsa_count / total_invoices) * 100
+
+            # Hitung persentase tipe
+            otomatis_percent = (otomatis_count / total_invoices) * 100
+            manual_percent = (manual_count / total_invoices) * 100
+            reinvoice_percent = (reinvoice_count / total_invoices) * 100
 
             # Format tanggal untuk header
             start_date_str = start_date.strftime('%d/%m/%Y') if start_date else 'Awal'
@@ -1647,10 +1929,51 @@ async def export_payment_links_excel(
         # Spasi
         ws_matrix.cell(row=10, column=1, value="")
 
-        # Insight/Kesimpulan
-        ws_matrix.cell(row=11, column=1, value="INSIGHT & KESIMPULAN")
+        # Header Tipe Invoice
+        ws_matrix.cell(row=11, column=1, value="TIPE INVOICE")
         ws_matrix.cell(row=11, column=1).font = title_font
         ws_matrix.merge_cells('A11:D11')
+
+        # Data Invoice Otomatis
+        ws_matrix.cell(row=12, column=1, value="Invoice Otomatis")
+        ws_matrix.cell(row=12, column=2, value=otomatis_count)
+        ws_matrix.cell(row=12, column=3, value=f"{otomatis_percent:.1f}%")
+        bar_length = int(otomatis_percent / 5)
+        ws_matrix.cell(row=12, column=4, value="█" * bar_length)
+        for col in range(1, 4):
+            cell = ws_matrix.cell(row=12, column=col)
+            cell.font = data_font
+            cell.fill = PatternFill(start_color="E6F3FF", end_color="E6F3FF", fill_type="solid")  # Blue
+
+        # Data Invoice Manual
+        ws_matrix.cell(row=13, column=1, value="Invoice Manual")
+        ws_matrix.cell(row=13, column=2, value=manual_count)
+        ws_matrix.cell(row=13, column=3, value=f"{manual_percent:.1f}%")
+        bar_length = int(manual_percent / 5)
+        ws_matrix.cell(row=13, column=4, value="█" * bar_length)
+        for col in range(1, 4):
+            cell = ws_matrix.cell(row=13, column=col)
+            cell.font = data_font
+            cell.fill = PatternFill(start_color="F3E6FF", end_color="F3E6FF", fill_type="solid")  # Purple
+
+        # Data Reinvoice
+        ws_matrix.cell(row=14, column=1, value="Reinvoice")
+        ws_matrix.cell(row=14, column=2, value=reinvoice_count)
+        ws_matrix.cell(row=14, column=3, value=f"{reinvoice_percent:.1f}%")
+        bar_length = int(reinvoice_percent / 5)
+        ws_matrix.cell(row=14, column=4, value="█" * bar_length)
+        for col in range(1, 4):
+            cell = ws_matrix.cell(row=14, column=col)
+            cell.font = data_font
+            cell.fill = PatternFill(start_color="FFE6F3", end_color="FFE6F3", fill_type="solid")  # Pink
+
+        # Spasi
+        ws_matrix.cell(row=15, column=1, value="")
+
+        # Insight/Kesimpulan
+        ws_matrix.cell(row=16, column=1, value="INSIGHT & KESIMPULAN")
+        ws_matrix.cell(row=16, column=1).font = title_font
+        ws_matrix.merge_cells('A16:D16')
 
         # Analisis pembayaran
         if lunas_percent >= 70:
@@ -1660,19 +1983,34 @@ async def export_payment_links_excel(
         else:
             payment_insight = f"Tingkat pembayaran perlu ditingkatkan ({lunas_percent:.1f}% lunas)"
 
-        ws_matrix.cell(row=12, column=1, value=payment_insight)
-        ws_matrix.merge_cells('A12:D12')
+        ws_matrix.cell(row=17, column=1, value=payment_insight)
+        ws_matrix.merge_cells('A17:D17')
+
+        # Analisis tipe invoice
+        if otomatis_percent > 50:
+            type_insight = f"Sistem invoice otomatis efektif ({otomatis_percent:.1f}%)"
+        elif manual_percent > 50:
+            type_insight = f"Masih dominan invoice manual ({manual_percent:.1f}%)"
+        elif reinvoice_percent > 20:
+            type_insight = f"Tingkat reinvoice tinggi ({reinvoice_percent:.1f}%) - perlu evaluasi"
+        else:
+            type_insight = f"Distribusi tipe invoice normal"
+
+        ws_matrix.cell(row=18, column=1, value=type_insight)
+        ws_matrix.merge_cells('A18:D18')
 
         # Rekomendasi tindakan
         if kadaluarsa_percent > 20:
             rekomendasi = "Perlu follow-up intensif untuk invoice kadaluarsa"
         elif belum_dibayar_percent > 50:
             rekomendasi = "Perlu reminder rutin untuk pembayaran"
+        elif reinvoice_percent > 20:
+            rekomendasi = "Evaluasi penyebab tingginya reinvoice dan optimalkan reminder"
         else:
             rekomendasi = "Status pembayaran dalam kondisi normal"
 
-        ws_matrix.cell(row=13, column=1, value=rekomendasi)
-        ws_matrix.merge_cells('A13:D13')
+        ws_matrix.cell(row=19, column=1, value=rekomendasi)
+        ws_matrix.merge_cells('A19:D19')
 
         # Auto-adjust column width untuk sheet matrix
         for column in ws_matrix.columns:
@@ -1699,6 +2037,159 @@ async def export_payment_links_excel(
         ws_matrix.cell(row=2, column=1, value="Tidak ada data invoice yang memenuhi filter")
         ws_matrix.merge_cells('A2:D2')
 
+    # Buat sheet ketiga untuk Suspended User Matrix
+    try:
+        # Get suspended matrix data
+        matrix_data = await get_suspended_invoice_matrix(db, None, None)
+
+        ws_suspended = wb.create_sheet("Suspended User Matrix")
+
+        # Styling untuk suspended matrix
+        blue_fill = PatternFill(start_color="E6F3FF", end_color="E6F3FF", fill_type="solid")
+        green_fill = PatternFill(start_color="E8F5E8", end_color="E8F5E8", fill_type="solid")
+        yellow_fill = PatternFill(start_color="FFF9E6", end_color="FFF9E6", fill_type="solid")
+        red_fill = PatternFill(start_color="FFE6E6", end_color="FFE6E6", fill_type="solid")
+        gray_fill = PatternFill(start_color="F5F5F5", end_color="F5F5F5", fill_type="solid")
+
+        # Header
+        ws_suspended.cell(row=1, column=1, value="MATRIX SUSPENDED USERS VS INVOICE STATUS")
+        ws_suspended.cell(row=1, column=1).font = header_font
+        ws_suspended.merge_cells('A1:E1')
+
+        ws_suspended.cell(row=2, column=1, value=f"Generated: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+        ws_suspended.merge_cells('A2:E2')
+
+        # Section 1: Users Summary
+        ws_suspended.cell(row=4, column=1, value="USERS SUMMARY")
+        ws_suspended.cell(row=4, column=1).font = title_font
+        ws_suspended.merge_cells('A4:E4')
+
+        users_headers = ["Metric", "Count", "Percentage"]
+        for col, header in enumerate(users_headers, 1):
+            ws_suspended.cell(row=5, column=col, value=header)
+            ws_suspended.cell(row=5, column=col).fill = gray_fill
+
+        # Users Data
+        users_summary = matrix_data['users_summary']
+        ws_suspended.cell(row=6, column=1, value="Total All Users")
+        ws_suspended.cell(row=6, column=2, value=users_summary['total_all_users'])
+        ws_suspended.cell(row=6, column=3, value="100.0%")
+        for col in range(1, 4):
+            ws_suspended.cell(row=6, column=col).fill = blue_fill
+
+        ws_suspended.cell(row=7, column=1, value="Total Aktif Users")
+        ws_suspended.cell(row=7, column=2, value=users_summary['total_aktif_users'])
+        ws_suspended.cell(row=7, column=3, value=f"{(users_summary['total_aktif_users']/users_summary['total_all_users']*100):.1f}%" if users_summary['total_all_users'] > 0 else "0%")
+        for col in range(1, 4):
+            ws_suspended.cell(row=7, column=col).fill = green_fill
+
+        ws_suspended.cell(row=8, column=1, value="Total Suspended Users")
+        ws_suspended.cell(row=8, column=2, value=users_summary['total_suspended_users'])
+        ws_suspended.cell(row=8, column=3, value=f"{users_summary['suspended_percentage']}%")
+        for col in range(1, 4):
+            ws_suspended.cell(row=8, column=col).fill = red_fill
+
+        # Section 2: Invoice Status Matrix
+        ws_suspended.cell(row=10, column=1, value="INVOICE STATUS MATRIX")
+        ws_suspended.cell(row=10, column=1).font = title_font
+        ws_suspended.merge_cells('A10:E10')
+
+        matrix_headers = ["User Status", "Total Invoices", "Lunas", "Belum Dibayar", "Bermasalah (Exp/Kad)"]
+        for col, header in enumerate(matrix_headers, 1):
+            ws_suspended.cell(row=11, column=col, value=header)
+            ws_suspended.cell(row=11, column=col).fill = gray_fill
+
+        # Aktif Users Invoice Data
+        aktif_inv = matrix_data['aktif_users_invoices']
+        ws_suspended.cell(row=12, column=1, value="Aktif Users")
+        ws_suspended.cell(row=12, column=2, value=aktif_inv['total'])
+        ws_suspended.cell(row=12, column=3, value=aktif_inv['lunas'])
+        ws_suspended.cell(row=12, column=4, value=aktif_inv['belum_dibayar'])
+        ws_suspended.cell(row=12, column=5, value=aktif_inv['expired'] + aktif_inv['kadaluarsa'])
+        for col in range(1, 6):
+            ws_suspended.cell(row=12, column=col).fill = green_fill
+
+        # Suspended Users Invoice Data
+        susp_inv = matrix_data['suspended_users_invoices']
+        ws_suspended.cell(row=13, column=1, value="Suspended Users")
+        ws_suspended.cell(row=13, column=2, value=susp_inv['total'])
+        ws_suspended.cell(row=13, column=3, value=susp_inv['lunas'])
+        ws_suspended.cell(row=13, column=4, value=susp_inv['belum_dibayar'])
+        ws_suspended.cell(row=13, column=5, value=susp_inv['expired'] + susp_inv['kadaluarsa'])
+        for col in range(1, 6):
+            ws_suspended.cell(row=13, column=col).fill = red_fill
+
+        # Section 3: Suspended Analysis
+        ws_suspended.cell(row=15, column=1, value="SUSPENDED USERS ANALYSIS")
+        ws_suspended.cell(row=15, column=1).font = title_font
+        ws_suspended.merge_cells('A15:E15')
+
+        analysis_headers = ["Analysis Type", "Count", "Rate", "Status"]
+        for col, header in enumerate(analysis_headers, 1):
+            ws_suspended.cell(row=16, column=col, value=header)
+            ws_suspended.cell(row=16, column=col).fill = gray_fill
+
+        susp_analysis = matrix_data['suspended_analysis']
+
+        ws_suspended.cell(row=17, column=1, value="Suspended with Unpaid")
+        ws_suspended.cell(row=17, column=2, value=susp_analysis['suspended_with_unpaid_invoices'])
+        ws_suspended.cell(row=17, column=3, value=f"{susp_analysis['unpaid_collection_rate']}%")
+        ws_suspended.cell(row=17, column=4, value="Critical" if susp_analysis['unpaid_collection_rate'] > 50 else "Monitor")
+        for col in range(1, 5):
+            ws_suspended.cell(row=17, column=col).fill = red_fill if susp_analysis['unpaid_collection_rate'] > 50 else yellow_fill
+
+        ws_suspended.cell(row=18, column=1, value="Suspended with Paid")
+        ws_suspended.cell(row=18, column=2, value=susp_analysis['suspended_with_paid_invoices'])
+        ws_suspended.cell(row=18, column=3, value=f"{susp_analysis['critical_recovery_rate']}%")
+        ws_suspended.cell(row=18, column=4, value="Good")
+        for col in range(1, 5):
+            ws_suspended.cell(row=18, column=col).fill = green_fill
+
+        ws_suspended.cell(row=19, column=1, value="Suspended No Invoice")
+        ws_suspended.cell(row=19, column=2, value=susp_analysis['suspended_without_invoices'])
+        ws_suspended.cell(row=19, column=3, value="N/A")
+        ws_suspended.cell(row=19, column=4, value="New/Closed")
+        for col in range(1, 5):
+            ws_suspended.cell(row=19, column=col).fill = blue_fill
+
+        # Section 4: Insights
+        ws_suspended.cell(row=21, column=1, value="INSIGHTS & REKOMENDASI")
+        ws_suspended.cell(row=21, column=1).font = title_font
+        ws_suspended.merge_cells('A21:E21')
+
+        insights = matrix_data['insights']
+        ws_suspended.cell(row=22, column=1, value=f"Suspension Rate: {insights['suspension_rate']}")
+        ws_suspended.merge_cells('A22:E22')
+
+        ws_suspended.cell(row=23, column=1, value=f"Collection Challenge: {insights['collection_challenge']}")
+        ws_suspended.merge_cells('A23:E23')
+
+        ws_suspended.cell(row=24, column=1, value=f"Recovery Potential: {insights['recovery_potential']}")
+        ws_suspended.merge_cells('A24:E24')
+
+        # Auto-adjust columns untuk sheet suspended
+        for column in ws_suspended.columns:
+            max_length = 0
+            first_cell = column[0] if column else None
+            if first_cell and hasattr(first_cell, 'column') and first_cell.column is not None:
+                column_letter = get_column_letter(first_cell.column)
+                for cell in column:
+                    try:
+                        if len(str(cell.value)) > max_length:
+                            max_length = len(str(cell.value))
+                    except:
+                        pass
+                adjusted_width = min(max_length + 2, 50)
+                ws_suspended.column_dimensions[column_letter].width = adjusted_width
+
+    except Exception as e:
+        # If error getting suspended matrix, create empty sheet
+        ws_suspended = wb.create_sheet("Suspended User Matrix")
+        ws_suspended.cell(row=1, column=1, value="SUSPENDED USER MATRIX")
+        ws_suspended.cell(row=1, column=1).font = header_font
+        ws_suspended.cell(row=2, column=1, value="Error generating matrix data")
+        ws_suspended.merge_cells('A2:E2')
+
     # Simpan workbook ke BytesIO
     buffer = BytesIO()
     wb.save(buffer)
@@ -1708,7 +2199,7 @@ async def export_payment_links_excel(
     return Response(
         buffer.getvalue(),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": "attachment; filename=payment_links_invoice.xlsx"},
+        headers={"Content-Disposition": "attachment; filename=invoice_report_comprehensive.xlsx"},
     )
 
 
@@ -1725,6 +2216,7 @@ async def export_payment_links_excel(
 @router.get("/count", response_model=int)
 async def get_invoice_count(
     db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user),  # PROTECTED
     search: Optional[str] = None,
     status_invoice: Optional[str] = None,
     start_date: Optional[date] = None,
@@ -1732,20 +2224,25 @@ async def get_invoice_count(
     exclude_expired: Optional[bool] = False,
 ):
     """
-    Menghitung total jumlah invoice dengan filter opsional.
+    Menghitung total jumlah invoice dengan filter opsional (termasuk ARSIP).
     """
+    # 1. Hitung dari tabel invoice utama
     count_query = select(func.count(InvoiceModel.id))
-
-    # Join dengan pelanggan untuk pencarian
     count_query = count_query.join(InvoiceModel.pelanggan)
 
     if search:
         search_term = f"%{search}%"
+        # Cek apakah search term adalah angka (untuk pelanggan_id)
+        is_numeric_search = search.strip().isdigit()
+
         count_query = count_query.where(
             or_(
                 InvoiceModel.invoice_number.ilike(search_term),
                 PelangganModel.nama.ilike(search_term),
                 InvoiceModel.id_pelanggan.ilike(search_term),
+                # Tambahkan filter langsung untuk pelanggan_id (BigInteger foreign key)
+                # Ini memperbaiki bug di mana riwayat pembayaran di view langganan tidak muncul
+                InvoiceModel.pelanggan_id == int(search.strip()) if is_numeric_search else False,
             )
         )
 
@@ -1757,15 +2254,12 @@ async def get_invoice_count(
     if end_date:
         count_query = count_query.where(InvoiceModel.tgl_jatuh_tempo <= end_date)
 
-    # Exclude invoice yang sudah kadaluarsa (lewat 5 hari grace period)
     if exclude_expired:
         from datetime import date
         overdue_threshold_date = date.today() - timedelta(days=5)
         count_query = count_query.where(
             or_(
-                # Invoice Lunas selalu boleh tampil
                 InvoiceModel.status_invoice == 'Lunas',
-                # Invoice Belum Dibayar boleh tampil jika masih dalam grace period
                 and_(
                     InvoiceModel.status_invoice == 'Belum Dibayar',
                     InvoiceModel.tgl_jatuh_tempo >= overdue_threshold_date
@@ -1774,8 +2268,47 @@ async def get_invoice_count(
         )
 
     result = await db.execute(count_query)
-    total_count = result.scalar_one()
-    return total_count
+    main_count = result.scalar_one()
+
+    # 2. Hitung dari tabel invoice archive
+    count_query_archive = select(func.count(InvoiceArchiveModel.id))
+    count_query_archive = count_query_archive.join(InvoiceArchiveModel.pelanggan)
+
+    if search:
+        search_term = f"%{search}%"
+        count_query_archive = count_query_archive.where(
+            or_(
+                InvoiceArchiveModel.invoice_number.ilike(search_term),
+                PelangganModel.nama.ilike(search_term),
+                InvoiceArchiveModel.id_pelanggan.ilike(search_term),
+            )
+        )
+
+    if status_invoice:
+        count_query_archive = count_query_archive.where(InvoiceArchiveModel.status_invoice == status_invoice)
+
+    if start_date:
+        count_query_archive = count_query_archive.where(InvoiceArchiveModel.tgl_jatuh_tempo >= start_date)
+    if end_date:
+        count_query_archive = count_query_archive.where(InvoiceArchiveModel.tgl_jatuh_tempo <= end_date)
+
+    if exclude_expired:
+        from datetime import date
+        overdue_threshold_date = date.today() - timedelta(days=5)
+        count_query_archive = count_query_archive.where(
+            or_(
+                InvoiceArchiveModel.status_invoice == 'Lunas',
+                and_(
+                    InvoiceArchiveModel.status_invoice == 'Belum Dibayar',
+                    InvoiceArchiveModel.tgl_jatuh_tempo >= overdue_threshold_date
+                )
+            )
+        )
+
+    result_archive = await db.execute(count_query_archive)
+    archive_count = result_archive.scalar_one()
+
+    return main_count + archive_count
 
 
 # ====================================================================
@@ -1880,4 +2413,523 @@ async def fix_missing_payment_links(
         "message": f"Fixed {fixed_count} invoices, {failed_count} failed",
         "fixed_count": fixed_count,
         "failed_count": failed_count
+    }
+
+
+@router.get("/summary")
+async def get_invoice_summary(
+    current_user: UserModel = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Endpoint untuk mendapatkan summary dashboard invoice:
+    - Total User (jumlah pelanggan aktif)
+    - Total Invoice
+    - Jumlah PAID
+    - Jumlah Expired
+    - Jumlah Reinvoice (invoice yang tergenerate otomatis & manual)
+    """
+    try:
+        # Query Total User (pelanggan aktif)
+        # Pelanggan model tidak punya deleted_at, jadi query semua
+        total_users_query = select(func.count(PelangganModel.id))
+        total_users_result = await db.execute(total_users_query)
+        total_users = total_users_result.scalar()
+
+        # Sederhanakan query - hanya dari tabel invoices utama dulu
+        # Query Total Invoice
+        total_invoice_query = select(func.count()).where(InvoiceModel.deleted_at.is_(None))
+        total_invoice_result = await db.execute(total_invoice_query)
+        total_invoices = total_invoice_result.scalar() or 0
+
+        # Query Jumlah PAID invoice
+        paid_query = select(func.count()).where(
+            and_(
+                InvoiceModel.status_invoice == "Lunas",
+                InvoiceModel.deleted_at.is_(None)
+            )
+        )
+        paid_result = await db.execute(paid_query)
+        total_paid = paid_result.scalar() or 0
+
+        # Query Jumlah Expired invoice (sederhana)
+        expired_query = select(func.count()).where(
+            and_(
+                InvoiceModel.status_invoice == "Expired",
+                InvoiceModel.deleted_at.is_(None)
+            )
+        )
+        expired_result = await db.execute(expired_query)
+        total_expired = expired_result.scalar() or 0
+
+        # Query Jumlah Reinvoice
+        reinvoice_query = select(func.count()).where(
+            and_(
+                InvoiceModel.is_reinvoice == True,
+                InvoiceModel.deleted_at.is_(None)
+            )
+        )
+        reinvoice_result = await db.execute(reinvoice_query)
+        total_reinvoice = reinvoice_result.scalar() or 0
+
+        # Query Invoice Otomatis
+        automatic_query = select(func.count()).where(
+            and_(
+                InvoiceModel.invoice_type == "automatic",
+                InvoiceModel.deleted_at.is_(None)
+            )
+        )
+        automatic_result = await db.execute(automatic_query)
+        total_automatic = automatic_result.scalar() or 0
+
+        # Query Invoice Manual
+        manual_query = select(func.count()).where(
+            and_(
+                InvoiceModel.invoice_type == "manual",
+                InvoiceModel.deleted_at.is_(None)
+            )
+        )
+        manual_result = await db.execute(manual_query)
+        total_manual = manual_result.scalar() or 0
+
+        # Summary data
+        summary_data = {
+            "total_users": total_users or 0,
+            "total_invoices": total_invoices,
+            "total_paid": total_paid,
+            "total_expired": total_expired,
+            "total_reinvoice": total_reinvoice,
+            "invoice_types": {
+                "automatic": total_automatic,
+                "manual": total_manual,
+                "reinvoice": total_reinvoice
+            },
+            "last_updated": datetime.now().isoformat()
+        }
+
+        return summary_data
+
+    except Exception as e:
+        logger.error(f"Error getting invoice summary: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to get invoice summary"
+        )
+
+
+@router.get("/suspended-invoice-matrix")
+async def get_suspended_invoice_matrix(
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user),
+    _: None = Depends(has_permission("view_invoices")),
+):
+    """
+    Summary pencocokan user yang suspended dengan status invoice:
+    - Total Users (aktif, suspended, total)
+    - Status Invoice breakdown per user status
+    - Matrix analysis untuk identifikasi pattern
+    """
+    try:
+        # Query total users by status
+        total_users_query = select(func.count(PelangganModel.id))
+        total_users_result = await db.execute(total_users_query)
+        total_all_users = total_users_result.scalar() or 0
+
+        # Query aktif users
+        aktif_users_query = select(func.count(LanggananModel.id)).where(LanggananModel.status == "Aktif")
+        aktif_users_result = await db.execute(aktif_users_query)
+        total_aktif_users = aktif_users_result.scalar() or 0
+
+        # Query suspended users
+        suspended_users_query = select(func.count(LanggananModel.id)).where(LanggananModel.status == "Suspended")
+        suspended_users_result = await db.execute(suspended_users_query)
+        total_suspended_users = suspended_users_result.scalar() or 0
+
+        # Query invoice status for aktif users
+        aktif_invoices_query = select(
+            InvoiceModel.status_invoice,
+            func.count(InvoiceModel.id).label('jumlah')
+        ).join(
+            InvoiceModel.pelanggan
+        ).join(
+            PelangganModel.langganan
+        ).where(
+            and_(
+                LanggananModel.status == "Aktif",
+                InvoiceModel.deleted_at.is_(None)
+            )
+        ).group_by(InvoiceModel.status_invoice)
+
+        aktif_invoices_result = await db.execute(aktif_invoices_query)
+        aktif_invoice_stats = {
+            row.status_invoice: row.jumlah
+            for row in aktif_invoices_result
+        }
+
+        # Query invoice status for suspended users
+        suspended_invoices_query = select(
+            InvoiceModel.status_invoice,
+            func.count(InvoiceModel.id).label('jumlah')
+        ).join(
+            InvoiceModel.pelanggan
+        ).join(
+            PelangganModel.langganan
+        ).where(
+            and_(
+                LanggananModel.status == "Suspended",
+                InvoiceModel.deleted_at.is_(None)
+            )
+        ).group_by(InvoiceModel.status_invoice)
+
+        suspended_invoices_result = await db.execute(suspended_invoices_query)
+        suspended_invoice_stats = {
+            row.status_invoice: row.jumlah
+            for row in suspended_invoices_result
+        }
+
+        # Query suspended users dengan unpaid invoices (critical cases)
+        suspended_unpaid_query = select(
+            func.count(func.distinct(PelangganModel.id)).label('count')
+        ).join(
+            PelangganModel.langganan
+        ).join(
+            PelangganModel.invoices
+        ).where(
+            and_(
+                LanggananModel.status == "Suspended",
+                InvoiceModel.status_invoice.in_(['Belum Dibayar', 'Expired', 'Kadaluarsa']),
+                InvoiceModel.deleted_at.is_(None)
+            )
+        )
+
+        suspended_unpaid_result = await db.execute(suspended_unpaid_query)
+        suspended_with_unpaid = suspended_unpaid_result.scalar() or 0
+
+        # Query suspended users dengan paid invoices (good cases)
+        suspended_paid_query = select(
+            func.count(func.distinct(PelangganModel.id)).label('count')
+        ).join(
+            PelangganModel.langganan
+        ).join(
+            PelangganModel.invoices
+        ).where(
+            and_(
+                LanggananModel.status == "Suspended",
+                InvoiceModel.status_invoice == "Lunas",
+                InvoiceModel.deleted_at.is_(None)
+            )
+        )
+
+        suspended_paid_result = await db.execute(suspended_paid_query)
+        suspended_with_paid = suspended_paid_result.scalar() or 0
+
+        # Matrix data
+        matrix_data = {
+            "users_summary": {
+                "total_all_users": total_all_users,
+                "total_aktif_users": total_aktif_users,
+                "total_suspended_users": total_suspended_users,
+                "suspended_percentage": round((total_suspended_users / total_all_users * 100), 2) if total_all_users > 0 else 0
+            },
+            "aktif_users_invoices": {
+                "total": sum(aktif_invoice_stats.values()),
+                "lunas": aktif_invoice_stats.get('Lunas', 0),
+                "belum_dibayar": aktif_invoice_stats.get('Belum Dibayar', 0),
+                "expired": aktif_invoice_stats.get('Expired', 0),
+                "kadaluarsa": aktif_invoice_stats.get('Kadaluarsa', 0)
+            },
+            "suspended_users_invoices": {
+                "total": sum(suspended_invoice_stats.values()),
+                "lunas": suspended_invoice_stats.get('Lunas', 0),
+                "belum_dibayar": suspended_invoice_stats.get('Belum Dibayar', 0),
+                "expired": suspended_invoice_stats.get('Expired', 0),
+                "kadaluarsa": suspended_invoice_stats.get('Kadaluarsa', 0)
+            },
+            "suspended_analysis": {
+                "suspended_with_unpaid_invoices": suspended_with_unpaid,
+                "suspended_with_paid_invoices": suspended_with_paid,
+                "suspended_without_invoices": total_suspended_users - (suspended_with_unpaid + suspended_with_paid),
+                "critical_recovery_rate": round((suspended_with_paid / total_suspended_users * 100), 2) if total_suspended_users > 0 else 0,
+                "unpaid_collection_rate": round((suspended_with_unpaid / total_suspended_users * 100), 2) if total_suspended_users > 0 else 0
+            },
+            "insights": {
+                "suspension_rate": "Tinggi" if (total_suspended_users / total_all_users * 100) > 30 else "Normal",
+                "collection_challenge": "Tinggi" if suspended_with_unpaid > suspended_with_paid else "Rendah",
+                "recovery_potential": f"{suspended_with_unpaid} users perlu follow-up pembayaran"
+            },
+            "last_updated": datetime.now().isoformat()
+        }
+
+        return matrix_data
+
+    except Exception as e:
+        logger.error(f"Error getting suspended invoice matrix: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to get suspended invoice matrix"
+        )
+
+
+# ====================================================================
+# INVOICE GENERATION MONITORING
+# ====================================================================
+
+@router.get("/skipped-invoice-generation")
+async def get_skipped_invoice_generation(
+    target_date: Optional[date] = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user)
+):
+    """
+    Monitoring untuk mendeteksi pelanggan yang seharusnya dapat invoice otomatis
+    tapi terlewat (skipped/missed) saat job generate invoice berjalan.
+    
+    Logic:
+    1. Cari semua langganan aktif dengan tgl_jatuh_tempo = target_date
+    2. Cek mana yang sudah punya invoice untuk periode tersebut
+    3. Return yang belum punya invoice (terlewat/skipped)
+    
+    Args:
+        target_date: Tanggal jatuh tempo yang mau dicek (default: tanggal 1 bulan depan)
+    
+    Returns:
+        - total_should_have_invoice: Jumlah pelanggan yang seharusnya dapat invoice
+        - total_generated: Jumlah invoice yang berhasil di-generate
+        - total_skipped: Jumlah pelanggan yang terlewat
+        - skipped_customers: Detail pelanggan yang terlewat
+    """
+    
+    # Default target_date = tanggal 1 bulan depan (sesuai logika H-5)
+    if not target_date:
+        today = date.today()
+        # Hitung tanggal 1 bulan depan
+        if today.month == 12:
+            target_date = date(today.year + 1, 1, 1)
+        else:
+            target_date = date(today.year, today.month + 1, 1)
+    
+    # 1. Cari semua langganan aktif dengan tgl_jatuh_tempo = target_date
+    should_have_invoice_stmt = (
+        select(LanggananModel)
+        .options(
+            selectinload(LanggananModel.pelanggan).selectinload(PelangganModel.data_teknis),
+            selectinload(LanggananModel.pelanggan).selectinload(PelangganModel.harga_layanan),
+            selectinload(LanggananModel.paket_layanan)
+        )
+        .where(
+            LanggananModel.tgl_jatuh_tempo == target_date,
+            LanggananModel.status == "Aktif"
+        )
+    )
+    
+    should_have_invoice_result = await db.execute(should_have_invoice_stmt)
+    all_langganan = should_have_invoice_result.scalars().unique().all()
+    
+    total_should_have = len(all_langganan)
+    
+    # 2. Cari invoice yang sudah di-generate untuk periode ini
+    # Calculate month period for target_date
+    target_year = target_date.year
+    target_month = target_date.month
+    start_of_month = date(target_year, target_month, 1)
+    if target_month == 12:
+        end_of_month = date(target_year + 1, 1, 1) - timedelta(days=1)
+    else:
+        end_of_month = date(target_year, target_month + 1, 1) - timedelta(days=1)
+    
+    # Get all pelanggan_id yang sudah punya invoice di periode ini
+    existing_invoices_stmt = (
+        select(InvoiceModel.pelanggan_id)
+        .where(
+            InvoiceModel.tgl_jatuh_tempo.between(start_of_month, end_of_month)
+        )
+        .distinct()
+    )
+    
+    existing_invoices_result = await db.execute(existing_invoices_stmt)
+    pelanggan_with_invoice = set(existing_invoices_result.scalars().all())
+    
+    # 3. Filter langganan yang belum punya invoice (skipped)
+    skipped_customers = []
+    for langganan in all_langganan:
+        if langganan.pelanggan_id not in pelanggan_with_invoice:
+            pelanggan = langganan.pelanggan
+            data_teknis = pelanggan.data_teknis if pelanggan else None
+            paket = langganan.paket_layanan
+            brand = pelanggan.harga_layanan if pelanggan else None
+            
+            # Detect skip reason
+            reasons = []
+            if not pelanggan:
+                reasons.append("Data pelanggan tidak ditemukan")
+            if not paket:
+                reasons.append("Data paket layanan tidak ditemukan")
+            if not brand:
+                reasons.append("Data brand/harga layanan tidak ditemukan")
+            if not data_teknis:
+                reasons.append("Data teknis tidak ditemukan")
+            if pelanggan and not pelanggan.email:
+                reasons.append("Email pelanggan kosong")
+            if pelanggan and not pelanggan.no_telp:
+                reasons.append("Nomor telepon pelanggan kosong")
+            if langganan.status != "Aktif":
+                reasons.append(f"Status langganan: {langganan.status}")
+            if not reasons:
+                reasons.append("Kemungkinan error saat generate invoice atau Xendit API gagal")
+            
+            skipped_customers.append({
+                "langganan_id": langganan.id,
+                "pelanggan_id": langganan.pelanggan_id,
+                "id_pelanggan": data_teknis.id_pelanggan if data_teknis else f"PLG-{langganan.pelanggan_id}",
+                "nama": pelanggan.nama if pelanggan else "N/A",
+                "alamat": pelanggan.alamat if pelanggan else "N/A",
+                "no_telp": pelanggan.no_telp if pelanggan else "N/A",
+                "email": pelanggan.email if pelanggan else "N/A",
+                "paket": f"{paket.kecepatan} Mbps" if paket else "N/A",
+                "brand": brand.brand if brand else "N/A",
+                "tgl_jatuh_tempo": target_date.isoformat(),
+                "status_langganan": langganan.status,
+                "metode_pembayaran": langganan.metode_pembayaran,
+                "reason": " | ".join(reasons)
+            })
+    
+    total_generated = total_should_have - len(skipped_customers)
+    
+    return {
+        "target_date": target_date.isoformat(),
+        "summary": {
+            "total_should_have_invoice": total_should_have,
+            "total_generated": total_generated,
+            "total_skipped": len(skipped_customers),
+            "success_rate": round((total_generated / total_should_have * 100) if total_should_have > 0 else 100, 1),
+            "status": "HEALTHY" if len(skipped_customers) == 0 else "NEEDS_ATTENTION" if len(skipped_customers) <= 5 else "CRITICAL"
+        },
+        "skipped_customers": skipped_customers,
+        "generated_at": datetime.now().isoformat()
+    }
+
+
+# GET /invoices/income-stats - Estimasi Income untuk Finance Team
+# Endpoint untuk menampilkan statistik pendapatan dari invoice dan reinvoice
+# Query parameters:
+# - period: filter periode (this_month, last_month, this_year, custom)
+# - start_date: tanggal mulai untuk custom period
+# - end_date: tanggal akhir untuk custom period
+# Response: total invoice, total reinvoice, count, dan persentase
+@router.get("/income-stats")
+async def get_income_stats(
+    db: AsyncSession = Depends(get_db),
+    period: str = "this_month",  # this_month, last_month, this_year, custom
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+):
+    """
+    Mendapatkan statistik pendapatan dari invoice dan reinvoice.
+    Berguna untuk finance team melihat estimasi income.
+    """
+    from datetime import date
+    from dateutil.relativedelta import relativedelta
+    
+    # Tentukan range tanggal berdasarkan period
+    today = date.today()
+    
+    if period == "this_month":
+        start = date(today.year, today.month, 1)
+        # Last day of current month
+        if today.month == 12:
+            end = date(today.year, 12, 31)
+        else:
+            end = date(today.year, today.month + 1, 1) - timedelta(days=1)
+    
+    elif period == "last_month":
+        # First day of last month
+        first_of_this_month = date(today.year, today.month, 1)
+        start = first_of_this_month - relativedelta(months=1)
+        # Last day of last month
+        end = first_of_this_month - timedelta(days=1)
+    
+    elif period == "this_year":
+        start = date(today.year, 1, 1)
+        end = date(today.year, 12, 31)
+    
+    elif period == "custom":
+        if not start_date or not end_date:
+            raise HTTPException(
+                status_code=400,
+                detail="start_date dan end_date harus diisi untuk period 'custom'"
+            )
+        start = start_date
+        end = end_date
+    
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail="Period tidak valid. Pilihan: this_month, last_month, this_year, custom"
+        )
+    
+    # Query untuk regular invoice (is_reinvoice = False)
+    regular_invoice_query = select(
+        func.sum(InvoiceModel.total_harga).label("total"),
+        func.count(InvoiceModel.id).label("count")
+    ).where(
+        and_(
+            InvoiceModel.tgl_invoice >= start,
+            InvoiceModel.tgl_invoice <= end,
+            InvoiceModel.is_reinvoice == False,
+            InvoiceModel.status_invoice != "Dibatalkan"  # Exclude cancelled invoices
+        )
+    )
+    
+    result_regular = await db.execute(regular_invoice_query)
+    regular_data = result_regular.one()
+    
+    # Query untuk reinvoice (is_reinvoice = True)
+    reinvoice_query = select(
+        func.sum(InvoiceModel.total_harga).label("total"),
+        func.count(InvoiceModel.id).label("count")
+    ).where(
+        and_(
+            InvoiceModel.tgl_invoice >= start,
+            InvoiceModel.tgl_invoice <= end,
+            InvoiceModel.is_reinvoice == True,
+            InvoiceModel.status_invoice != "Dibatalkan"  # Exclude cancelled invoices
+        )
+    )
+    
+    result_reinvoice = await db.execute(reinvoice_query)
+    reinvoice_data = result_reinvoice.one()
+    
+    # Calculate totals
+    total_invoice = float(regular_data.total or 0)
+    count_invoice = int(regular_data.count or 0)
+    
+    total_reinvoice = float(reinvoice_data.total or 0)
+    count_reinvoice = int(reinvoice_data.count or 0)
+    
+    grand_total = total_invoice + total_reinvoice
+    total_count = count_invoice + count_reinvoice
+    
+    # Calculate percentages
+    invoice_percentage = round((total_invoice / grand_total * 100) if grand_total > 0 else 0, 1)
+    reinvoice_percentage = round((total_reinvoice / grand_total * 100) if grand_total > 0 else 0, 1)
+    
+    return {
+        "period": period,
+        "start_date": start.isoformat(),
+        "end_date": end.isoformat(),
+        "invoice": {
+            "total": total_invoice,
+            "count": count_invoice,
+            "percentage": invoice_percentage
+        },
+        "reinvoice": {
+            "total": total_reinvoice,
+            "count": count_reinvoice,
+            "percentage": reinvoice_percentage
+        },
+        "summary": {
+            "grand_total": grand_total,
+            "total_count": total_count
+        },
+        "generated_at": datetime.now().isoformat()
     }

@@ -22,3 +22,5 @@ from .trouble_ticket import TroubleTicket, TicketHistory, ActionTaken, TicketSta
 from .traffic_history import TrafficHistory
 from .payment_callback_log import PaymentCallbackLog
 from .syarat_ketentuan import SyaratKetentuan
+from .invoice_archive import InvoiceArchive
+

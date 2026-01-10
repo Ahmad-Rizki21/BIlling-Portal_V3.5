@@ -110,9 +110,9 @@ class Pelanggan(Base):
     langganan: Mapped[list["Langganan"]] = relationship("Langganan", back_populates="pelanggan")
     invoices: Mapped[list["Invoice"]] = relationship("Invoice", back_populates="pelanggan")
     harga_layanan: Mapped["HargaLayanan"] = relationship("HargaLayanan", foreign_keys=[id_brand])
-    # Tambahkan relasi ke inventory items
+    # Menambahkan relasi ke inventory items
     inventory_items: Mapped[list["InventoryItem"]] = relationship("InventoryItem", back_populates="pelanggan")
-    # Tambahkan relasi ke trouble tickets
+    # Menambahkan relasi ke trouble tickets
     trouble_tickets: Mapped[list["TroubleTicket"]] = relationship("TroubleTicket", back_populates="pelanggan")
 
     def to_dict(self):
