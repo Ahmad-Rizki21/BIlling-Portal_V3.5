@@ -5,3 +5,12 @@ declare module '*.vue' {
   const component: DefineComponent<{}, {}, any>
   export default component
 }
+
+// Electron API interface
+interface Window {
+  electronAPI?: {
+    platform: string;
+    version: string;
+    getVersions: () => NodeJS.ProcessVersions;
+  };
+}

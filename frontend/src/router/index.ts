@@ -1,12 +1,17 @@
 // src/router/index.ts
 
-import { createRouter, createWebHistory } from 'vue-router';
+import { createRouter, createWebHistory, createWebHashHistory } from 'vue-router';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import DashboardView from '../views/DashboardView.vue';
 import { getEncryptedToken } from '@/utils/crypto';
 
+// Gunakan Hash History untuk Electron (file:// protocol) dan Web History untuk Web
+const historyMode = (window as any).electronAPI 
+  ? createWebHashHistory() 
+  : createWebHistory(import.meta.env.BASE_URL);
+
 const router = createRouter({
-  history: createWebHistory(import.meta.env.BASE_URL),
+  history: historyMode,
   routes: [
     // Rute untuk halaman yang memerlukan login (DIBUNGKUS OLEH DefaultLayout)
     {

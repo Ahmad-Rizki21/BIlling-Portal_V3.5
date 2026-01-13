@@ -1,12 +1,16 @@
 {
-  "name": "frontend",
-  "version": "0.0.0",
+  "name": "artacom-billing-system",
+  "version": "4.0.0",
   "private": true,
   "description": "Artacom FTTH Billing System",
   "author": "Artacom (https://www.instagram.com/amad.dyk/)",
+  "main": "electron/main.cjs",
   "type": "module",
   "scripts": {
     "dev": "vite --host",
+    "electron:dev": "concurrently \"npm run dev\" \"wait-on http://localhost:5173 && electron .\"",
+    "electron:build": "npm run build && electron-builder --win --x64 --config electron-builder.config.cjs",
+    "electron:build:portable": "npm run build && electron-builder --win --x64 --config electron-builder.config.cjs --publish never",
     "dev:tsc": "run-p dev \"type-check {@}\" --",
     "build": "vite build",
     "build:prod": "npm run build && npm run build:analyze",
@@ -72,9 +76,13 @@
     "@types/node": "^22.16.5",
     "@vitejs/plugin-vue": "^6.0.0",
     "@vue/tsconfig": "^0.7.0",
+    "concurrently": "^9.2.1",
+    "electron": "^39.2.7",
+    "electron-builder": "^26.4.0",
+    "electron-is-dev": "^3.0.1",
     "eslint": "^9.31.0",
-    "globals": "^16.3.0",
     "eslint-plugin-vue": "^10.3.0",
+    "globals": "^16.3.0",
     "npm-run-all2": "^8.0.4",
     "rollup-plugin-visualizer": "^6.0.4",
     "terser": "^5.44.1",
@@ -82,6 +90,7 @@
     "typescript-eslint": "^8.37.0",
     "vite": "^7.1.6",
     "vite-plugin-vue-devtools": "^7.7.7",
-    "vue-tsc": "^2.2.10"
+    "vue-tsc": "^2.2.10",
+    "wait-on": "^9.0.3"
   }
 }
