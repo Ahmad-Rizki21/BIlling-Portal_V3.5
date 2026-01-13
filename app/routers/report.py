@@ -133,6 +133,7 @@ async def get_revenue_report_details(
             InvoiceModel.metode_pembayaran,
             InvoiceModel.tgl_jatuh_tempo,
             InvoiceModel.pelanggan_id,
+            InvoiceModel.is_reinvoice,
             PelangganModel.nama,
             PelangganModel.alamat,
             PelangganModel.id_brand,
@@ -160,6 +161,7 @@ async def get_revenue_report_details(
             InvoiceArchiveModel.metode_pembayaran,
             InvoiceArchiveModel.tgl_jatuh_tempo,
             InvoiceArchiveModel.pelanggan_id,
+            InvoiceArchiveModel.is_reinvoice,
             PelangganModel.nama,
             PelangganModel.alamat,
             PelangganModel.id_brand,
@@ -203,16 +205,25 @@ async def get_revenue_report_details(
             brand_harga_layanan[harga_layanan.id_brand] = harga_layanan
 
     for data in invoice_pelanggan_data:
-        # Tentukan tipe invoice berdasarkan tanggal jatuh tempo
+        # Tentukan tipe invoice berdasarkan tanggal jatuh tempo dan is_reinvoice
         invoice_type = "Otomatis"
         if data.tgl_jatuh_tempo and data.tgl_jatuh_tempo.day > 1:
             invoice_type = "Prorate"
 
-        # Tentukan metode pembayaran final
+        # Tentukan metode pembayaran final berdasarkan is_reinvoice
         metode_pembayaran_final = data.metode_pembayaran
-        if not metode_pembayaran_final:
-            # Jika kosong (via Xendit), gabungkan dengan tipe invoice
-            metode_pembayaran_final = f"Xendit - {invoice_type}"
+        if data.is_reinvoice:
+            # Jika reinvoice, tambahkan suffix " - Reinvoice"
+            if not metode_pembayaran_final:
+                metode_pembayaran_final = f"Xendit - {invoice_type} - Reinvoice"
+            else:
+                # Jika sudah ada nilai, tambahkan " - Reinvoice" jika belum ada
+                if "Reinvoice" not in metode_pembayaran_final:
+                    metode_pembayaran_final = f"{metode_pembayaran_final} - Reinvoice"
+        else:
+            # Pasang baru / invoice biasa
+            if not metode_pembayaran_final:
+                metode_pembayaran_final = f"Xendit - {invoice_type}"
 
         paid_at_wib = None
         if data.paid_at:
