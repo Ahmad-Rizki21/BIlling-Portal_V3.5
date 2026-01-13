@@ -131,8 +131,10 @@
 
       <!-- Mobile Card View -->
       <div v-else class="mobile-cards-container">
-        <v-progress-circular v-if="loading" indeterminate color="primary" class="loading-spinner"></v-progress-circular>
-        
+        <div v-if="loading">
+          <SkeletonLoader type="list" :items="5" />
+        </div>
+
         <div v-else-if="skItems.length === 0" class="empty-state">
           <v-icon size="64" color="grey-lighten-1">mdi-file-document-outline</v-icon>
           <p class="text-medium-emphasis mt-4">Belum ada konten tersedia</p>

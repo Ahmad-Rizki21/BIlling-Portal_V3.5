@@ -7,9 +7,127 @@
     </div>
 
     <!-- Loading State -->
-    <div v-if="loading" class="text-center py-12">
-      <v-progress-circular indeterminate color="primary" size="64"></v-progress-circular>
-      <p class="mt-4 text-h6">Memuat data statistik...</p>
+    <div v-if="loading">
+      <!-- Stats Cards Skeleton -->
+      <v-row class="mb-6">
+        <v-col cols="12" sm="6" md="3">
+          <v-card rounded="xl" elevation="2" class="stats-card">
+            <v-card-text class="pa-6">
+              <div class="d-flex align-center mb-2">
+                <v-avatar color="grey-lighten-2" size="48" class="me-3">
+                  <v-skeleton-loader type="avatar" width="48" height="48"></v-skeleton-loader>
+                </v-avatar>
+                <div class="flex-grow-1">
+                  <v-skeleton-loader type="text" width="100" class="mb-2"></v-skeleton-loader>
+                  <v-skeleton-loader type="heading" width="80"></v-skeleton-loader>
+                </div>
+              </div>
+              <v-skeleton-loader type="text" width="100%"></v-skeleton-loader>
+            </v-card-text>
+          </v-card>
+        </v-col>
+
+        <v-col cols="12" sm="6" md="3">
+          <v-card rounded="xl" elevation="2" class="stats-card">
+            <v-card-text class="pa-6">
+              <div class="d-flex align-center mb-2">
+                <v-avatar color="grey-lighten-2" size="48" class="me-3">
+                  <v-skeleton-loader type="avatar" width="48" height="48"></v-skeleton-loader>
+                </v-avatar>
+                <div class="flex-grow-1">
+                  <v-skeleton-loader type="text" width="100" class="mb-2"></v-skeleton-loader>
+                  <v-skeleton-loader type="heading" width="80"></v-skeleton-loader>
+                </div>
+              </div>
+              <v-skeleton-loader type="text" width="60"></v-skeleton-loader>
+            </v-card-text>
+          </v-card>
+        </v-col>
+
+        <v-col cols="12" sm="6" md="3">
+          <v-card rounded="xl" elevation="2" class="stats-card">
+            <v-card-text class="pa-6">
+              <div class="d-flex align-center mb-2">
+                <v-avatar color="grey-lighten-2" size="48" class="me-3">
+                  <v-skeleton-loader type="avatar" width="48" height="48"></v-skeleton-loader>
+                </v-avatar>
+                <div class="flex-grow-1">
+                  <v-skeleton-loader type="text" width="100" class="mb-2"></v-skeleton-loader>
+                  <v-skeleton-loader type="heading" width="80"></v-skeleton-loader>
+                </div>
+              </div>
+              <v-skeleton-loader type="text" width="60"></v-skeleton-loader>
+            </v-card-text>
+          </v-card>
+        </v-col>
+
+        <v-col cols="12" sm="6" md="3">
+          <v-card rounded="xl" elevation="2" class="stats-card">
+            <v-card-text class="pa-6">
+              <div class="d-flex align-center mb-2">
+                <v-avatar color="grey-lighten-2" size="48" class="me-3">
+                  <v-skeleton-loader type="avatar" width="48" height="48"></v-skeleton-loader>
+                </v-avatar>
+                <div class="flex-grow-1">
+                  <v-skeleton-loader type="text" width="100" class="mb-2"></v-skeleton-loader>
+                  <v-skeleton-loader type="heading" width="80"></v-skeleton-loader>
+                </div>
+              </div>
+              <v-skeleton-loader type="text" width="100%"></v-skeleton-loader>
+            </v-card-text>
+          </v-card>
+        </v-col>
+      </v-row>
+
+      <!-- Revenue Card Skeleton -->
+      <v-row class="mb-6">
+        <v-col cols="12">
+          <v-card rounded="xl" elevation="3" class="revenue-card">
+            <v-card-text class="pa-6">
+              <div class="d-flex align-center justify-space-between mb-4">
+                <div>
+                  <v-skeleton-loader type="heading" width="200" class="mb-2"></v-skeleton-loader>
+                  <v-skeleton-loader type="text" width="150"></v-skeleton-loader>
+                </div>
+                <v-avatar color="grey-lighten-2" size="56">
+                  <v-skeleton-loader type="avatar" width="56" height="56"></v-skeleton-loader>
+                </v-avatar>
+              </div>
+              <v-skeleton-loader type="heading" width="200" height="48" class="mb-4"></v-skeleton-loader>
+              <v-skeleton-loader type="text" width="300"></v-skeleton-loader>
+            </v-card-text>
+          </v-card>
+        </v-col>
+      </v-row>
+
+      <!-- Charts Skeleton -->
+      <v-row class="mb-6">
+        <v-col cols="12" md="6">
+          <v-card rounded="xl" elevation="2" height="400" class="chart-card">
+            <v-card-title class="pa-6 pb-2">
+              <v-skeleton-loader type="text" width="200"></v-skeleton-loader>
+            </v-card-title>
+            <v-card-text class="pa-6 pt-2">
+              <div style="height: 280px;">
+                <SkeletonLoader type="chart" />
+              </div>
+            </v-card-text>
+          </v-card>
+        </v-col>
+
+        <v-col cols="12" md="6">
+          <v-card rounded="xl" elevation="2" height="400" class="chart-card">
+            <v-card-title class="pa-6 pb-2">
+              <v-skeleton-loader type="text" width="200"></v-skeleton-loader>
+            </v-card-title>
+            <v-card-text class="pa-6 pt-2">
+              <div style="height: 280px;">
+                <SkeletonLoader type="chart" />
+              </div>
+            </v-card-text>
+          </v-card>
+        </v-col>
+      </v-row>
     </div>
 
     <!-- Dashboard Content -->
@@ -340,6 +458,7 @@ import { ref, onMounted, computed, watch } from 'vue';
 import apiClient from '@/services/api';
 import Chart from 'chart.js/auto';
 import type { ChartConfiguration } from 'chart.js';
+import SkeletonLoader from '@/components/SkeletonLoader.vue';
 
 // No need to manually register components when using chart.js/auto
 
@@ -820,6 +939,7 @@ onMounted(() => {
 </script>
 
 <style scoped>
+/* OPTIMIZED - Reduced shadows and animations */
 .dashboard-header {
   background: linear-gradient(135deg, rgba(33, 150, 243, 0.1) 0%, rgba(156, 39, 176, 0.1) 100%);
   border-radius: 16px;
@@ -828,13 +948,12 @@ onMounted(() => {
 }
 
 .stats-card {
-  transition: all 0.3s ease;
+  transition: background-color 0.2s ease;
   border: 1px solid rgba(var(--v-border-color), 0.1);
 }
 
 .stats-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15) !important;
+  border-color: rgba(var(--v-theme-primary), 0.3);
 }
 
 .revenue-card {
@@ -863,7 +982,7 @@ onMounted(() => {
 
 .chart-card {
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(245, 245, 245, 0.1) 100%);
-  transition: all 0.3s ease;
+  transition: background-color 0.2s ease;
   border: 1px solid rgba(var(--v-border-color), 0.1);
   overflow: hidden;
   position: relative;
@@ -881,19 +1000,16 @@ onMounted(() => {
 }
 
 .chart-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15) !important;
-  border-color: rgba(var(--v-theme-primary), 0.3) !important;
+  border-color: rgba(var(--v-theme-primary), 0.3);
 }
 
 .quick-stats .stat-item {
   border-radius: 12px;
-  transition: all 0.3s ease;
 }
 
 .kpi-item {
   border-radius: 12px;
-  transition: all 0.3s ease;
+  transition: background-color 0.2s ease;
 }
 
 .kpi-item:hover {
@@ -923,7 +1039,7 @@ onMounted(() => {
   padding-left: 8px;
 }
 
-/* Dark theme adjustments */
+/* Dark theme adjustments - SIMPLIFIED SHADOWS */
 .v-theme--dark .dashboard-header {
   background: linear-gradient(135deg, rgba(33, 150, 243, 0.15) 0%, rgba(156, 39, 176, 0.15) 100%);
 }
@@ -934,7 +1050,7 @@ onMounted(() => {
 }
 
 .v-theme--dark .stats-card:hover {
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4) !important;
+  border-color: rgba(var(--v-theme-primary), 0.4);
 }
 
 .v-theme--dark .chart-card {
@@ -943,8 +1059,7 @@ onMounted(() => {
 }
 
 .v-theme--dark .chart-card:hover {
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4) !important;
-  border-color: rgba(var(--v-theme-primary), 0.4) !important;
+  border-color: rgba(var(--v-theme-primary), 0.4);
 }
 
 /* Mobile responsiveness */
@@ -988,44 +1103,23 @@ onMounted(() => {
   .pa-6 {
     padding: 12px !important;
   }
-  
+
   .stats-card .text-h4 {
     font-size: 1.5rem !important;
   }
-  
+
   .revenue-amount .text-h3 {
     font-size: 1.8rem !important;
   }
-  
+
   .chart-container {
     height: 200px !important;
   }
-  
+
   .timeline-custom {
     max-height: 250px;
   }
 }
-
-/* Animation classes */
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(30px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.stats-card {
-  animation: fadeInUp 0.6s ease-out;
-}
-
-.stats-card:nth-child(1) { animation-delay: 0.1s; }
-.stats-card:nth-child(2) { animation-delay: 0.2s; }
-.stats-card:nth-child(3) { animation-delay: 0.3s; }
-.stats-card:nth-child(4) { animation-delay: 0.4s; }
 
 /* Custom scrollbar for timeline */
 .timeline-custom {

@@ -514,9 +514,8 @@
       <!-- Tampilan Kartu untuk Mobile (Small ke bawah) -->
       <div class="d-md-none pa-4">
         <!-- Loading State -->
-        <div v-if="loading" class="text-center py-8">
-          <v-progress-circular indeterminate color="primary"></v-progress-circular>
-          <p class="mt-4 text-medium-emphasis">Memuat data...</p>
+        <div v-if="loading">
+          <SkeletonLoader type="list" :items="5" />
         </div>
 
         <!-- No Data State -->

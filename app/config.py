@@ -37,27 +37,28 @@ class Settings(BaseSettings):
 
     # Daftar menu yang ada di sidebar aplikasi
     # Urutan menu ini akan muncul di frontend
+    # CATATAN: Nama menu ini akan di-convert ke snake_case untuk permission names
+    # Contoh: "Dashboard" -> create_dashboard, view_dashboard, edit_dashboard, delete_dashboard
     MENUS: List[str] = [
         "Dashboard",                # Halaman utama admin
         "Pelanggan",               # Manajemen data pelanggan
         "Langganan",               # Manajemen langganan aktif
-        "Data Teknis",             # Data teknis koneksi internet
-        "Brand & Paket",           # Manajemen provider dan paket
+        "Teknis",                  # Data teknis koneksi internet (sebelumnya "Data Teknis")
+        "Paket",                   # Manajemen provider dan paket (sebelumnya "Brand & Paket")
         "Invoices",                # Manajemen tagihan/invoice
-        "Reports Revenue",         # Laporan pendapatan
-        "Mikrotik Servers",        # Konfigurasi server Mikrotik
+        "Reports",                 # Laporan pendapatan (sebelumnya "Reports Revenue")
+        "Servers",                 # Konfigurasi server Mikrotik (sebelumnya "Mikrotik Servers")
         "Users",                   # Manajemen pengguna
         "Roles",                   # Manajemen role/hak akses
         "Permissions",             # Manajemen permission detail
-        "S&K",                     # Syarat & Ketentuan
-        "Simulasi Harga",          # Kalkulator biaya
-        "Kelola S&K",             # Form edit S&K
-        "inventory",               # Manajemen inventory (rename dari "Manajemen Inventaris")
-        "Dashboard Pelanggan",     # Dashboard khusus pelanggan
-        "Activity Log",            # Log aktivitas sistem
-        "olt",                     # Manajemen OLT (Optical Line Terminal)
-        "odp_management",          # Manajemen ODP (Optical Distribution Point)
-        "Trouble Tickets",         # Sistem tiket trouble
+        "SK",                      # Syarat & Ketentuan (gabungan "S&K" dan "Kelola S&K")
+        "Simulasi",                # Kalkulator biaya (sebelumnya "Simulasi Harga")
+        "Inventory",               # Manajemen inventory
+        "Dashboard_Pelanggan",     # Dashboard khusus pelanggan
+        "Activity_Log",            # Log aktivitas sistem
+        "OLT",                     # Manajemen OLT (Optical Line Terminal)
+        "ODP",                     # Manajemen ODP (sebelumnya "odp_management")
+        "Trouble_Tickets",         # Sistem tiket trouble
     ]
 
     # Daftar widget yang ada di dashboard admin dan pelanggan

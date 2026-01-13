@@ -289,7 +289,27 @@
         <span class="text-h6 font-weight-medium">{{ currentPageTitle }}</span>
       </v-toolbar-title>
 
-      <v-spacer></v-spacer>
+      <!-- Running Text -->
+      <div v-if="!isMobile" class="running-text-container mx-4 flex-grow-1">
+        <div class="marquee-content">
+          <span>
+            <v-icon color="primary" class="mr-2" size="small">mdi-bullhorn-outline</v-icon>
+            Selamat Datang di&nbsp;<strong>Artacom Billing System</strong>&nbsp;- Portal Manajemen Layanan Internet Terpadu
+            <span class="mx-4">•</span>
+             <v-icon color="success" class="mr-2" size="small">mdi-check-circle-outline</v-icon>
+            Sistem Berjalan Normal
+            <span class="mx-4">•</span>
+             <v-icon color="info" class="mr-2" size="small">mdi-clock-outline</v-icon>
+             Jangan lupa cek invoice jatuh tempo!
+          </span>
+          <span class="mx-4">•</span>
+          <span>
+            <v-icon color="warning" class="mr-2" size="small">mdi-alert-outline</v-icon>
+            SEMANGATTT MBA UMAYYYY!
+          </span>
+        </div>
+      </div>
+      <v-spacer v-else></v-spacer>
 
       <!-- Global Search -->
       <GlobalSearch class="me-2" />
@@ -2946,9 +2966,52 @@ onUnmounted(() => {
   .modern-footer {
     display: none !important;
   }
-  
+
   .modern-main {
     padding: 0 !important;
   }
+}
+
+/* ==================== RUNNING TEXT ==================== */
+
+.running-text-container {
+  overflow: hidden;
+  position: relative;
+  background: rgba(var(--v-theme-primary), 0.04);
+  border-radius: 50px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  border: 1px dashed rgba(var(--v-theme-primary), 0.2);
+  margin: 0 auto;
+  mask-image: linear-gradient(to right, transparent 0%, black 5%, black 95%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, transparent 0%, black 5%, black 95%, transparent 100%);
+}
+
+.marquee-content {
+  white-space: nowrap;
+  animation: marquee 35s linear infinite;
+  padding-left: 100%;
+  display: flex;
+  align-items: center;
+  min-width: 100%;
+}
+
+.marquee-content span {
+  display: flex;
+  align-items: center;
+  color: rgb(var(--v-theme-on-surface));
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+@keyframes marquee {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-100%); }
+}
+
+/* Pause on hover */
+.running-text-container:hover .marquee-content {
+  animation-play-state: paused;
 }
 </style>

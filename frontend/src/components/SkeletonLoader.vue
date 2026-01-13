@@ -35,12 +35,15 @@
 
   <!-- Chart Skeleton -->
   <div v-else-if="type === 'chart'" class="skeleton-chart">
-    <div class="skeleton-chart-header">
-      <v-skeleton-loader type="heading" width="250" class="mb-2"></v-skeleton-loader>
-      <v-skeleton-loader type="text" width="150"></v-skeleton-loader>
-    </div>
-    <div class="skeleton-chart-body">
-      <v-skeleton-loader type="image" height="250"></v-skeleton-loader>
+    <div class="skeleton-chart-wrapper">
+      <div class="skeleton-chart-header">
+        <div class="skeleton-header-left">
+          <v-skeleton-loader type="avatar" width="24" height="24" class="skeleton-icon"></v-skeleton-loader>
+          <v-skeleton-loader type="text" width="180" class="skeleton-title"></v-skeleton-loader>
+        </div>
+        <v-skeleton-loader type="avatar" width="32" height="32" class="skeleton-action"></v-skeleton-loader>
+      </div>
+      <v-skeleton-loader type="image" height="250" class="skeleton-chart-body"></v-skeleton-loader>
     </div>
   </div>
 
@@ -164,13 +167,45 @@ withDefaults(defineProps<Props>(), {
   height: 320px;
 }
 
+.skeleton-chart-wrapper {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
 .skeleton-chart-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid rgba(var(--v-border-color), 0.12);
+}
+
+.skeleton-header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.skeleton-icon {
+  flex-shrink: 0;
+}
+
+.skeleton-title {
+  flex-shrink: 0;
+}
+
+.skeleton-action {
+  flex-shrink: 0;
 }
 
 .skeleton-chart-body {
   width: 100%;
-  height: 250px;
+  flex: 1;
+  min-height: 250px;
+  border-radius: 8px;
 }
 
 .skeleton-form {
@@ -251,10 +286,20 @@ withDefaults(defineProps<Props>(), {
     opacity: 1;
   }
   50% {
-    opacity: 0.4;
+    opacity: 0.5;
   }
   100% {
     opacity: 1;
+  }
+}
+
+/* Shimmer effect for skeleton */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
   }
 }
 
@@ -265,6 +310,32 @@ withDefaults(defineProps<Props>(), {
 .skeleton-form,
 .skeleton-dashboard,
 .skeleton-default {
-  animation: skeleton-pulse 1.5s ease-in-out infinite;
+  animation: skeleton-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Apply shimmer effect to skeleton loaders */
+.skeleton-table :deep(.v-skeleton-loader__bone),
+.skeleton-card-grid :deep(.v-skeleton-loader__bone),
+.skeleton-list :deep(.v-skeleton-loader__bone),
+.skeleton-chart :deep(.v-skeleton-loader__bone),
+.skeleton-form :deep(.v-skeleton-loader__bone),
+.skeleton-dashboard :deep(.v-skeleton-loader__bone),
+.skeleton-default :deep(.v-skeleton-loader__bone) {
+  background: linear-gradient(
+    90deg,
+    rgba(var(--v-theme-surface-variant), 0.3) 0%,
+    rgba(var(--v-theme-surface-variant), 0.5) 50%,
+    rgba(var(--v-theme-surface-variant), 0.3) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 4px;
+}
+
+/* Smooth transitions */
+.skeleton-chart-wrapper,
+.skeleton-chart-header,
+.skeleton-chart-body {
+  transition: all 0.3s ease;
 }
 </style>

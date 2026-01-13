@@ -90,7 +90,8 @@
 
     <div class="charts-section">
       <div class="charts-row">
-        <div v-if="lokasiChartData" id="lokasi-chart-container" class="chart-card location-chart">
+        <!-- Lokasi Chart -->
+        <div id="lokasi-chart-container" class="chart-card location-chart">
           <div class="chart-header">
             <div class="chart-title-section">
               <h3 class="chart-title">
@@ -99,14 +100,16 @@
               </h3>
               <p class="chart-subtitle">Distribusi pelanggan aktif di setiap lokasi</p>
             </div>
-            <v-btn icon="mdi-download" size="small" variant="text" @click="downloadAsPNG('lokasi-chart-container', 'distribusi-lokasi.png')"></v-btn>
+            <v-btn v-if="!loading && lokasiChartData" icon="mdi-download" size="small" variant="text" @click="downloadAsPNG('lokasi-chart-container', 'distribusi-lokasi.png')"></v-btn>
           </div>
           <div class="chart-container">
-            <Chart v-if="!loading" type="bar" :data="lokasiChartData" :options="chartOptions" />
+            <SkeletonLoader v-if="loading" type="chart" />
+            <Chart v-else-if="lokasiChartData" type="bar" :data="lokasiChartData" :options="chartOptions" />
           </div>
         </div>
 
-        <div v-if="paketChartData" id="paket-chart-container" class="chart-card package-chart">
+        <!-- Paket Chart -->
+        <div id="paket-chart-container" class="chart-card package-chart">
           <div class="chart-header">
             <div class="chart-title-section">
               <h3 class="chart-title">
@@ -115,16 +118,18 @@
               </h3>
               <p class="chart-subtitle">Distribusi pelanggan berdasarkan paket</p>
             </div>
-            <v-btn icon="mdi-download" size="small" variant="text" @click="downloadAsPNG('paket-chart-container', 'distribusi-paket.png')"></v-btn>
+            <v-btn v-if="!loading && paketChartData" icon="mdi-download" size="small" variant="text" @click="downloadAsPNG('paket-chart-container', 'distribusi-paket.png')"></v-btn>
           </div>
           <div class="chart-container">
-            <Chart v-if="!loading" type="bar" :data="paketChartData" :options="chartOptions" />
+            <SkeletonLoader v-if="loading" type="chart" />
+            <Chart v-else-if="paketChartData" type="bar" :data="paketChartData" :options="chartOptions" />
           </div>
         </div>
       </div>
 
       <div class="charts-row">
-        <div v-if="growthChartData" id="growth-chart-container" class="chart-card growth-chart">
+        <!-- Growth Chart -->
+        <div id="growth-chart-container" class="chart-card growth-chart">
           <div class="chart-header">
             <div class="chart-title-section">
               <h3 class="chart-title">
@@ -133,14 +138,16 @@
               </h3>
               <p class="chart-subtitle">Jumlah pelanggan baru per bulan</p>
             </div>
-            <v-btn icon="mdi-download" size="small" variant="text" @click="downloadAsPNG('growth-chart-container', 'pertumbuhan-pelanggan.png')"></v-btn>
+            <v-btn v-if="!loading && growthChartData" icon="mdi-download" size="small" variant="text" @click="downloadAsPNG('growth-chart-container', 'pertumbuhan-pelanggan.png')"></v-btn>
           </div>
           <div class="chart-container">
-            <Chart v-if="!loading" type="line" :data="growthChartData" :options="growthChartOptions" />
+            <SkeletonLoader v-if="loading" type="chart" />
+            <Chart v-else-if="growthChartData" type="line" :data="growthChartData" :options="growthChartOptions" />
           </div>
         </div>
 
-        <div v-if="invoiceChartData" id="invoice-chart-container" class="chart-card invoice-chart">
+        <!-- Invoice Chart -->
+        <div id="invoice-chart-container" class="chart-card invoice-chart">
           <div class="chart-header">
             <div class="chart-title-section">
               <h3 class="chart-title">
@@ -149,17 +156,19 @@
               </h3>
               <p class="chart-subtitle">Distribusi status invoice per bulan</p>
             </div>
-            <v-btn icon="mdi-download" size="small" variant="text" @click="downloadAsPNG('invoice-chart-container', 'ringkasan-invoice.png')"></v-btn>
+            <v-btn v-if="!loading && invoiceChartData" icon="mdi-download" size="small" variant="text" @click="downloadAsPNG('invoice-chart-container', 'ringkasan-invoice.png')"></v-btn>
           </div>
           <div class="chart-container">
-            <Chart v-if="!loading" type="bar" :data="invoiceChartData" :options="invoiceChartOptions" />
+            <SkeletonLoader v-if="loading" type="chart" />
+            <Chart v-else-if="invoiceChartData" type="bar" :data="invoiceChartData" :options="invoiceChartOptions" />
           </div>
         </div>
       </div>
     </div>
 
     <div class="charts-row">
-      <div v-if="statusChartData" id="status-chart-container" class="chart-card">
+      <!-- Status Chart -->
+      <div id="status-chart-container" class="chart-card">
         <div class="chart-header">
           <div class="chart-title-section">
             <h3 class="chart-title">
@@ -168,18 +177,22 @@
             </h3>
             <p class="chart-subtitle">Distribusi status semua langganan</p>
           </div>
-          <v-btn icon="mdi-download" size="small" variant="text" @click="downloadAsPNG('status-chart-container', 'status-langganan.png')"></v-btn>
+          <v-btn v-if="!loading && statusChartData" icon="mdi-download" size="small" variant="text" @click="downloadAsPNG('status-chart-container', 'status-langganan.png')"></v-btn>
         </div>
         <div class="chart-container donut-container">
-          <Chart v-if="!loading" type="doughnut" :data="statusChartData" :options="donutChartOptions" />
-          <div class="total-in-center">
-            <h3>{{ totalSubscriptions }}</h3>
-            <span>Total Langganan</span>
-          </div>
+          <SkeletonLoader v-if="loading" type="chart" />
+          <template v-else-if="statusChartData">
+            <Chart type="doughnut" :data="statusChartData" :options="donutChartOptions" />
+            <div class="total-in-center">
+              <h3>{{ totalSubscriptions }}</h3>
+              <span>Total Langganan</span>
+            </div>
+          </template>
         </div>
       </div>
 
-      <div v-if="loyalitasChartData" id="loyalitas-chart-container" class="chart-card">
+      <!-- Loyalitas Chart -->
+      <div id="loyalitas-chart-container" class="chart-card">
         <div class="chart-header">
           <div class="chart-title-section">
             <h3 class="chart-title">
@@ -188,20 +201,22 @@
             </h3>
             <p class="chart-subtitle">Distribusi pembayaran pelanggan aktif</p>
           </div>
-          <v-btn icon="mdi-download" size="small" variant="text" @click="downloadAsPNG('loyalitas-chart-container', 'loyalitas-pembayaran.png')"></v-btn>
+          <v-btn v-if="!loading && loyalitasChartData" icon="mdi-download" size="small" variant="text" @click="downloadAsPNG('loyalitas-chart-container', 'loyalitas-pembayaran.png')"></v-btn>
         </div>
         <div class="chart-container donut-container">
-          <Chart v-if="!loading" type="doughnut" :data="loyalitasChartData" :options="loyalitasDonutOptions" />
-          <div class="total-in-center">
-            <h3>{{ totalActiveCustomers }}</h3>
-            <span>Pelanggan Aktif</span>
-          </div>
+          <SkeletonLoader v-if="loading" type="chart" />
+          <template v-else-if="loyalitasChartData">
+            <Chart type="doughnut" :data="loyalitasChartData" :options="loyalitasDonutOptions" />
+            <div class="total-in-center">
+              <h3>{{ totalActiveCustomers }}</h3>
+              <span>Pelanggan Aktif</span>
+            </div>
+          </template>
         </div>
       </div>
 
-
-
-      <div v-if="alamatChartData" id="alamat-chart-container" class="chart-card">
+      <!-- Alamat Chart -->
+      <div id="alamat-chart-container" class="chart-card">
         <div class="chart-header">
           <div class="chart-title-section">
             <h3 class="chart-title">
@@ -210,10 +225,11 @@
             </h3>
             <p class="chart-subtitle">7 Lokasi dengan pelanggan aktif terbanyak</p>
           </div>
-          <v-btn icon="mdi-download" size="small" variant="text" @click="downloadAsPNG('alamat-chart-container', 'pelanggan-per-alamat.png')"></v-btn>
+          <v-btn v-if="!loading && alamatChartData" icon="mdi-download" size="small" variant="text" @click="downloadAsPNG('alamat-chart-container', 'pelanggan-per-alamat.png')"></v-btn>
         </div>
         <div class="chart-container">
-          <Chart v-if="!loading" type="pie" :data="alamatChartData" :options="pieChartOptions" />
+          <SkeletonLoader v-if="loading" type="chart" />
+          <Chart v-else-if="alamatChartData" type="pie" :data="alamatChartData" :options="pieChartOptions" />
         </div>
       </div>
     </div>
@@ -921,21 +937,13 @@ function getSystemStatusClass(status: string): string {
   return "info";
 }
 
-// PERBAIKAN: Chart options dengan tipe yang benar
+// Optimized: Cache chart colors to avoid recomputation
 const chartAxisColor = computed(() => {
-  if (theme.global.current.value.dark) {
-    return 'rgba(255, 255, 255, 0.9)';
-  } else {
-    return 'rgba(0, 0, 0, 0.8)';
-  }
+  return theme.global.current.value.dark ? 'rgba(255, 255, 255, 0.9)' : 'rgba(0, 0, 0, 0.8)';
 });
 
 const chartGridColor = computed(() => {
-  if (theme.global.current.value.dark) {
-    return 'rgba(255, 255, 255, 0.08)';
-  } else {
-    return 'rgba(0, 0, 0, 0.06)';
-  }
+  return theme.global.current.value.dark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)';
 });
 
 // PERBAIKAN: Loyalitas donut options dengan tipe yang tepat
@@ -978,7 +986,7 @@ const loyalitasDonutOptions = computed((): ChartOptions<'doughnut'> => ({
       }
     }
   },
-}));
+})) as any;
 
 // Chart options lainnya
 const chartOptions = computed((): ChartOptions<'bar'> => ({
@@ -1040,7 +1048,7 @@ const chartOptions = computed((): ChartOptions<'bar'> => ({
       }
     },
   },
-}));
+})) as any;
 
 const pieChartOptions = computed((): ChartOptions<'pie'> => ({
   responsive: true,
@@ -1079,7 +1087,7 @@ const pieChartOptions = computed((): ChartOptions<'pie'> => ({
       }
     }
   },
-}));
+})) as any;
 
 const donutChartOptions = computed((): ChartOptions<'doughnut'> => ({
   responsive: true,
@@ -1119,7 +1127,7 @@ const donutChartOptions = computed((): ChartOptions<'doughnut'> => ({
       }
     }
   },
-}));
+})) as any;
 
 const growthChartOptions = computed((): ChartOptions<'line'> => ({
   responsive: true,
@@ -1183,7 +1191,7 @@ const growthChartOptions = computed((): ChartOptions<'line'> => ({
       }
     },
   },
-}));
+})) as any;
 
 const invoiceChartOptions = computed((): ChartOptions<'bar'> => ({
   responsive: true,
@@ -1270,7 +1278,7 @@ const invoiceChartOptions = computed((): ChartOptions<'bar'> => ({
       }
     },
   },
-}));
+})) as any;
 
 // Helper functions for stats
 function getIconForStat(title: string) {
@@ -1721,14 +1729,15 @@ onMounted(async () => {
 
 .revenue-card {
   position: relative;
-  border-radius: 20px;
+  border-radius: 16px;
   overflow: hidden;
   color: white;
   background: linear-gradient(135deg, #3b82f6 0%, #6366f1 50%, #8b5cf6 100%);
-  box-shadow: 0 10px 25px rgba(59, 130, 246, 0.25), 0 4px 12px rgba(0, 0, 0, 0.1);
-  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
   height: 100%;
   border: 1px solid rgba(255, 255, 255, 0.1);
+  will-change: transform;
 }
 
 .donut-container {
@@ -1844,8 +1853,8 @@ onMounted(async () => {
 
 
 .revenue-card:hover {
-  transform: translateY(-8px) scale(1.02);
-  box-shadow: 0 20px 40px rgba(59, 130, 246, 0.35), 0 8px 16px rgba(0, 0, 0, 0.15);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(59, 130, 246, 0.25);
 }
 
 .revenue-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
@@ -1887,15 +1896,14 @@ onMounted(async () => {
   gap: 1.5rem;
 }
 
-/* Header Section - Improved Responsive Layout */
+/* Header Section - Optimized for Performance */
 .dashboard-header {
   margin-bottom: 2rem;
   background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(25px);
-  border-radius: 24px;
+  border-radius: 16px;
   padding: 1.5rem 2rem;
   border: 1px solid rgba(255, 255, 255, 0.3);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1), 0 2px 8px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
   position: relative;
   overflow: hidden;
 }
@@ -1992,13 +2000,12 @@ onMounted(async () => {
   height: 32px;
   white-space: nowrap;
   border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(34, 197, 94, 0.2);
-  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(34, 197, 94, 0.15);
+  transition: transform 0.2s ease;
 }
 
 .status-chip:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3);
 }
 
 /* Stats Grid */
@@ -2053,27 +2060,9 @@ onMounted(async () => {
   box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
-/* Chart Canvas Enhancements */
+/* Simplified chart canvas - removed heavy filters */
 .chart-container canvas {
   border-radius: 4px;
-  transition: all 0.3s ease;
-}
-
-.v-theme--light .chart-container:hover canvas {
-  filter: brightness(1.02) contrast(1.05);
-}
-
-.v-theme--dark .chart-container:hover canvas {
-  filter: brightness(1.1) contrast(1.1);
-}
-
-/* Growth Chart Specific Enhancements */
-.growth-chart .chart-container canvas {
-  filter: contrast(1.1) saturate(1.05);
-}
-
-.v-theme--light .growth-chart .chart-container canvas {
-  filter: contrast(1.15) saturate(1.1) brightness(1.02);
 }
 
 /* Invoice Chart Specific Enhancements */
@@ -2085,45 +2074,36 @@ onMounted(async () => {
   filter: contrast(1.1) saturate(1.05) brightness(1.02);
 }
 
-/* Chart Card Hover Effects */
-.chart-card:hover .chart-container {
-  transform: translateY(-1px);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.v-theme--light .chart-card:hover .chart-container {
-  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.08), 0 4px 12px rgba(0, 0, 0, 0.1);
-}
-
-.v-theme--dark .chart-card:hover .chart-container {
-  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.4), 0 4px 12px rgba(0, 0, 0, 0.3);
-}
+/* Removed heavy chart container hover effects for better scroll performance */
 
 
 
-/* Stat Cards */
+/* Stat Cards - Optimized */
 .stat-card {
   background: rgba(255, 255, 255, 0.98);
-  backdrop-filter: blur(25px);
-  border-radius: 20px;
+  border-radius: 16px;
   padding: 0;
   border: 1px solid rgba(255, 255, 255, 0.3);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1), 0 2px 8px rgba(0, 0, 0, 0.05);
-  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
   position: relative;
   overflow: hidden;
   cursor: pointer;
+  will-change: transform;
 }
 
+/* Simplified stat card decorations */
 .stat-card::before {
   content: '';
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
-  height: 4px;
+  height: 3px;
   background: linear-gradient(90deg, var(--card-gradient-start), var(--card-gradient-end));
 }
+
+/* Removed heavy ::after pseudo-element for better performance */
 
 .stat-card.card-0 {
   --card-gradient-start: #6366f1;
@@ -2145,29 +2125,9 @@ onMounted(async () => {
   --card-gradient-end: #ec4899;
 }
 
-.stat-card::after {
-  content: '';
-  position: absolute;
-  top: 50%;
-  right: -20px;
-  transform: translateY(-50%);
-  width: 120px;
-  height: 120px;
-  background: linear-gradient(135deg, var(--card-gradient-start), var(--card-gradient-end));
-  opacity: 0.05;
-  border-radius: 50%;
-  pointer-events: none;
-}
-
-.stat-card.card-0::before { background: linear-gradient(90deg, #6366f1, #8b5cf6); }
-.stat-card.card-1::before { background: linear-gradient(90deg, #22c55e, #10b981); }
-.stat-card.card-2::before { background: linear-gradient(90deg, #f59e0b, #f97316); }
-.stat-card.card-3::before { background: linear-gradient(90deg, #ef4444, #ec4899); }
-
 .stat-card:hover {
-  transform: translateY(-6px) scale(1.02);
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15), 0 8px 16px rgba(0, 0, 0, 0.1);
-  border-color: rgba(99, 102, 241, 0.4);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
 }
 
 .stat-card-content {
@@ -2184,30 +2144,15 @@ onMounted(async () => {
 .stat-icon-container {
   width: 48px;
   height: 48px;
-  border-radius: 14px;
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: linear-gradient(135deg, var(--icon-gradient-start), var(--icon-gradient-end));
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
-  overflow: hidden;
 }
 
-.stat-icon-container::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.2), transparent);
-  border-radius: 14px;
-}
-
-.stat-card:hover .stat-icon-container {
-  transform: scale(1.1) rotate(5deg);
-}
+/* Removed heavy pseudo-element and transform animation */
 
 .stat-icon-container .v-icon {
   color: white !important;
@@ -2319,45 +2264,34 @@ onMounted(async () => {
 
 .chart-card {
   background: rgba(255, 255, 255, 0.98);
-  backdrop-filter: blur(25px);
-  border-radius: 20px;
+  border-radius: 16px;
   padding: 1.5rem;
   border: 1px solid rgba(255, 255, 255, 0.3);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1), 0 2px 8px rgba(0, 0, 0, 0.05);
-  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
   position: relative;
   overflow: hidden;
+  will-change: transform;
 }
 
 .chart-card:hover {
-  transform: translateY(-6px) scale(1.01);
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15), 0 8px 16px rgba(0, 0, 0, 0.1);
-  border-color: rgba(99, 102, 241, 0.4);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
 }
 
+/* Simplified chart card decoration */
 .chart-card::before {
   content: '';
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
-  height: 3px;
+  height: 2px;
   background: linear-gradient(90deg, #6366f1, #8b5cf6, #ec4899);
-  opacity: 0.8;
+  opacity: 0.6;
 }
 
-.chart-card::after {
-  content: '';
-  position: absolute;
-  top: -50%;
-  right: -50%;
-  width: 200px;
-  height: 200px;
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.03), rgba(139, 92, 246, 0.02), rgba(236, 72, 153, 0.01));
-  border-radius: 50%;
-  pointer-events: none;
-  z-index: 0;
-}
+/* Removed heavy decorative pseudo-element */
 
 .chart-card .chart-header,
 .chart-card .chart-container {
@@ -2448,22 +2382,22 @@ onMounted(async () => {
   position: relative;
   padding: 0.5rem;
   border-radius: 8px;
-  transition: all 0.3s ease;
+  /* Removed transition for better scroll performance */
 }
 
 .large-chart {
   height: 350px;
 }
 
-/* Animations */
+/* Simplified animations */
 @keyframes fadeIn {
   from {
     opacity: 0;
-    transform: translateY(20px);
+    transform: translate3d(0, 10px, 0);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: translate3d(0, 0, 0);
   }
 }
 
@@ -2622,13 +2556,12 @@ onMounted(async () => {
   }
 }
 
-/* Dialog Card Styling */
+/* Dialog Card Styling - Optimized */
 .package-detail-card {
-  border-radius: 20px !important;
+  border-radius: 16px !important;
   overflow: hidden;
   position: relative;
   background: rgba(255, 255, 255, 0.98);
-  backdrop-filter: blur(20px);
 }
 
 /* Header Section */
@@ -2661,9 +2594,8 @@ onMounted(async () => {
 .header-icon {
   width: 60px;
   height: 60px;
-  border-radius: 16px;
+  border-radius: 12px;
   background: rgba(255, 255, 255, 0.2);
-  backdrop-filter: blur(10px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2695,12 +2627,11 @@ onMounted(async () => {
   top: 1rem;
   right: 1rem;
   z-index: 3;
-  background: rgba(255, 255, 255, 0.1) !important;
-  backdrop-filter: blur(10px);
+  background: rgba(255, 255, 255, 0.15) !important;
 }
 
 .close-btn:hover {
-  background: rgba(255, 255, 255, 0.2) !important;
+  background: rgba(255, 255, 255, 0.25) !important;
 }
 
 /* Dialog Content */
@@ -3269,18 +3200,17 @@ onMounted(async () => {
 
 .invoice-monitor-widget {
   background: rgba(255, 255, 255, 0.98);
-  backdrop-filter: blur(25px);
-  border-radius: 20px;
+  border-radius: 16px;
   border: 1px solid rgba(255, 255, 255, 0.3);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1), 0 2px 8px rgba(0, 0, 0, 0.05);
-  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
   overflow: hidden;
+  will-change: transform;
 }
 
 .invoice-monitor-widget:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.15), 0 4px 16px rgba(0, 0, 0, 0.1);
-  border-color: rgba(99, 102, 241, 0.3);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
 }
 
 .widget-header {

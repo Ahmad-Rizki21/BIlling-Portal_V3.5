@@ -175,9 +175,8 @@
                 </v-chip>
               </div>
               
-              <div v-if="!allPermissions.length && loading" class="text-center py-8">
-                <v-progress-circular indeterminate color="primary" size="40"></v-progress-circular>
-                <p class="mt-4 text-body-1">Memuat permissions...</p>
+              <div v-if="!allPermissions.length && loading">
+                <SkeletonLoader type="list" :items="5" />
               </div>
 
               <div v-else>

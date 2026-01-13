@@ -175,7 +175,7 @@
                 :mobile-breakpoint="768"
               >
                 <template v-slot:loading>
-                  <v-skeleton-loader type="table-row@5"></v-skeleton-loader>
+                  <SkeletonLoader type="table" :rows="5" />
                 </template>
 
                 <template v-slot:item.status="{ item }">
@@ -439,7 +439,7 @@
               :mobile-breakpoint="768"
             >
               <template v-slot:loading>
-                <v-skeleton-loader type="table-row@5"></v-skeleton-loader>
+                <SkeletonLoader type="table" :rows="5" />
               </template>
 
               <template v-slot:item.name="{ item }">
@@ -602,7 +602,7 @@
               :mobile-breakpoint="768"
             >
               <template v-slot:loading>
-                <v-skeleton-loader type="table-row@5"></v-skeleton-loader>
+                <SkeletonLoader type="table" :rows="5" />
               </template>
 
               <template v-slot:item.name="{ item }">
@@ -810,7 +810,7 @@
               :mobile-breakpoint="768"
             >
               <template v-slot:loading>
-                <v-skeleton-loader type="table-row@5"></v-skeleton-loader>
+                <SkeletonLoader type="table" :rows="5" />
               </template>
 
               <template v-slot:item.timestamp="{ item }">
@@ -1498,7 +1498,7 @@
               :mobile-breakpoint="768"
             >
             <template v-slot:loading>
-              <v-skeleton-loader type="table-row@3"></v-skeleton-loader>
+              <SkeletonLoader type="table" :rows="3" />
             </template>
 
             <template v-slot:item.timestamp="{ item }">

@@ -296,15 +296,7 @@
 
           <!-- Loading State -->
           <template v-slot:loading>
-            <div class="loading-container d-flex flex-column align-center justify-center pa-8">
-              <v-progress-circular 
-                indeterminate 
-                color="primary" 
-                size="48"
-                width="4"
-              ></v-progress-circular>
-              <p class="text-body-2 text-medium-emphasis mt-4 mb-0">Memuat data log...</p>
-            </div>
+            <SkeletonLoader type="table" :rows="8" />
           </template>
 
           <!-- No Data State -->
@@ -490,6 +482,7 @@
 import { ref, computed, watch } from 'vue';
 import apiClient from '@/services/api';
 import { debounce } from 'lodash-es';
+import SkeletonLoader from '@/components/SkeletonLoader.vue';
 
 interface User {
   id: number;

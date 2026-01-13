@@ -175,7 +175,7 @@
               :loading-text="'Memuat data paket...'"
             >
               <template v-slot:loading>
-                <v-skeleton-loader type="table-row@3"></v-skeleton-loader>
+                <SkeletonLoader type="table" :rows="5" />
               </template>
 
               <template v-slot:item.nama_paket="{ item }">

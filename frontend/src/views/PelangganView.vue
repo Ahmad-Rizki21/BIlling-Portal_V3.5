@@ -1452,27 +1452,21 @@ function showSnackbar(text: string, color: 'success' | 'error' | 'warning') {
 
 <style scoped>
 /* ============================================
-   MOBILE-FIRST RESPONSIVE DESIGN
-   ============================================ */
-
-/* ============================================
-   MOBILE-FIRST RESPONSIVE DESIGN - FIXED POSITIONING
+   OPTIMIZED MOBILE-FIRST RESPONSIVE DESIGN
    ============================================ */
 
 /* Base Styles */
 .modern-app {
   background-color: rgb(var(--v-theme-background));
-  transition: background-color 0.3s ease;
 }
 
-/* Header Card - Mobile Optimized with Fixed Positioning */
+/* Header Card - Mobile Optimized - REDUCED SHADOW */
 .header-card {
   background: linear-gradient(135deg, rgb(var(--v-theme-primary)) 0%, rgb(var(--v-theme-secondary)) 100%);
   border-radius: 20px;
   padding: 24px;
   color: rgb(var(--v-theme-on-primary));
-  box-shadow: 0 8px 32px rgba(var(--v-theme-primary), 0.25);
-  position: relative;
+  box-shadow: 0 2px 8px rgba(var(--v-theme-primary), 0.15);
 }
 
 .header-card .d-flex.flex-column {
@@ -1519,7 +1513,7 @@ function showSnackbar(text: string, color: 'success' | 'error' | 'warning') {
   border-radius: 14px;
   font-weight: 600;
   height: 48px;
-  transition: all 0.3s ease;
+  transition: background-color 0.2s ease;
 }
 
 .action-btn {
@@ -1531,7 +1525,6 @@ function showSnackbar(text: string, color: 'success' | 'error' | 'warning') {
 
 .action-btn:hover {
   background-color: rgba(255, 255, 255, 0.25) !important;
-  transform: translateY(-1px);
 }
 
 .primary-btn {
@@ -1539,15 +1532,15 @@ function showSnackbar(text: string, color: 'success' | 'error' | 'warning') {
   color: rgb(var(--v-theme-primary)) !important;
 }
 
-/* Filter Card - Mobile Optimized */
+/* Filter Card - Mobile Optimized - REDUCED SHADOW */
 .filter-card {
   border-radius: 16px;
   border: 1px solid rgba(var(--v-theme-primary), 0.12);
   background: rgb(var(--v-theme-surface));
-  box-shadow: 0 2px 12px rgba(var(--v-theme-shadow), 0.08);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
-/* Data Table Card */
+/* Data Table Card - NO SHADOW */
 .data-table-card {
   border-radius: 16px;
   overflow: hidden;
@@ -1590,13 +1583,11 @@ function showSnackbar(text: string, color: 'success' | 'error' | 'warning') {
 
 .mobile-customer-card {
   border-radius: 12px;
-  transition: all 0.3s ease;
   border: 1px solid rgba(var(--v-theme-outline-variant), 0.5);
 }
 
 .mobile-customer-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(var(--v-theme-shadow), 0.15);
+  border-color: rgba(var(--v-theme-primary), 0.3);
 }
 
 .mobile-customer-name {
@@ -1638,7 +1629,7 @@ function showSnackbar(text: string, color: 'success' | 'error' | 'warning') {
   flex: 1;
 }
 
-/* Desktop Table Styles - Clean & Minimalist */
+/* Desktop Table Styles - Clean & Minimalist - NO TRANSITIONS */
 .elegant-table {
   background: #ffffff !important;
 }
@@ -1664,10 +1655,6 @@ function showSnackbar(text: string, color: 'success' | 'error' | 'warning') {
   font-size: 0.875rem;
   color: #616161;
   vertical-align: middle;
-}
-
-.elegant-table :deep(tbody tr) {
-  transition: all 0.2s ease;
 }
 
 .elegant-table :deep(tbody tr:hover) {
@@ -1889,13 +1876,10 @@ function showSnackbar(text: string, color: 'success' | 'error' | 'warning') {
   border: 2px dashed rgba(var(--v-theme-success), 0.3);
   background: rgba(var(--v-theme-success), 0.05);
   border-radius: 12px;
-  transition: all 0.3s ease;
 }
 
 .template-card:hover {
-  border-color: rgb(var(--v-theme-success));
-  transform: translateY(-1px);
-  box-shadow: 0 4px 20px rgba(var(--v-theme-success), 0.15);
+  border-color: rgba(var(--v-theme-success), 0.5);
 }
 
 .template-title, .upload-title {
@@ -1915,12 +1899,10 @@ function showSnackbar(text: string, color: 'success' | 'error' | 'warning') {
   border: 2px dashed rgb(var(--v-theme-outline-variant)) !important;
   background: rgb(var(--v-theme-surface)) !important;
   border-radius: 12px;
-  transition: all 0.2s ease-in-out;
 }
 
 .file-input :deep(.v-field:hover) {
-  border-color: rgb(var(--v-theme-success)) !important;
-  background: rgba(var(--v-theme-success), 0.05) !important;
+  border-color: rgba(var(--v-theme-success), 0.5) !important;
 }
 
 .error-alert {
@@ -2296,9 +2278,9 @@ function showSnackbar(text: string, color: 'success' | 'error' | 'warning') {
   }
 }
 
-/* Dark Theme Adjustments */
+/* Dark Theme Adjustments - SIMPLIFIED SHADOWS */
 .v-theme--dark .header-card {
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 .v-theme--dark .filter-card,
@@ -2313,10 +2295,6 @@ function showSnackbar(text: string, color: 'success' | 'error' | 'warning') {
 .v-theme--dark .mobile-customer-card {
   background: #1e293b;
   border-color: #334155;
-}
-
-.v-theme--dark .mobile-customer-card:hover {
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
 }
 
 .v-theme--dark .card-header {
@@ -2338,6 +2316,38 @@ function showSnackbar(text: string, color: 'success' | 'error' | 'warning') {
 .v-theme--dark .template-card {
   background: rgba(var(--v-theme-success), 0.1);
   border-color: rgba(var(--v-theme-success), 0.3);
+}
+
+.v-theme--dark .elegant-table {
+  background: #1e293b !important;
+  color: rgb(var(--v-theme-on-surface)) !important;
+}
+
+.v-theme--dark .elegant-table :deep(thead) {
+  background: #0f1629 !important;
+}
+
+.v-theme--dark .elegant-table :deep(th) {
+  background: #0f1629 !important;
+  color: rgb(var(--v-theme-on-surface)) !important;
+  border-bottom: 2px solid #334155 !important;
+}
+
+.v-theme--dark .elegant-table :deep(td) {
+  color: rgb(var(--v-theme-on-surface)) !important;
+  border-bottom: 1px solid #334155 !important;
+}
+
+.v-theme--dark .elegant-table :deep(tbody tr:hover) {
+  background-color: rgba(var(--v-theme-primary), 0.05) !important;
+}
+
+.v-theme--dark .customer-name {
+  color: rgb(var(--v-theme-on-surface)) !important;
+}
+
+.v-theme--dark .customer-email {
+  color: rgba(var(--v-theme-on-surface), 0.7) !important;
 }
 
 .v-theme--dark .error-item {
@@ -2369,25 +2379,6 @@ function showSnackbar(text: string, color: 'success' | 'error' | 'warning') {
 .mobile-customer-card.loading {
   opacity: 0.7;
   pointer-events: none;
-}
-
-/* Animation Classes */
-.fade-enter-active,
-.fade-leave-active {
-  transition: opacity 0.3s ease;
-}
-
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
-}
-
-.slide-up-enter-active {
-  transition: transform 0.3s ease;
-}
-
-.slide-up-enter-from {
-  transform: translateY(20px);
 }
 
 /* Print Styles */
