@@ -109,7 +109,13 @@ const router = createRouter({
           path: 'reports/revenue',
           name: 'revenue-report',
           component: () => import('../views/RevenueReportView.vue'),
-          meta: { permission: 'view_reports_revenue' } 
+          meta: { permission: 'view_reports_revenue' }
+        },
+        {
+          path: 'analytics',
+          name: 'ai-analytics',
+          component: () => import('../views/AIAnalyticsView.vue'),
+          meta: { permission: 'view_analytics' }
         },
         {
           path: 'network-management/olt', // Buat URL yang rapi

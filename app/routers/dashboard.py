@@ -401,7 +401,7 @@ async def get_dashboard_data(
                         func.sum(case((Invoice.status_invoice == "Belum Dibayar", 1), else_=0)).label("menunggu"),
                         func.sum(case((Invoice.status_invoice == "Expired", 1), else_=0)).label("kadaluarsa"),
                         func.sum(case((Invoice.invoice_type == "automatic", 1), else_=0)).label("otomatis"),
-                        func.sum(case((Invoice.invoice_type == "manual", 1), else_=0)).label("manual"),
+                        func.sum(case((Invoice.invoice_type == "manual", 1), else_=0)).label("manual_inv"),
                         func.sum(case((Invoice.is_reinvoice == True, 1), else_=0)).label("reinvoice"),
                     )
                     .where(Invoice.tgl_invoice >= six_months_ago)
@@ -420,7 +420,7 @@ async def get_dashboard_data(
                         menunggu=[item.menunggu or 0 for item in invoice_data],
                         kadaluarsa=[item.kadaluarsa or 0 for item in invoice_data],
                         otomatis=[item.otomatis or 0 for item in invoice_data],
-                        manual=[item.manual or 0 for item in invoice_data],
+                        manual=[item.manual_inv or 0 for item in invoice_data],
                         reinvoice=[item.reinvoice or 0 for item in invoice_data],
                     )
                     print(f"✅ Invoice chart loaded successfully with {len(invoice_data)} data points")

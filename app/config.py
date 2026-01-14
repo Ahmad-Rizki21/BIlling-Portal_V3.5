@@ -47,6 +47,7 @@ class Settings(BaseSettings):
         "Paket",                   # Manajemen provider dan paket (sebelumnya "Brand & Paket")
         "Invoices",                # Manajemen tagihan/invoice
         "Reports",                 # Laporan pendapatan (sebelumnya "Reports Revenue")
+        "Analytics",               # AI-powered analytics untuk insight bisnis
         "Servers",                 # Konfigurasi server Mikrotik (sebelumnya "Mikrotik Servers")
         "Users",                   # Manajemen pengguna
         "Roles",                   # Manajemen role/hak akses
@@ -175,6 +176,32 @@ class Settings(BaseSettings):
     # Key buat enkripsi data sensitif di database (password, dll)
     # HARUS DIUBAH DI PRODUCTION! Pakai Fernet key yang valid
     ENCRYPTION_KEY: str = "default_encryption_key_change_in_production"
+
+    # ====================================================================
+    # KONFIGURASI AI ANALYTICS (GROQ)
+    # ====================================================================
+
+    # API Key dari Groq untuk AI Analytics
+    # Dapatkan dari https://console.groq.com/keys
+    # Simpan di environment variable: GROQ_API_KEY=gsk_...
+    GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")
+
+    # Base URL untuk Groq API (OpenAI compatible)
+    GROQ_BASE_URL: str = "https://api.groq.com/openai/v1"
+
+    # Model yang digunakan untuk analisis
+    # llama-3.3-70b-versatile: Model terbaru Llama 3.3 70B (Gratis & Cepat)
+    # llama-3.1-70b-versatile: Llama 3.1 70B (Gratis)
+    # mixtral-8x7b-32768: Mixtral 8x7B (Gratis)
+    GROQ_MODEL: str = "llama-3.3-70b-versatile"
+
+    # Cache TTL untuk AI responses (dalam detik)
+    # Default: 1 jam (3600 detik)
+    ANALYTICS_CACHE_TTL: int = 3600
+
+    # Rate limiting untuk AI requests
+    # Maximum requests per minute per user
+    ANALYTICS_RATE_LIMIT: int = 10
 
     @property
     def XENDIT_API_KEYS(self) -> dict:

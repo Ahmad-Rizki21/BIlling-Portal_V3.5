@@ -753,31 +753,31 @@ const menuGroups = ref([
     ]
   },
 
-  { 
-    title: 'BILLING', 
+  {
+    title: 'BILLING',
     items: [
-      { 
-        title: 'Billing & Reports', 
-        icon: 'mdi-cash-multiple', 
+      {
+        title: 'Billing & Reports',
+        icon: 'mdi-cash-multiple',
         value: 'billing-group',
         description: 'Kelola tagihan & laporan',
         permission: null,
         children: [
-          { 
-            title: 'Invoices', 
-            icon: 'mdi-receipt-text-outline', 
-            value: 'invoices', 
-            to: '/invoices', 
-            badge: 0, 
-            badgeColor: 'grey-darken-1', 
+          {
+            title: 'Invoices',
+            icon: 'mdi-receipt-text-outline',
+            value: 'invoices',
+            to: '/invoices',
+            badge: 0,
+            badgeColor: 'grey-darken-1',
             permission: 'view_invoices',
             description: 'Tagihan & pembayaran'
           },
-          { 
-            title: 'Laporan Pendapatan', 
-            icon: 'mdi-chart-line', 
-            value: 'revenue-report', 
-            to: '/reports/revenue', 
+          {
+            title: 'Laporan Pendapatan',
+            icon: 'mdi-chart-line',
+            value: 'revenue-report',
+            to: '/reports/revenue',
             permission: 'view_reports_revenue',
             description: 'Analisis pendapatan'
           }
@@ -786,7 +786,21 @@ const menuGroups = ref([
     ]
   },
 
-  { 
+  {
+    title: 'ANALYTICS',
+    items: [
+      {
+        title: 'AI Analytics',
+        icon: 'mdi-brain',
+        value: 'ai-analytics',
+        to: '/analytics',
+        permission: 'view_analytics',
+        description: 'AI-powered insights & predictions'
+      }
+    ]
+  },
+
+  {
     title: 'LAINNYA', 
     items: [
       { 
