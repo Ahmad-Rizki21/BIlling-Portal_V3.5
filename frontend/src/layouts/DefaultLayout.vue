@@ -1,14 +1,74 @@
 <template>
   <v-app class="modern-app">
-    <!-- Maintenance Banner -->
-    <v-system-bar 
-      v-if="settingsStore.maintenanceMode.isActive"
-      color="warning" 
-      window 
-      class="maintenance-banner"
+    <!-- Maintenance Mode Overlay for Non-Admin Users -->
+    <v-overlay
+      v-if="settingsStore.maintenanceMode.isActive && !isAdmin"
+      v-model="showMaintenanceOverlay"
+      class="maintenance-overlay align-center justify-center"
+      scrim="rgba(0, 0, 0, 0.85)"
+      persistent
     >
-      <v-icon class="me-2">mdi-alert</v-icon>
-      <span>{{ settingsStore.maintenanceMode.message }}</span>
+      <v-card class="maintenance-card" elevation="24">
+        <div class="maintenance-icon-wrapper">
+          <v-icon size="120" color="warning" class="maintenance-icon">mdi-tools</v-icon>
+          <div class="maintenance-pulse"></div>
+        </div>
+
+        <h1 class="maintenance-title">Sistem Sedang Dalam Maintenance</h1>
+
+        <p class="maintenance-message">
+          {{ settingsStore.maintenanceMode.message || 'Sistem sedang dalam perbaikan. Silakan coba lagi nanti.' }}
+        </p>
+
+        <v-divider class="my-4"></v-divider>
+
+        <div class="maintenance-info">
+          <v-icon size="20" color="info" class="me-2">mdi-information-outline</v-icon>
+          <span>Anda tetap bisa login, namun akses ke sistem terbatas saat maintenance.</span>
+        </div>
+
+        <div class="maintenance-features">
+          <div class="feature-item">
+            <v-icon color="success" class="me-2">mdi-check-circle</v-icon>
+            <span>Login tetap tersedia</span>
+          </div>
+          <div class="feature-item">
+            <v-icon color="success" class="me-2">mdi-check-circle</v-icon>
+            <span>Data tetap aman</span>
+          </div>
+          <div class="feature-item">
+            <v-icon color="success" class="me-2">mdi-check-circle</v-icon>
+            <span>Sistem akan kembali normal segera</span>
+          </div>
+        </div>
+
+        <v-btn
+          color="primary"
+          variant="elevated"
+          size="large"
+          class="maintenance-btn"
+          @click="refreshPage"
+        >
+          <v-icon start>mdi-refresh</v-icon>
+          Refresh Halaman
+        </v-btn>
+      </v-card>
+    </v-overlay>
+
+    <!-- Admin Banner - Hanya untuk Admin -->
+    <v-system-bar
+      v-if="settingsStore.maintenanceMode.isActive && isAdmin"
+      color="warning"
+      window
+      class="maintenance-admin-banner"
+    >
+      <v-icon class="me-2 animate-pulse">mdi-alert-decagram</v-icon>
+      <span class="me-2"><strong>Mode Maintenance Aktif:</strong> {{ settingsStore.maintenanceMode.message }}</span>
+      <v-spacer></v-spacer>
+      <v-chip size="small" color="error" variant="elevated">
+        <v-icon start size="small">mdi-shield-crown</v-icon>
+        Admin Access
+      </v-chip>
     </v-system-bar>
 
     <!-- Navigation Drawer (Sidebar) -->
@@ -557,6 +617,20 @@ const logoSrc = computed(() => {
   return theme.global.current.value.dark ? logoDark : logoLight;
 });
 
+// Computed untuk cek apakah user adalah admin
+const isAdmin = computed(() => {
+  const user = authStore.user;
+  if (user?.role) {
+    return user.role.name?.toLowerCase() === 'admin';
+  }
+  return false;
+});
+
+// State untuk maintenance overlay
+const showMaintenanceOverlay = computed(() => {
+  return settingsStore.maintenanceMode.isActive && !isAdmin.value;
+});
+
 // Computed untuk judul halaman saat ini
 const currentPageTitle = computed(() => {
   const path = route.path;
@@ -753,31 +827,31 @@ const menuGroups = ref([
     ]
   },
 
-  { 
-    title: 'BILLING', 
+  {
+    title: 'BILLING',
     items: [
-      { 
-        title: 'Billing & Reports', 
-        icon: 'mdi-cash-multiple', 
+      {
+        title: 'Billing & Reports',
+        icon: 'mdi-cash-multiple',
         value: 'billing-group',
         description: 'Kelola tagihan & laporan',
         permission: null,
         children: [
-          { 
-            title: 'Invoices', 
-            icon: 'mdi-receipt-text-outline', 
-            value: 'invoices', 
-            to: '/invoices', 
-            badge: 0, 
-            badgeColor: 'grey-darken-1', 
+          {
+            title: 'Invoices',
+            icon: 'mdi-receipt-text-outline',
+            value: 'invoices',
+            to: '/invoices',
+            badge: 0,
+            badgeColor: 'grey-darken-1',
             permission: 'view_invoices',
             description: 'Tagihan & pembayaran'
           },
-          { 
-            title: 'Laporan Pendapatan', 
-            icon: 'mdi-chart-line', 
-            value: 'revenue-report', 
-            to: '/reports/revenue', 
+          {
+            title: 'Laporan Pendapatan',
+            icon: 'mdi-chart-line',
+            value: 'revenue-report',
+            to: '/reports/revenue',
             permission: 'view_reports_revenue',
             description: 'Analisis pendapatan'
           }
@@ -786,7 +860,21 @@ const menuGroups = ref([
     ]
   },
 
-  { 
+  {
+    title: 'ANALYTICS',
+    items: [
+      {
+        title: 'AI Analytics',
+        icon: 'mdi-brain',
+        value: 'ai-analytics',
+        to: '/analytics',
+        permission: 'view_analytics',
+        description: 'AI-powered insights & predictions'
+      }
+    ]
+  },
+
+  {
     title: 'LAINNYA', 
     items: [
       { 
@@ -1577,6 +1665,11 @@ function handleLogoClick() {
     // Refresh halaman dengan cara yang elegan
     forceRender.value += 1;
   }
+}
+
+// Refresh halaman untuk maintenance mode
+function refreshPage() {
+  window.location.reload();
 }
 
 onMounted(async () => {
@@ -2633,6 +2726,160 @@ onUnmounted(() => {
   font-weight: 600;
   justify-content: center;
   box-shadow: var(--shadow-sm);
+}
+
+/* ==================== MAINTENANCE OVERLAY ==================== */
+
+.maintenance-overlay {
+  z-index: 9999 !important;
+}
+
+.maintenance-card {
+  max-width: 600px;
+  width: 90%;
+  padding: 48px;
+  border-radius: 24px !important;
+  background: rgb(var(--v-theme-surface));
+  text-align: center;
+}
+
+.maintenance-icon-wrapper {
+  position: relative;
+  display: inline-block;
+  margin-bottom: 32px;
+}
+
+.maintenance-icon {
+  animation: float 3s ease-in-out infinite;
+}
+
+.maintenance-pulse {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 150px;
+  height: 150px;
+  border-radius: 50%;
+  background: rgba(251, 191, 36, 0.1);
+  animation: pulse-ring 2s ease-out infinite;
+}
+
+.maintenance-pulse::before,
+.maintenance-pulse::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: rgba(251, 191, 36, 0.1);
+}
+
+.maintenance-pulse::before {
+  width: 180px;
+  height: 180px;
+  animation: pulse-ring 2s ease-out infinite 0.5s;
+}
+
+.maintenance-pulse::after {
+  width: 210px;
+  height: 210px;
+  animation: pulse-ring 2s ease-out infinite 1s;
+}
+
+@keyframes pulse-ring {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(0.8);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.2);
+  }
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.maintenance-title {
+  font-size: 2rem;
+  font-weight: 700;
+  color: rgb(var(--v-theme-on-surface));
+  margin-bottom: 16px;
+}
+
+.maintenance-message {
+  font-size: 1.125rem;
+  color: rgba(var(--v-theme-on-surface), 0.7);
+  margin-bottom: 24px;
+  line-height: 1.6;
+}
+
+.maintenance-info {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(var(--v-theme-info), 0.1);
+  border-radius: 12px;
+  margin-bottom: 24px;
+  font-size: 0.9375rem;
+  color: rgba(var(--v-theme-on-surface), 0.8);
+}
+
+.maintenance-features {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 32px;
+}
+
+.feature-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 1rem;
+  color: rgba(var(--v-theme-on-surface), 0.8);
+}
+
+.maintenance-btn {
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0.02em;
+  padding: 0 32px;
+  height: 48px;
+}
+
+/* ==================== MAINTENANCE ADMIN BANNER ==================== */
+
+.maintenance-admin-banner {
+  height: 48px !important;
+  font-size: 0.875rem !important;
+  font-weight: 600;
+  justify-content: center;
+  box-shadow: var(--shadow-sm);
+  background: linear-gradient(90deg, rgba(251, 191, 36, 0.15), rgba(251, 191, 36, 0.05)) !important;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.animate-pulse {
+  animation: pulse 2s ease-in-out infinite;
 }
 
 /* ==================== DARK THEME ==================== */

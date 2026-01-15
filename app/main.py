@@ -70,6 +70,7 @@ from .models.user import User as UserModel
 # Import semua router (API endpoints)
 from .routers import (
     activity_log,      # Log aktivitas user
+    analytics,         # AI-powered analytics
     auth,              # Authentication & authorization
     calculator,        # Kalkulator biaya
     dashboard,         # Dashboard admin
@@ -204,45 +205,78 @@ app.add_middleware(
 # ==========================================================
 @app.middleware("http")
 async def maintenance_mode_middleware(request: Request, call_next):
-    # Daftar path yang diizinkan selama maintenance
-    allowed_paths = [
+    # Daftar path yang SELALU diizinkan (tanpa authentication)
+    always_allowed_paths = [
         "/auth/token",  # Izinkan login
         "/auth/refresh",  # Izinkan refresh token
         "/auth/logout",  # Izinkan logout
         "/users/token",  # Izinkan login (backup path)
-        "/pelanggan",  # Izinkan akses pelanggan
-        "/paket_layanan",  # Izinkan akses paket layanan
-        "/harga_layanan",  # Izinkan akses harga layanan
-        "/settings/maintenance",  # Izinkan admin mengubah status maintenance
         "/docs",  # Izinkan akses dokumentasi API
         "/openapi.json",
         "/ws/test",  # Izinkan WebSocket test
+        "/static/",  # Static files
+        "/health",  # Health check
+        "/",  # Root endpoint
     ]
 
-    # Jika path request ada di daftar yang diizinkan, lewati pengecekan
-    if any(request.url.path.startswith(path) for path in allowed_paths):
+    # Daftar path yang diizinkan untuk admin saat maintenance
+    admin_allowed_paths = [
+        "/settings/",  # Izinkan admin mengubah pengaturan
+        "/dashboard",  # Izinkan admin akses dashboard
+        "/api/dashboard",  # Dashboard API
+        "/api/settings/",  # Settings API
+    ]
+
+    # Jika path request ada di daftar yang selalu diizinkan, lewati pengecekan
+    if any(request.url.path.startswith(path) for path in always_allowed_paths):
         return await call_next(request)
 
+    # Ambil status maintenance dari database
     async with AsyncSessionLocal() as db:  # type: ignore[attr-defined]
-        # Ambil status maintenance dari database dengan query berdasarkan key
-        stmt_active = select(SettingModel).where(SettingModel.setting_key == "maintenance_active")
-        maintenance_active_setting = (await db.execute(stmt_active)).scalar_one_or_none()
-        is_active = maintenance_active_setting and maintenance_active_setting.setting_value.lower() == "true"
+        # Cek status maintenance (gunakan format "true|message" atau "false|message")
+        stmt_mode = select(SettingModel).where(SettingModel.setting_key == "maintenance_mode")
+        maintenance_mode_setting = (await db.execute(stmt_mode)).scalar_one_or_none()
+
+        # Parse value: "true|Pesan maintenance" atau "false|..."
+        is_active = False
+        message = "Sistem sedang dalam perbaikan. Silakan coba lagi nanti."
+
+        if maintenance_mode_setting and maintenance_mode_setting.setting_value:
+            parts = maintenance_mode_setting.setting_value.split("|", 1)
+            is_active = parts[0].lower() == "true" if len(parts) > 0 else False
+            message = parts[1] if len(parts) > 1 and parts[1] else message
 
         if is_active:
-            # Jika maintenance aktif, ambil pesannya
-            stmt_message = select(SettingModel).where(SettingModel.setting_key == "maintenance_message")
-            maintenance_message_setting = (await db.execute(stmt_message)).scalar_one_or_none()
-            message = (
-                maintenance_message_setting.setting_value
-                if maintenance_message_setting
-                else "Sistem sedang dalam perbaikan. Silakan coba lagi nanti."
-            )
+            # Cek apakah user adalah admin
+            is_admin = False
+            auth_header = request.headers.get("Authorization", "")
 
-            # Kembalikan response 503 Service Unavailable
+            if auth_header.startswith("Bearer "):
+                token = auth_header.replace("Bearer ", "")
+                try:
+                    user = await get_user_from_token(token, db)
+                    if user and user.role and user.role.name.lower() == "admin":
+                        is_admin = True
+                except Exception:
+                    # Token invalid atau error, lanjutkan sebagai non-admin
+                    pass
+
+            # Jika admin, izinkan akses ke semua endpoint
+            if is_admin:
+                return await call_next(request)
+
+            # Jika non-admin, izinkan hanya ke path tertentu
+            if any(request.url.path.startswith(path) for path in admin_allowed_paths):
+                return await call_next(request)
+
+            # Blokir akses untuk non-admin dengan 503
             return JSONResponse(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                content={"detail": message},
+                content={
+                    "detail": message,
+                    "maintenance_mode": True,
+                    "message": "Sistem sedang dalam maintenance. Silakan coba lagi nanti."
+                },
             )
 
     # Jika tidak maintenance, lanjutkan ke request berikutnya
@@ -802,6 +836,7 @@ app.include_router(trouble_ticket.router)
 app.include_router(traffic_monitoring.router)
 app.include_router(rate_limiter_monitor.router)
 app.include_router(error_report.router)
+app.include_router(analytics.router)  # AI Analytics
 
 
 
