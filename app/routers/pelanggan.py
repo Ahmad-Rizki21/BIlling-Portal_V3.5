@@ -235,13 +235,19 @@ async def create_pelanggan(
         # Commit transaction
         await db.commit()
 
-        # Eager load harga_layanan untuk response (PelangganListItem butuh ini)
+        # Eager load harga_layanan dan work_orders untuk response
         result = await db.execute(
             select(PelangganModel)
             .where(PelangganModel.id == db_pelanggan.id)
-            .options(joinedload(PelangganModel.harga_layanan))
+            .options(
+                joinedload(PelangganModel.harga_layanan),
+                joinedload(PelangganModel.work_orders)
+            )
         )
         db_pelanggan = result.scalar_one()
+
+        # Expunge object dari session untuk mencegah lazy loading errors
+        db.expunge(db_pelanggan)
 
     except Exception as e:
         # Rollback transaction jika exception terjadi
