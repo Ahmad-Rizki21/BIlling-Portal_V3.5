@@ -35,8 +35,6 @@ if TYPE_CHECKING:
     from .mikrotik_server import MikrotikServer # Server Mikrotik
     from .inventory_item import InventoryItem   # Inventory items
     from .trouble_ticket import TroubleTicket   # Trouble tickets
-    from .work_order import WorkOrder           # Work orders
-    from .instalasi_document import InstalasiDocument  # Instalasi documents
 
 
 class Pelanggan(Base):
@@ -116,10 +114,8 @@ class Pelanggan(Base):
     inventory_items: Mapped[list["InventoryItem"]] = relationship("InventoryItem", back_populates="pelanggan")
     # Menambahkan relasi ke trouble tickets
     trouble_tickets: Mapped[list["TroubleTicket"]] = relationship("TroubleTicket", back_populates="pelanggan")
-    # Menambahkan relasi ke work orders
+    # Menambahkan relasi ke work orders (history WO)
     work_orders: Mapped[list["WorkOrder"]] = relationship("WorkOrder", back_populates="pelanggan", cascade="all, delete-orphan")
-    # Menambahkan relasi ke instalasi documents
-    instalasi_documents: Mapped[list["InstalasiDocument"]] = relationship("InstalasiDocument", cascade="all, delete-orphan")
 
     def to_dict(self):
         return {c.name: getattr(self, c.name) for c in self.__table__.columns}

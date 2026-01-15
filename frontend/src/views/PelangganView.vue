@@ -9,7 +9,7 @@
             </v-avatar>
           </div>
           <div class="ml-4">
-            <h1 class="header-title">Data Pelanggan</h1>
+            <h1 class="header-title">Pelanggan & Work Order's</h1>
             <p class="header-subtitle">Kelola semua data pelanggan Anda dengan mudah</p>
           </div>
         </div>
@@ -132,7 +132,7 @@
           <div class="header-icon-wrapper">
             <v-icon color="primary" size="20">mdi-format-list-bulleted-square</v-icon>
           </div>
-          <span class="card-title ml-3">Daftar Pelanggan</span>
+          <span class="card-title ml-3">Pelanggan & Work Order's</span>
         </div>
         <v-chip color="primary" variant="tonal" size="small" class="count-chip">
           <v-icon start size="small">mdi-account-multiple</v-icon>
@@ -144,6 +144,17 @@
         <div v-if="selectedPelanggan.length > 0" class="selection-toolbar">
           <span class="font-weight-bold text-primary">{{ selectedPelanggan.length }} pelanggan terpilih</span>
           <v-spacer></v-spacer>
+          <v-btn 
+            color="secondary" 
+            variant="tonal" 
+            prepend-icon="mdi-printer"
+            @click="printSelectedWorkOrders"
+            size="small"
+            class="mr-2"
+          >
+            <span class="d-none d-sm-inline">Print / Download WO</span>
+            <span class="d-inline d-sm-none">Print</span>
+          </v-btn>
           <v-btn 
             color="error" 
             variant="tonal" 
@@ -251,21 +262,41 @@
 
               <!-- Action Buttons -->
               <div class="d-flex gap-2 mt-4">
-                <v-btn 
-                  size="small" 
-                  variant="tonal" 
-                  color="primary" 
-                  @click="openDialog(item)" 
+                <v-btn
+                  size="small"
+                  variant="tonal"
+                  color="info"
+                  @click="openWoDialog(item)"
+                  prepend-icon="mdi-clipboard-text"
+                  class="flex-grow-1"
+                >
+                  View WO
+                </v-btn>
+                <v-btn
+                  size="small"
+                  variant="tonal"
+                  color="teal"
+                  @click="printWorkOrder(item)"
+                  prepend-icon="mdi-printer"
+                  class="flex-grow-1"
+                >
+                  Print
+                </v-btn>
+                <v-btn
+                  size="small"
+                  variant="tonal"
+                  color="primary"
+                  @click="openDialog(item)"
                   prepend-icon="mdi-pencil"
                   class="flex-grow-1"
                 >
                   Edit
                 </v-btn>
-                <v-btn 
-                  size="small" 
-                  variant="tonal" 
-                  color="error" 
-                  @click="openDeleteDialog(item)" 
+                <v-btn
+                  size="small"
+                  variant="tonal"
+                  color="error"
+                  @click="openDeleteDialog(item)"
                   prepend-icon="mdi-delete"
                   class="flex-grow-1"
                 >
@@ -342,19 +373,36 @@
           
           <template v-slot:item.actions="{ item }">
             <div class="action-buttons">
-              <v-btn 
-                size="small" 
-                variant="tonal" 
-                color="primary" 
-                @click="openDialog(item)" 
+              <v-btn
+                size="small"
+                variant="tonal"
+                color="info"
+                @click="openWoDialog(item)"
+                icon="mdi-clipboard-text"
+                class="action-btn-small"
+              ></v-btn>
+              <v-btn
+                size="small"
+                variant="tonal"
+                color="teal"
+                @click="printWorkOrder(item)"
+                icon="mdi-printer"
+                class="action-btn-small mr-1"
+                title="Print Work Order"
+              ></v-btn>
+              <v-btn
+                size="small"
+                variant="tonal"
+                color="primary"
+                @click="openDialog(item)"
                 icon="mdi-pencil"
                 class="action-btn-small"
               ></v-btn>
-              <v-btn 
-                size="small" 
-                variant="tonal" 
-                color="error" 
-                @click="openDeleteDialog(item)" 
+              <v-btn
+                size="small"
+                variant="tonal"
+                color="error"
+                @click="openDeleteDialog(item)"
                 icon="mdi-delete"
                 class="action-btn-small"
               ></v-btn>
@@ -393,7 +441,7 @@
             <div class="d-flex align-center">
               <v-select
                 v-model="itemsPerPage"
-                :items="[5, 10, 15, 25, 50]"
+                :items="[10, 15, 25, 50]"
                 variant="outlined"
                 density="compact"
                 hide-details
@@ -449,16 +497,23 @@
           <v-form ref="form" v-model="isFormValid">
             <v-stepper v-model="currentStep" flat class="elegant-stepper" :mobile="display.mobile.value">
               <v-stepper-header class="stepper-header">
-                <v-stepper-item 
-                  title="Info Pribadi" 
-                  :value="1" 
-                  :complete="currentStep > 1" 
+                <v-stepper-item
+                  title="Work Order"
+                  :value="1"
+                  :complete="currentStep > 1"
                   color="primary"
                 ></v-stepper-item>
                 <v-divider class="stepper-divider"></v-divider>
-                <v-stepper-item 
-                  title="Alamat & Layanan" 
-                  :value="2" 
+                <v-stepper-item
+                  title="Info Pribadi"
+                  :value="2"
+                  :complete="currentStep > 2"
+                  color="primary"
+                ></v-stepper-item>
+                <v-divider class="stepper-divider"></v-divider>
+                <v-stepper-item
+                  title="Alamat & Layanan"
+                  :value="3"
                   color="primary"
                 ></v-stepper-item>
               </v-stepper-header>
@@ -466,10 +521,173 @@
               <v-stepper-window class="stepper-content">
                 <v-stepper-window-item :value="1" class="step-content">
                   <div class="step-header">
+                    <h3 class="step-title">Work Order (WO)</h3>
+                    <p class="step-subtitle">Isi data Work Order untuk instalasi pelanggan baru</p>
+                  </div>
+
+                  <v-row class="form-row">
+                    <v-col cols="12" md="6">
+                      <div class="input-group">
+                        <label class="input-label">
+                          <v-icon size="small" class="mr-2">mdi-clipboard-text-outline</v-icon>
+                          No. WO
+                        </label>
+                        <v-text-field
+                          v-model="editedItem.no_wo"
+                          variant="outlined"
+                          class="elegant-input"
+                          density="comfortable"
+                          :placeholder="loadingWoNumber ? 'Memuat nomor WO...' : 'FTTH - XX - JENIS WO'"
+                          readonly
+                          :loading="loadingWoNumber"
+                        >
+                          <template v-slot:append-inner>
+                            <v-tooltip bottom>
+                              <template v-slot:activator="{ props }">
+                                <v-icon v-bind="props" color="info">mdi-information</v-icon>
+                              </template>
+                              <span>Nomor WO otomatis di-generate dari database</span>
+                            </v-tooltip>
+                          </template>
+                        </v-text-field>
+                      </div>
+                    </v-col>
+
+                    <v-col cols="12" md="6">
+                      <div class="input-group">
+                        <label class="input-label">
+                          <v-icon size="small" class="mr-2">mdi-shape</v-icon>
+                          Jenis WO
+                        </label>
+                        <v-select
+                          v-model="editedItem.jenis_wo"
+                          :items="jenisWoOptions"
+                          item-title="title"
+                          item-value="value"
+                          variant="outlined"
+                          class="elegant-input"
+                          density="comfortable"
+                          @update:model-value="onJenisWoChange"
+                        ></v-select>
+                      </div>
+                    </v-col>
+
+                    <v-col cols="12" md="6">
+                      <div class="input-group">
+                        <label class="input-label">
+                          <v-icon size="small" class="mr-2">mdi-flag</v-icon>
+                          Prioritas
+                        </label>
+                        <v-select
+                          v-model="editedItem.prioritas"
+                          :items="prioritasOptions"
+                          item-title="title"
+                          item-value="value"
+                          variant="outlined"
+                          class="elegant-input"
+                          density="comfortable"
+                        ></v-select>
+                      </div>
+                    </v-col>
+
+                    <v-col cols="12" md="6">
+                      <div class="input-group">
+                        <label class="input-label">
+                          <v-icon size="small" class="mr-2">mdi-calendar-outline</v-icon>
+                          Tanggal WO
+                        </label>
+                        <v-text-field
+                          v-model="editedItem.tanggal_wo"
+                          type="date"
+                          variant="outlined"
+                          class="elegant-input"
+                          density="comfortable"
+                        ></v-text-field>
+                      </div>
+                    </v-col>
+
+                    <v-col cols="12" md="6">
+                      <div class="input-group">
+                        <label class="input-label">
+                          <v-icon size="small" class="mr-2">mdi-calendar-check</v-icon>
+                          Target Tanggal Online
+                        </label>
+                        <v-text-field
+                          v-model="editedItem.tanggal_target_online"
+                          type="date"
+                          variant="outlined"
+                          class="elegant-input"
+                          density="comfortable"
+                        ></v-text-field>
+                      </div>
+                    </v-col>
+
+                    <v-col cols="12" md="6">
+                      <div class="input-group">
+                        <label class="input-label">
+                          <v-icon size="small" class="mr-2">mdi-checkbox-marked-circle</v-icon>
+                          Status WO
+                        </label>
+                        <v-select
+                          v-model="editedItem.status_wo"
+                          :items="statusWoOptions"
+                          item-title="title"
+                          item-value="value"
+                          variant="outlined"
+                          class="elegant-input"
+                          density="comfortable"
+                        >
+                          <template v-slot:prepend-inner>
+                            <v-icon
+                              :color="editedItem.status_wo === 'COMPLETED' ? 'success' : 'warning'"
+                              size="small"
+                            >
+                              {{ editedItem.status_wo === 'COMPLETED' ? 'mdi-check-circle' : 'mdi-clock-outline' }}
+                            </v-icon>
+                          </template>
+                          <template v-slot:selection="{ item }">
+                             <span class="text-body-2 font-weight-medium" style="color: rgb(var(--v-theme-on-surface))">{{ item.title }}</span>
+                          </template>
+                        </v-select>
+                      </div>
+                    </v-col>
+
+                    <v-col cols="12" md="6">
+                      <div class="input-group">
+                        <label class="input-label">
+                          <v-icon size="small" class="mr-2">mdi-calendar-clock</v-icon>
+                          Tanggal Instalasi
+                          <span class="text-caption text-medium-emphasis ml-2">(Opsional - Diisi teknisi)</span>
+                        </label>
+                        <v-text-field
+                          v-model="editedItem.tgl_instalasi"
+                          type="date"
+                          variant="outlined"
+                          class="elegant-input"
+                          density="comfortable"
+                          placeholder="DD/MM/YYYY"
+                          persistent-placeholder
+                        >
+                          <template v-slot:append-inner>
+                            <v-tooltip bottom>
+                              <template v-slot:activator="{ props }">
+                                <v-icon v-bind="props" color="info">mdi-information</v-icon>
+                              </template>
+                              <span>Tanggal instalasi akan diisi oleh tim teknisi saat melakukan instalasi</span>
+                            </v-tooltip>
+                          </template>
+                        </v-text-field>
+                      </div>
+                    </v-col>
+                  </v-row>
+                </v-stepper-window-item>
+
+                <v-stepper-window-item :value="2" class="step-content">
+                  <div class="step-header">
                     <h3 class="step-title">Informasi Pribadi</h3>
                     <p class="step-subtitle">Masukkan data pribadi pelanggan dengan lengkap</p>
                   </div>
-                  
+
                   <v-row class="form-row">
                     <v-col cols="12" md="6">
                       <div class="input-group">
@@ -478,9 +696,9 @@
                           Nama Lengkap
                           <span class="required-flag text-error">*</span>
                         </label>
-                        <v-text-field 
-                          v-model="editedItem.nama" 
-                          :rules="[rules.required]" 
+                        <v-text-field
+                          v-model="editedItem.nama"
+                          :rules="[rules.required]"
                           variant="outlined"
                           class="elegant-input"
                           density="comfortable"
@@ -494,10 +712,10 @@
                           Nomor KTP
                           <span class="required-flag text-error">*</span>
                         </label>
-                        <v-text-field 
-                          v-model="editedItem.no_ktp" 
-                          :rules="[rules.required, rules.ktp]" 
-                          variant="outlined" 
+                        <v-text-field
+                          v-model="editedItem.no_ktp"
+                          :rules="[rules.required, rules.ktp]"
+                          variant="outlined"
                           counter="16"
                           class="elegant-input"
                           density="comfortable"
@@ -511,9 +729,9 @@
                           Email
                           <span class="required-flag text-error">*</span>
                         </label>
-                        <v-text-field 
-                          v-model="editedItem.email" 
-                          :rules="[rules.required, rules.email]" 
+                        <v-text-field
+                          v-model="editedItem.email"
+                          :rules="[rules.required, rules.email]"
                           variant="outlined"
                           class="elegant-input"
                           density="comfortable"
@@ -539,14 +757,21 @@
                     </v-col>
                   </v-row>
                 </v-stepper-window-item>
-                
-                <v-stepper-window-item :value="2" class="step-content">
+
+                <v-stepper-window-item :value="3" class="step-content">
                   <div class="step-header">
                     <h3 class="step-title">Alamat & Layanan</h3>
                     <p class="step-subtitle">Lengkapi informasi alamat dan layanan pelanggan</p>
                   </div>
-                  
+
                   <v-row class="form-row">
+                    <v-col cols="12">
+                      <!-- <div class="d-flex align-center mb-3">
+                        <v-icon color="primary" class="mr-2">mdi-map-marker</v-icon>
+                        <h4 class="text-h6">Alamat & Lokasi</h4>
+                      </div> -->
+                    </v-col>
+
                     <v-col cols="12">
                       <div class="input-group">
                         <label class="input-label">
@@ -571,8 +796,8 @@
                           <v-icon size="small" class="mr-2">mdi-map-marker-outline</v-icon>
                           Alamat Tambahan (Opsional)
                         </label>
-                        <v-text-field 
-                          v-model="editedItem.alamat_2" 
+                        <v-text-field
+                          v-model="editedItem.alamat_2"
                           variant="outlined"
                           class="elegant-input"
                           density="comfortable"
@@ -586,9 +811,9 @@
                           Blok
                           <span class="required-flag text-error">*</span>
                         </label>
-                        <v-text-field 
-                          v-model="editedItem.blok" 
-                          :rules="[rules.required]" 
+                        <v-text-field
+                          v-model="editedItem.blok"
+                          :rules="[rules.required]"
                           variant="outlined"
                           class="elegant-input"
                           density="comfortable"
@@ -602,31 +827,16 @@
                           Unit
                           <span class="required-flag text-error">*</span>
                         </label>
-                        <v-text-field 
-                          v-model="editedItem.unit" 
-                          :rules="[rules.required]" 
+                        <v-text-field
+                          v-model="editedItem.unit"
+                          :rules="[rules.required]"
                           variant="outlined"
                           class="elegant-input"
                           density="comfortable"
                         ></v-text-field>
                       </div>
                     </v-col>
-                    <v-col cols="12" md="4">
-                      <div class="input-group">
-                        <label class="input-label">
-                          <v-icon size="small" class="mr-2">mdi-calendar</v-icon>
-                          Tanggal Instalasi
-                        </label>
-                        <v-text-field 
-                          v-model="editedItem.tgl_instalasi" 
-                          type="date" 
-                          variant="outlined"
-                          class="elegant-input"
-                          density="comfortable"
-                        ></v-text-field>
-                      </div>
-                    </v-col>
-                    <v-col cols="12" md="4">
+                    <v-col cols="12" md="6">
                       <div class="input-group">
                         <label class="input-label">
                           <v-icon size="small" class="mr-2">mdi-wifi</v-icon>
@@ -649,11 +859,11 @@
                           Brand Provider
                           <span class="required-flag text-error">*</span>
                         </label>
-                        <v-select 
-                          v-model="editedItem.id_brand" 
-                          :items="hargaLayananList" 
-                          item-title="brand" 
-                          item-value="id_brand" 
+                        <v-select
+                          v-model="editedItem.id_brand"
+                          :items="hargaLayananList"
+                          item-title="brand"
+                          item-value="id_brand"
                           variant="outlined"
                           class="elegant-input"
                           density="comfortable"
@@ -686,9 +896,9 @@
           >
             Batal
           </v-btn>
-          <v-btn 
-            v-if="currentStep < 2" 
-            @click="currentStep++" 
+          <v-btn
+            v-if="currentStep < 3"
+            @click="currentStep++"
             color="primary"
             class="nav-btn"
             append-icon="mdi-arrow-right"
@@ -793,6 +1003,196 @@
             </v-btn>
           </v-card-actions>
         </v-card>
+    </v-dialog>
+
+    <!-- WO History Dialog -->
+    <v-dialog v-model="dialogWo" max-width="900px" :fullscreen="display.mobile.value" persistent class="form-dialog">
+      <v-card class="form-card">
+        <div class="form-header">
+          <div class="form-header-content">
+            <v-icon class="mr-3" size="24">mdi-information-outline</v-icon>
+            <span class="form-title">Information Instalation</span>
+          </div>
+          <v-btn
+            v-if="display.mobile.value"
+            icon
+            variant="text"
+            @click="dialogWo = false"
+            class="mobile-close-btn"
+          >
+            <v-icon color="white">mdi-close</v-icon>
+          </v-btn>
+        </div>
+
+        <v-card-text class="form-content pa-0">
+          <!-- User Details Section -->
+          <v-sheet class="pa-4 user-details-sheet" border>
+            <v-row v-if="selectedPelangganWo">
+              <v-col cols="12" md="6">
+                <div class="d-flex align-center mb-3">
+                  <v-avatar color="primary" variant="tonal" size="32" class="mr-3">
+                    <v-icon size="16">mdi-account</v-icon>
+                  </v-avatar>
+                  <div>
+                    <div class="text-caption text-medium-emphasis">Nama User</div>
+                    <div class="text-body-1 font-weight-bold">{{ selectedPelangganWo.nama }}</div>
+                  </div>
+                </div>
+                
+                <div class="d-flex align-center mb-3">
+                  <v-avatar color="primary" variant="tonal" size="32" class="mr-3">
+                    <v-icon size="16">mdi-card-account-details</v-icon>
+                  </v-avatar>
+                  <div>
+                    <div class="text-caption text-medium-emphasis">NIK</div>
+                    <div class="text-body-2 font-weight-medium">{{ selectedPelangganWo.no_ktp }}</div>
+                  </div>
+                </div>
+
+                <div class="d-flex align-center mb-3">
+                  <v-avatar color="primary" variant="tonal" size="32" class="mr-3">
+                    <v-icon size="16">mdi-email</v-icon>
+                  </v-avatar>
+                  <div>
+                    <div class="text-caption text-medium-emphasis">Email</div>
+                    <div class="text-body-2 font-weight-medium">{{ selectedPelangganWo.email }}</div>
+                  </div>
+                </div>
+              </v-col>
+
+              <v-col cols="12" md="6">
+                 <div class="d-flex align-center mb-3">
+                  <v-avatar color="primary" variant="tonal" size="32" class="mr-3">
+                    <v-icon size="16">mdi-phone</v-icon>
+                  </v-avatar>
+                  <div>
+                    <div class="text-caption text-medium-emphasis">Nomer Telepon</div>
+                    <div class="text-body-2 font-weight-medium">{{ selectedPelangganWo.no_telp }}</div>
+                  </div>
+                </div>
+
+                <div class="d-flex align-center mb-3">
+                  <v-avatar color="primary" variant="tonal" size="32" class="mr-3">
+                    <v-icon size="16">mdi-map-marker</v-icon>
+                  </v-avatar>
+                  <div>
+                    <div class="text-caption text-medium-emphasis">Alamat</div>
+                    <div class="text-body-2 font-weight-medium">
+                      {{ selectedPelangganWo.alamat }}
+                      <span v-if="selectedPelangganWo.alamat_2">, {{ selectedPelangganWo.alamat_2 }}</span>
+                      <span v-if="selectedPelangganWo.blok">, Blok {{ selectedPelangganWo.blok }}</span>
+                      <span v-if="selectedPelangganWo.unit"> No. {{ selectedPelangganWo.unit }}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="d-flex align-center">
+                  <v-avatar color="primary" variant="tonal" size="32" class="mr-3">
+                     <v-icon size="16">mdi-wifi</v-icon>
+                  </v-avatar>
+                  <div>
+                    <div class="text-caption text-medium-emphasis">Brand & Paket</div>
+                    <div class="text-body-2 font-weight-medium">
+                      <v-chip 
+                        size="small" 
+                        :color="getBrandChipColor(selectedPelangganWo.harga_layanan?.brand || selectedPelangganWo.id_brand || '')" 
+                        class="mr-1"
+                      >
+                        {{ selectedPelangganWo.harga_layanan?.brand || selectedPelangganWo.id_brand }}
+                      </v-chip>
+                      {{ selectedPelangganWo.layanan }}
+                    </div>
+                  </div>
+                </div>
+              </v-col>
+            </v-row>
+          </v-sheet>
+
+          <v-divider></v-divider>
+
+          <!-- WO History Section -->
+          <div class="pa-4">
+            <h3 class="text-h6 mb-3 d-flex align-center">
+              <v-icon start color="primary">mdi-history</v-icon>
+              Work Order
+            </h3>
+
+            <div v-if="loadingWo" class="text-center pa-8">
+              <v-progress-circular indeterminate color="primary"></v-progress-circular>
+              <p class="mt-4">Memuat data Work Order...</p>
+            </div>
+
+            <div v-else-if="woHistory.length === 0" class="text-center pa-8">
+              <v-icon size="64" color="surface-variant">mdi-clipboard-off</v-icon>
+              <p class="text-h6 mt-4">Belum ada Work Order</p>
+              <p class="text-medium-emphasis">Pelanggan ini belum memiliki riwayat Work Order</p>
+            </div>
+
+            <v-timeline v-else density="compact" side="end" class="mt-2 user-timeline">
+              <v-timeline-item
+                v-for="wo in woHistory"
+                :key="wo.id"
+                :dot-color="wo.status === 'COMPLETED' ? 'success' : (wo.status === 'OPEN' ? 'info' : 'warning')"
+                size="small"
+              >
+                <template v-slot:icon>
+                  <v-icon :color="wo.status === 'COMPLETED' ? 'success' : (wo.status === 'OPEN' ? 'info' : 'warning')" size="small">
+                    {{ wo.status === 'COMPLETED' ? 'mdi-check' : (wo.status === 'OPEN' ? 'mdi-folder-open' : 'mdi-clock-outline') }}
+                  </v-icon>
+                </template>
+                <v-card elevation="2" border variant="flat">
+                  <v-card-text class="pt-3 pb-3">
+                    <div class="d-flex align-center justify-space-between mb-2">
+                       <div class="font-weight-bold text-subtitle-2">{{ wo.no_wo }}</div>
+                       <v-chip
+                        :color="wo.status === 'COMPLETED' ? 'success' : (wo.status === 'OPEN' ? 'info' : 'warning')"
+                        size="x-small"
+                        variant="flat"
+                        class="text-uppercase font-weight-bold"
+                      >
+                        {{ wo.status }}
+                      </v-chip>
+                    </div>
+                    
+                    <div class="text-caption mb-2 text-medium-emphasis">
+                      {{ wo.jenis_wo }} • {{ formatDate(wo.tanggal_wo) }}
+                    </div>
+
+                    <v-row dense>
+                      <v-col cols="6" v-if="wo.prioritas">
+                        <div class="text-caption text-medium-emphasis">Prioritas</div>
+                        <div class="text-body-2 font-weight-medium text-capitalize {{ wo.prioritas === 'high' ? 'text-error' : '' }}">
+                          {{ wo.prioritas }}
+                        </div>
+                      </v-col>
+                      <v-col cols="6" v-if="wo.tanggal_target_online">
+                        <div class="text-caption text-medium-emphasis">Target Online</div>
+                        <div class="text-body-2">{{ formatDate(wo.tanggal_target_online) }}</div>
+                      </v-col>
+                      <v-col cols="12" v-if="wo.catatan">
+                        <div class="text-caption text-medium-emphasis">Catatan</div>
+                        <div class="text-body-2">{{ wo.catatan }}</div>
+                      </v-col>
+                    </v-row>
+                  </v-card-text>
+                </v-card>
+              </v-timeline-item>
+            </v-timeline>
+          </div>
+        </v-card-text>
+
+        <v-card-actions class="form-actions ma-0 pa-4 border-t">
+          <v-spacer></v-spacer>
+          <v-btn
+            @click="dialogWo = false"
+            color="primary"
+            variant="elevated"
+            class="px-6"
+          >
+            Tutup
+          </v-btn>
+        </v-card-actions>
+      </v-card>
     </v-dialog>
 
     <!-- Import Dialog -->
@@ -962,10 +1362,34 @@ interface HargaLayanan {
   id_brand: string;
   brand: string;
 }
+
+interface WorkOrder {
+  id: number;
+  pelanggan_id: number;
+  no_wo: string;
+  jenis_wo: string;
+  prioritas: string;
+  tanggal_wo: string;
+  tanggal_target_online?: string | null;
+  status: string;
+  catatan?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
 interface Pelanggan extends BasePelanggan {
   alamat_2?: string | null;
   id_brand?: string | null;
   harga_layanan?: HargaLayanan | null;
+  // Work Order fields
+  no_wo?: string | null;
+  jenis_wo?: string | null;
+  prioritas?: string | null;
+  tanggal_wo?: string | null;
+  tanggal_target_online?: string | null;
+  status_wo?: string | null;
+  // Work Orders history
+  work_orders?: WorkOrder[] | null;
 }
 
 // --- STATE MANAGEMENT ---
@@ -978,6 +1402,7 @@ const deleting = ref(false);
 const dialog = ref(false);
 const dialogDelete = ref(false);
 const dialogBulkDelete = ref(false);
+const dialogWo = ref(false);
 const editedIndex = ref(-1);
 const currentStep = ref(1);
 const isFormValid = ref(false);
@@ -997,23 +1422,34 @@ const selectedBrand = ref<string | null>(null);
 // --- State Baru untuk Paginasi Mobile dan Desktop ---
 const mobilePage = ref(1);
 const desktopPage = ref(1);
-const itemsPerPage = ref(15);
+const itemsPerPage = ref(10);
 const hasMoreData = ref(true);
 const loadingMore = ref(false);
+const loadingWoNumber = ref(false);
+const selectedPelangganWo = ref<Pelanggan | null>(null);
+const woHistory = ref<WorkOrder[]>([]);
+const loadingWo = ref(false);
 
-const defaultItem: Partial<Pelanggan> = { 
-  id: undefined, 
-  nama: '', 
-  no_ktp: '', 
-  email: '', 
-  no_telp: '', 
+const defaultItem: Partial<Pelanggan> = {
+  id: undefined,
+  nama: '',
+  no_ktp: '',
+  email: '',
+  no_telp: '',
   layanan: '',
-  alamat: '', 
-  blok: '', 
-  unit: '', 
-  tgl_instalasi: new Date().toISOString().split('T')[0], 
+  alamat: '',
+  blok: '',
+  unit: '',
+  tgl_instalasi: '',
   alamat_2: '',
-  id_brand: null
+  id_brand: null,
+  // Work Order fields
+  no_wo: '',
+  jenis_wo: 'NEW INSTALLATION',
+  prioritas: 'high',
+  tanggal_wo: new Date().toISOString().split('T')[0],
+  tanggal_target_online: '',
+  status_wo: 'OPEN'
 };
 const editedItem = ref<Partial<Pelanggan>>({ ...defaultItem });
 const itemToDelete = ref<Pelanggan | null>(null);
@@ -1038,6 +1474,24 @@ const layananOptions = ref([
   'Internet 20 Mbps',
   'Internet 30 Mbps',
   'Internet 50 Mbps'
+]);
+
+const prioritasOptions = ref([
+  { title: 'High', value: 'high' },
+  { title: 'Medium', value: 'medium' },
+  { title: 'Low', value: 'low' }
+]);
+
+const jenisWoOptions = ref([
+  { title: 'NEW INSTALLATION', value: 'NEW INSTALLATION' },
+  { title: 'RELOKASI', value: 'RELOKASI' },
+  { title: 'UPGRADE', value: 'UPGRADE' },
+  { title: 'DOWNGRADE', value: 'DOWNGRADE' }
+]);
+
+const statusWoOptions = ref([
+  { title: 'OPEN', value: 'OPEN' },
+  { title: 'COMPLETED', value: 'COMPLETED' }
 ]);
 
 // --- VALIDATION RULES ---
@@ -1158,7 +1612,7 @@ async function fetchPelanggan(isLoadMore = false, preservePage = false) {
       newData = response.data;
       totalCount = newData.length; // This is not accurate but provides fallback
     }
-
+    
     if (isLoadMore) {
       pelangganList.value.push(...newData);
     } else {
@@ -1247,7 +1701,10 @@ async function fetchHargaLayanan() {
   }
 }
 
-function openDialog(item?: Pelanggan) {
+const existingWoCount = ref(0);
+const originalWoDetails = ref({ jenis_wo: null, no_wo: null });
+
+async function openDialog(item?: Pelanggan) {
   editedIndex.value = item ? pelangganList.value.findIndex(p => p.id === item.id) : -1;
   const targetItem = item ? { ...item } : { ...defaultItem };
   if (targetItem.tgl_instalasi) {
@@ -1256,6 +1713,95 @@ function openDialog(item?: Pelanggan) {
   editedItem.value = targetItem;
   currentStep.value = 1;
   dialog.value = true;
+
+  // Store original details to allow reverting
+  originalWoDetails.value = {
+    jenis_wo: targetItem.jenis_wo,
+    no_wo: targetItem.no_wo
+  };
+
+  if (!item) {
+    existingWoCount.value = 0;
+    // For new customers, wait for Jenis WO selection to generate number
+  } else {
+    // Fetch WO count for existing user to determine next sequence
+    try {
+      const response = await apiClient.get(`/work-orders/pelanggan/${item.id}/work-orders`);
+      existingWoCount.value = response.data.length;
+    } catch (error) {
+      console.error("Gagal hitung WO:", error);
+      existingWoCount.value = 0;
+    }
+  }
+}
+
+
+async function generateWoNumber() {
+  if (!editedItem.value.jenis_wo) return;
+
+  // Robust check: If no ID, it's definitely a new record
+  // Call API to get the next WO number from database (not hardcoded)
+  if (!editedItem.value.id) {
+    loadingWoNumber.value = true;
+    try {
+      const response = await apiClient.get('/work-orders/next-number', {
+        params: { jenis_wo: editedItem.value.jenis_wo }
+      });
+      editedItem.value.no_wo = response.data.next_wo_number;
+    } catch (error) {
+      console.error('Gagal mendapatkan nomor WO berikutnya:', error);
+      // Fallback ke format standar jika API gagal
+      editedItem.value.no_wo = `FTTH - XX - ${editedItem.value.jenis_wo.toUpperCase()}`;
+    } finally {
+      loadingWoNumber.value = false;
+    }
+    return;
+  }
+
+  // Only generate new number if types don't match (meaning it's a new WO action)
+  if (editedItem.value.jenis_wo !== originalWoDetails.value.jenis_wo) {
+    loadingWoNumber.value = true;
+    // Call API to get the next WO number from database
+    try {
+      const response = await apiClient.get('/work-orders/next-number', {
+        params: { jenis_wo: editedItem.value.jenis_wo }
+      });
+      editedItem.value.no_wo = response.data.next_wo_number;
+      editedItem.value.status_wo = 'OPEN';
+    } catch (error) {
+      console.error('Gagal mendapatkan nomor WO berikutnya:', error);
+      // Fallback ke perhitungan lokal jika API gagal
+      const nextSeq = String(existingWoCount.value + 1).padStart(2, '0');
+      editedItem.value.no_wo = `FTTH - ${nextSeq} - ${editedItem.value.jenis_wo.toUpperCase()}`;
+      editedItem.value.status_wo = 'OPEN';
+    } finally {
+      loadingWoNumber.value = false;
+    }
+  } else {
+    // Restore original if type matches
+    editedItem.value.no_wo = originalWoDetails.value.no_wo;
+  }
+}
+
+async function onJenisWoChange() {
+  await generateWoNumber();
+}
+
+async function openWoDialog(pelanggan: Pelanggan) {
+  selectedPelangganWo.value = pelanggan;
+  dialogWo.value = true;
+  loadingWo.value = true;
+
+  try {
+    const response = await apiClient.get(`/work-orders/pelanggan/${pelanggan.id}/work-orders`);
+    woHistory.value = response.data;
+  } catch (error) {
+    console.error('Gagal mengambil data WO:', error);
+    showSnackbar('Gagal mengambil history Work Order', 'error');
+    woHistory.value = [];
+  } finally {
+    loadingWo.value = false;
+  }
 }
 
 function closeDialog() {
@@ -1269,11 +1815,23 @@ async function savePelanggan() {
   if (!isFormValid.value) return;
   saving.value = true;
   try {
-    if (editedIndex.value > -1) {
-      await apiClient.patch(`/pelanggan/${editedItem.value.id}`, editedItem.value);
+    // Clean data: remove empty strings for optional fields
+    const cleanData = { ...editedItem.value };
+    // Convert empty strings to null for date fields
+    if (cleanData.tanggal_target_online === '') cleanData.tanggal_target_online = null;
+    if (cleanData.alamat_2 === '') cleanData.alamat_2 = null;
+    // Convert empty strings to null for WO fields
+    if (cleanData.no_wo === '') cleanData.no_wo = null;
+    if (cleanData.jenis_wo === '') cleanData.jenis_wo = null;
+    if (cleanData.prioritas === '') cleanData.prioritas = null;
+    if (cleanData.tanggal_wo === '') cleanData.tanggal_wo = null;
+    if (cleanData.status_wo === '') cleanData.status_wo = null;
+
+    if (editedItem.value.id) {
+      await apiClient.patch(`/pelanggan/${editedItem.value.id}`, cleanData);
       showSnackbar('Data pelanggan berhasil diperbarui', 'success');
     } else {
-      await apiClient.post('/pelanggan/', editedItem.value);
+      await apiClient.post('/pelanggan/', cleanData);
       showSnackbar('Data pelanggan berhasil ditambahkan', 'success');
     }
     await fetchPelanggan();
@@ -1310,6 +1868,27 @@ async function confirmDelete() {
   } finally {
     deleting.value = false;
   }
+}
+
+
+function printWorkOrder(item: Pelanggan) {
+  // Open the specialized Print View in a new tab
+  // We construct the URL manually or via router if accessible
+  // Since we are inside <script setup>, we can use router instance if defined
+  // Assuming 'router' is not strictly global here, we can use window.open with the path
+  const url = `/print-wo/${item.id}`;
+  window.open(url, '_blank');
+}
+
+function printSelectedWorkOrders() {
+  if (selectedPelanggan.value.length === 0) return;
+  
+  // Create a comma-separated string of IDs
+  const ids = selectedPelanggan.value.map(p => p.id).join(',');
+  
+  // Use a special route for bulk printing
+  const url = `/print-wo/bulk?ids=${ids}`;
+  window.open(url, '_blank');
 }
 
 // --- IMPORT/EXPORT METHODS ---
@@ -1452,21 +2031,27 @@ function showSnackbar(text: string, color: 'success' | 'error' | 'warning') {
 
 <style scoped>
 /* ============================================
-   OPTIMIZED MOBILE-FIRST RESPONSIVE DESIGN
+   MOBILE-FIRST RESPONSIVE DESIGN
+   ============================================ */
+
+/* ============================================
+   MOBILE-FIRST RESPONSIVE DESIGN - FIXED POSITIONING
    ============================================ */
 
 /* Base Styles */
 .modern-app {
   background-color: rgb(var(--v-theme-background));
+  transition: background-color 0.3s ease;
 }
 
-/* Header Card - Mobile Optimized - REDUCED SHADOW */
+/* Header Card - Mobile Optimized with Fixed Positioning */
 .header-card {
   background: linear-gradient(135deg, rgb(var(--v-theme-primary)) 0%, rgb(var(--v-theme-secondary)) 100%);
   border-radius: 20px;
   padding: 24px;
   color: rgb(var(--v-theme-on-primary));
-  box-shadow: 0 2px 8px rgba(var(--v-theme-primary), 0.15);
+  box-shadow: 0 8px 32px rgba(var(--v-theme-primary), 0.25);
+  position: relative;
 }
 
 .header-card .d-flex.flex-column {
@@ -1513,7 +2098,7 @@ function showSnackbar(text: string, color: 'success' | 'error' | 'warning') {
   border-radius: 14px;
   font-weight: 600;
   height: 48px;
-  transition: background-color 0.2s ease;
+  transition: all 0.3s ease;
 }
 
 .action-btn {
@@ -1525,6 +2110,7 @@ function showSnackbar(text: string, color: 'success' | 'error' | 'warning') {
 
 .action-btn:hover {
   background-color: rgba(255, 255, 255, 0.25) !important;
+  transform: translateY(-1px);
 }
 
 .primary-btn {
@@ -1532,15 +2118,15 @@ function showSnackbar(text: string, color: 'success' | 'error' | 'warning') {
   color: rgb(var(--v-theme-primary)) !important;
 }
 
-/* Filter Card - Mobile Optimized - REDUCED SHADOW */
+/* Filter Card - Mobile Optimized */
 .filter-card {
   border-radius: 16px;
   border: 1px solid rgba(var(--v-theme-primary), 0.12);
   background: rgb(var(--v-theme-surface));
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 2px 12px rgba(var(--v-theme-shadow), 0.08);
 }
 
-/* Data Table Card - NO SHADOW */
+/* Data Table Card */
 .data-table-card {
   border-radius: 16px;
   overflow: hidden;
@@ -1583,11 +2169,13 @@ function showSnackbar(text: string, color: 'success' | 'error' | 'warning') {
 
 .mobile-customer-card {
   border-radius: 12px;
+  transition: all 0.3s ease;
   border: 1px solid rgba(var(--v-theme-outline-variant), 0.5);
 }
 
 .mobile-customer-card:hover {
-  border-color: rgba(var(--v-theme-primary), 0.3);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(var(--v-theme-shadow), 0.15);
 }
 
 .mobile-customer-name {
@@ -1629,36 +2217,41 @@ function showSnackbar(text: string, color: 'success' | 'error' | 'warning') {
   flex: 1;
 }
 
-/* Desktop Table Styles - Clean & Minimalist - NO TRANSITIONS */
+/* Desktop Table Styles - Clean & Minimalist */
 .elegant-table {
-  background: #ffffff !important;
+  background: rgb(var(--v-theme-surface)) !important;
+  color: rgb(var(--v-theme-on-surface)) !important;
 }
 
 .elegant-table :deep(thead) {
-  background: #fafafa;
+  background: rgba(var(--v-theme-surface-variant), 0.12); /* Subtle contrast for header */
 }
 
 .elegant-table :deep(th) {
   font-weight: 700 !important;
   font-size: 0.75rem !important;
-  color: #424242 !important;
+  color: rgb(var(--v-theme-on-surface)) !important;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   padding: 16px 12px !important;
-  border-bottom: 2px solid #e0e0e0 !important;
+  border-bottom: 2px solid rgba(var(--v-theme-outline), 0.2) !important;
   white-space: nowrap;
 }
 
 .elegant-table :deep(td) {
   padding: 14px 12px !important;
-  border-bottom: 1px solid #f5f5f5 !important;
+  border-bottom: 1px solid rgba(var(--v-theme-outline), 0.1) !important;
   font-size: 0.875rem;
-  color: #616161;
+  color: rgba(var(--v-theme-on-surface), 0.87);
   vertical-align: middle;
 }
 
+.elegant-table :deep(tbody tr) {
+  transition: all 0.2s ease;
+}
+
 .elegant-table :deep(tbody tr:hover) {
-  background-color: #fafafa !important;
+  background-color: rgba(var(--v-theme-on-surface), 0.04) !important;
 }
 
 .elegant-table :deep(tbody tr:last-child td) {
@@ -1667,13 +2260,13 @@ function showSnackbar(text: string, color: 'success' | 'error' | 'warning') {
 
 .customer-name {
   font-weight: 600;
-  color: #1a1a1a;
+  color: rgb(var(--v-theme-on-surface));
   font-size: 0.875rem;
 }
 
 .customer-email {
   font-size: 0.8125rem;
-  color: #757575;
+  color: rgba(var(--v-theme-on-surface), 0.6);
   margin-top: 2px;
 }
 
@@ -1781,7 +2374,8 @@ function showSnackbar(text: string, color: 'success' | 'error' | 'warning') {
 
 .elegant-input :deep(.v-field) {
   border-radius: 12px;
-  background: rgb(var(--v-theme-background));
+  background: rgba(var(--v-theme-on-surface), 0.04);
+  color: rgb(var(--v-theme-on-surface));
 }
 
 .form-actions {
@@ -1876,10 +2470,13 @@ function showSnackbar(text: string, color: 'success' | 'error' | 'warning') {
   border: 2px dashed rgba(var(--v-theme-success), 0.3);
   background: rgba(var(--v-theme-success), 0.05);
   border-radius: 12px;
+  transition: all 0.3s ease;
 }
 
 .template-card:hover {
-  border-color: rgba(var(--v-theme-success), 0.5);
+  border-color: rgb(var(--v-theme-success));
+  transform: translateY(-1px);
+  box-shadow: 0 4px 20px rgba(var(--v-theme-success), 0.15);
 }
 
 .template-title, .upload-title {
@@ -1899,10 +2496,12 @@ function showSnackbar(text: string, color: 'success' | 'error' | 'warning') {
   border: 2px dashed rgb(var(--v-theme-outline-variant)) !important;
   background: rgb(var(--v-theme-surface)) !important;
   border-radius: 12px;
+  transition: all 0.2s ease-in-out;
 }
 
 .file-input :deep(.v-field:hover) {
-  border-color: rgba(var(--v-theme-success), 0.5) !important;
+  border-color: rgb(var(--v-theme-success)) !important;
+  background: rgba(var(--v-theme-success), 0.05) !important;
 }
 
 .error-alert {
@@ -2278,9 +2877,9 @@ function showSnackbar(text: string, color: 'success' | 'error' | 'warning') {
   }
 }
 
-/* Dark Theme Adjustments - SIMPLIFIED SHADOWS */
+/* Dark Theme Adjustments */
 .v-theme--dark .header-card {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
 }
 
 .v-theme--dark .filter-card,
@@ -2295,6 +2894,10 @@ function showSnackbar(text: string, color: 'success' | 'error' | 'warning') {
 .v-theme--dark .mobile-customer-card {
   background: #1e293b;
   border-color: #334155;
+}
+
+.v-theme--dark .mobile-customer-card:hover {
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
 }
 
 .v-theme--dark .card-header {
@@ -2316,38 +2919,6 @@ function showSnackbar(text: string, color: 'success' | 'error' | 'warning') {
 .v-theme--dark .template-card {
   background: rgba(var(--v-theme-success), 0.1);
   border-color: rgba(var(--v-theme-success), 0.3);
-}
-
-.v-theme--dark .elegant-table {
-  background: #1e293b !important;
-  color: rgb(var(--v-theme-on-surface)) !important;
-}
-
-.v-theme--dark .elegant-table :deep(thead) {
-  background: #0f1629 !important;
-}
-
-.v-theme--dark .elegant-table :deep(th) {
-  background: #0f1629 !important;
-  color: rgb(var(--v-theme-on-surface)) !important;
-  border-bottom: 2px solid #334155 !important;
-}
-
-.v-theme--dark .elegant-table :deep(td) {
-  color: rgb(var(--v-theme-on-surface)) !important;
-  border-bottom: 1px solid #334155 !important;
-}
-
-.v-theme--dark .elegant-table :deep(tbody tr:hover) {
-  background-color: rgba(var(--v-theme-primary), 0.05) !important;
-}
-
-.v-theme--dark .customer-name {
-  color: rgb(var(--v-theme-on-surface)) !important;
-}
-
-.v-theme--dark .customer-email {
-  color: rgba(var(--v-theme-on-surface), 0.7) !important;
 }
 
 .v-theme--dark .error-item {
@@ -2379,6 +2950,25 @@ function showSnackbar(text: string, color: 'success' | 'error' | 'warning') {
 .mobile-customer-card.loading {
   opacity: 0.7;
   pointer-events: none;
+}
+
+/* Animation Classes */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+.slide-up-enter-active {
+  transition: transform 0.3s ease;
+}
+
+.slide-up-enter-from {
+  transform: translateY(20px);
 }
 
 /* Print Styles */
@@ -2425,6 +3015,23 @@ function showSnackbar(text: string, color: 'success' | 'error' | 'warning') {
   font-size: 1.1em;
   font-weight: bold;
   vertical-align: middle;
+}
+
+/* User Details Sheet - Theme Aware */
+.user-details-sheet {
+  background: rgba(var(--v-theme-primary), 0.08) !important;
+  color: rgb(var(--v-theme-on-surface)) !important;
+  border-bottom: 1px solid rgba(var(--v-theme-outline), 0.2) !important;
+}
+
+/* Ensure text readability in both modes */
+.user-details-sheet .text-medium-emphasis {
+  color: rgba(var(--v-theme-on-surface), 0.7) !important;
+}
+
+.user-details-sheet .text-body-1, 
+.user-details-sheet .text-body-2 {
+  color: rgb(var(--v-theme-on-surface)) !important;
 }
 
 </style>

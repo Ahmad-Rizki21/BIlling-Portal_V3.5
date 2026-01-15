@@ -182,6 +182,14 @@
                 class="mb-2"
                 style="height: 50px; object-fit: contain;"
               />
+
+              <img 
+                v-if="item.pelanggan?.harga_layanan?.brand === 'JELANTIK NAGRAK'" 
+                src="/logo-jelantik.png" 
+                alt="Logo" 
+                class="mb-2"
+                style="height: 50px; object-fit: contain;"
+              />
               
               <!-- Logo JAKINET -->
               <img 

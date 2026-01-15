@@ -4,6 +4,7 @@ from typing import Optional, List
 import re
 
 from .harga_layanan import HargaLayanan as HargaLayananSchema
+from .work_order import WorkOrderHistory
 
 
 # Skema untuk membuat Pelanggan baru
@@ -19,6 +20,13 @@ class PelangganCreate(BaseModel):
     email: EmailStr = Field(..., description="Email (wajib)")
     id_brand: Optional[str] = Field(None, description="ID Brand (opsional)")
     layanan: Optional[str] = Field(None, description="Layanan (opsional)")
+    # Data Work Order (WO)
+    no_wo: Optional[str] = Field(None, description="Nomor Work Order (opsional)")
+    jenis_wo: Optional[str] = Field(None, description="Jenis WO: baru/relokasi/upgrade (opsional)")
+    prioritas: Optional[str] = Field(None, description="Prioritas WO: high/medium/low (opsional)")
+    tanggal_wo: Optional[date] = Field(None, description="Tanggal pembuatan WO (opsional)")
+    tanggal_target_online: Optional[date] = Field(None, description="Target tanggal online (opsional)")
+    status_wo: Optional[str] = Field("OPEN", description="Status WO: OPEN/COMPLETED (opsional)")
 
     # Konfigurasi untuk memungkinkan nilai kosong pada field opsional
     class Config:  # type: ignore
@@ -221,7 +229,52 @@ class PelangganCreate(BaseModel):
         }
 
 
-# Skema untuk menampilkan data Pelanggan
+# Skema untuk menampilkan data Pelanggan (untuk list, dengan WO dari relationship)
+class PelangganListItem(BaseModel):
+    id: int
+    no_ktp: Optional[str] = None
+    nama: Optional[str] = None
+    alamat: Optional[str] = None
+    alamat_2: Optional[str] = None
+    tgl_instalasi: Optional[date] = None
+    blok: Optional[str] = None
+    unit: Optional[str] = None
+    no_telp: Optional[str] = None
+    email: Optional[EmailStr] = None
+    id_brand: Optional[str] = None
+    layanan: Optional[str] = None
+    harga_layanan: Optional[HargaLayananSchema] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    # Data Work Order (WO) terakhir - diambil dari relationship
+    work_orders: Optional[List[WorkOrderHistory]] = None
+
+    # Computed properties untuk WO terakhir (untuk kemuduan frontend)
+    @property
+    def no_wo(self) -> Optional[str]:
+        return self.work_orders[0].no_wo if self.work_orders else None
+
+    @property
+    def jenis_wo(self) -> Optional[str]:
+        return self.work_orders[0].jenis_wo if self.work_orders else None
+
+    @property
+    def prioritas(self) -> Optional[str]:
+        return self.work_orders[0].prioritas if self.work_orders else None
+
+    @property
+    def tanggal_wo(self) -> Optional[date]:
+        return self.work_orders[0].tanggal_wo if self.work_orders else None
+
+    @property
+    def tanggal_target_online(self) -> Optional[date]:
+        return self.work_orders[0].tanggal_target_online if self.work_orders else None
+
+    class Config:  # type: ignore
+        from_attributes = True
+
+
+# Skema untuk menampilkan data Pelanggan lengkap (untuk detail, dengan work_orders)
 class Pelanggan(BaseModel):
     id: int
     no_ktp: Optional[str] = None
@@ -238,6 +291,8 @@ class Pelanggan(BaseModel):
     harga_layanan: Optional[HargaLayananSchema] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+    # Data Work Order (WO) - diambil dari relationship
+    work_orders: Optional[List[WorkOrderHistory]] = None
 
     class Config:  # type: ignore
         from_attributes = True
@@ -265,6 +320,12 @@ class PelangganUpdate(BaseModel):
     email: Optional[EmailStr] = None
     id_brand: Optional[str] = None
     layanan: Optional[str] = None
+    # Data Work Order (WO)
+    no_wo: Optional[str] = None
+    jenis_wo: Optional[str] = None
+    prioritas: Optional[str] = None
+    tanggal_wo: Optional[date] = None
+    tanggal_target_online: Optional[date] = None
 
     # Apply same validators for update, but only when values are provided
     @validator("no_ktp", pre=True)
@@ -387,6 +448,13 @@ class PelangganImport(BaseModel):
     email: EmailStr = Field(..., description="Email (wajib)")
     id_brand: Optional[str] = Field(None, description="ID Brand (opsional)")
     layanan: Optional[str] = Field(None, description="Layanan (opsional)")
+    # Data Work Order (WO)
+    no_wo: Optional[str] = Field(None, description="Nomor Work Order (opsional)")
+    jenis_wo: Optional[str] = Field(None, description="Jenis WO: baru/relokasi/upgrade (opsional)")
+    prioritas: Optional[str] = Field(None, description="Prioritas WO: high/medium/low (opsional)")
+    tanggal_wo: Optional[date] = Field(None, description="Tanggal pembuatan WO (opsional)")
+    tanggal_target_online: Optional[date] = Field(None, description="Target tanggal online (opsional)")
+    status_wo: Optional[str] = Field("OPEN", description="Status WO: OPEN/COMPLETED (opsional)")
 
     @validator("no_ktp", pre=True)
     def validate_no_ktp_import(cls, v):

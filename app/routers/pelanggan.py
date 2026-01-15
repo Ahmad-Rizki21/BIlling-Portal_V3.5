@@ -7,11 +7,11 @@ from fastapi import (
     File,
     Query,
 )
-from pydantic import BaseModel, Field
-from pydantic_core import ValidationError
+from pydantic import BaseModel, Field, ValidationError
+from pydantic_core import ValidationError as CoreValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, selectinload
 from typing import List, Optional, Dict, Any
 from datetime import datetime, date
 import io
@@ -41,6 +41,7 @@ from ..schemas.pelanggan import (
     PaginatedPelangganResponse,
     PaginationInfo,
     Pelanggan as PelangganSchema,
+    PelangganListItem,
     PelangganCreate,
     PelangganUpdate,
     PelangganImport,
@@ -136,7 +137,7 @@ async def auto_update_langganan(db: AsyncSession, pelanggan_id: int, old_layanan
 
 # --- Skema Respons Baru ---
 class PelangganListResponse(BaseModel):
-    data: List[PelangganSchema]
+    data: List[PelangganListItem]
     total_count: int
 
 
@@ -146,7 +147,7 @@ class PelangganListResponse(BaseModel):
 # Response: data pelanggan yang baru dibuat
 # Validation: cek duplikasi email dan KTP
 # Error handling: rollback transaction kalau ada error, kirim notifikasi ke tim NOC/CS
-@router.post("/", response_model=PelangganSchema, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=PelangganListItem, status_code=status.HTTP_201_CREATED)
 async def create_pelanggan(
     pelanggan: PelangganCreate, db: AsyncSession = Depends(get_db), current_user: UserModel = Depends(get_current_active_user)
 ):
@@ -155,13 +156,49 @@ async def create_pelanggan(
     ✅ TRANSACTION-SAFE: Semua operasi atomic atau rollback semua.
     """
     try:
-        # 1. Create pelanggan record
-        db_pelanggan = PelangganModel(**pelanggan.model_dump())
+        logger.info(f"Creating pelanggan: {pelanggan.model_dump()}")
+
+        # Extract status_wo for Work Order (remove from pelanggan data)
+        status_wo = pelanggan.status_wo if hasattr(pelanggan, 'status_wo') else "OPEN"
+        pelanggan_data = pelanggan.model_dump(exclude={'status_wo'})
+
+        # 1. Create pelanggan record (tanpa status_wo karena itu field Work Order, bukan Pelanggan)
+        db_pelanggan = PelangganModel(**pelanggan_data)
         db.add(db_pelanggan)
 
         # Flush untuk dapat ID tanpa commit
         await db.flush()
         await db.refresh(db_pelanggan, attribute_names=["harga_layanan", "data_teknis"])
+
+        # 1.5 Create Work Order jika data WO diberikan
+        # Untuk pelanggan baru, SELALU generate nomor WO baru dari database
+        # untuk memastikan nomor melanjutkan dari nomor terakhir (bukan dari frontend)
+        if pelanggan.jenis_wo:
+            from ..models.work_order import WorkOrder
+            from .work_order import get_next_wo_number
+
+            # SELALU generate nomor WO baru untuk pelanggan baru
+            # Frontend mungkin mengirim "FTTH - 01" hardcoded, tapi kita gunakan nomor sebenarnya dari DB
+            base_number = await get_next_wo_number(db)
+            final_no_wo = f"{base_number} - {pelanggan.jenis_wo.upper()}"
+
+            logger.info(f"Generated WO number for new pelanggan: {final_no_wo}")
+
+            # Map status_wo (OPEN/COMPLETED) to work_order status
+            # Default to OPEN if not COMPLETED
+            wo_status = "COMPLETED" if status_wo == "COMPLETED" else "OPEN"
+            new_wo = WorkOrder(
+                pelanggan_id=db_pelanggan.id,
+                no_wo=final_no_wo,
+                jenis_wo=pelanggan.jenis_wo,
+                prioritas=pelanggan.prioritas or "high",
+                tanggal_wo=pelanggan.tanggal_wo or date.today(),
+                tanggal_target_online=pelanggan.tanggal_target_online,
+                status=wo_status
+            )
+            db.add(new_wo)
+
+            # No sync needed - WO data is in work_orders table
 
         # 2. Prepare notification data (masih dalam transaction)
         target_roles = ["NOC", "CS", "Admin"]
@@ -188,6 +225,14 @@ async def create_pelanggan(
 
         # Commit transaction
         await db.commit()
+
+        # Eager load harga_layanan untuk response (PelangganListItem butuh ini)
+        result = await db.execute(
+            select(PelangganModel)
+            .where(PelangganModel.id == db_pelanggan.id)
+            .options(joinedload(PelangganModel.harga_layanan))
+        )
+        db_pelanggan = result.scalar_one()
 
     except Exception as e:
         # Rollback transaction jika exception terjadi
@@ -303,7 +348,7 @@ async def read_all_pelanggan(
             ).order_by(PelangganModel.id.desc())
     else:
         # Full loading: Load semua relasi untuk view yang lengkap
-        if selected_fields and not any(f in selected_fields for f in ['data_teknis', 'harga_layanan', 'langganan']):
+        if selected_fields and not any(f in selected_fields for f in ['data_teknis', 'harga_layanan', 'langganan', 'work_orders']):
             # Jika field tidak include relasi, skip eager loading
             data_query = base_query.order_by(PelangganModel.id.desc())
         else:
@@ -311,6 +356,7 @@ async def read_all_pelanggan(
                 joinedload(PelangganModel.data_teknis),
                 joinedload(PelangganModel.harga_layanan),
                 joinedload(PelangganModel.langganan).joinedload(LanggananModel.paket_layanan),
+                joinedload(PelangganModel.work_orders),
             ).order_by(PelangganModel.id.desc())
 
     if limit is not None:
@@ -519,6 +565,7 @@ async def read_pelanggan_by_id(
             joinedload(PelangganModel.harga_layanan),
             joinedload(PelangganModel.data_teknis),
             joinedload(PelangganModel.langganan).joinedload(LanggananModel.paket_layanan),
+            selectinload(PelangganModel.work_orders),  # Load WO history
         )
     )
     result = await db.execute(query)
@@ -571,6 +618,78 @@ async def update_pelanggan(
         update_data = pelanggan_update.model_dump(exclude_unset=True)
         update_data.pop("harga_layanan", None)
 
+        # 2.5 Handle Work Order (Create New or Update Existing)
+        # Allows adding new WO (e.g. RELOKASI) or updating existing one via Edit form
+        if "no_wo" in update_data and update_data["no_wo"]:
+            new_no_wo = update_data["no_wo"]
+            from ..models.work_order import WorkOrder as WorkOrderModelForUpdate
+
+            # Check if this WO already exists
+            stmt_check = select(WorkOrderModelForUpdate).where(WorkOrderModelForUpdate.no_wo == new_no_wo)
+            result_check = await db.execute(stmt_check)
+            existing_wo = result_check.scalar_one_or_none()
+
+            if not existing_wo:
+                # CREATE NEW WORK ORDER
+                # Logic: If no_wo is new, we assume it's a new request (e.g. Relokasi)
+                # SELALU generate nomor WO baru dari database untuk ensure consistency
+                from .work_order import get_next_wo_number
+                base_number = await get_next_wo_number(db)
+                jenis_wo_value = update_data.get("jenis_wo", "Update Layanan")
+                generated_no_wo = f"{base_number} - {jenis_wo_value.upper()}"
+
+                logger.info(f"🆕 Creating NEW Work Order: {new_no_wo} -> {generated_no_wo}")
+                new_wo_entry = WorkOrderModelForUpdate(
+                    pelanggan_id=pelanggan_id,
+                    no_wo=generated_no_wo,
+                    jenis_wo=jenis_wo_value,
+                    prioritas=update_data.get("prioritas", "High"),
+                    tanggal_wo=update_data.get("tanggal_wo", date.today()),
+                    tanggal_target_online=update_data.get("tanggal_target_online"),
+                    status=update_data.get("status_wo", "OPEN"),
+                    catatan=update_data.get("catatan")
+                )
+                db.add(new_wo_entry)
+
+                # No sync to pelanggan table needed - WO data is in work_orders table
+            else:
+                # UPDATE EXISTING WORK ORDER
+                # If WO exists, update its fields
+                if "status_wo" in update_data:
+                     existing_wo.status = update_data["status_wo"]
+                if "jenis_wo" in update_data:
+                    existing_wo.jenis_wo = update_data["jenis_wo"]
+                if "prioritas" in update_data:
+                    existing_wo.prioritas = update_data["prioritas"]
+                if "tanggal_target_online" in update_data:
+                    existing_wo.tanggal_target_online = update_data["tanggal_target_online"]
+                if "tanggal_wo" in update_data:
+                    existing_wo.tanggal_wo = update_data["tanggal_wo"]
+
+                db.add(existing_wo)
+                logger.info(f"✅ Updated existing WO: {new_no_wo}")
+
+        elif "status_wo" in update_data:
+            # Fallback: Update latest WO if no specific no_wo provided
+            status_wo = update_data.pop("status_wo")
+            if status_wo:
+                from ..models.work_order import WorkOrder as WorkOrderModelForUpdate
+                
+                # Find latest WO
+                stmt = (
+                    select(WorkOrderModelForUpdate)
+                    .where(WorkOrderModelForUpdate.pelanggan_id == pelanggan_id)
+                    .order_by(WorkOrderModelForUpdate.created_at.desc())
+                    .limit(1)
+                )
+                result_wo = await db.execute(stmt)
+                latest_wo = result_wo.scalar_one_or_none()
+                
+                if latest_wo:
+                    latest_wo.status = status_wo
+                    db.add(latest_wo)
+                    logger.info(f"✅ Updated latest WO status for pelanggan {pelanggan_id} to {status_wo}")
+
         # 3. Handle harga_layanan relationship update
         if "id_brand" in update_data:
             id_brand = update_data.pop("id_brand")
@@ -619,23 +738,30 @@ async def update_pelanggan(
 
         # 7. Mark for update
         db.add(db_pelanggan)
-        await db.flush()  # Validate sebelum commit
-
-        # Commit transaction
         await db.commit()
 
         logger.info(f"✅ Pelanggan {pelanggan_id} updated successfully")
+
+        # 8. Re-fetch fresh data with all relationships needed for response schema
+        # This prevents MissingGreenlet error when accessing work_orders in response
+        result = await db.execute(
+            select(PelangganModel)
+            .where(PelangganModel.id == pelanggan_id)
+            .options(
+                joinedload(PelangganModel.harga_layanan),
+                joinedload(PelangganModel.data_teknis),
+                joinedload(PelangganModel.langganan).joinedload(LanggananModel.paket_layanan),
+                selectinload(PelangganModel.work_orders),
+            )
+        )
+        updated_pelanggan = result.scalars().unique().one()
+        return updated_pelanggan
 
     except Exception as e:
         # Rollback transaction jika exception terjadi
         await db.rollback()
         logger.error(f"❌ Transaction failed during pelanggan update: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Gagal update pelanggan: {str(e)}")
-
-    # Refresh data setelah commit untuk response
-    await db.refresh(db_pelanggan, attribute_names=["harga_layanan", "data_teknis"])
-
-    return db_pelanggan
 
 
 # DELETE /pelanggan/{pelanggan_id} - Hapus pelanggan dan semua data terkait
