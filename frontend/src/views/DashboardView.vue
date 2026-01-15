@@ -287,14 +287,14 @@
         </div>
       </div>
 
-      <!-- Additional Monitoring for 2026-01-01 -->
+    <!-- Additional Monitoring for Upcoming Invoice -->
       <div class="invoice-monitor-widget future-monitor" style="margin-top: 1.5rem;">
         <div class="widget-header">
           <div class="header-left">
             <v-icon class="widget-icon" color="primary">mdi-calendar-clock</v-icon>
             <div class="header-text">
-              <h3 class="widget-title">Monitoring Invoice Tahun Baru 2026</h3>
-              <p class="widget-subtitle">Monitoring invoice otomatis untuk 1 Januari 2026</p>
+              <h3 class="widget-title">Monitoring Invoice {{ futureInvoiceMonitorData?.target_date ? formatDate(futureInvoiceMonitorData.target_date) : 'Upcoming' }}</h3>
+              <p class="widget-subtitle">Monitoring invoice otomatis untuk {{ futureInvoiceMonitorData?.target_date ? formatDate(futureInvoiceMonitorData.target_date) : '...' }}</p>
             </div>
           </div>
           <div class="header-right">
@@ -318,25 +318,25 @@
                 <div class="stat-value">{{ futureInvoiceMonitorData.system_status || 'Siap' }}</div>
               </div>
               <div class="stat-box">
-                <div class="stat-label">Menuju 1 Jan 2026</div>
+                <div class="stat-label">Menuju {{ futureInvoiceMonitorData ? formatDate(futureInvoiceMonitorData.target_date) : '...' }}</div>
                 <div class="stat-value">{{ futureInvoiceMonitorData.days_until }} hari</div>
               </div>
               <div class="stat-box">
                 <div class="stat-label">Jadwal Generate</div>
-                <div class="stat-value">27 Des 2025</div>
+                <div class="stat-value">{{ futureInvoiceMonitorData ? formatDate(futureInvoiceMonitorData.generation_date) : '...' }}</div>
               </div>
             </div>
 
             <div class="widget-message info">
               <v-icon class="message-icon">mdi-information</v-icon>
-              <span>Invoice untuk 1 Januari 2026 akan di-generate otomatis pada 27 Desember 2025 (H-5)</span>
+              <span>Invoice untuk {{ futureInvoiceMonitorData ? formatDate(futureInvoiceMonitorData.target_date) : '...' }} akan di-generate otomatis pada {{ futureInvoiceMonitorData ? formatDate(futureInvoiceMonitorData.generation_date) : '...' }} (H-5)</span>
             </div>
           </div>
 
           <div v-else class="future-monitor-placeholder">
             <div class="placeholder-content">
               <v-icon size="32" color="primary">mdi-calendar-alert</v-icon>
-              <p class="placeholder-text">Memuat data monitoring untuk 2026...</p>
+              <p class="placeholder-text">Memuat data monitoring...</p>
             </div>
           </div>
 
@@ -803,7 +803,7 @@ async function fetchUserPermissions() {
   }
 }
 
-// Future Invoice Monitor Functions (for 2026-01-01)
+// Future Invoice Monitor Functions (Dynamic)
 async function fetchFutureInvoiceMonitor() {
   try {
     loadingFutureInvoiceMonitor.value = true;
@@ -814,21 +814,80 @@ async function fetchFutureInvoiceMonitor() {
       return;
     }
 
+    // Calculate dynamic dates
+    // Rule: Invoice generated on 27th of month M for usage in Month M+1 (Target 1st of M+1)
+    const today = new Date();
+    let genYear = today.getFullYear();
+    let genMonth = today.getMonth(); // 0-11
+    
+    // If today is after the 27th, we are looking at NEXT month's generation
+    if (today.getDate() >= 27) {
+      genMonth++;
+      if (genMonth > 11) {
+        genMonth = 0;
+        genYear++;
+      }
+    }
+    
+    const genDate = new Date(genYear, genMonth, 27);
+    
+    // Target date is the 1st of the month after generation
+    // If gen is Jan 27, Target is Feb 1
+    const targetDate = new Date(genYear, genMonth + 1, 1);
+    
+    // Format YYYY-MM-DD using local time
+    const dateToYMD = (d: Date) => {
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+    const targetDateStr = dateToYMD(targetDate);
+    const genDateStr = dateToYMD(genDate);
+
     // Call the actual API endpoint
-    const response = await apiClient.get('/dashboard/future-invoice-projection?target_date=2026-01-01');
-    futureInvoiceMonitorData.value = response.data;
+    const response = await apiClient.get(`/dashboard/future-invoice-projection?target_date=${targetDateStr}`);
+    futureInvoiceMonitorData.value = {
+      ...response.data,
+      target_date: targetDateStr, // Ensure these are set 
+      generation_date: genDateStr
+    };
+    
+    // Calculate days until if provided or missing
+    if (!futureInvoiceMonitorData.value.days_until) {
+      futureInvoiceMonitorData.value.days_until = calculateDaysUntil(targetDateStr);
+    }
+    
   } catch (error) {
     console.error('Error fetching future invoice monitor:', error);
 
-    // Fallback to mock data if API fails
+    // Fallback logic
+    const today = new Date();
+    let genYear = today.getFullYear();
+    let genMonth = today.getMonth();
+    
+    if (today.getDate() >= 27) {
+      genMonth++;
+      if (genMonth > 11) {genMonth = 0; genYear++;}
+    }
+    
+    const genDate = new Date(genYear, genMonth, 27);
+    const targetDate = new Date(genYear, genMonth + 1, 1);
+    const dateToYMD = (d: Date) => {
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+
     const activeCustomersOnFirst = allStats.value.find(s => s.title.toLowerCase().includes('pelanggan'))?.value || 0;
 
     futureInvoiceMonitorData.value = {
-      estimated_customers: Math.round(activeCustomersOnFirst * 0.3),
+      estimated_customers: Math.round(activeCustomersOnFirst * 1.05), // Assuming 5% growth
       system_status: 'Siap',
-      target_date: '2026-01-01',
-      generation_date: '2025-12-27',
-      days_until: calculateDaysUntil('2026-01-01')
+      target_date: dateToYMD(targetDate),
+      generation_date: dateToYMD(genDate),
+      days_until: calculateDaysUntil(dateToYMD(targetDate))
     };
   } finally {
     loadingFutureInvoiceMonitor.value = false;
@@ -837,12 +896,15 @@ async function fetchFutureInvoiceMonitor() {
 
 function viewFutureMonitoringDetails() {
   if (futureInvoiceMonitorData.value) {
+    const targetDateFormatted = formatDate(futureInvoiceMonitorData.value.target_date);
+    const genDateFormatted = formatDate(futureInvoiceMonitorData.value.generation_date);
+    
     const info = `
-Proyeksi Invoice untuk 1 Januari 2026:
+Proyeksi Invoice untuk ${targetDateFormatted}:
 
 • Estimasi Pelanggan: ${futureInvoiceMonitorData.value.estimated_customers || 0} pelanggan
 • Persentase dari Total Aktif: ${futureInvoiceMonitorData.value.percentage_of_active || 0}%
-• Tanggal Generate: 27 Desember 2025 (H-5)
+• Tanggal Generate: ${genDateFormatted} (H-5)
 • Hari Menuju Generate: ${futureInvoiceMonitorData.value.days_until || 0} hari
 
 ${futureInvoiceMonitorData.value.days_until > 30 ?
