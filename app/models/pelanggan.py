@@ -96,6 +96,14 @@ class Pelanggan(Base):
     created_at: Mapped[Optional[datetime]] = mapped_column(DateTime, server_default=func.now())  # Waktu dibuat
     updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())  # Waktu diupdate
 
+    # --- Data Work Order (Denormalized) ---
+    no_wo: Mapped[str | None] = mapped_column(String(191))
+    jenis_wo: Mapped[str | None] = mapped_column(String(191))
+    prioritas: Mapped[str | None] = mapped_column(String(191))
+    tanggal_wo: Mapped[Date | None] = mapped_column(Date)
+    tanggal_target_online: Mapped[Date | None] = mapped_column(Date)
+
+
     # --- TAMBAHAN PENTING ---
     mikrotik_server_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("mikrotik_servers.id")

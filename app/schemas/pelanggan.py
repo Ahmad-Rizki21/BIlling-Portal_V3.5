@@ -229,7 +229,7 @@ class PelangganCreate(BaseModel):
         }
 
 
-# Skema untuk menampilkan data Pelanggan (untuk list, dengan WO dari relationship)
+# Skema untuk menampilkan data Pelanggan (untuk list, tanpa work_orders)
 class PelangganListItem(BaseModel):
     id: int
     no_ktp: Optional[str] = None
@@ -246,29 +246,12 @@ class PelangganListItem(BaseModel):
     harga_layanan: Optional[HargaLayananSchema] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
-    # Data Work Order (WO) terakhir - diambil dari relationship
-    work_orders: Optional[List[WorkOrderHistory]] = None
-
-    # Computed properties untuk WO terakhir (untuk kemuduan frontend)
-    @property
-    def no_wo(self) -> Optional[str]:
-        return self.work_orders[0].no_wo if self.work_orders else None
-
-    @property
-    def jenis_wo(self) -> Optional[str]:
-        return self.work_orders[0].jenis_wo if self.work_orders else None
-
-    @property
-    def prioritas(self) -> Optional[str]:
-        return self.work_orders[0].prioritas if self.work_orders else None
-
-    @property
-    def tanggal_wo(self) -> Optional[date]:
-        return self.work_orders[0].tanggal_wo if self.work_orders else None
-
-    @property
-    def tanggal_target_online(self) -> Optional[date]:
-        return self.work_orders[0].tanggal_target_online if self.work_orders else None
+    # Data Work Order (WO) terakhir
+    no_wo: Optional[str] = None
+    jenis_wo: Optional[str] = None
+    prioritas: Optional[str] = None
+    tanggal_wo: Optional[date] = None
+    tanggal_target_online: Optional[date] = None
 
     class Config:  # type: ignore
         from_attributes = True
@@ -291,7 +274,13 @@ class Pelanggan(BaseModel):
     harga_layanan: Optional[HargaLayananSchema] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
-    # Data Work Order (WO) - diambil dari relationship
+    # Data Work Order (WO)
+    no_wo: Optional[str] = None
+    jenis_wo: Optional[str] = None
+    prioritas: Optional[str] = None
+    tanggal_wo: Optional[date] = None
+    tanggal_target_online: Optional[date] = None
+    # History Work Orders (relationship)
     work_orders: Optional[List[WorkOrderHistory]] = None
 
     class Config:  # type: ignore

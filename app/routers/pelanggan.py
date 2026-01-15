@@ -160,18 +160,9 @@ async def create_pelanggan(
 
         # Extract status_wo for Work Order (remove from pelanggan data)
         status_wo = pelanggan.status_wo if hasattr(pelanggan, 'status_wo') else "OPEN"
+        pelanggan_data = pelanggan.model_dump(exclude={'status_wo'})
 
-        # Exclude all WO fields from pelanggan data (WO data goes to work_orders table)
-        pelanggan_data = pelanggan.model_dump(exclude={
-            'status_wo',
-            'no_wo',
-            'jenis_wo',
-            'prioritas',
-            'tanggal_wo',
-            'tanggal_target_online'
-        })
-
-        # 1. Create pelanggan record (without WO fields - those go to work_orders table)
+        # 1. Create pelanggan record (tanpa status_wo karena itu field Work Order, bukan Pelanggan)
         db_pelanggan = PelangganModel(**pelanggan_data)
         db.add(db_pelanggan)
 
@@ -207,7 +198,8 @@ async def create_pelanggan(
             )
             db.add(new_wo)
 
-            # No sync needed - WO data is in work_orders table
+            # Sinkronisasi no_wo ke pelanggan untuk consistency/denormalization
+            db_pelanggan.no_wo = final_no_wo
 
         # 2. Prepare notification data (masih dalam transaction)
         target_roles = ["NOC", "CS", "Admin"]
@@ -235,19 +227,13 @@ async def create_pelanggan(
         # Commit transaction
         await db.commit()
 
-        # Eager load harga_layanan dan work_orders untuk response
+        # Eager load harga_layanan untuk response (PelangganListItem butuh ini)
         result = await db.execute(
             select(PelangganModel)
             .where(PelangganModel.id == db_pelanggan.id)
-            .options(
-                joinedload(PelangganModel.harga_layanan),
-                joinedload(PelangganModel.work_orders)
-            )
+            .options(joinedload(PelangganModel.harga_layanan))
         )
-        db_pelanggan = result.unique().scalar_one()
-
-        # Expunge object dari session untuk mencegah lazy loading errors
-        db.expunge(db_pelanggan)
+        db_pelanggan = result.scalar_one()
 
     except Exception as e:
         # Rollback transaction jika exception terjadi
@@ -363,7 +349,7 @@ async def read_all_pelanggan(
             ).order_by(PelangganModel.id.desc())
     else:
         # Full loading: Load semua relasi untuk view yang lengkap
-        if selected_fields and not any(f in selected_fields for f in ['data_teknis', 'harga_layanan', 'langganan', 'work_orders']):
+        if selected_fields and not any(f in selected_fields for f in ['data_teknis', 'harga_layanan', 'langganan']):
             # Jika field tidak include relasi, skip eager loading
             data_query = base_query.order_by(PelangganModel.id.desc())
         else:
@@ -371,7 +357,6 @@ async def read_all_pelanggan(
                 joinedload(PelangganModel.data_teknis),
                 joinedload(PelangganModel.harga_layanan),
                 joinedload(PelangganModel.langganan).joinedload(LanggananModel.paket_layanan),
-                joinedload(PelangganModel.work_orders),
             ).order_by(PelangganModel.id.desc())
 
     if limit is not None:
@@ -636,7 +621,7 @@ async def update_pelanggan(
         # 2.5 Handle Work Order (Create New or Update Existing)
         # Allows adding new WO (e.g. RELOKASI) or updating existing one via Edit form
         if "no_wo" in update_data and update_data["no_wo"]:
-            new_no_wo = update_data["no_wo"]
+            new_no_wo = str(update_data["no_wo"]).strip()
             from ..models.work_order import WorkOrder as WorkOrderModelForUpdate
 
             # Check if this WO already exists
@@ -666,21 +651,33 @@ async def update_pelanggan(
                 )
                 db.add(new_wo_entry)
 
-                # No sync to pelanggan table needed - WO data is in work_orders table
+                # Sync to Pelanggan table (for Denormalization/List View)
+                # Note: db_pelanggan fields are updated via setattr loop later, but we ensure consistency here
+                db_pelanggan.no_wo = generated_no_wo
+                db_pelanggan.jenis_wo = new_wo_entry.jenis_wo
+                db_pelanggan.prioritas = new_wo_entry.prioritas
+                db_pelanggan.tanggal_wo = new_wo_entry.tanggal_wo
+                db_pelanggan.tanggal_target_online = new_wo_entry.tanggal_target_online
             else:
                 # UPDATE EXISTING WORK ORDER
                 # If WO exists, update its fields
                 if "status_wo" in update_data:
                      existing_wo.status = update_data["status_wo"]
-                if "jenis_wo" in update_data:
+                if "jenis_wo" in update_data: 
                     existing_wo.jenis_wo = update_data["jenis_wo"]
-                if "prioritas" in update_data:
+                    db_pelanggan.jenis_wo = update_data["jenis_wo"] # Sync
+                if "prioritas" in update_data: 
                     existing_wo.prioritas = update_data["prioritas"]
-                if "tanggal_target_online" in update_data:
+                    db_pelanggan.prioritas = update_data["prioritas"] # Sync
+                if "tanggal_target_online" in update_data: 
                     existing_wo.tanggal_target_online = update_data["tanggal_target_online"]
+                    db_pelanggan.tanggal_target_online = update_data["tanggal_target_online"] # Sync
                 if "tanggal_wo" in update_data:
                     existing_wo.tanggal_wo = update_data["tanggal_wo"]
+                    db_pelanggan.tanggal_wo = update_data["tanggal_wo"] # Sync
 
+                
+                db_pelanggan.no_wo = new_no_wo # Ensure sync
                 db.add(existing_wo)
                 logger.info(f"✅ Updated existing WO: {new_no_wo}")
 

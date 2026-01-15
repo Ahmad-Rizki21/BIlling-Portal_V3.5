@@ -1148,7 +1148,7 @@
                         :color="wo.status === 'COMPLETED' ? 'success' : (wo.status === 'OPEN' ? 'info' : 'warning')"
                         size="x-small"
                         variant="flat"
-                        class="text-uppercase font-weight-bold"
+                        class="text-uppercase font-weight-bold ml-2"
                       >
                         {{ wo.status }}
                       </v-chip>
