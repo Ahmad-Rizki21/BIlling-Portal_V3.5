@@ -4,9 +4,9 @@
     <v-overlay
       v-if="settingsStore.maintenanceMode.isActive && !isAdmin"
       v-model="showMaintenanceOverlay"
-      contained
-      class="maintenance-overlay"
+      class="maintenance-overlay align-center justify-center"
       scrim="rgba(0, 0, 0, 0.85)"
+      persistent
     >
       <v-card class="maintenance-card" elevation="24">
         <div class="maintenance-icon-wrapper">
@@ -34,7 +34,7 @@
           </div>
           <div class="feature-item">
             <v-icon color="success" class="me-2">mdi-check-circle</v-icon>
-            <span>Data Anda tetap aman</span>
+            <span>Data tetap aman</span>
           </div>
           <div class="feature-item">
             <v-icon color="success" class="me-2">mdi-check-circle</v-icon>
