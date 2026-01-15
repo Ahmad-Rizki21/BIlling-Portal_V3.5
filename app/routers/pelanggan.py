@@ -160,9 +160,18 @@ async def create_pelanggan(
 
         # Extract status_wo for Work Order (remove from pelanggan data)
         status_wo = pelanggan.status_wo if hasattr(pelanggan, 'status_wo') else "OPEN"
-        pelanggan_data = pelanggan.model_dump(exclude={'status_wo'})
 
-        # 1. Create pelanggan record (tanpa status_wo karena itu field Work Order, bukan Pelanggan)
+        # Exclude all WO fields from pelanggan data (WO data goes to work_orders table)
+        pelanggan_data = pelanggan.model_dump(exclude={
+            'status_wo',
+            'no_wo',
+            'jenis_wo',
+            'prioritas',
+            'tanggal_wo',
+            'tanggal_target_online'
+        })
+
+        # 1. Create pelanggan record (without WO fields - those go to work_orders table)
         db_pelanggan = PelangganModel(**pelanggan_data)
         db.add(db_pelanggan)
 
