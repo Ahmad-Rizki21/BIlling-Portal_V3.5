@@ -847,30 +847,8 @@ const menuGroups = ref([
             permission: 'view_invoices',
             description: 'Tagihan & pembayaran'
           },
-          {
-            title: 'Laporan Pendapatan',
-            icon: 'mdi-chart-line',
-            value: 'revenue-report',
-            to: '/reports/revenue',
-            permission: 'view_reports_revenue',
-            description: 'Analisis pendapatan'
-          }
         ]
       },
-    ]
-  },
-
-  {
-    title: 'ANALYTICS',
-    items: [
-      {
-        title: 'AI Analytics',
-        icon: 'mdi-brain',
-        value: 'ai-analytics',
-        to: '/analytics',
-        permission: 'view_analytics',
-        description: 'AI-powered insights & predictions'
-      }
     ]
   },
 

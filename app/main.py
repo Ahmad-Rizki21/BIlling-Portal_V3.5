@@ -70,7 +70,6 @@ from .models.user import User as UserModel
 # Import semua router (API endpoints)
 from .routers import (
     activity_log,      # Log aktivitas user
-    analytics,         # AI-powered analytics
     auth,              # Authentication & authorization
     calculator,        # Kalkulator biaya
     dashboard,         # Dashboard admin
@@ -836,8 +835,6 @@ app.include_router(trouble_ticket.router)
 app.include_router(traffic_monitoring.router)
 app.include_router(rate_limiter_monitor.router)
 app.include_router(error_report.router)
-app.include_router(analytics.router)  # AI Analytics
-
 
 
 # Endpoint root untuk verifikasi
