@@ -265,4 +265,35 @@ export const troubleTicketAPI = {
   getStatistics: () => apiClient.get('/trouble-tickets/statistics/dashboard')
 };
 
+// ==========================================================
+// --- INSTALASI DOCUMENT API METHODS ---
+// ==========================================================
+
+export const instalasiAPI = {
+  // Get all documents for pelanggan
+  getDocuments: (pelangganId: number, params?: any) => apiClient.get(`/instalasi/${pelangganId}/documents`, { params }),
+
+  // Upload document
+  uploadDocument: (pelangganId: number, documentType: string, file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return apiClient.post(`/instalasi/${pelangganId}/upload?document_type=${documentType}`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+  },
+
+  // Download document
+  downloadDocument: (documentId: number) => apiClient.get(`/instalasi/documents/${documentId}/download`, {
+    responseType: 'blob'
+  }),
+
+  // Delete document
+  deleteDocument: (documentId: number) => apiClient.delete(`/instalasi/documents/${documentId}`),
+
+  // Get documents summary
+  getDocumentsSummary: (pelangganId: number) => apiClient.get(`/instalasi/${pelangganId}/documents/summary`)
+};
+
 export default apiClient;

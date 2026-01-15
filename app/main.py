@@ -99,6 +99,8 @@ from .routers import (
     topology,          # Topologi jaringan
     traffic_monitoring, # Traffic monitoring PPPoE
     uploads,           # Upload file管理
+    work_order,        # Work Order management
+    instalasi_document, # Instalasi Documents
 )
 from .routers import rate_limiter_monitor  # Rate limiter monitoring
 from .routers import user  # User management
@@ -802,6 +804,8 @@ app.include_router(trouble_ticket.router)
 app.include_router(traffic_monitoring.router)
 app.include_router(rate_limiter_monitor.router)
 app.include_router(error_report.router)
+app.include_router(work_order.router)
+app.include_router(instalasi_document.router)
 
 
 

@@ -23,4 +23,6 @@ from .traffic_history import TrafficHistory
 from .payment_callback_log import PaymentCallbackLog
 from .syarat_ketentuan import SyaratKetentuan
 from .invoice_archive import InvoiceArchive
+from .work_order import WorkOrder
+from .instalasi_document import InstalasiDocument
 

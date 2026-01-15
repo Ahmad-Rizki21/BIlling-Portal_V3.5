@@ -64,6 +64,7 @@
     "vue-chartjs": "^5.2.0",
     "vue-echarts": "^7.0.3",
     "vue-router": "^4.5.1",
+    "vue-signature-pad": "^3.0.2",
     "vuetify": "^3.9.2",
     "xlsx": "^0.18.5"
   },

@@ -50,6 +50,11 @@ const router = createRouter({
           component: () => import('../views/PelangganView.vue')
         },
         {
+          path: 'pelanggan/:id/print-wo',
+          name: 'print-wo',
+          component: () => import('../views/PrintWorkOrderView.vue')
+        },
+        {
           path: 'langganan',
           name: 'langganan',
           component: () => import('../views/LanggananView.vue')
