@@ -1873,22 +1873,21 @@ async function confirmDelete() {
 
 function printWorkOrder(item: Pelanggan) {
   // Open the specialized Print View in a new tab
-  // We construct the URL manually or via router if accessible
-  // Since we are inside <script setup>, we can use router instance if defined
-  // Assuming 'router' is not strictly global here, we can use window.open with the path
-  const url = `/print-wo/${item.id}`;
+  // Route: /pelanggan/:id/print-wo
+  const url = `/pelanggan/${item.id}/print-wo`;
   window.open(url, '_blank');
 }
 
 function printSelectedWorkOrders() {
   if (selectedPelanggan.value.length === 0) return;
-  
-  // Create a comma-separated string of IDs
-  const ids = selectedPelanggan.value.map(p => p.id).join(',');
-  
-  // Use a special route for bulk printing
-  const url = `/print-wo/bulk?ids=${ids}`;
-  window.open(url, '_blank');
+
+  // For bulk printing, we print each work order individually
+  // Alternative: create a bulk print route if needed
+  selectedPelanggan.value.forEach((pelanggan, index) => {
+    setTimeout(() => {
+      printWorkOrder(pelanggan);
+    }, index * 500); // Open each tab with 500ms delay
+  });
 }
 
 // --- IMPORT/EXPORT METHODS ---

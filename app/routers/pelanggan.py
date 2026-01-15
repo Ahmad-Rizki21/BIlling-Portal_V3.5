@@ -244,7 +244,7 @@ async def create_pelanggan(
                 joinedload(PelangganModel.work_orders)
             )
         )
-        db_pelanggan = result.scalar_one()
+        db_pelanggan = result.unique().scalar_one()
 
         # Expunge object dari session untuk mencegah lazy loading errors
         db.expunge(db_pelanggan)
