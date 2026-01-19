@@ -8,6 +8,8 @@ import asyncio
 import logging
 from datetime import datetime, timezone
 from fastapi.responses import JSONResponse
+from ..models.user import User as UserModel
+from ..auth import get_current_active_user
 
 from ..database import get_db
 from ..models.mikrotik_server import MikrotikServer as MikrotikServerModel
@@ -31,7 +33,11 @@ router = APIRouter(
 
 
 @router.post("/", response_model=MikrotikServerSchema, status_code=status.HTTP_201_CREATED)
-async def create_mikrotik_server(server_data: MikrotikServerCreate, db: AsyncSession = Depends(get_db)):
+async def create_mikrotik_server(
+    server_data: MikrotikServerCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user)
+):
     """
     Membuat (mendaftarkan) server Mikrotik baru.
     """
@@ -49,6 +55,7 @@ async def get_all_mikrotik_servers(
     is_active: Optional[bool] = None,
     last_connection_status: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user)
 ):
     """
     Mengambil daftar semua server Mikrotik yang terdaftar dengan filter.
@@ -72,7 +79,11 @@ async def get_all_mikrotik_servers(
 
 
 @router.get("/{server_id}", response_model=MikrotikServerSchema)
-async def get_mikrotik_server_by_id(server_id: int, db: AsyncSession = Depends(get_db)):
+async def get_mikrotik_server_by_id(
+    server_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user)
+):
     """
     Mengambil detail satu server Mikrotik berdasarkan ID.
     """
@@ -87,6 +98,7 @@ async def update_mikrotik_server(
     server_id: int,
     server_update: MikrotikServerUpdate,
     db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user)
 ):
     """
     Memperbarui data server Mikrotik.
@@ -108,7 +120,11 @@ async def update_mikrotik_server(
 
 
 @router.delete("/{server_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_mikrotik_server(server_id: int, db: AsyncSession = Depends(get_db)):
+async def delete_mikrotik_server(
+    server_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user)
+):
     """
     Menghapus data server Mikrotik dari sistem.
     """
@@ -123,7 +139,11 @@ async def delete_mikrotik_server(server_id: int, db: AsyncSession = Depends(get_
 
 # --- ENDPOINT BARU UNTUK TEST KONEKSI ---
 @router.post("/{server_id}/test_connection", status_code=status.HTTP_200_OK)
-async def test_mikrotik_connection(server_id: int, db: AsyncSession = Depends(get_db)):
+async def test_mikrotik_connection(
+    server_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user)
+):
     """
     Menguji koneksi ke server Mikrotik tertentu dan menyimpan hasilnya.
     """
@@ -177,7 +197,11 @@ async def test_mikrotik_connection(server_id: int, db: AsyncSession = Depends(ge
 
 
 @router.get("/connection-health/{server_id}")
-async def get_connection_health(server_id: int, db: AsyncSession = Depends(get_db)):
+async def get_connection_health(
+    server_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user)
+):
     """Get detailed connection health status for a specific Mikrotik server."""
     try:
         # Get server from database

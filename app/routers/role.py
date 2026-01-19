@@ -53,6 +53,8 @@ from ..models.role import Role as RoleModel
 from ..models.permission import Permission as PermissionModel
 from ..schemas.role import Role as RoleSchema, RoleCreate, RoleUpdate
 from ..database import get_db
+from ..models.user import User as UserModel
+from ..auth import get_current_active_user
 
 router = APIRouter(
     prefix="/roles",
@@ -62,7 +64,11 @@ router = APIRouter(
 
 
 @router.post("/", response_model=RoleSchema, status_code=status.HTTP_201_CREATED)
-async def create_role(role_data: RoleCreate, db: AsyncSession = Depends(get_db)):
+async def create_role(
+    role_data: RoleCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user)
+):
     """
     Create New Role - Buat role baru dengan permissions
 
@@ -142,14 +148,22 @@ async def create_role(role_data: RoleCreate, db: AsyncSession = Depends(get_db))
 
 
 @router.get("/", response_model=List[RoleSchema])
-async def get_all_roles(db: AsyncSession = Depends(get_db)):
+async def get_all_roles(
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user)
+):
     # Gunakan selectinload untuk memuat permissions bersamaan (menghindari N+1 query)
     result = await db.execute(select(RoleModel).options(selectinload(RoleModel.permissions)))
     return result.scalars().all()
 
 
 @router.patch("/{role_id}", response_model=RoleSchema)
-async def update_role(role_id: int, role_update: RoleUpdate, db: AsyncSession = Depends(get_db)):
+async def update_role(
+    role_id: int,
+    role_update: RoleUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user)
+):
     # Ambil role beserta permissions-nya
     db_role = (
         await db.execute(select(RoleModel).options(selectinload(RoleModel.permissions)).where(RoleModel.id == role_id))
@@ -175,7 +189,11 @@ async def update_role(role_id: int, role_update: RoleUpdate, db: AsyncSession = 
 
 
 @router.delete("/{role_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_role(role_id: int, db: AsyncSession = Depends(get_db)):
+async def delete_role(
+    role_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user)
+):
     db_role = await db.get(RoleModel, role_id)
     if not db_role:
         raise HTTPException(status_code=404, detail="Role not found")

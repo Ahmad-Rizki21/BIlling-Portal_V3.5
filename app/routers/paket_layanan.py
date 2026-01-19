@@ -9,6 +9,8 @@ from ..schemas.paket_layanan import (
     PaketLayananUpdate,
 )
 from ..database import get_db
+from ..models.user import User as UserModel
+from ..auth import get_current_active_user
 
 router = APIRouter(prefix="/paket_layanan", tags=["Paket Layanan"])
 
@@ -23,7 +25,11 @@ router = APIRouter(prefix="/paket_layanan", tags=["Paket Layanan"])
 # Error handling: 400 kalau brand nggak ada, 500 kalau error server
 # Transaction: rollback kalau ada error
 @router.post("/", response_model=PaketLayananSchema, status_code=status.HTTP_201_CREATED)
-async def create_paket_layanan(paket: PaketLayananCreate, db: AsyncSession = Depends(get_db)):
+async def create_paket_layanan(
+    paket: PaketLayananCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user)
+):
     try:
         # Check if id_brand exists in harga_layanan table
         from ..models.harga_layanan import HargaLayanan as HargaLayananModel
@@ -63,7 +69,10 @@ async def create_paket_layanan(paket: PaketLayananCreate, db: AsyncSession = Dep
 # Performance: simple query, no pagination (biasanya data nggak banyak)
 # Sorting: default berdasarkan ID ascending
 @router.get("/", response_model=List[PaketLayananSchema])
-async def get_all_paket_layanan(db: AsyncSession = Depends(get_db)):
+async def get_all_paket_layanan(
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user)
+):
     result = await db.execute(select(PaketLayananModel))
     return result.scalars().all()
 
@@ -76,7 +85,11 @@ async def get_all_paket_layanan(db: AsyncSession = Depends(get_db)):
 # Error handling: 404 kalau paket nggak ketemu
 # Use case: buat edit form atau detail view
 @router.get("/{paket_id}", response_model=PaketLayananSchema)
-async def get_paket_layanan_by_id(paket_id: int, db: AsyncSession = Depends(get_db)):
+async def get_paket_layanan_by_id(
+    paket_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user)
+):
     paket = await db.get(PaketLayananModel, paket_id)
     if not paket:
         raise HTTPException(status_code=404, detail="Paket layanan tidak ditemukan")
@@ -93,7 +106,12 @@ async def get_paket_layanan_by_id(paket_id: int, db: AsyncSession = Depends(get_
 # Error handling: 404 kalau paket nggak ketemu
 # Note: kalo update id_brand, pastikan brand baru udah ada
 @router.patch("/{paket_id}", response_model=PaketLayananSchema)
-async def update_paket_layanan(paket_id: int, paket_update: PaketLayananUpdate, db: AsyncSession = Depends(get_db)):
+async def update_paket_layanan(
+    paket_id: int,
+    paket_update: PaketLayananUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user)
+):
     db_paket = await db.get(PaketLayananModel, paket_id)
     if not db_paket:
         raise HTTPException(status_code=404, detail="Paket layanan tidak ditemukan")
@@ -118,7 +136,11 @@ async def update_paket_layanan(paket_id: int, paket_update: PaketLayananUpdate, 
 # Error handling: 404 kalau paket nggak ketemu
 # Recommendation: Cek dulu apakah ada langganan yang pake paket ini sebelum hapus
 @router.delete("/{paket_id}")
-async def delete_paket_layanan(paket_id: int, db: AsyncSession = Depends(get_db)):
+async def delete_paket_layanan(
+    paket_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user)
+):
     db_paket = await db.get(PaketLayananModel, paket_id)
     if not db_paket:
         raise HTTPException(status_code=404, detail="Paket layanan tidak ditemukan")

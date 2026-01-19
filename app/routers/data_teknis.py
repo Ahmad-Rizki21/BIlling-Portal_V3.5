@@ -30,6 +30,8 @@ from ..models.user import User as UserModel
 from ..models.role import Role as RoleModel
 from ..models.odp import ODP as ODPModel
 
+from ..auth import get_current_active_user
+
 # Impor model DataTeknis
 from ..models.data_teknis import DataTeknis as DataTeknisModel
 
@@ -68,7 +70,11 @@ logger = logging.getLogger(__name__)
 
 
 @router.post("/", response_model=DataTeknisSchema, status_code=status.HTTP_201_CREATED)
-async def create_data_teknis(data_teknis: DataTeknisCreate, db: AsyncSession = Depends(get_db)):
+async def create_data_teknis(
+    data_teknis: DataTeknisCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user)
+):
     """
     Membuat data teknis baru untuk seorang pelanggan.
     """
@@ -161,7 +167,11 @@ async def create_data_teknis(data_teknis: DataTeknisCreate, db: AsyncSession = D
 
 
 @router.get("/by-pelanggan/{pelanggan_id}", response_model=List[DataTeknisSchema])
-async def read_data_teknis_by_pelanggan(pelanggan_id: int, db: AsyncSession = Depends(get_db)):
+async def read_data_teknis_by_pelanggan(
+    pelanggan_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user)
+):
     """
     Mengambil data teknis berdasarkan ID pelanggan.
     """
@@ -185,6 +195,7 @@ async def read_all_data_teknis(
     onu_power_min: Optional[int] = None,
     onu_power_max: Optional[int] = None,
     db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user)
 ):
     """
     Mengambil daftar semua data teknis dengan paginasi, filter, dan total hitungan.
@@ -261,7 +272,10 @@ async def read_all_data_teknis(
 
 
 @router.get("/available-olt", response_model=List[str])
-async def get_available_olt(db: AsyncSession = Depends(get_db)):
+async def get_available_olt(
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user)
+):
     """
     Mengambil semua OLT/Mikrotik Server yang tersedia untuk filter dropdown.
     Diubah untuk mengambil dari data_teknis.olt agar sesuai dengan data yang ada.
@@ -287,7 +301,10 @@ async def get_available_olt(db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/available-profiles", response_model=List[str])
-async def get_all_available_profiles(db: AsyncSession = Depends(get_db)):
+async def get_available_profiles(
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user)
+):
     """
     Mengambil semua Profile PPPoE yang tersedia untuk filter dropdown.
     """
@@ -312,7 +329,10 @@ async def get_all_available_profiles(db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/available-vlans", response_model=List[str])
-async def get_available_vlans(db: AsyncSession = Depends(get_db)):
+async def get_available_vlans(
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user)
+):
     """
     Mengambil semua VLAN yang tersedia untuk filter dropdown.
     """
@@ -337,7 +357,10 @@ async def get_available_vlans(db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/debug-filter-data")
-async def debug_filter_data(db: AsyncSession = Depends(get_db)):
+async def debug_filter_data(
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user)
+):
     """
     Endpoint untuk debugging data filter - menampilkan sample data OLT dan VLAN
     """
@@ -374,7 +397,10 @@ async def debug_filter_data(db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/onu-power-ranges")
-async def get_onu_power_ranges(db: AsyncSession = Depends(get_db)):
+async def get_onu_power_ranges(
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user)
+):
     """
     Mengambil range ONU Power untuk filter dropdown.
     """
@@ -431,6 +457,7 @@ async def export_data_teknis(
     onu_power_max: Optional[int] = None,
     format: str = Query("csv", description="Export format: csv atau excel"),
     db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user)
 ):
     """
     Mengekspor data teknis ke CSV atau Excel dengan data relasi yang mudah dibaca dan filter.
@@ -518,7 +545,11 @@ async def export_data_teknis(
 
 
 @router.get("/{data_teknis_id}", response_model=DataTeknisSchema)
-async def read_data_teknis_by_id(data_teknis_id: int, db: AsyncSession = Depends(get_db)):
+async def read_data_teknis_by_id(
+    data_teknis_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user)
+):
     """
     Mengambil satu data teknis berdasarkan ID.
     """
@@ -538,6 +569,7 @@ async def update_data_teknis(
     data_teknis_id: int,
     data_teknis_update: DataTeknisUpdate,
     db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user)
 ):
     """
     Memperbarui data teknis secara parsial DAN mentrigger update ke Mikrotik.
@@ -588,7 +620,11 @@ async def update_data_teknis(
 
 
 @router.delete("/{data_teknis_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_data_teknis(data_teknis_id: int, db: AsyncSession = Depends(get_db)):
+async def delete_data_teknis(
+    data_teknis_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user)
+):
     """
     Menghapus data teknis berdasarkan ID.
     """
@@ -624,7 +660,11 @@ async def delete_data_teknis(data_teknis_id: int, db: AsyncSession = Depends(get
 
 # Validasi IP
 @router.post("/check-ip", response_model=IPCheckResponse)
-async def check_ip_address(request: IPCheckRequest, db: AsyncSession = Depends(get_db)):
+async def check_ip_address(
+    request: IPCheckRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user)
+):
     # 1. Pengecekan ke database (tetap sama)
     query = select(DataTeknisModel).where(DataTeknisModel.ip_pelanggan == request.ip_address)
     if request.current_id:
@@ -672,7 +712,9 @@ async def check_ip_address(request: IPCheckRequest, db: AsyncSession = Depends(g
 
 
 @router.get("/template/csv", response_class=StreamingResponse)
-async def download_csv_template_teknis():
+async def download_csv_template_teknis(
+    current_user: UserModel = Depends(get_current_active_user)
+):
     """
     Men-download template CSV untuk import data teknis yang telah disesuaikan
     dengan model baru (menggunakan nama, bukan ID).
@@ -744,6 +786,7 @@ async def export_data_teknis(
     onu_power_max: Optional[int] = None,
     format: str = Query("csv", description="Export format: csv atau excel"),
     db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user)
 ):
     """
     Mengekspor data teknis ke CSV atau Excel dengan data relasi yang mudah dibaca dan filter.
@@ -831,7 +874,11 @@ async def export_data_teknis(
 
 
 @router.post("/import/csv")
-async def import_from_csv_teknis(file: UploadFile = File(...), db: AsyncSession = Depends(get_db)):
+async def import_from_csv_teknis(
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user)
+):
     """
     Mengimpor data teknis dari file CSV dengan validasi relasi berdasarkan nama/kode.
     """
@@ -980,6 +1027,7 @@ async def get_available_profiles(
     pelanggan_id: int,
     mikrotik_server_id: Optional[int] = Query(None),
     db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user)
 ):
     """
     Menyediakan daftar PPPoE profile yang relevan.
@@ -1075,7 +1123,11 @@ async def get_available_profiles(
     response_model=List[ProfileUsage],
     include_in_schema=False,
 )
-async def get_available_profiles_legacy(paket_layanan_id: int, db: AsyncSession = Depends(get_db)):
+async def get_available_profiles_legacy(
+    paket_layanan_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user)
+):
     """Fungsi lama, gunakan yang baru dengan pelanggan_id."""
     logger.warning("Memanggil endpoint lama /available-profiles/{paket_layanan_id}. Gunakan yang baru.")
     # Fallback ke server aktif pertama
@@ -1125,7 +1177,7 @@ async def get_available_profiles_legacy(paket_layanan_id: int, db: AsyncSession 
 
 
 @router.get("/last-ip/{mikrotik_server_id}")
-async def get_last_used_ip(mikrotik_server_id: int, db: AsyncSession = Depends(get_db)):
+async def get_last_used_ip(mikrotik_server_id: int, db: AsyncSession = Depends(get_db), current_user: UserModel = Depends(get_current_active_user)):
     """
     Mendapatkan IP terakhir yang digunakan dari server Mikrotik tertentu.
     """

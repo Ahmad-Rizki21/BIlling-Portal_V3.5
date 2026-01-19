@@ -10,6 +10,8 @@ from ..schemas.harga_layanan import (
 )
 from ..database import get_db
 from ..services.cache_service import get_cached_harga_layanan, invalidate_data_caches
+from ..models.user import User as UserModel
+from ..auth import get_current_active_user
 
 router = APIRouter(prefix="/harga_layanan", tags=["Harga Layanan (Brand)"])
 
@@ -22,7 +24,11 @@ router = APIRouter(prefix="/harga_layanan", tags=["Harga Layanan (Brand)"])
 # Use case: master data management untuk brand/provider (ISP, dll)
 # Note: id_brand bakal dipake di tabel lain sebagai foreign key
 @router.post("/", response_model=HargaLayananSchema, status_code=status.HTTP_201_CREATED)
-async def create_brand(brand_data: HargaLayananCreate, db: AsyncSession = Depends(get_db)):
+async def create_brand(
+    brand_data: HargaLayananCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user)
+):
     db_brand = HargaLayananModel(**brand_data.model_dump())
     db.add(db_brand)
     await db.commit()
@@ -45,7 +51,11 @@ async def create_brand(brand_data: HargaLayananCreate, db: AsyncSession = Depend
 # Performance: mengurangi database load untuk static data
 # Fallback: otomatis ke database kalo cache error
 @router.get("/", response_model=List[HargaLayananSchema])
-async def get_all_brands(response: Response, db: AsyncSession = Depends(get_db)):
+async def get_all_brands(
+    response: Response,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user)
+):
     """
     Get all harga layanan dengan caching.
     Cache Strategy: Static data di-cache selama 1 jam untuk mengurangi database load.
@@ -83,7 +93,11 @@ async def get_all_brands(response: Response, db: AsyncSession = Depends(get_db))
 # Error handling: 404 kalau brand nggak ketemu
 # Use case: buat edit form atau detail view brand
 @router.get("/{id_brand}", response_model=HargaLayananSchema)
-async def get_brand_by_id(id_brand: str, db: AsyncSession = Depends(get_db)):
+async def get_brand_by_id(
+    id_brand: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user)
+):
     brand = await db.get(HargaLayananModel, id_brand)
     if not brand:
         raise HTTPException(status_code=404, detail="Brand tidak ditemukan")
@@ -101,7 +115,12 @@ async def get_brand_by_id(id_brand: str, db: AsyncSession = Depends(get_db)):
 # Cache Strategy: cache bakal invalidate otomatis via service layer
 # Caution: Hati-hati update id_brand karena bakal impact foreign key references
 @router.patch("/{id_brand}", response_model=HargaLayananSchema)
-async def update_brand(id_brand: str, brand_update: HargaLayananUpdate, db: AsyncSession = Depends(get_db)):
+async def update_brand(
+    id_brand: str,
+    brand_update: HargaLayananUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user)
+):
     db_brand = await db.get(HargaLayananModel, id_brand)
     if not db_brand:
         raise HTTPException(status_code=404, detail="Brand tidak ditemukan")
@@ -126,7 +145,11 @@ async def update_brand(id_brand: str, brand_update: HargaLayananUpdate, db: Asyn
 # Error handling: 404 kalau brand nggak ketemu
 # Database constraint: Pastikan nggak ada foreign key references sebelum hapus
 @router.delete("/{id_brand}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_brand(id_brand: str, db: AsyncSession = Depends(get_db)):
+async def delete_brand(
+    id_brand: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user)
+):
     db_brand = await db.get(HargaLayananModel, id_brand)
     if not db_brand:
         raise HTTPException(status_code=404, detail="Brand tidak ditemukan")

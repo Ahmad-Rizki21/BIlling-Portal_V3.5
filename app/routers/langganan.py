@@ -20,6 +20,8 @@ from ..database import get_db
 from ..models.harga_layanan import HargaLayanan as HargaLayananModel
 from ..models.invoice import Invoice as InvoiceModel
 from ..models.langganan import Langganan as LanggananModel
+from ..models.user import User as UserModel
+from ..auth import get_current_active_user
 from ..models.paket_layanan import PaketLayanan as PaketLayananModel
 from ..models.pelanggan import Pelanggan as PelangganModel
 from ..models.data_teknis import DataTeknis as DataTeknisModel
@@ -79,7 +81,11 @@ class LanggananListResponse(BaseModel):
 # - Auto set tanggal jatuh tempo
 # Validation: cek pelanggan dan paket layanan harus ada
 @router.post("/", response_model=LanggananSchema, status_code=status.HTTP_201_CREATED)
-async def create_langganan(langganan_data: LanggananCreate, db: AsyncSession = Depends(get_db)):
+async def create_langganan(
+    langganan_data: LanggananCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user)
+):
     """
     Membuat langganan baru dengan perhitungan harga otomatis di backend.
     Mendukung metode pembayaran 'Otomatis' dan 'Prorate' (biasa atau gabungan).
@@ -199,6 +205,7 @@ async def get_all_langganan(
     skip: int = 0,
     limit: Optional[int] = 15,
     db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user)
 ):
     """Mengambil semua langganan dengan opsi filter dan paginasi serta total count."""
     base_query = (
@@ -319,6 +326,7 @@ async def export_langganan(
     jatuh_tempo_end: Optional[str] = None,
     format: str = Query("csv", description="Export format: csv atau excel"),
     db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user)
 ):
     """Mengekspor semua data langganan ke dalam file dengan format yang dipilih (CSV/Excel)."""
     # Validate format
@@ -405,6 +413,7 @@ async def export_langganan(
 async def get_langganan_by_id(
     langganan_id: int,
     db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user)
 ):
     """Mengambil detail langganan berdasarkan ID."""
     query = (
@@ -437,6 +446,7 @@ async def update_langganan(
     langganan_id: int,
     langganan_update: LanggananUpdate,
     db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user)
 ):
     """Memperbarui data langganan berdasarkan ID."""
     db_langganan = await db.get(LanggananModel, langganan_id)
@@ -505,7 +515,11 @@ async def update_langganan(
 # Error handling: 404 kalau langganan nggak ketemu
 # Note: Invoice yang berelasi mungkin masih ada (cek constraint di database)
 @router.delete("/{langganan_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_langganan(langganan_id: int, db: AsyncSession = Depends(get_db)):
+async def delete_langganan(
+    langganan_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user)
+):
     """Menghapus langganan berdasarkan ID."""
     db_langganan = await db.get(LanggananModel, langganan_id)
     if not db_langganan:
@@ -541,7 +555,11 @@ class LanggananCalculateResponse(BaseModel):
 # - Include pajak dari brand pelanggan
 # Use case: buat preview harga di frontend sebelum submit
 @router.post("/calculate-price", response_model=LanggananCalculateResponse)
-async def calculate_langganan_price(request_data: LanggananCalculateRequest, db: AsyncSession = Depends(get_db)):
+async def calculate_langganan_price(
+    request_data: LanggananCalculateRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user)
+):
     """Menghitung harga awal dan tanggal jatuh tempo untuk frontend."""
     pelanggan = await db.get(
         PelangganModel,
@@ -653,6 +671,7 @@ async def export_langganan(
     jatuh_tempo_end: Optional[str] = None,
     format: str = Query("csv", description="Export format: csv atau excel"),
     db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user)
 ):
     """Mengekspor semua data langganan ke dalam file dengan format yang dipilih (CSV/Excel)."""
     # Validate format
@@ -741,7 +760,11 @@ async def export_langganan(
 # Error handling: rollback semua data kalau ada error, return detail error per baris
 # Performance: batch insert biar lebih cepat, eager loading buat validation
 @router.post("/import/csv")
-async def import_from_csv_langganan(file: UploadFile = File(...), db: AsyncSession = Depends(get_db)):
+async def import_from_csv_langganan(
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user)
+):
     """Mengimpor data langganan dari file CSV."""
     if not file.filename or not file.filename.lower().endswith(".csv"):
         raise HTTPException(status_code=400, detail="File harus berformat .csv")
@@ -907,7 +930,11 @@ class LanggananCalculateProratePlusFullResponse(BaseModel):
     "/calculate-prorate-plus-full",
     response_model=LanggananCalculateProratePlusFullResponse,
 )
-async def calculate_langganan_price_plus_full(request_data: LanggananCalculateRequest, db: AsyncSession = Depends(get_db)):
+async def calculate_langganan_price_plus_full(
+    request_data: LanggananCalculateRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user)
+):
     """
     Menghitung harga gabungan: prorate bulan ini + harga penuh bulan depan.
     """
@@ -956,7 +983,10 @@ async def calculate_langganan_price_plus_full(request_data: LanggananCalculateRe
 # Use case: buat dashboard atau statistik
 # Performance: simple count query, efficient
 @router.get("/count", response_model=int)
-async def get_langganan_count(db: AsyncSession = Depends(get_db)):
+async def get_langganan_count(
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user)
+):
     """
     Menghitung total jumlah langganan.
     """
@@ -972,7 +1002,10 @@ async def get_langganan_count(db: AsyncSession = Depends(get_db)):
 # Use case: buat nampilin pelanggan di dropdown atau list dengan indikator status langganan
 # Performance: eager loading langganan relasi biar efficient
 @router.get("/pelanggan/list", response_model=List[PelangganSchema])
-async def get_all_pelanggan_with_status(db: AsyncSession = Depends(get_db)):
+async def get_all_pelanggan_with_status(
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user)
+):
     """
     Mengambil daftar semua pelanggan, dengan status langganan dan data teknis mereka.
     Info penting untuk Finance: hanya pelanggan dengan data teknis yang bisa dibuatkan langganan.
@@ -1005,7 +1038,10 @@ async def get_all_pelanggan_with_status(db: AsyncSession = Depends(get_db)):
 # - Report jumlah success dan failed
 # Use case: Fix masalah user yang statusnya Suspended di DB tapi masih aktif di Mikrotik
 @router.post("/sync-suspended", status_code=status.HTTP_200_OK)
-async def sync_suspended_to_mikrotik(db: AsyncSession = Depends(get_db)):
+async def sync_suspended_to_mikrotik(
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user)
+):
     """
     Sinkronisasi manual semua langganan yang statusnya Suspended ke Mikrotik.
     Endpoint ini digunakan untuk memastikan semua user yang sudah Suspended
