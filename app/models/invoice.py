@@ -112,6 +112,12 @@ class Invoice(Base):
     tgl_jatuh_tempo: Mapped[Date] = mapped_column(Date)          # Tanggal jatuh tempo pembayaran
     status_invoice: Mapped[str] = mapped_column(String(50))      # Status invoice (Belum Dibayar/Lunas/Expired/Batal)
 
+    # Data Diskon
+    diskon_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)      # ID diskon yang diterapkan
+    diskon_persen: Mapped[float | None] = mapped_column(Numeric(5, 2), nullable=True)  # Persentase diskon yang diterapkan
+    diskon_amount: Mapped[float | None] = mapped_column(Numeric(15, 2), nullable=True)  # Nominal diskon yang diterapkan
+    harga_sebelum_diskon: Mapped[float | None] = mapped_column(Numeric(15, 2), nullable=True)  # Harga sebelum diskon
+
     # Data Pembayaran
     payment_link: Mapped[str | None] = mapped_column(Text)                # Link pembayaran dari Xendit
     metode_pembayaran: Mapped[str | None] = mapped_column(String(50))     # Metode pembayaran yang dipake

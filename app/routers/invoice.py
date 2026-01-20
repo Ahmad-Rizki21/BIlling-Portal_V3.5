@@ -1,5 +1,6 @@
 import pandas as pd
 from typing import List
+import math
 import openpyxl
 from io import BytesIO
 from typing import Optional
@@ -19,6 +20,7 @@ from dateutil.relativedelta import relativedelta
 from sqlalchemy import func, or_, and_
 from ..models.user import User as UserModel
 from ..models.role import Role as RoleModel
+from ..models.diskon import Diskon as DiskonModel
 from ..websocket_manager import manager
 
 # Import has_permission function
@@ -955,6 +957,46 @@ async def generate_manual_invoice(invoice_data: InvoiceGenerate, db: AsyncSessio
     # Pastikan harga dasar untuk item di Xendit juga konsisten.
     harga_dasar = total_harga - pajak
 
+    # Simpan harga sebelum diskon untuk reference
+    total_harga_sebelum_diskon = total_harga
+
+    # Cek diskon aktif untuk cluster pelanggan
+    diskon_applied = None
+    diskon_id = None
+    diskon_persen = None
+    diskon_amount = None
+
+    # Gunakan alamat sebagai cluster untuk diskon
+    cluster_to_check = pelanggan.alamat if pelanggan.alamat and pelanggan.alamat.strip() else None
+
+    # Prorate users TIDAK mendapatkan diskon
+    if langganan.metode_pembayaran == "Prorate":
+        logger.info(f"⚠️ Invoice manual untuk pelanggan {pelanggan.nama} (ID: {pelanggan.id}) menggunakan Prorate - Diskon tidak diterapkan")
+    elif cluster_to_check:
+        # Cari diskon aktif untuk cluster ini
+        tanggal_hari_ini = date.today()
+        diskon_query = (
+            select(DiskonModel)
+            .where(DiskonModel.cluster == cluster_to_check)
+            .where(DiskonModel.is_active == True)
+            .where(
+                (DiskonModel.tgl_mulai.is_(None)) | (DiskonModel.tgl_mulai <= tanggal_hari_ini)
+            )
+            .where(
+                (DiskonModel.tgl_selesai.is_(None)) | (DiskonModel.tgl_selesai >= tanggal_hari_ini)
+            )
+            .order_by(DiskonModel.persentase_diskon.desc())
+        )
+        diskon_result = await db.execute(diskon_query)
+        diskon_applied = diskon_result.scalar_one_or_none()
+
+    if diskon_applied:
+        diskon_id = diskon_applied.id
+        diskon_persen = float(diskon_applied.persentase_diskon)
+        diskon_amount = math.floor((total_harga_sebelum_diskon * diskon_persen / 100) + 0.5)
+        total_harga = total_harga_sebelum_diskon - diskon_amount
+        logger.info(f"💰 Diskon {diskon_persen}% (Rp {diskon_amount:,.0f}) diterapkan untuk invoice manual pelanggan {pelanggan.nama} - Cluster: {cluster_to_check}")
+
     # Tentukan tipe invoice
     invoice_type = "manual"
     if invoice_data.is_reinvoice:
@@ -977,6 +1019,11 @@ async def generate_manual_invoice(invoice_data: InvoiceGenerate, db: AsyncSessio
             "is_reinvoice": invoice_data.is_reinvoice if hasattr(invoice_data, 'is_reinvoice') else False,
             "original_invoice_id": invoice_data.original_invoice_id if hasattr(invoice_data, 'original_invoice_id') else None,
             "reinvoice_reason": invoice_data.reinvoice_reason if hasattr(invoice_data, 'reinvoice_reason') else None,
+            # Diskon fields
+            "diskon_id": diskon_id,
+            "diskon_persen": diskon_persen,
+            "diskon_amount": diskon_amount,
+            "harga_sebelum_diskon": total_harga_sebelum_diskon if diskon_applied else None,
         }
 
     db_invoice = InvoiceModel(**new_invoice_data)
@@ -1687,7 +1734,15 @@ async def export_payment_links_excel(
     query = (
         select(InvoiceModel)
         .join(InvoiceModel.pelanggan)
-        .options(joinedload(InvoiceModel.pelanggan).joinedload(PelangganModel.harga_layanan))
+        .options(
+            joinedload(InvoiceModel.pelanggan)
+            .joinedload(PelangganModel.harga_layanan)
+        )
+        # Eager load langganan untuk metode_pembayaran
+        .options(
+            joinedload(InvoiceModel.pelanggan)
+            .joinedload(PelangganModel.langganan)
+        )
     )
 
     if search:
@@ -1768,15 +1823,48 @@ async def export_payment_links_excel(
             ws.cell(row=row_num, column=7, value=invoice.status_invoice)
 
             # Tipe invoice dengan mapping yang user-friendly
-            # Prioritaskan reinvoice check dulu
+            # Format: [Tipe] - [Metode] - [Diskon jika ada]
+            # Contoh: "Otomatis - Diskon", "Prorate - Reinvoice", "Manual"
+
+            # Tentukan metode pembayaran (ambil dari langganan pelanggan)
+            metode_pembayaran = "Otomatis"  # Default
+            if invoice.pelanggan and hasattr(invoice.pelanggan, 'langganan'):
+                # Cari langganan yang aktif
+                langganan_aktif = None
+                for langganan in invoice.pelanggan.langganan:
+                    if langganan.status == "Aktif":
+                        langganan_aktif = langganan
+                        break
+                if langganan_aktif:
+                    metode_pembayaran = langganan_aktif.metode_pembayaran or "Otomatis"
+
+            # Bangun tipe invoice string
+            type_parts = []
+
+            # Tambah tipe invoice (Otomatis/Manual)
             if getattr(invoice, 'is_reinvoice', False):
-                invoice_type_display = "Reinvoice"
+                type_parts.append("Reinvoice")
+                # Untuk reinvoice, gunakan metode pembayaran dari langganan
+                type_parts.append(metode_pembayaran)
             else:
-                invoice_type_display = invoice.invoice_type or "manual"
-                if invoice_type_display == "automatic":
-                    invoice_type_display = "Otomatis"
-                elif invoice_type_display == "manual":
-                    invoice_type_display = "Manual"
+                invoice_type = invoice.invoice_type or "manual"
+                if invoice_type == "automatic":
+                    type_parts.append("Otomatis")
+                elif invoice_type == "manual":
+                    type_parts.append("Manual")
+                else:
+                    type_parts.append(invoice_type.capitalize())
+
+                # Tambah metode pembayaran jika berbeda
+                if metode_pembayaran == "Prorate":
+                    type_parts.append("Prorate")
+
+            # Tambah flag diskon jika ada
+            if getattr(invoice, 'diskon_id', None) and invoice.diskon_id:
+                type_parts.append("Diskon")
+
+            # Gabungkan semua bagian dengan " - "
+            invoice_type_display = " - ".join(type_parts)
             ws.cell(row=row_num, column=8, value=invoice_type_display)
 
             # Handle SQLAlchemy Date untuk Excel export
