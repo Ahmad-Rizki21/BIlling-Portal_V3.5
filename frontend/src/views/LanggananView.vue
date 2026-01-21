@@ -3019,67 +3019,28 @@ async function sendWhatsApp(item: Langganan) {
   const phoneNumber = getPelangganPhone(item.pelanggan_id);
 
   if (phoneNumber === 'N/A' || !phoneNumber) {
-    // Tampilkan alert bahwa nomor telepon tidak tersedia
-    alert('Nomor telepon pelanggan tidak tersedia');
+    showSnackbar('Nomor telepon pelanggan tidak tersedia', 'error');
     return;
   }
 
-  // Format nomor telepon untuk WhatsApp
-  const formattedPhone = phoneNumber.replace(/^0/, '62').replace(/[-\s]/g, '');
-
-  // Format tanggal jatuh tempo
-  const jatuhTempo = item.tgl_jatuh_tempo ?
-    new Date(item.tgl_jatuh_tempo).toLocaleDateString('id-ID', {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric'
-    }) : 'N/A';
-
-  // Ambil ID Pelanggan dari Data Teknis
-  let idPelanggan = item.id; // fallback ke langganan_id
-  try {
-    const dataTeknisResponse = await apiClient.get(`/data_teknis/by-pelanggan/${item.pelanggan_id}`);
-    if (dataTeknisResponse.data && dataTeknisResponse.data.length > 0) {
-      // Cari yang cocok dengan langganan ini
-      const dataTeknis = dataTeknisResponse.data.find((dt: any) =>
-        dt.nama_pelanggan === item.pelanggan?.nama ||
-        dt.no_telp === item.pelanggan?.no_telp
-      );
-      if (dataTeknis && dataTeknis.id_pelanggan) {
-        idPelanggan = dataTeknis.id_pelanggan;
-      }
-    }
-  } catch (error) {
-    console.warn('Gagal mengambil ID Pelanggan dari Data Teknis, menggunakan fallback:', error);
+  // Validasi status harus Suspended
+  if (item.status !== 'Suspended') {
+    showSnackbar('WhatsApp reminder hanya untuk langganan dengan status Suspended', 'warning');
+    return;
   }
 
-  // Buat pesan WhatsApp (sesuai template yang diminta)
-  const message = `Halo ${item.pelanggan?.nama || 'Pelanggan'},
+  // Loading state
+  loading.value = true;
 
-Kami dari tim support Artacom. Langganan internet Anda dengan nomor ${idPelanggan} saat ini dalam status SUSPENDED.
-
-Mohon segera melakukan pembayaran untuk mengaktifkan kembali layanan internet Anda.
-
-Total tagihan: Rp ${item.harga_awal?.toLocaleString('id-ID') || '0'}
-Jatuh tempo: ${jatuhTempo}
-
-Terima kasih atas perhatian Anda.`;
-
-  // Encode pesan untuk URL
-  const encodedMessage = encodeURIComponent(message);
-
-  // Buka WhatsApp dengan nomor dan pesan
-  const whatsappUrl = `https://wa.me/${formattedPhone}?text=${encodedMessage}`;
-  window.open(whatsappUrl, '_blank');
-
-  // Update status WhatsApp di database
   try {
-    const response = await apiClient.patch(`/langganan/${item.id}`, {
-      whatsapp_status: 'sent',
-      last_whatsapp_sent: new Date().toISOString()
-    });
+    // Panggil API endpoint baru untuk kirim WhatsApp via Qontak
+    const response = await apiClient.post(`/langganan/${item.id}/send-whatsapp-reminder`);
 
-    if (response.data) {
+    loading.value = false;
+
+    if (response.data.success) {
+      showSnackbar('WhatsApp reminder terkirim!', 'success');
+
       // Update data di frontend
       const index = langgananList.value.findIndex(l => l.id === item.id);
       if (index !== -1) {
@@ -3091,19 +3052,40 @@ Terima kasih atas perhatian Anda.`;
       }
     }
 
-    console.log('WhatsApp status updated successfully');
+  } catch (err: any) {
+    loading.value = false;
 
-  } catch (error: any) {
-    console.error('Error updating WhatsApp status:', error);
+    const errorMessage = err.response?.data?.detail || 'Gagal mengirim WhatsApp';
+    showSnackbar(errorMessage, 'error');
 
-    // Fallback: tetap update status di frontend
-    const index = langgananList.value.findIndex(l => l.id === item.id);
-    if (index !== -1) {
-      langgananList.value[index] = {
-        ...langgananList.value[index],
-        whatsapp_status: 'sent',
-        last_whatsapp_sent: new Date().toISOString()
-      };
+    // Fallback ke manual wa.me jika user konfirmasi
+    if (confirm('Gagal mengirim otomatis via Qontak. Gunakan WhatsApp manual?')) {
+      // Format nomor telepon untuk WhatsApp
+      const formattedPhone = phoneNumber.replace(/^0/, '62').replace(/[-\s]/g, '');
+
+      // Buka WhatsApp manual
+      const whatsappUrl = `https://wa.me/${formattedPhone}`;
+      window.open(whatsappUrl, '_blank');
+
+      // Update status WhatsApp di database (tetap update meskipun manual)
+      try {
+        await apiClient.patch(`/langganan/${item.id}`, {
+          whatsapp_status: 'sent',
+          last_whatsapp_sent: new Date().toISOString()
+        });
+
+        // Update data di frontend
+        const index = langgananList.value.findIndex(l => l.id === item.id);
+        if (index !== -1) {
+          langgananList.value[index] = {
+            ...langgananList.value[index],
+            whatsapp_status: 'sent',
+            last_whatsapp_sent: new Date().toISOString()
+          };
+        }
+      } catch (updateError) {
+        console.error('Error updating WhatsApp status:', updateError);
+      }
     }
   }
 }

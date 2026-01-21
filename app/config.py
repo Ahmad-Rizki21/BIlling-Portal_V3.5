@@ -169,6 +169,25 @@ class Settings(BaseSettings):
     XENDIT_API_URL: str = "https://api.xendit.co/v2/invoices"
 
     # ====================================================================
+    # KONFIGURASI QONTAK WHATSAPP API
+    # ====================================================================
+
+    # Base URL untuk Qontak Chat API (dengan HMAC auth)
+    QONTAK_BASE_URL: str = "https://api.mekari.com"
+
+    # Client credentials dari Mekari Developer
+    QONTAK_CLIENT_ID: str = ""
+    QONTAK_CLIENT_SECRET: str = ""
+
+    # Channel Integration IDs untuk masing-masing brand
+    QONTAK_CHANNEL_ID_JAKINET: str = "175b8963-5ef3-4a2e-bd72-cfa4646e99bf"
+    QONTAK_CHANNEL_ID_JELANTIK: str = "6dc2cd98-7369-4aa3-a36f-eccf27faf233"
+
+    # Template IDs untuk payment reminder
+    QONTAK_TEMPLATE_ID_JAKINET: str = "1179b67d-bd46-4b82-aa34-fe52c2e4e3ea"
+    QONTAK_TEMPLATE_ID_JELANTIK: str = "010e84bb-78ec-40fe-98f1-27ce189e7a4f"
+
+    # ====================================================================
     # KONFIGURASI ENCRYPTION
     # ====================================================================
 
@@ -192,6 +211,44 @@ class Settings(BaseSettings):
         return {
             "ARTACOMINDO": self.XENDIT_CALLBACK_TOKEN_ARTACOMINDO,
             "JELANTIK": self.XENDIT_CALLBACK_TOKEN_JELANTIK,
+        }
+
+    @property
+    def QONTAK_CHANNEL_IDS(self) -> dict:
+        """
+        Mapping channel integration IDs berdasarkan brand.
+
+        Brand & Account Configuration:
+        - JAKINET (ajn-01) -> JAKINET WhatsApp number
+        - JELANTIK (ajn-02) -> JELANTIK WhatsApp number
+        - JELANTIK NAGRAK (ajn-03) -> JELANTIK WhatsApp number
+        """
+        return {
+            "JAKINET": self.QONTAK_CHANNEL_ID_JAKINET,
+            "JELANTIK": self.QONTAK_CHANNEL_ID_JELANTIK,
+            # Support keys untuk brand code yang ada di database
+            "ajn-01": self.QONTAK_CHANNEL_ID_JAKINET,      # JAKINET
+            "ajn-02": self.QONTAK_CHANNEL_ID_JELANTIK,     # JELANTIK
+            "ajn-03": self.QONTAK_CHANNEL_ID_JELANTIK,     # JELANTIK NAGRAK
+        }
+
+    @property
+    def QONTAK_TEMPLATE_IDS(self) -> dict:
+        """
+        Mapping template IDs untuk payment reminder berdasarkan brand.
+
+        Brand & Template Configuration:
+        - JAKINET (ajn-01) -> remainderspembayaranjakinet template
+        - JELANTIK (ajn-02) -> remaindersjelantik template
+        - JELANTIK NAGRAK (ajn-03) -> remaindersjelantik template
+        """
+        return {
+            "JAKINET": self.QONTAK_TEMPLATE_ID_JAKINET,
+            "JELANTIK": self.QONTAK_TEMPLATE_ID_JELANTIK,
+            # Support keys untuk brand code yang ada di database
+            "ajn-01": self.QONTAK_TEMPLATE_ID_JAKINET,      # JAKINET
+            "ajn-02": self.QONTAK_TEMPLATE_ID_JELANTIK,     # JELANTIK
+            "ajn-03": self.QONTAK_TEMPLATE_ID_JELANTIK,     # JELANTIK NAGRAK
         }
 
     def can_access_widget(self, widget_name: str, user_role: str) -> bool:

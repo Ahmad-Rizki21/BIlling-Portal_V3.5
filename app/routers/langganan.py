@@ -32,6 +32,7 @@ from ..schemas.langganan import (
     LanggananUpdate,
 )
 from ..schemas.pelanggan import Pelanggan as PelangganSchema
+from ..schemas.whatsapp import WhatsAppReminderResponse
 from ..utils.export import create_langganan_export_response
 
 router = APIRouter(prefix="/langganan", tags=["Langganan"])
@@ -1160,3 +1161,98 @@ async def sync_suspended_to_mikrotik(
         )
 
 
+@router.post("/{langganan_id}/send-whatsapp-reminder", response_model=WhatsAppReminderResponse)
+async def send_whatsapp_reminder(
+    langganan_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user)
+):
+    """
+    Kirim WhatsApp payment reminder via Qontak API untuk langganan dengan status Suspended.
+
+    Fitur ini mengirimkan pesan pembayaran otomatis ke nomor WhatsApp pelanggan
+    menggunakan template yang sudah disetujui di Qontak.
+
+    Alur:
+    1. Validasi langganan ada dan statusnya Suspended
+    2. Ambil nomor telepon pelanggan dan format ke 62xx
+    3. Tentukan channel_id dan template_id berdasarkan brand
+    4. Kirim broadcast via Qontak API
+    5. Update whatsapp_status dan last_whatsapp_sent jika sukses
+    """
+    # 1. Fetch langganan dengan eager load pelanggan, harga_layanan, dan paket_layanan
+    query = (
+        select(LanggananModel)
+        .where(LanggananModel.id == langganan_id)
+        .options(
+            joinedload(LanggananModel.pelanggan).joinedload(
+                PelangganModel.harga_layanan
+            ),
+            joinedload(LanggananModel.paket_layanan)  # Tambahkan ini untuk prevent greenlet error
+        )
+    )
+    result = await db.execute(query)
+    langganan = result.scalar_one_or_none()
+
+    if not langganan:
+        raise HTTPException(status_code=404, detail="Langganan tidak ditemukan")
+
+    if langganan.status != "Suspended":
+        raise HTTPException(
+            status_code=400,
+            detail="Hanya langganan dengan status Suspended yang bisa dikirim reminder"
+        )
+
+    if not langganan.pelanggan.no_telp:
+        raise HTTPException(
+            status_code=400,
+            detail="Nomor telepon pelanggan tidak tersedia"
+        )
+
+    # 2. Format nomor telepon ke international format (62xx)
+    phone_number = format_phone_number(langganan.pelanggan.no_telp)
+
+    # 3. Kirim WhatsApp broadcast via Qontak service
+    try:
+        from ..services import qontak_service
+
+        qontak_response = await qontak_service.send_whatsapp_broadcast(
+            langganan=langganan,
+            phone_number=phone_number
+        )
+
+        # 4. Update status hanya jika API call berhasil
+        langganan.whatsapp_status = 'sent'
+        langganan.last_whatsapp_sent = datetime.now()
+        db.add(langganan)
+        await db.commit()
+
+        logger.info(
+            f"✅ WhatsApp reminder sent to langganan ID {langganan_id}, "
+            f"pelanggan: {langganan.pelanggan.nama}, "
+            f"phone: {phone_number}"
+        )
+
+        return WhatsAppReminderResponse(
+            success=True,
+            message="WhatsApp reminder terkirim",
+            qontak_response=qontak_response
+        )
+
+    except ValueError as e:
+        # Error dari validasi channel/template ID
+        await db.rollback()
+        logger.error(f"❌ Configuration error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Konfigurasi Qontak belum lengkap: {str(e)}"
+        )
+
+    except Exception as e:
+        # Error dari Qontak API atau masalah lain
+        await db.rollback()
+        logger.error(f"❌ Failed to send WhatsApp reminder: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Gagal mengirim WhatsApp reminder: {str(e)}"
+        )
