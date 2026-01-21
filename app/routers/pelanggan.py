@@ -72,42 +72,57 @@ async def auto_update_langganan(db: AsyncSession, pelanggan_id: int, old_layanan
     """
     try:
         # 1. Cari langganan aktif pelanggan
+        # FIX: Include Suspended status so updates apply to suspended users too
         langganan_query = (
             select(LanggananModel)
             .where(LanggananModel.pelanggan_id == pelanggan_id)
-            .where(LanggananModel.status == "Aktif")
+            .where(LanggananModel.status.in_(["Aktif", "Suspended"]))
             .options(joinedload(LanggananModel.paket_layanan))
         )
         langganan_result = await db.execute(langganan_query)
-        active_langganan = langganan_result.scalar_one_or_none()
+        # Handle multiple results just in case (e.g. if dirty data), pick the most recent
+        active_langganans = langganan_result.scalars().all()
+        active_langganan = active_langganans[0] if active_langganans else None
 
         if not active_langganan:
-            logger.warning(f"Pelanggan {pelanggan_id} tidak memiliki langganan aktif")
+            logger.warning(f"Pelanggan {pelanggan_id} tidak memiliki langganan aktif atau suspended")
             return
 
         old_paket_name = active_langganan.paket_layanan.nama_paket if active_langganan.paket_layanan else "Unknown"
 
         # 2. Cari paket layanan yang sesuai dengan layanan baru
+        # Prioritas 1: Exact string match
         paket_query = (
             select(PaketLayananModel)
             .where(PaketLayananModel.id_brand == id_brand)
             .where(PaketLayananModel.nama_paket.ilike(f"%{new_layanan}%"))
         )
         paket_result = await db.execute(paket_query)
-        new_paket = paket_result.scalar_one_or_none()
+        new_paket = paket_result.scalars().first() # Use first() to avoid crash if multiple matches
 
         if not new_paket:
             # Coba extract speed dari layanan
             speed_match = re.search(r'(\d+)\s*Mbps', new_layanan, re.IGNORECASE)
             if speed_match:
                 speed = speed_match.group(1)
+                # Prioritas 2: Regex match "X Mbps" specifically to avoid "10" matching "100"
                 paket_query_speed = (
                     select(PaketLayananModel)
                     .where(PaketLayananModel.id_brand == id_brand)
-                    .where(PaketLayananModel.nama_paket.ilike(f"%{speed}%"))
+                    .where(PaketLayananModel.nama_paket.ilike(f"%{speed} Mbps%"))
                 )
                 paket_result_speed = await db.execute(paket_query_speed)
-                new_paket = paket_result_speed.scalar_one_or_none()
+                new_paket = paket_result_speed.scalars().first()
+                
+                # Prioritas 3: Loose match if specific "X Mbps" failed
+                if not new_paket:
+                     paket_query_loose = (
+                        select(PaketLayananModel)
+                        .where(PaketLayananModel.id_brand == id_brand)
+                        .where(PaketLayananModel.nama_paket.ilike(f"%{speed}%"))
+                    )
+                     paket_result_loose = await db.execute(paket_query_loose)
+                     new_paket = paket_result_loose.scalars().first()
 
         if not new_paket:
             logger.error(f"Tidak menemukan paket untuk layanan '{new_layanan}' (brand: {id_brand})")
