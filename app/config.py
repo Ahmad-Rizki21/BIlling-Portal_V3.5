@@ -169,6 +169,18 @@ class Settings(BaseSettings):
     XENDIT_API_URL: str = "https://api.xendit.co/v2/invoices"
 
     # ====================================================================
+    # KONFIGURASI WHATSAPP API (WasenderAPI)
+    # ====================================================================
+
+    # API Key dari WasenderAPI untuk mengirim pesan WhatsApp
+    # Dapatkan dari dashboard WasenderAPI: https://wasenderapi.com/
+    # Simpan di file .env: WHATSAPP_API_KEY=your_api_key_here
+    WHATSAPP_API_KEY: str = ""
+
+    # URL endpoint API WasenderAPI
+    WHATSAPP_API_URL: str = "https://www.wasenderapi.com/api/send-message"
+
+    # ====================================================================
     # KONFIGURASI ENCRYPTION
     # ====================================================================
 

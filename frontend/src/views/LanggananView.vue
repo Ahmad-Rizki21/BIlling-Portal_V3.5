@@ -3024,8 +3024,11 @@ async function sendWhatsApp(item: Langganan) {
     return;
   }
 
-  // Format nomor telepon untuk WhatsApp
-  const formattedPhone = phoneNumber.replace(/^0/, '62').replace(/[-\s]/g, '');
+  // Validasi status langganan harus Suspended
+  if (item.status !== 'Suspended') {
+    alert('Hanya langganan dengan status Suspended yang bisa dikirim notifikasi WhatsApp.');
+    return;
+  }
 
   // Format tanggal jatuh tempo
   const jatuhTempo = item.tgl_jatuh_tempo ?
@@ -3053,50 +3056,29 @@ async function sendWhatsApp(item: Langganan) {
     console.warn('Gagal mengambil ID Pelanggan dari Data Teknis, menggunakan fallback:', error);
   }
 
-  // Buat pesan WhatsApp (sesuai template yang diminta)
-  const message = `Halo ${item.pelanggan?.nama || 'Pelanggan'},
+  // Buat custom message untuk dikirim via WasenderAPI
+  const customMessage = `Halo ${item.pelanggan?.nama || 'Pelanggan'},
 
 Kami dari tim support Artacom. Langganan internet Anda dengan nomor ${idPelanggan} saat ini dalam status SUSPENDED.
 
-Mohon segera melakukan pembayaran untuk mengaktifkan kembali layanan internet Anda.
+Mohon segera melakukan pembayaran untuk mengaktifkan kembali layanan internet Anda. BAYARRRR KALO GA DI BOM TAR
 
 Total tagihan: Rp ${item.harga_awal?.toLocaleString('id-ID') || '0'}
 Jatuh tempo: ${jatuhTempo}
 
 Terima kasih atas perhatian Anda.`;
 
-  // Encode pesan untuk URL
-  const encodedMessage = encodeURIComponent(message);
-
-  // Buka WhatsApp dengan nomor dan pesan
-  const whatsappUrl = `https://wa.me/${formattedPhone}?text=${encodedMessage}`;
-  window.open(whatsappUrl, '_blank');
-
-  // Update status WhatsApp di database
+  // Kirim pesan via WasenderAPI
   try {
-    const response = await apiClient.patch(`/langganan/${item.id}`, {
-      whatsapp_status: 'sent',
-      last_whatsapp_sent: new Date().toISOString()
+    // Tampilkan loading state
+    snackbar.value = { show: true, text: 'Mengirim pesan WhatsApp...', color: 'warning' };
+
+    // Panggil API endpoint WasenderAPI
+    const response = await apiClient.post(`/langganan/${item.id}/send-whatsapp`, {
+      message: customMessage
     });
 
-    if (response.data) {
-      // Update data di frontend
-      const index = langgananList.value.findIndex(l => l.id === item.id);
-      if (index !== -1) {
-        langgananList.value[index] = {
-          ...langgananList.value[index],
-          whatsapp_status: 'sent',
-          last_whatsapp_sent: new Date().toISOString()
-        };
-      }
-    }
-
-    console.log('WhatsApp status updated successfully');
-
-  } catch (error: any) {
-    console.error('Error updating WhatsApp status:', error);
-
-    // Fallback: tetap update status di frontend
+    // Update data di frontend
     const index = langgananList.value.findIndex(l => l.id === item.id);
     if (index !== -1) {
       langgananList.value[index] = {
@@ -3105,6 +3087,39 @@ Terima kasih atas perhatian Anda.`;
         last_whatsapp_sent: new Date().toISOString()
       };
     }
+
+    // Tampilkan pesan sukses
+    snackbar.value = {
+      show: true,
+      text: response.data?.message || 'Pesan WhatsApp berhasil dikirim!',
+      color: 'success'
+    };
+    setTimeout(() => {
+      snackbar.value.show = false;
+    }, 3000);
+
+    console.log('WhatsApp sent successfully via WasenderAPI:', response.data);
+
+  } catch (error: any) {
+    console.error('Error sending WhatsApp via WasenderAPI:', error);
+
+    // Tampilkan pesan error
+    const errorMsg = error.response?.data?.detail?.message ||
+                     error.response?.data?.detail ||
+                     error.response?.data?.message ||
+                     'Gagal mengirim pesan WhatsApp. Silakan coba lagi.';
+
+    snackbar.value = {
+      show: true,
+      text: errorMsg,
+      color: 'error'
+    };
+    setTimeout(() => {
+      snackbar.value.show = false;
+    }, 5000);
+
+    // Alert juga untuk memastikan user melihat error
+    alert('Gagal mengirim pesan WhatsApp: ' + errorMsg);
   }
 }
 

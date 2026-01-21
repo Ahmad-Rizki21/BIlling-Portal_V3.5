@@ -1160,3 +1160,110 @@ async def sync_suspended_to_mikrotik(
         )
 
 
+# --- Endpoint WhatsApp Notification ---
+
+
+class WhatsAppMessageRequest(BaseModel):
+    message: Optional[str] = None  # Custom message (opsional)
+
+
+# POST /langganan/{id}/send-whatsapp - Kirim pesan WhatsApp ke pelanggan
+# Endpoint buat kirim pesan WhatsApp ke pelanggan dengan status Suspended
+# Path parameters:
+# - id: ID langganan
+# Request body (opsional):
+#   - message: Pesan custom (jika tidak diisi, gunakan template default)
+# Response: status pengiriman pesan
+# Fitur:
+# - Hanya bisa dikirim ke langganan dengan status "Suspended"
+# - Jika message tidak diisi, gunakan template default untuk notifikasi Suspended
+# - Update whatsapp_status dan last_whatsapp_sent di database
+# - Format nomor telepon otomatis (62 prefix)
+@router.post("/{id}/send-whatsapp", status_code=status.HTTP_200_OK)
+async def send_whatsapp_notification(
+    id: int,
+    request: WhatsAppMessageRequest = WhatsAppMessageRequest(),
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user)
+):
+    """
+    Mengirim pesan WhatsApp ke pelanggan dengan status Suspended.
+
+    Endpoint ini digunakan untuk mengirim notifikasi WhatsApp ke pelanggan
+    yang status langganannya Suspended. Jika custom message tidak diberikan,
+    akan menggunakan template default untuk notifikasi Suspended.
+    """
+    from ..services.whatsapp_service import WhatsAppService
+
+    # 1. Validasi langganan ada dan statusnya Suspended
+    query = (
+        select(LanggananModel)
+        .where(LanggananModel.id == id)
+        .options(
+            joinedload(LanggananModel.pelanggan),
+            joinedload(LanggananModel.paket_layanan),
+        )
+    )
+    result = await db.execute(query)
+    langganan = result.scalar_one_or_none()
+
+    if not langganan:
+        raise HTTPException(status_code=404, detail="Langganan tidak ditemukan")
+
+    if langganan.status != "Suspended":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Hanya langganan dengan status Suspended yang bisa dikirim notifikasi WhatsApp. Status saat ini: {langganan.status}"
+        )
+
+    # 2. Validasi pelanggan punya nomor telepon
+    if not langganan.pelanggan or not langganan.pelanggan.no_telp:
+        raise HTTPException(
+            status_code=400,
+            detail="Pelanggan tidak memiliki nomor telepon"
+        )
+
+    # 3. Tentukan pesan yang akan dikirim
+    phone_number = langganan.pelanggan.no_telp
+
+    if request.message:
+        # Gunakan custom message
+        result = await WhatsAppService.send_custom_message(phone_number, request.message)
+    else:
+        # Gunakan template default untuk Suspended
+        result = await WhatsAppService.send_suspended_notification(
+            nama=langganan.pelanggan.nama or "Pelanggan",
+            phone_number=phone_number,
+            paket=langganan.paket_layanan.nama_paket if langganan.paket_layanan else "N/A",
+            alamat=langganan.pelanggan.alamat or "N/A"
+        )
+
+    # 4. Update status WhatsApp di database jika berhasil
+    if result.get("success"):
+        langganan.whatsapp_status = "sent"
+        langganan.last_whatsapp_sent = datetime.now()
+        db.add(langganan)
+        await db.commit()
+
+        logger.info(f"✅ WhatsApp sent successfully to Langganan ID {id}, Pelanggan: {langganan.pelanggan.nama}")
+
+        return {
+            "message": "Pesan WhatsApp berhasil dikirim",
+            "langganan_id": id,
+            "pelanggan_nama": langganan.pelanggan.nama,
+            "phone_number": result.get("phone_number"),
+            "sent_at": langganan.last_whatsapp_sent.isoformat()
+        }
+    else:
+        logger.error(f"❌ WhatsApp send failed for Langganan ID {id}: {result.get('error')}")
+
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "message": "Gagal mengirim pesan WhatsApp",
+                "error": result.get("error"),
+                "detail": result.get("detail", "")
+            }
+        )
+
+
