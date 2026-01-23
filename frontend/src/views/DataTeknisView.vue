@@ -1047,8 +1047,8 @@
               <v-btn
                 color="success"
                 variant="elevated"
-                :href="`${apiClient.defaults.baseURL}/data_teknis/template/csv`"
-                download
+                @click="downloadTemplate"
+                :loading="downloadingTemplate"
                 prepend-icon="mdi-download"
                 class="template-btn"
                 :block="display.mobile.value"
@@ -1222,6 +1222,7 @@ const fileToImport = ref<File[]>([]);
 const dialogImport = ref(false);
 const importing = ref(false);
 const exporting = ref(false);
+const downloadingTemplate = ref(false);
 const snackbar = ref({ show: false, text: '', color: 'success' });
 const importErrors = ref<string[]>([]);
 const showPppoePassword = ref(false);
@@ -2157,6 +2158,29 @@ async function exportData(format = 'csv') {
     exporting.value = false;
   }
 }
+
+async function downloadTemplate() {
+  downloadingTemplate.value = true;
+  try {
+    const response = await apiClient.get('/data_teknis/template/csv', {
+      responseType: 'blob',
+    });
+    const url = window.URL.createObjectURL(new Blob([response.data]));
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', 'template_import_teknis.csv');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  } catch (error) {
+    console.error("Gagal mengunduh template:", error);
+    showSnackbar("Gagal mengunduh template", "error");
+  } finally {
+    downloadingTemplate.value = false;
+  }
+}
+
 async function importData() {
   const file = fileToImport.value[0];
   if (!file) {
