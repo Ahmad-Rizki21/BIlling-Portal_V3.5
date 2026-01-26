@@ -712,9 +712,7 @@ async def check_ip_address(
 
 
 @router.get("/template/csv", response_class=StreamingResponse)
-async def download_csv_template_teknis(
-    current_user: UserModel = Depends(get_current_active_user)
-):
+async def download_csv_template_teknis():
     """
     Men-download template CSV untuk import data teknis yang telah disesuaikan
     dengan model baru (menggunakan nama, bukan ID).
@@ -761,7 +759,8 @@ async def download_csv_template_teknis(
         }
     ]
 
-    writer = csv.DictWriter(output, fieldnames=headers)
+    # Menggunakan semicolon (;) sebagai delimiter agar langsung rapi di Excel (Regional Indonesia/Europe)
+    writer = csv.DictWriter(output, fieldnames=headers, delimiter=";")
     writer.writeheader()
     writer.writerows(sample_data)
     output.seek(0)
@@ -893,14 +892,26 @@ async def import_from_csv_teknis(
         encoding = chardet.detect(contents)["encoding"] or "utf-8"
         content_str = contents.decode(encoding)
 
-        # --- PERBAIKAN DI SINI ---
-        # 1. Buat objek DictReader terlebih dahulu
-        reader_object = csv.DictReader(io.StringIO(content_str))
+        # Hapus BOM jika ada
+        if content_str.startswith("\ufeff"):
+            content_str = content_str.lstrip("\ufeff")
 
-        # 2. Cek 'fieldnames' pada objek DictReader, BUKAN pada list
+        # --- DETEKSI DELIMITER ---
+        # Cek apakah menggunakan koma (,) atau titik-koma (;)
+        first_line = content_str.split('\n')[0]
+        dialect_delimiter = ","
+        if ";" in first_line and first_line.count(";") > first_line.count(","):
+            dialect_delimiter = ";"
+        
+        # --- PERBAIKAN DI SINI ---
+        # 1. Buat objek DictReader terlebih dahulu dengan delimiter yang terdeteksi
+        reader_object = csv.DictReader(io.StringIO(content_str), delimiter=dialect_delimiter)
+
+        # 2. Cek 'fieldnames' pada objek DictReader
         if not reader_object.fieldnames:
             raise HTTPException(status_code=400, detail="Header CSV tidak ditemukan.")
-        # 3. SEKARANG baru ubah menjadi list untuk di-loop
+        
+        # 3. Ubah menjadi list untuk di-loop
         reader = list(reader_object)
     except Exception as e:
         logger.error(f"Gagal membaca atau mem-parsing file CSV: {repr(e)}")

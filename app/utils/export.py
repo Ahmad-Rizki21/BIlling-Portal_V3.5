@@ -102,8 +102,8 @@ class CSVExporter(BaseExporter):
             elif headers is None:
                 headers = []
 
-            # Create CSV writer
-            writer = csv.DictWriter(output, fieldnames=headers)
+            # Create CSV writer dengan semicolon (;) untuk compatibilitas Excel di Indonesia
+            writer = csv.DictWriter(output, fieldnames=headers, delimiter=";")
             writer.writeheader()
 
             # Write data rows
@@ -140,7 +140,8 @@ class CSVExporter(BaseExporter):
             output = io.StringIO()
             output.write("\ufeff")  # BOM untuk Excel
 
-            writer = csv.DictWriter(output, fieldnames=headers)
+            # Menggunakan semicolon agar langsung rapi di Excel Indonesia
+            writer = csv.DictWriter(output, fieldnames=headers, delimiter=";")
             writer.writeheader()
 
             # Write sample data jika ada

@@ -715,7 +715,7 @@ async def download_csv_template_langganan():
         }
     ]
 
-    writer = csv.DictWriter(output, fieldnames=headers)
+    writer = csv.DictWriter(output, fieldnames=headers, delimiter=";")
     writer.writeheader()
     writer.writerows(sample_data)
     output.seek(0)
@@ -853,10 +853,21 @@ async def import_from_csv_langganan(
     contents = await file.read()
     try:
         content_str = contents.decode(chardet.detect(contents)["encoding"] or "utf-8")
-    except Exception:
-        raise HTTPException(status_code=400, detail="Encoding file tidak dapat dibaca.")
+        
+        # Hapus BOM jika ada
+        if content_str.startswith("\ufeff"):
+            content_str = content_str.lstrip("\ufeff")
 
-    reader = list(csv.DictReader(io.StringIO(content_str)))
+        # --- DETEKSI DELIMITER ---
+        first_line = content_str.split('\n')[0]
+        dialect_delimiter = ","
+        if ";" in first_line and first_line.count(";") > first_line.count(","):
+            dialect_delimiter = ";"
+
+        reader_object = csv.DictReader(io.StringIO(content_str), delimiter=dialect_delimiter)
+        reader = list(reader_object)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Encoding file tidak dapat dibaca atau format CSV tidak valid.")
     errors = []
     langganan_to_create = []
     processed_emails_in_file = set()

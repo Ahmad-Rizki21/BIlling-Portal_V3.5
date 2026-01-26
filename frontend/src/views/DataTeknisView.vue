@@ -2162,6 +2162,7 @@ async function exportData(format = 'csv') {
 async function downloadTemplate() {
   downloadingTemplate.value = true;
   try {
+    // Gunakan endpoint public untuk menghindari issue auth token di production
     const response = await apiClient.get('/data_teknis/template/csv', {
       responseType: 'blob',
     });

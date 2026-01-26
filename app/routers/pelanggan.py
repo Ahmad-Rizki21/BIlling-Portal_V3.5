@@ -753,7 +753,7 @@ async def download_csv_template(current_user: UserModel = Depends(get_current_ac
             "ID Brand": "ajn-01",
         },
     ]
-    writer = csv.DictWriter(output, fieldnames=headers)
+    writer = csv.DictWriter(output, fieldnames=headers, delimiter=";")
     writer.writeheader()
     writer.writerows(sample_data)
     output.seek(0)
@@ -793,8 +793,19 @@ async def import_from_csv(
     try:
         encoding = chardet.detect(contents)["encoding"] or "utf-8"
         content_str = contents.decode(encoding)
+
+        # Hapus BOM jika ada
+        if content_str.startswith("\ufeff"):
+            content_str = content_str.lstrip("\ufeff")
+
+        # --- DETEKSI DELIMITER ---
+        first_line = content_str.split('\n')[0]
+        dialect_delimiter = ","
+        if ";" in first_line and first_line.count(";") > first_line.count(","):
+            dialect_delimiter = ";"
+
         stream = io.StringIO(content_str)
-        reader = csv.DictReader(stream)
+        reader = csv.DictReader(stream, delimiter=dialect_delimiter)
         if not reader.fieldnames:
             raise HTTPException(status_code=400, detail="Header CSV tidak ditemukan.")
     except Exception as e:
