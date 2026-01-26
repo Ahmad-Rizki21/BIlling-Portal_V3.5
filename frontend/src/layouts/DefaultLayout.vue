@@ -854,7 +854,7 @@ const menuGroups = ref([
             icon: 'mdi-percent-outline',
             value: 'diskon',
             to: '/diskon',
-            permission: 'manage_diskon',
+            permission: 'view_diskon',
             description: 'Kelola diskon per cluster'
           },
           {
