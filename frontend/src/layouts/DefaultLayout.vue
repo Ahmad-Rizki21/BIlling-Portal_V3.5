@@ -642,10 +642,12 @@ const currentPageTitle = computed(() => {
     '/data-teknis': 'Data Teknis',
     '/harga-layanan': 'Brand & Paket',
     '/kalkulator': 'Simulasi Harga',
+    '/kalkulator-diskon': 'Kalkulator Diskon',
     '/syarat-ketentuan': 'Syarat & Ketentuan',
     '/trouble-tickets': 'Trouble Tickets',
     '/trouble-tickets/reports': 'Ticket Reports',
     '/invoices': 'Invoices',
+    '/diskon': 'Diskon',
     '/reports/revenue': 'Laporan Pendapatan',
     '/mikrotik': 'Mikrotik Servers',
     '/traffic-monitoring': 'Traffic Monitoring',
@@ -848,6 +850,14 @@ const menuGroups = ref([
             description: 'Tagihan & pembayaran'
           },
           {
+            title: 'Diskon',
+            icon: 'mdi-percent-outline',
+            value: 'diskon',
+            to: '/diskon',
+            permission: 'view_diskon',
+            description: 'Kelola diskon per cluster'
+          },
+          {
             title: 'Laporan Pendapatan',
             icon: 'mdi-chart-line',
             value: 'revenue-report',
@@ -870,19 +880,27 @@ const menuGroups = ref([
         description: 'Alat bantu & sumber daya',
         permission: null,
         children: [
-          { 
-            title: 'Simulasi Harga', 
-            icon: 'mdi-calculator-variant-outline', 
-            value: 'kalkulator', 
-            to: '/kalkulator', 
+          {
+            title: 'Simulasi Harga',
+            icon: 'mdi-calculator-variant-outline',
+            value: 'kalkulator',
+            to: '/kalkulator',
             permission: 'view_simulasi_harga',
             description: 'Hitung estimasi biaya'
           },
-          { 
-            title: 'S&K', 
-            icon: 'mdi-file-document-outline', 
-            value: 'sk', 
-            to: '/syarat-ketentuan', 
+          {
+            title: 'Kalkulator Diskon',
+            icon: 'mdi-percent-outline',
+            value: 'kalkulator-diskon',
+            to: '/kalkulator-diskon',
+            permission: 'view_simulasi_harga',
+            description: 'Hitung simulasi diskon'
+          },
+          {
+            title: 'S&K',
+            icon: 'mdi-file-document-outline',
+            value: 'sk',
+            to: '/syarat-ketentuan',
             permission: null,
             description: 'Syarat & ketentuan layanan'
           }

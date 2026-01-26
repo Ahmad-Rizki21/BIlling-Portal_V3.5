@@ -75,6 +75,7 @@ from .routers import (
     dashboard,         # Dashboard admin
     dashboard_pelanggan, # Dashboard pelanggan
     data_teknis,       # Data teknis koneksi
+    diskon,            # Diskon per cluster
     global_search,     # Global search functionality
     harga_layanan,     # Harga paket layanan
     inventory,         # Manajemen inventory
@@ -804,6 +805,7 @@ async def shutdown_event():
 
 # Meng-include semua router
 app.include_router(pelanggan.router)
+app.include_router(diskon.router)
 app.include_router(user.router)
 app.include_router(role.router)
 app.include_router(auth.router)

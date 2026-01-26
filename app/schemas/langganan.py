@@ -472,18 +472,15 @@ class Langganan(LanggananBase):
     @computed_field
     @property
     def harga_final(self) -> float:
-        """Menghitung harga final (paket + PPN) untuk ditampilkan."""
+        """Harga final yang sudah termasuk diskon (jika ada).
 
-        # Jika data relasi tidak lengkap, tampilkan harga awal sebagai fallback
-        if not self.paket_layanan or not self.pelanggan.harga_layanan:
-            return self.harga_awal or 0.0
-
-        harga_paket = self.paket_layanan.harga
-        pajak_persen = self.pelanggan.harga_layanan.pajak
-
-        harga_total = harga_paket * (1 + (pajak_persen / 100))
-
-        return round(harga_total)
+        Harga_final langsung menggunakan harga_awal yang sudah dihitung
+        oleh backend dengan apply_diskon_to_langganan_price().
+        Jika ada diskon aktif untuk cluster, harga_awal sudah berisi
+        harga setelah diskon.
+        """
+        # harga_awal sudah dihitung oleh backend dan sudah termasuk diskon
+        return self.harga_awal or 0.0
 
     class Config:
         from_attributes = True

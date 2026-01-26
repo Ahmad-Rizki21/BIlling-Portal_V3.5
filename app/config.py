@@ -59,6 +59,7 @@ class Settings(BaseSettings):
         "OLT",                     # Manajemen OLT (Optical Line Terminal)
         "ODP",                     # Manajemen ODP (sebelumnya "odp_management")
         "Trouble_Tickets",         # Sistem tiket trouble
+        "Diskon",                  # Manajemen diskon
     ]
 
     # Daftar widget yang ada di dashboard admin dan pelanggan

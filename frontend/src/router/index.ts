@@ -29,6 +29,12 @@ const router = createRouter({
           component: DashboardView
         },
         {
+          path: 'diskon',
+          name: 'diskon',
+          component: () => import('../views/DiskonView.vue'),
+          meta: { permission: 'manage_diskon' }
+        },
+        {
           path: 'users',
           name: 'users',
           // Gunakan lazy loading untuk performa yang lebih baik
@@ -104,6 +110,12 @@ const router = createRouter({
           name: 'kalkulator',
           component: () => import('../views/CalculatorView.vue'),
           meta: { permission: 'use_calculator' } // Beri permission jika perlu
+        },
+        {
+          path: 'kalkulator-diskon',
+          name: 'kalkulator-diskon',
+          component: () => import('../views/KalkulatorDiskonView.vue'),
+          meta: { permission: 'use_calculator' }
         },
         {
           path: 'reports/revenue',

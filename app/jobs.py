@@ -35,6 +35,7 @@ from .models import DataTeknis as DataTeknisModel
 from .models import Invoice as InvoiceModel
 from .models import Langganan as LanggananModel
 from .models import Pelanggan as PelangganModel
+from .models import Diskon as DiskonModel
 from .routers.invoice import _process_successful_payment
 from .services import mikrotik_service, xendit_service
 from .services.rate_limiter import create_invoice_with_rate_limit, InvoicePriority
@@ -62,7 +63,44 @@ async def generate_single_invoice(db: AsyncSession, langganan: LanggananModel) -
         pajak_persen = float(brand.pajak)
         pajak_mentah = harga_dasar * (pajak_persen / 100)
         pajak = math.floor(pajak_mentah + 0.5)
-        total_harga = harga_dasar + pajak
+        total_harga_sebelum_diskon = harga_dasar + pajak
+
+        # Cek diskon aktif untuk cluster pelanggan
+        diskon_applied = None
+        diskon_id = None
+        diskon_persen = None
+        diskon_amount = None
+
+        # Gunakan alamat sebagai cluster untuk diskon
+        cluster_to_check = pelanggan.alamat if pelanggan.alamat and pelanggan.alamat.strip() else None
+
+        # Prorate users TIDAK mendapatkan diskon
+        if langganan.metode_pembayaran == "Prorate":
+            logger.info(f"⚠️ Pelanggan {pelanggan.nama} (ID: {pelanggan.id}) menggunakan Prorate - Diskon tidak diterapkan")
+        elif cluster_to_check:
+            # Cari diskon aktif untuk cluster ini
+            tanggal_hari_ini = date.today()
+            diskon_query = (
+                select(DiskonModel)
+                .where(DiskonModel.cluster == cluster_to_check)
+                .where(DiskonModel.is_active == True)
+                .where(
+                    (DiskonModel.tgl_mulai.is_(None)) | (DiskonModel.tgl_mulai <= tanggal_hari_ini)
+                )
+                .where(
+                    (DiskonModel.tgl_selesai.is_(None)) | (DiskonModel.tgl_selesai >= tanggal_hari_ini)
+                )
+                .order_by(DiskonModel.persentase_diskon.desc())
+            )
+            diskon_result = await db.execute(diskon_query)
+            diskon_applied = diskon_result.scalar_one_or_none()
+
+        if diskon_applied:
+            diskon_id = diskon_applied.id
+            diskon_persen = float(diskon_applied.persentase_diskon)
+            diskon_amount = math.floor((total_harga_sebelum_diskon * diskon_persen / 100) + 0.5)
+            total_harga = total_harga_sebelum_diskon - diskon_amount
+            logger.info(f"💰 Diskon {diskon_persen}% (Rp {diskon_amount:,.0f}) diterapkan untuk pelanggan {pelanggan.nama} - Cluster: {cluster_to_check}")
 
         # --- MODIFICATION FOR INVOICE NUMBER ---
         # 1. Sanitize and prepare customer name and address
@@ -101,6 +139,11 @@ async def generate_single_invoice(db: AsyncSession, langganan: LanggananModel) -
             "tgl_jatuh_tempo": langganan.tgl_jatuh_tempo,
             "status_invoice": "Belum Dibayar",
             "invoice_type": "automatic",  # Invoice dari background job
+            # Diskon fields
+            "diskon_id": diskon_id,
+            "diskon_persen": diskon_persen,
+            "diskon_amount": diskon_amount,
+            "harga_sebelum_diskon": total_harga_sebelum_diskon if diskon_applied else None,
         }
 
         db_invoice = InvoiceModel(**new_invoice_data)

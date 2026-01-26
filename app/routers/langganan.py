@@ -20,6 +20,7 @@ from ..database import get_db
 from ..models.harga_layanan import HargaLayanan as HargaLayananModel
 from ..models.invoice import Invoice as InvoiceModel
 from ..models.langganan import Langganan as LanggananModel
+from ..models.diskon import Diskon as DiskonModel
 from ..models.user import User as UserModel
 from ..auth import get_current_active_user
 from ..models.paket_layanan import PaketLayanan as PaketLayananModel
@@ -40,6 +41,9 @@ logger = logging.getLogger(__name__)
 
 
 # --- Helper Functions ---
+import math
+from datetime import date as date_class
+
 def format_phone_number(phone_number: str) -> str:
     """
     Format phone number to international format (62 prefix).
@@ -59,6 +63,60 @@ def format_phone_number(phone_number: str) -> str:
 
     # If already starts with 62 or doesn't start with 0, return as is
     return phone_digits
+
+
+async def apply_diskon_to_langganan_price(langganan: LanggananModel, db: AsyncSession) -> float:
+    """
+    Apply diskon secara dynamic ke harga langganan.
+    Jika ada diskon aktif untuk cluster pelanggan, harga diskon dikembalikan.
+    Jika tidak ada diskon, harga normal dikembalikan.
+
+    CATATAN: User dengan metode pembayaran Prorate TIDAK mendapatkan diskon.
+    """
+    if not langganan.harga_awal or not langganan.pelanggan:
+        return langganan.harga_awal or 0.0
+
+    # Prorate users TIDAK mendapatkan diskon
+    if langganan.metode_pembayaran == "Prorate":
+        return float(langganan.harga_awal)
+
+    # Cek diskon aktif untuk cluster pelanggan
+    tanggal_hari_ini = date_class.today()
+
+    # Gunakan alamat sebagai cluster
+    cluster_to_check = langganan.pelanggan.alamat if langganan.pelanggan.alamat and langganan.pelanggan.alamat.strip() else None
+
+    if not cluster_to_check:
+        return langganan.harga_awal
+
+    # Cari diskon aktif untuk cluster ini
+    diskon_query = (
+        select(DiskonModel)
+        .where(DiskonModel.cluster == cluster_to_check)
+        .where(DiskonModel.is_active == True)
+        .where(
+            (DiskonModel.tgl_mulai.is_(None)) | (DiskonModel.tgl_mulai <= tanggal_hari_ini)
+        )
+        .where(
+            (DiskonModel.tgl_selesai.is_(None)) | (DiskonModel.tgl_selesai >= tanggal_hari_ini)
+        )
+        .order_by(DiskonModel.persentase_diskon.desc())
+    )
+
+    diskon_result = await db.execute(diskon_query)
+    diskon_applied = diskon_result.scalar_one_or_none()
+
+    harga_asli = float(langganan.harga_awal)
+
+    if diskon_applied:
+        diskon_persen = float(diskon_applied.persentase_diskon)
+        diskon_amount = math.floor((harga_asli * diskon_persen / 100) + 0.5)
+        harga_setelah_diskon = harga_asli - diskon_amount
+        # Log level DEBUG untuk menghindari spam di production
+        logger.debug(f"💰 Dynamic diskon {diskon_persen}% (Rp {diskon_amount:,.0f}) applied to langganan {langganan.id} - Cluster: {cluster_to_check}")
+        return harga_setelah_diskon
+
+    return harga_asli
 
 
 # --- Skema Respons Baru ---
@@ -277,7 +335,7 @@ async def get_all_langganan(
     result = await db.execute(data_query)
     langganan_list = result.unique().scalars().all()
 
-    
+
     if for_invoice_selection and langganan_list:
         pelanggan_ids = {l.pelanggan_id for l in langganan_list}
         invoice_counts_stmt = (
@@ -298,7 +356,23 @@ async def get_all_langganan(
 
             langganan.is_new_user = is_new_user
 
-    return LanggananListResponse(data=langganan_list, total_count=total_count)
+    # Apply diskon secara dynamic ke setiap langganan
+    langganan_response_data = []
+    for langganan in langganan_list:
+        # Apply diskon dan override harga_awal
+        harga_with_diskon = await apply_diskon_to_langganan_price(langganan, db)
+
+        # Create response dict dan override harga_awal
+        langganan_dict = LanggananSchema.model_validate(langganan).model_dump(mode='python')
+        langganan_dict['harga_awal'] = harga_with_diskon
+
+        # Add is_new_user if exists
+        if hasattr(langganan, 'is_new_user'):
+            langganan_dict['is_new_user'] = langganan.is_new_user
+
+        langganan_response_data.append(LanggananSchema(**langganan_dict))
+
+    return LanggananListResponse(data=langganan_response_data, total_count=total_count)
 
 
 # GET /langganan/export - Export data langganan ke CSV atau Excel
@@ -430,7 +504,14 @@ async def get_langganan_by_id(
     if not langganan:
         raise HTTPException(status_code=404, detail="Langganan tidak ditemukan")
 
-    return langganan
+    # Apply diskon secara dynamic ke harga
+    harga_with_diskon = await apply_diskon_to_langganan_price(langganan, db)
+
+    # Create response dict dan override harga_awal
+    langganan_dict = LanggananSchema.model_validate(langganan).model_dump(mode='python')
+    langganan_dict['harga_awal'] = harga_with_diskon
+
+    return LanggananSchema(**langganan_dict)
 
 
 # PATCH /langganan/{langganan_id} - Update data langganan
