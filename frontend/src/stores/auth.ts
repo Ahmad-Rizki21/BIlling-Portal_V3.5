@@ -25,6 +25,7 @@ interface User {
 export const useAuthStore = defineStore('auth', () => {
   const token = ref<string | null>(getEncryptedToken('access_token'));
   const user = ref<User | null>(null);
+  const isLoggingOut = ref(false);
 
   const isAuthenticated = computed(() => !!token.value);
 
@@ -43,6 +44,7 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function logout() {
+    isLoggingOut.value = true;
     const refreshToken = getEncryptedToken('refresh_token');
     try {
       if (refreshToken) {
@@ -57,6 +59,10 @@ export const useAuthStore = defineStore('auth', () => {
       user.value = null;
       delete apiClient.defaults.headers.common['Authorization'];
       router.push('/login');
+      // Reset flag after redirect
+      setTimeout(() => {
+        isLoggingOut.value = false;
+      }, 1000);
     }
   }
 

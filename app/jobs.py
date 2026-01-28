@@ -47,8 +47,9 @@ import re
 
 # ... (rest of the imports)
 
-async def generate_single_invoice(db: AsyncSession, langganan: LanggananModel) -> None:
-    # ... (try block starts)
+async def generate_single_invoice(db: AsyncSession, langganan: LanggananModel) -> bool:
+    new_invoice_data = {}
+    db_invoice = None  # Inisialisasi awal
     try:
         pelanggan = langganan.pelanggan
         paket = langganan.paket_layanan
@@ -57,13 +58,14 @@ async def generate_single_invoice(db: AsyncSession, langganan: LanggananModel) -
 
         if not all([pelanggan, paket, brand, data_teknis]):
             logger.error(f"Data tidak lengkap untuk langganan ID {langganan.id}. Skip.")
-            return
+            return False
 
         harga_dasar = float(paket.harga)
         pajak_persen = float(brand.pajak)
         pajak_mentah = harga_dasar * (pajak_persen / 100)
         pajak = math.floor(pajak_mentah + 0.5)
         total_harga_sebelum_diskon = harga_dasar + pajak
+        total_harga = total_harga_sebelum_diskon  # Default value if no discount
 
         # Cek diskon aktif untuk cluster pelanggan
         diskon_applied = None
@@ -115,20 +117,20 @@ async def generate_single_invoice(db: AsyncSession, langganan: LanggananModel) -
         # 3. Generate new invoice number (sama format dengan manual)
         nomor_invoice_baru = f"{brand_singkat}/ftth/{nama_pelanggan_singkat}/{bulan_tahun}/{alamat_singkat}/{str(data_teknis.id_pelanggan)[-3:]}"
 
-        # 4. Check for duplicate invoice number and add timestamp if needed
-        existing_invoice_number = (await db.execute(
-            select(InvoiceModel.id).where(InvoiceModel.invoice_number == nomor_invoice_baru)
-        )).scalar_one_or_none()
+        # 4. Check for duplicate invoice number WITHOUT creating a copy
+        # Safety Logic: Jika invoice bulan ini sudah ada, JANGAN buat baru dengan timestamp.
+        # Ini mencegah double invoice jika scheduler jalan 2x atau ada race condition.
+        existing_invoice = (await db.execute(
+            select(InvoiceModel).where(InvoiceModel.invoice_number.like(f"{nomor_invoice_baru}%"))
+        )).scalars().first()
 
-        if existing_invoice_number:
-            # Generate nomor unik dengan tambahan timestamp atau random
-            import time
-            timestamp = str(int(time.time()))[-6:]  # 6 digit terakhir timestamp
-            nomor_invoice_baru = f"{nomor_invoice_baru}/{timestamp}"
+        if existing_invoice:
+            logger.warning(f"⚠️ Invoice untuk {nama_pelanggan_singkat} bulan ini SUDAH ADA ({existing_invoice.invoice_number}). Skip double invoice.")
+            return False
         # --- END OF MODIFICATION ---
 
         new_invoice_data = {
-            "invoice_number": nomor_invoice_baru, # Use the new invoice number
+            "invoice_number": nomor_invoice_baru,  # Use the new invoice number
             "pelanggan_id": pelanggan.id,
             "id_pelanggan": data_teknis.id_pelanggan,
             "brand": brand.brand,
@@ -147,18 +149,23 @@ async def generate_single_invoice(db: AsyncSession, langganan: LanggananModel) -
         }
 
         db_invoice = InvoiceModel(**new_invoice_data)
-        
-        # PENTING: Add & Flush dulu supaya object db_invoice mendapatkan ID dari database
-        # Ini mencegah issue "external_id" berujung "None" di Xendit (contoh: .../PARAMA/None)
         db.add(db_invoice)
-        await db.flush()
+
+        # 🔒 COMMIT AWAL (First Commit)
+        # Penting! Kita commit database SEBELUM request ke Xendit.
+        # Ini mencegah race condition dimana Xendit mengirim notifikasi ke user (WA),
+        # user bayar "gercep" (kilat), callback masuk, tapi invoice belum ada di DB.
+        await db.commit()
         await db.refresh(db_invoice)
+        
+        # Log bahwa invoice basic sudah terbuat
+        logger.info(f"💾 Invoice basic {db_invoice.invoice_number} saved to DB. Proceeding to Xendit...")
 
         deskripsi_xendit = ""
-        jatuh_tempo_str_lengkap = datetime.combine(date.fromisoformat(str(db_invoice.tgl_jatuh_tempo)), datetime.min.time()).strftime("%d/%m/%Y")
+        jatuh_tempo_str_lengkap = datetime.combine(date.fromisoformat(str(db_invoice.tgl_jatuh_tempo)),
+                                                   datetime.min.time()).strftime("%d/%m/%Y")
 
         if langganan.metode_pembayaran == "Prorate":
-            
 
             # Hitung harga normal untuk perbandingan
             harga_normal_full = float(paket.harga) * (1 + (float(brand.pajak) / 100))
@@ -174,7 +181,8 @@ async def generate_single_invoice(db: AsyncSession, langganan: LanggananModel) -
                 # FIX: Periode prorate harus diambil dari invoice_date, bukan jatuh_tempo_date
                 # karena invoice_date adalah tanggal mulai langganan (tanggal pembuatan invoice)
                 periode_prorate_str = datetime.combine(invoice_date, datetime.min.time()).strftime("%B %Y")
-                periode_berikutnya_str = datetime.combine(jatuh_tempo_date + relativedelta(months=1), datetime.min.time()).strftime("%B %Y")
+                periode_berikutnya_str = datetime.combine(jatuh_tempo_date + relativedelta(months=1),
+                                                          datetime.min.time()).strftime("%B %Y")
 
                 deskripsi_xendit = (
                     f"Biaya internet up to {paket.kecepatan} Mbps. "
@@ -230,29 +238,48 @@ async def generate_single_invoice(db: AsyncSession, langganan: LanggananModel) -
         db_invoice.xendit_external_id = xendit_response.get("external_id")
 
         db.add(db_invoice)
+        # 🔒 COMMIT KEDUA (Update Xendit Data)
+        # Setelah sukses dari Xendit, kita update data payment link.
+        await db.commit()
+        
         logger.info(f"✅ Invoice {db_invoice.invoice_number} BERHASIL dengan payment link dan WhatsApp notification")
         logger.info(f"📱 WhatsApp notification sent to: {pelanggan.nama} ({pelanggan.no_telp})")
+        return True
 
     except Exception as e:
-        # 🔧 FIX: Save invoice even if Xendit fails, but log for manual retry
+        # 🔧 FIX: Safety net buat error handling
         logger.error(f"⚠️ Xendit API gagal untuk Langganan ID {langganan.id}: {e}")
-        logger.error(f"📝 Invoice {new_invoice_data.get('invoice_number', 'UNKNOWN')} akan disimpan tanpa payment link untuk retry otomatis")
-
-        # Save invoice tanpa payment link untuk retry otomatis nanti
+        
         try:
-            # Tambah field retry tracking
-            new_invoice_data.update({
-                'xendit_status': 'failed',
-                'xendit_error_message': str(e),
-                'xendit_retry_count': 0,
-            })
-
-            db_invoice = InvoiceModel(**new_invoice_data)
-            db.add(db_invoice)
-            logger.info(f"🔄 Invoice {db_invoice.invoice_number} disimpan tanpa payment link (akan di-retry otomatis)")
+            # Jika db_invoice sudah berhasil dibuat (sudah commit pertama), kita update saja
+            if db_invoice and db_invoice.id:
+                logger.info(f"🔄 Mengupdate status error pada invoice {db_invoice.invoice_number} yang sudah ada.")
+                db_invoice.xendit_status = 'failed'
+                db_invoice.xendit_error_message = str(e)
+                db_invoice.xendit_retry_count = 0
+                db.add(db_invoice)
+                await db.commit()
+                return True # Tetap dianggap berhasil dibuat (meski status failed) karena sudah ada di DB
+            
+            # Jika invoice belum sempat dibuat (error sebelum commit pertama), kita buat baru sebagai draft failed
+            elif new_invoice_data:
+                logger.info(f"📝 Membuat invoice baru dengan status failed untuk: {new_invoice_data.get('invoice_number', 'UNKNOWN')}")
+                new_invoice_data.update({
+                    'xendit_status': 'failed',
+                    'xendit_error_message': str(e),
+                    'xendit_retry_count': 0,
+                })
+                db_invoice = InvoiceModel(**new_invoice_data)
+                db.add(db_invoice)
+                await db.commit()
+                logger.info(f"🔄 Invoice {db_invoice.invoice_number} disimpan tanpa payment link (akan di-retry otomatis)")
+                return True # Berhasil dibuat (status failed)
+                
         except Exception as db_error:
-            logger.error(f"❌ Database error juga: {db_error}")
-        # Re-raise biar scheduler tau ada issue
+            logger.error(f"❌ Database error saat handling exception: {db_error}")
+            # Kita ga raise error lagi biar loop utama ga berhenti total, 
+            # tapi error aslinya sudah ke-log di atas.
+            return False # Gagal total (tidak ada record di DB)
 
 
 # ==========================================================
@@ -299,12 +326,18 @@ async def job_generate_invoices() -> None:
     logger.info(f"🔍 Mencari langganan yang jatuh tempo pada: {target_due_date.strftime('%d %B %Y')} (H-5)")
 
     async with SessionType() as db:
+        # PENTING: Disable expire_on_commit untuk mencegah object expired saat loop + commit
+        # Ini mencegah error MissingGreenlet saat akses atribut object di iterasi berikutnya
+        db.expire_on_commit = False
         while True:
             try:
+                # FIX: Handle potential DateTime vs Date mismatch
+                # Gunakan range filter agar lebih aman menangkap tgl_jatuh_tempo yang mungkin ada jam-nya
                 base_stmt = (
                     select(LanggananModel)
                     .where(
-                        LanggananModel.tgl_jatuh_tempo == target_due_date,
+                        LanggananModel.tgl_jatuh_tempo >= target_due_date,
+                        LanggananModel.tgl_jatuh_tempo < target_due_date + timedelta(days=1),
                         LanggananModel.status == "Aktif",
                     )
                     .options(
@@ -347,12 +380,16 @@ async def job_generate_invoices() -> None:
                         # tapi BELUM ada di DB. Jika user bayar kilat, callback masuk dan invoice "Not Found".
                         try:
                             # Generate dan kirim ke Xendit
-                            await generate_single_invoice(db, langganan)
+                            is_created = await generate_single_invoice(db, langganan)
                             
                             # COMMIT SEGERA!
                             # Supaya saat user terima WA dan bayar, invoice sudah ready di DB untuk terima callback.
                             await db.commit()
-                            total_invoices_created += 1
+                            
+                            if is_created:
+                                total_invoices_created += 1
+                            else:
+                                logger.info(f"ℹ️ Invoice skip/gagal untuk ID {langganan.id} (tidak dihitung dalam total)")
                             
                         except Exception as e:
                             # Error handling per item
