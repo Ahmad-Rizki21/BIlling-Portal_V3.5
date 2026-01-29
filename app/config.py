@@ -170,6 +170,21 @@ class Settings(BaseSettings):
     XENDIT_API_URL: str = "https://api.xendit.co/v2/invoices"
 
     # ====================================================================
+    # KONFIGURASI SMTP EMAIL
+    # ====================================================================
+    # Konfigurasi SMTP untuk kirim email notifikasi
+    # Hanya digunakan untuk brand JELANTIK (ajn-02) dan JELANTIK NAGRAK (ajn-03)
+    #
+    # SMTP Server dari mail.jelantik.com (aaPanel)
+    # Port 587 untuk TLS, port 465 untuk SSL
+    SMTP_HOST: str = "mail.jelantik.com"
+    SMTP_PORT: int = 587  # TLS port
+    SMTP_USERNAME: str = "noreplay@jelantik.com"  # Email account yang dibuat di aaPanel (PERHATIKAN: noreplay bukan noreply)
+    SMTP_PASSWORD: str = "Satlink2020"  # Password email dari aaPanel
+    SMTP_FROM_EMAIL: str = "noreplay@jelantik.com"  # From email address
+    SMTP_FROM_NAME: str = "Jelantik FTTH"  # From name
+
+    # ====================================================================
     # KONFIGURASI ENCRYPTION
     # ====================================================================
 

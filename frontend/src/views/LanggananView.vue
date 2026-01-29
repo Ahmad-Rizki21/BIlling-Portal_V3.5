@@ -453,6 +453,27 @@
               </div>
             </template>
           </v-list-item>
+          <v-list-item class="px-0" v-if="item.status === 'Suspended'">
+            <template v-slot:prepend>
+              <v-icon size="18" class="me-3 text-medium-emphasis">mdi-email</v-icon>
+            </template>
+            <v-list-item-title class="text-body-2">Status Email</v-list-item-title>
+            <template v-slot:append>
+              <div class="text-right">
+                <v-chip
+                  size="x-small"
+                  :color="item.email_status === 'sent' ? 'success' : item.email_status === 'skipped' ? 'grey' : 'info'"
+                  class="font-weight-bold mb-1"
+                  label
+                >
+                  {{ item.email_status === 'sent' ? 'Terkirim' : item.email_status === 'skipped' ? 'Skip' : 'Belum Dikirim' }}
+                </v-chip>
+                <div v-if="item.last_email_sent" class="text-caption text-medium-emphasis">
+                  {{ formatDate(item.last_email_sent, true) }}
+                </div>
+              </div>
+            </template>
+          </v-list-item>
           <v-list-item class="px-0" v-if="item.status === 'Berhenti' && item.alasan_berhenti">
             <template v-slot:prepend>
               <v-icon size="18" class="me-3 text-medium-emphasis">mdi-information-outline</v-icon>
@@ -501,6 +522,18 @@
           >
             <v-icon start size="16">mdi-whatsapp</v-icon>
             {{ item.whatsapp_status ? 'Chat Lagi' : 'WhatsApp' }}
+          </v-btn>
+          <v-btn
+            v-if="item.status === 'Suspended'"
+            size="small"
+            variant="tonal"
+            :color="item.email_status ? 'success' : 'info'"
+            @click="sendEmail(item)"
+            class="flex-grow-1"
+            :data-email-btn="item.id"
+          >
+            <v-icon start size="16">mdi-email</v-icon>
+            {{ item.email_status ? 'Email Lagi' : 'Email' }}
           </v-btn>
           <v-btn size="small" variant="tonal" color="error" @click="openDeleteDialog(item)" class="flex-grow-1">
             <v-icon start size="16">mdi-delete</v-icon> Hapus
@@ -679,6 +712,23 @@
             <span v-else class="text-medium-emphasis text-body-2">-</span>
           </template>
 
+          <template v-slot:item.email_status="{ item }: { item: Langganan }">
+            <div v-if="item.status === 'Suspended'" class="text-center">
+              <v-chip
+                size="x-small"
+                :color="item.email_status === 'sent' ? 'success' : item.email_status === 'skipped' ? 'grey' : 'info'"
+                class="font-weight-bold mb-1"
+                label
+              >
+                {{ item.email_status === 'sent' ? 'Terkirim' : item.email_status === 'skipped' ? 'Skip' : 'Belum' }}
+              </v-chip>
+              <div v-if="item.last_email_sent" class="text-caption text-medium-emphasis">
+                {{ formatDate(item.last_email_sent, true) }}
+              </div>
+            </div>
+            <span v-else class="text-medium-emphasis text-body-2">-</span>
+          </template>
+
           <template v-slot:item.actions="{ item }: { item: Langganan }">
             <div class="d-flex justify-center ga-2">
               <v-btn size="small" variant="tonal" color="primary" @click="navigateToEdit(item)">
@@ -696,6 +746,17 @@
               >
                 <v-icon start size="16">mdi-whatsapp</v-icon>
                 {{ item.whatsapp_status ? 'Chat Lagi' : 'WhatsApp' }}
+              </v-btn>
+              <v-btn
+                v-if="item.status === 'Suspended'"
+                size="small"
+                variant="tonal"
+                :color="item.email_status ? 'success' : 'info'"
+                @click="sendEmail(item)"
+                :data-email-btn="item.id"
+              >
+                <v-icon start size="16">mdi-email</v-icon>
+                {{ item.email_status ? 'Email Lagi' : 'Email' }}
               </v-btn>
               <v-btn size="small" variant="tonal" color="error" @click="openDeleteDialog(item)">
                 <v-icon start size="16">mdi-delete</v-icon> Hapus
@@ -1719,6 +1780,8 @@ interface Langganan {
   status_modem?: string | null;
   whatsapp_status?: string | null;
   last_whatsapp_sent?: string | null;
+  email_status?: string | null;
+  last_email_sent?: string | null;
   riwayat_tgl_berhenti?: string | null;
 }
 
@@ -1728,6 +1791,7 @@ interface PelangganData {
   nama: string;
   alamat: string;
   no_telp?: string;
+  email?: string;
   id_brand?: string;
 }
 
@@ -1936,6 +2000,15 @@ const whatsappStatusHeader = {
   align: 'center'
 };
 
+// Status Email header yang akan ditambahkan saat filter = "Suspended"
+const emailStatusHeader = {
+  title: 'Status Email',
+  key: 'email_status',
+  sortable: false,
+  width: '8%',
+  align: 'center'
+};
+
 // Computed headers yang dinamis berdasarkan filter
 const headers = computed(() => {
   let newHeaders: any[] = [...baseHeaders];
@@ -1953,6 +2026,12 @@ const headers = computed(() => {
   // Tambahkan Status WhatsApp hanya untuk filter "Suspended"
   if (selectedStatus.value === 'Suspended') {
     newHeaders.splice(statusIndex + 1 + columnsAdded, 0, whatsappStatusHeader);
+    columnsAdded++;
+  }
+
+  // Tambahkan Status Email hanya untuk filter "Suspended"
+  if (selectedStatus.value === 'Suspended') {
+    newHeaders.splice(statusIndex + 1 + columnsAdded, 0, emailStatusHeader);
     columnsAdded++;
   }
 
@@ -3104,6 +3183,74 @@ Terima kasih atas perhatian Anda.`;
         whatsapp_status: 'sent',
         last_whatsapp_sent: new Date().toISOString()
       };
+    }
+  }
+}
+
+// --- Email Functions ---
+async function sendEmail(item: Langganan) {
+  // Tampilkan loading
+  const emailButton = document.querySelector(`[data-email-btn="${item.id}"]`) as HTMLButtonElement;
+  if (emailButton) {
+    emailButton.disabled = true;
+    emailButton.textContent = 'Sending...';
+  }
+
+  try {
+    // Panggil API untuk kirim email
+    const response = await apiClient.post(`/langganan/${item.id}/send-suspend-email`);
+
+    if (response.data.success) {
+      // Update data di frontend
+      const index = langgananList.value.findIndex(l => l.id === item.id);
+      if (index !== -1) {
+        langgananList.value[index] = {
+          ...langgananList.value[index],
+          email_status: 'sent',
+          last_email_sent: new Date().toISOString()
+        };
+      }
+
+      // Tampilkan pesan sukses
+      snackbar.value = {
+        show: true,
+        text: `Email berhasil dikirim ke ${item.pelanggan?.email || 'pelanggan'}`,
+        color: 'success'
+      };
+    } else {
+      // Tampilkan pesan error/feedback
+      snackbar.value = {
+        show: true,
+        text: response.data.message || 'Gagal mengirim email',
+        color: response.data.email_status === 'skipped' ? 'warning' : 'error'
+      };
+
+      // Jika statusnya skipped, tetap update di frontend
+      if (response.data.email_status === 'skipped') {
+        const index = langgananList.value.findIndex(l => l.id === item.id);
+        if (index !== -1) {
+          langgananList.value[index] = {
+            ...langgananList.value[index],
+            email_status: 'skipped',
+            last_email_sent: new Date().toISOString()
+          };
+        }
+      }
+    }
+  } catch (error: any) {
+    console.error('Error sending email:', error);
+
+    // Tampilkan pesan error
+    snackbar.value = {
+      show: true,
+      text: error.response?.data?.detail || 'Terjadi kesalahan saat mengirim email',
+      color: 'error'
+    };
+  } finally {
+    // Re-enable button
+    if (emailButton) {
+      emailButton.disabled = false;
+      emailButton.textContent = item.email_status ? 'Email Lagi' : 'Email';
     }
   }
 }

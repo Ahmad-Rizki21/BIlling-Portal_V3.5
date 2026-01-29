@@ -611,6 +611,85 @@ async def delete_langganan(
     return None
 
 
+# --- Endpoint Kirim Notifikasi Email Suspend ---
+
+
+class SendSuspendEmailResponse(BaseModel):
+    """Response model untuk kirim email suspend"""
+    success: bool
+    message: str
+    email_status: Optional[str] = None
+
+
+@router.post("/{langganan_id}/send-suspend-email", response_model=SendSuspendEmailResponse)
+async def send_suspend_email(
+    langganan_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user)
+):
+    """
+    Kirim notifikasi email suspend ke pelanggan secara manual.
+    Hanya berfungsi untuk brand JELANTIK (ajn-02) dan JELANTIK NAGRAK (ajn-03).
+    """
+    from ..services.email_service import EmailService
+    from sqlalchemy.orm import joinedload
+
+    # Ambil data langganan dengan relasi
+    query = (
+        select(LanggananModel)
+        .where(LanggananModel.id == langganan_id)
+        .options(
+            joinedload(LanggananModel.pelanggan).joinedload(PelangganModel.harga_layanan),
+            joinedload(LanggananModel.paket_layanan),
+        )
+    )
+    result = await db.execute(query)
+    langganan = result.scalar_one_or_none()
+
+    if not langganan:
+        raise HTTPException(status_code=404, detail="Langganan tidak ditemukan")
+
+    pelanggan = langganan.pelanggan
+    if not pelanggan:
+        raise HTTPException(status_code=404, detail="Data pelanggan tidak ditemukan")
+
+    # Cek apakah pelanggan punya email
+    if not pelanggan.email:
+        return SendSuspendEmailResponse(
+            success=False,
+            message="Pelanggan tidak memiliki alamat email",
+            email_status="skipped"
+        )
+
+    # Ambil brand code dari pelanggan
+    id_brand = pelanggan.harga_layanan.id_brand if pelanggan.harga_layanan else None
+
+    # Kirim email
+    email_result = await EmailService.send_suspend_notification(
+        db=db,
+        pelanggan_email=pelanggan.email,
+        pelanggan_nama=pelanggan.nama,
+        total_tagihan=int(langganan.harga_awal) if langganan.harga_awal else 0,
+        id_brand=id_brand or "",
+        langganan_id=langganan.id,
+        tgl_jatuh_tempo=langganan.tgl_jatuh_tempo,
+    )
+
+    # Update status email di langganan jika berhasil
+    if email_result.get("success") and email_result.get("status") == "sent":
+        langganan.email_status = "sent"
+        langganan.last_email_sent = datetime.now()
+        db.add(langganan)
+        await db.commit()
+        logger.info(f"✅ Email status updated untuk langganan ID {langganan_id}")
+
+    return SendSuspendEmailResponse(
+        success=email_result.get("success", False),
+        message=email_result.get("message", ""),
+        email_status=email_result.get("status", "")
+    )
+
+
 # --- Endpoint Kalkulasi Prorate ---
 
 
