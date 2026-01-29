@@ -111,21 +111,37 @@ async def generate_single_invoice(db: AsyncSession, langganan: LanggananModel) -
         alamat_singkat = re.sub(r'[^a-zA-Z0-9]', '', pelanggan.alamat or '').upper()
         brand_singkat = re.sub(r'[^a-zA-Z0-9]', '', brand.brand or '').upper()
 
-        # 2. Format untuk bulan-tahun
-        bulan_tahun = f"{calendar.month_name[date.today().month].upper()}-{date.today().year}"
+        # 2. Format untuk bulan-tahun BERDASARKAN JATUH TEMPO (BUKAN date.today())
+        # FIX BUG: Prorate customer yang bayar di Desember dengan jatuh tempo Januari
+        # harus dapat invoice baru untuk pembayaran Februari (bukan di-skip karena "sudah ada invoice Januari")
+        # Gunakan tgl_jatuh_tempo untuk menentukan periode invoice, bukan tanggal hari ini
+        due_date = langganan.tgl_jatuh_tempo
+        bulan_tahun = f"{calendar.month_name[due_date.month].upper()}-{due_date.year}"
 
         # 3. Generate new invoice number (sama format dengan manual)
         nomor_invoice_baru = f"{brand_singkat}/ftth/{nama_pelanggan_singkat}/{bulan_tahun}/{alamat_singkat}/{str(data_teknis.id_pelanggan)[-3:]}"
 
-        # 4. Check for duplicate invoice number WITHOUT creating a copy
-        # Safety Logic: Jika invoice bulan ini sudah ada, JANGAN buat baru dengan timestamp.
-        # Ini mencegah double invoice jika scheduler jalan 2x atau ada race condition.
+        # 4. Check for duplicate invoice BERDASARKAN PERIODE JATUH TEMPO
+        # Safety Logic: Cek apakah sudah ada invoice untuk BULAN JATUH TEMPO yang sama
+        # Contoh: Invoice untuk jatuh tempo Februari 2026 (apapun tanggal pembuatannya)
+        # Ini mencegah double invoice jika scheduler jalan 2x atau ada race condition
+        target_year = due_date.year
+        target_month = due_date.month
+        start_of_month = date(target_year, target_month, 1)
+        if target_month == 12:
+            end_of_month = date(target_year + 1, 1, 1) - timedelta(days=1)
+        else:
+            end_of_month = date(target_year, target_month + 1, 1) - timedelta(days=1)
+        
         existing_invoice = (await db.execute(
-            select(InvoiceModel).where(InvoiceModel.invoice_number.like(f"{nomor_invoice_baru}%"))
+            select(InvoiceModel).where(
+                InvoiceModel.pelanggan_id == pelanggan.id,
+                InvoiceModel.tgl_jatuh_tempo.between(start_of_month, end_of_month)
+            )
         )).scalars().first()
 
         if existing_invoice:
-            logger.warning(f"⚠️ Invoice untuk {nama_pelanggan_singkat} bulan ini SUDAH ADA ({existing_invoice.invoice_number}). Skip double invoice.")
+            logger.warning(f"⚠️ Invoice untuk {nama_pelanggan_singkat} periode {bulan_tahun} SUDAH ADA ({existing_invoice.invoice_number}). Skip double invoice.")
             return False
         # --- END OF MODIFICATION ---
 
@@ -353,48 +369,31 @@ async def job_generate_invoices() -> None:
                 if not subscriptions_batch:
                     break
 
-                # OPTIMISASI: Ambil semua invoice yang sudah ada untuk batch ini dalam satu query
-                pelanggan_ids_in_batch = [s.pelanggan_id for s in subscriptions_batch]
-
-                # FIX: Check duplicate berdasarkan PERIODE BULAN, bukan exact date
-                # Calculate month period for target_due_date
-                target_year = target_due_date.year
-                target_month = target_due_date.month
-                start_of_month = date(target_year, target_month, 1)
-                if target_month == 12:
-                    end_of_month = date(target_year + 1, 1, 1) - timedelta(days=1)
-                else:
-                    end_of_month = date(target_year, target_month + 1, 1) - timedelta(days=1)
-
-                existing_invoices_stmt = select(InvoiceModel.pelanggan_id).where(
-                    InvoiceModel.pelanggan_id.in_(pelanggan_ids_in_batch),
-                    InvoiceModel.tgl_jatuh_tempo.between(start_of_month, end_of_month),
-                )
-                existing_invoices_pelanggan_ids = {row[0] for row in await db.execute(existing_invoices_stmt)}
-
+                # Process each subscription in the batch
+                # Duplicate check is now handled inside generate_single_invoice()
+                # with proper due date period logic (not current month)
                 for langganan in subscriptions_batch:
-                    # Cek dari data yang sudah di-prefetch, bukan query baru
-                    if langganan.pelanggan_id not in existing_invoices_pelanggan_ids:
-                        # FIX RACE CONDITION: Commit per invoice
-                        # Masalah: Jika pakai batch commit, ada jeda waktu dimana invoice sudah terkirim ke Xendit (dan User)
-                        # tapi BELUM ada di DB. Jika user bayar kilat, callback masuk dan invoice "Not Found".
-                        try:
-                            # Generate dan kirim ke Xendit
-                            is_created = await generate_single_invoice(db, langganan)
-                            
-                            # COMMIT SEGERA!
-                            # Supaya saat user terima WA dan bayar, invoice sudah ready di DB untuk terima callback.
-                            await db.commit()
-                            
-                            if is_created:
-                                total_invoices_created += 1
-                            else:
-                                logger.info(f"ℹ️ Invoice skip/gagal untuk ID {langganan.id} (tidak dihitung dalam total)")
-                            
-                        except Exception as e:
-                            # Error handling per item
-                            logger.error(f"❌ Gagal generate invoice untuk Langganan ID {langganan.id}: {e}")
-                            await db.rollback()
+                    # FIX RACE CONDITION: Commit per invoice
+                    # Masalah: Jika pakai batch commit, ada jeda waktu dimana invoice sudah terkirim ke Xendit (dan User)
+                    # tapi BELUM ada di DB. Jika user bayar kilat, callback masuk dan invoice "Not Found".
+                    try:
+                        # Generate dan kirim ke Xendit
+                        is_created = await generate_single_invoice(db, langganan)
+                        
+                        # COMMIT SEGERA!
+                        # Supaya saat user terima WA dan bayar, invoice sudah ready di DB untuk terima callback.
+                        await db.commit()
+                        
+                        if is_created:
+                            total_invoices_created += 1
+                        else:
+                            logger.info(f"ℹ️ Invoice skip/gagal untuk ID {langganan.id} (tidak dihitung dalam total)")
+                        
+                    except Exception as e:
+                        # Error handling per item
+                        logger.error(f"❌ Gagal generate invoice untuk Langganan ID {langganan.id}: {e}")
+                        await db.rollback()
+
 
                 offset += BATCH_SIZE
 
