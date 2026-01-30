@@ -55,6 +55,16 @@
                   Export sebagai Excel
                 </v-list-item-title>
               </v-list-item>
+              <v-divider></v-divider>
+              <v-list-item @click="exportMultiSheet">
+                <v-list-item-title>
+                  <v-icon class="mr-2 text-primary">mdi-microsoft-excel</v-icon>
+                  <span class="text-primary font-weight-medium">Export Multi-Sheet (Lengkap)</span>
+                </v-list-item-title>
+                <v-list-item-subtitle class="text-wrap mt-1 text-caption">
+                  Data langganan + history pembayaran & invoice + summary statistik
+                </v-list-item-subtitle>
+              </v-list-item>
             </v-list>
           </v-menu>
           <v-btn
@@ -2933,6 +2943,56 @@ async function exportLangganan(format = 'csv') {
     link.remove();
   } catch (error) {
     console.error("Gagal mengekspor data langganan:", error);
+  } finally {
+    exporting.value = false;
+  }
+}
+
+// Export Multi-Sheet - Data lengkap dengan history pembayaran dan invoice
+async function exportMultiSheet() {
+  exporting.value = true;
+  try {
+    const params = new URLSearchParams();
+
+    // Gunakan filter yang sama dengan export biasa
+    if (searchQuery.value) {
+      params.append('search', searchQuery.value);
+    }
+    if (selectedAlamat.value && selectedAlamat.value.trim() !== '') {
+      params.append('alamat', selectedAlamat.value.trim());
+    }
+    if (selectedPaket.value) {
+      params.append('paket_layanan_name', String(selectedPaket.value));
+    }
+    if (selectedStatus.value) {
+      params.append('status', selectedStatus.value);
+    }
+    if (selectedExportBrand.value && selectedExportBrand.value.trim() !== '') {
+      params.append('brand', selectedExportBrand.value.trim());
+    }
+    if (selectedJatuhTempoStart.value) {
+      params.append('jatuh_tempo_start', toISODateString(selectedJatuhTempoStart.value));
+    }
+    if (selectedJatuhTempoEnd.value) {
+      params.append('jatuh_tempo_end', toISODateString(selectedJatuhTempoEnd.value));
+    }
+
+    // Default limit 5000, max 10000
+    params.append('limit', '5000');
+
+    const queryString = params.toString();
+    const exportUrl = `/langganan/export/excel/multi-sheet${queryString ? '?' + queryString : ''}`;
+
+    const response = await apiClient.get(exportUrl, { responseType: 'blob' });
+    const url = window.URL.createObjectURL(new Blob([response.data]));
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `langganan_multi_sheet_${new Date().toISOString().split('T')[0]}.xlsx`);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  } catch (error) {
+    console.error("Gagal mengekspor multi-sheet:", error);
   } finally {
     exporting.value = false;
   }

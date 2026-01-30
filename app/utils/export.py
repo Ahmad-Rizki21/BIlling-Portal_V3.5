@@ -355,6 +355,146 @@ class ExcelExporter(BaseExporter):
             raise
 
 
+class MultiSheetExcelExporter(BaseExporter):
+    """
+    Multi-sheet Excel export utility with optimized query handling
+    untuk export data kompleks dengan multiple sheets
+    """
+
+    @staticmethod
+    def create_multi_sheet_response(
+        sheets_data: Dict[str, List[Dict[str, Any]]],
+        filename_prefix: str,
+        sheet_configs: Optional[Dict[str, Dict]] = None,
+    ) -> StreamingResponse:
+        """
+        Create Excel response dengan multiple sheets
+
+        Args:
+            sheets_data: Dict dengan sheet names sebagai keys dan data list sebagai values
+            filename_prefix: Prefix untuk filename
+            sheet_configs: Optional dict dengan per-sheet configuration (headers, styles, dll)
+
+        Returns:
+            StreamingResponse dengan Excel file yang berisi multiple sheets
+        """
+        try:
+            # Create workbook
+            wb = openpyxl.Workbook()
+
+            # Remove default sheet
+            if "Sheet" in wb.sheetnames:
+                del wb["Sheet"]
+
+            # Process setiap sheet
+            for sheet_name, data in sheets_data.items():
+                # Truncate sheet name jika lebih dari 31 chars (Excel limit)
+                ws_sheet_name = sheet_name[:31] if len(sheet_name) > 31 else sheet_name
+                ws = wb.create_sheet(title=ws_sheet_name)
+
+                # Get configuration untuk sheet ini
+                config = sheet_configs.get(sheet_name, {}) if sheet_configs else {}
+
+                # Determine headers
+                headers = config.get("headers", [])
+                if not headers and data:
+                    headers = list(data[0].keys())
+
+                # Get transform functions
+                transform_functions = config.get("transform_functions", {})
+
+                # Write headers dengan styling
+                if headers:
+                    for col_num, header in enumerate(headers, 1):
+                        cell = ws.cell(row=1, column=col_num, value=header)
+                        # Style headers
+                        cell.font = Font(bold=True, color="FFFFFF")
+                        cell.fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+                        cell.alignment = Alignment(horizontal="center", vertical="center")
+                        cell.border = Border(
+                            left=Side(style="thin"),
+                            right=Side(style="thin"),
+                            top=Side(style="thin"),
+                            bottom=Side(style="thin")
+                        )
+
+                # Write data rows
+                if data:
+                    current_row = 2
+                    for row_data in data:
+                        # Skip empty dict (row separator)
+                        if not row_data or all(v == "" for v in row_data.values()):
+                            current_row += 1
+                            continue
+
+                        for col_num, header in enumerate(headers, 1):
+                            value = row_data.get(header, "")
+
+                            # Apply transform function jika ada
+                            if header in transform_functions:
+                                try:
+                                    value = transform_functions[header](value)
+                                except Exception as e:
+                                    logger.warning(f"Failed to transform {header}: {e}")
+                                    value = str(value) if value else ""
+
+                            cell = ws.cell(row=current_row, column=col_num, value=value)
+
+                            # Add borders
+                            cell.border = Border(
+                                left=Side(style="thin"),
+                                right=Side(style="thin"),
+                                top=Side(style="thin"),
+                                bottom=Side(style="thin")
+                            )
+
+                        # Auto-adjust row height
+                        ws.row_dimensions[current_row].height = 20
+                        current_row += 1
+
+                # Auto-adjust column widths
+                if headers:
+                    for col_num in range(1, len(headers) + 1):
+                        column_letter = get_column_letter(col_num)
+                        max_length = len(str(headers[col_num - 1]))
+
+                        for row in ws.iter_rows(min_row=2, max_col=col_num, max_row=ws.max_row):
+                            cell_value = row[col_num - 1].value
+                            if cell_value:
+                                max_length = max(max_length, len(str(cell_value)))
+
+                        adjusted_width = min(max_length + 2, 50)
+                        ws.column_dimensions[column_letter].width = adjusted_width
+
+                # Freeze header row
+                ws.freeze_panes = "A2"
+
+            # Save ke BytesIO
+            output = io.BytesIO()
+            wb.save(output)
+            output.seek(0)
+
+            # Generate filename dengan timestamp
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"{filename_prefix}_multi_sheet_{timestamp}.xlsx"
+
+            # Create response headers
+            response_headers = {
+                "Content-Disposition": f'attachment; filename="{filename}"',
+                "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            }
+
+            return StreamingResponse(
+                io.BytesIO(output.getvalue()),
+                headers=response_headers,
+                media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+
+        except Exception as e:
+            logger.error(f"Failed to create multi-sheet Excel response for {filename_prefix}: {e}")
+            raise
+
+
 class ExportManager:
     """
     Unified export manager that handles both CSV and Excel exports
@@ -569,6 +709,55 @@ class ExportConfigurations:
         },
     }
 
+    # Multi-sheet export configuration untuk langganan dengan history pembayaran dan invoice
+    LANGGANAN_MULTI_SHEET_EXPORT = {
+        "Data Langganan": {
+            "headers": [
+                "ID Langganan", "Nama Pelanggan", "Email", "No Telepon", "Alamat",
+                "Paket", "Harga Paket", "Status Langganan", "Tanggal Aktif",
+                "Jatuh Tempo", "Brand", "Metode Pembayaran"
+            ],
+            "transform_functions": {
+                "Harga Paket": lambda x: f"Rp {x:,.0f}" if x else "Rp 0",
+                "Tanggal Aktif": lambda x: str(x) if x else "",
+                "Jatuh Tempo": lambda x: str(x) if x else "",
+                "ID Langganan": lambda x: str(x) if x else "",
+            },
+        },
+        "History Pembayaran": {
+            "headers": [
+                "Nama Pelanggan", "Email", "No Invoice",
+                "Tanggal Bayar", "Jumlah Dibayar", "Metode Pembayaran",
+                "Status Pembayaran"
+            ],
+            "transform_functions": {
+                "Jumlah Dibayar": lambda x: f"Rp {x:,.0f}" if x else "Rp 0",
+                "Tanggal Bayar": lambda x: str(x) if x else "",
+            },
+        },
+        "History Invoice": {
+            "headers": [
+                "Nama Pelanggan", "Email", "No Invoice",
+                "Tanggal Invoice", "Jatuh Tempo", "Total Harga",
+                "Status Invoice", "Tipe Invoice"
+            ],
+            "transform_functions": {
+                "Total Harga": lambda x: f"Rp {x:,.0f}" if x else "Rp 0",
+                "Tanggal Invoice": lambda x: str(x) if x else "",
+                "Jatuh Tempo": lambda x: str(x) if x else "",
+            },
+        },
+        "Summary Statistics": {
+            "headers": [
+                "Kategori", "Jumlah", "Persentase", "Total Nilai"
+            ],
+            "transform_functions": {
+                "Total Nilai": lambda x: f"Rp {x:,.0f}" if x else "Rp 0",
+                "Persentase": lambda x: f"{x:.1f}%" if isinstance(x, (int, float)) else str(x),
+            },
+        },
+    }
+
 
 # Factory functions untuk common export patterns
 def create_pelanggan_export_response(data: List[Any], export_format: str = "csv") -> StreamingResponse:
@@ -641,4 +830,30 @@ def create_invoice_export_response(data: List[Any], export_format: str = "csv") 
         "invoice",
         export_format,
         config["headers"]  # type: ignore
+    )
+
+
+def create_langganan_multi_sheet_export_response(
+    sheets_data: Dict[str, List[Dict[str, Any]]],
+    filename_prefix: str = "langganan_complete"
+) -> StreamingResponse:
+    """
+    Factory function untuk langganan multi-sheet export
+
+    Args:
+        sheets_data: Dict dengan sheet names sebagai keys dan data list sebagai values:
+                     - "Data Langganan": List of dict dengan data langganan
+                     - "History Pembayaran": List of dict dengan data pembayaran
+                     - "History Invoice": List of dict dengan data invoice
+        filename_prefix: Prefix untuk filename (default: "langganan_complete")
+
+    Returns:
+        StreamingResponse dengan Excel file yang berisi multiple sheets
+    """
+    config = ExportConfigurations.LANGGANAN_MULTI_SHEET_EXPORT  # type: ignore
+
+    return MultiSheetExcelExporter.create_multi_sheet_response(
+        sheets_data=sheets_data,
+        filename_prefix=filename_prefix,
+        sheet_configs=config  # type: ignore
     )

@@ -33,7 +33,7 @@ from ..schemas.langganan import (
     LanggananUpdate,
 )
 from ..schemas.pelanggan import Pelanggan as PelangganSchema
-from ..utils.export import create_langganan_export_response
+from ..utils.export import create_langganan_export_response, create_langganan_multi_sheet_export_response
 
 router = APIRouter(prefix="/langganan", tags=["Langganan"])
 
@@ -825,6 +825,279 @@ async def export_langganan(
 
     # Gunakan export utility yang sudah dioptimasi
     return create_langganan_export_response(export_data, format.lower())
+
+
+# GET /langganan/export/excel/multi-sheet - Export data langganan dengan multi-sheet Excel
+# Buat export data langganan lengkap dengan history pembayaran dan invoice dalam multiple sheets
+# Query parameters:
+# - search: filter pencarian (sama seperti di list)
+# - alamat: filter berdasarkan alamat
+# - paket_layanan_name: filter berdasarkan nama paket
+# - status: filter berdasarkan status
+# - brand: filter berdasarkan brand (JAKINET, JELANTIK, dll)
+# - jatuh_tempo_start: filter tanggal jatuh tempo mulai
+# - jatuh_tempo_end: filter tanggal jatuh tempo akhir
+# - limit: batas maksimal data (default: 5000, max: 10000)
+# Response: file Excel dengan 3 sheets:
+#   - Sheet 1: Data Langganan (pelanggan + paket + status)
+#   - Sheet 2: History Pembayaran per Pelanggan
+#   - Sheet 3: History Invoice per Pelanggan
+# Performance: batch queries untuk avoid N+1 problem, limit max 10000 records
+@router.get("/export/excel/multi-sheet", response_class=StreamingResponse)
+async def export_langganan_multi_sheet(
+    search: Optional[str] = None,
+    alamat: Optional[str] = None,
+    paket_layanan_name: Optional[str] = None,
+    status: Optional[str] = None,
+    brand: Optional[str] = None,
+    jatuh_tempo_start: Optional[str] = None,
+    jatuh_tempo_end: Optional[str] = None,
+    limit: int = Query(default=5000, le=10000, description="Maximum records to export (max: 10000)"),
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user)
+):
+    """
+    Mengekspor data langganan lengkap dengan history pembayaran dan invoice
+    dalam format Excel multi-sheet.
+
+    Sheets:
+    - Data Langganan: Informasi langganan dan pelanggan
+    - History Pembayaran: Riwayat pembayaran yang sudah lunas
+    - History Invoice: Semua riwayat invoice (lunas/belum/expire)
+
+    Performance note: Export dibatasi maksimal 10,000 records.
+    """
+    # Validate limit
+    if limit > 10000:
+        raise HTTPException(status_code=400, detail="Maximum 10,000 records allowed per export")
+
+    # Build base query (reuse existing logic)
+    query = (
+        select(LanggananModel)
+        .options(
+            joinedload(LanggananModel.pelanggan).joinedload(PelangganModel.harga_layanan),
+            joinedload(LanggananModel.paket_layanan),
+        )
+        .join(LanggananModel.pelanggan)
+    )
+
+    # Apply filters
+    if search:
+        query = query.where(PelangganModel.nama.ilike(f"%{search}%"))
+    if alamat:
+        query = query.where(PelangganModel.alamat.ilike(f"%{alamat}%"))
+    if paket_layanan_name:
+        query = query.join(PaketLayananModel).where(PaketLayananModel.nama_paket == paket_layanan_name)
+    if status:
+        query = query.where(LanggananModel.status == status)
+    if brand:
+        query = query.where(PelangganModel.id_brand == brand)
+
+    # Filter berdasarkan tanggal jatuh tempo
+    if jatuh_tempo_start:
+        try:
+            start_date = datetime.strptime(jatuh_tempo_start, "%Y-%m-%d").date()
+            query = query.where(LanggananModel.tgl_jatuh_tempo >= start_date)
+        except ValueError:
+            pass
+
+    if jatuh_tempo_end:
+        try:
+            end_date = datetime.strptime(jatuh_tempo_end, "%Y-%m-%d").date()
+            query = query.where(LanggananModel.tgl_jatuh_tempo <= end_date)
+        except ValueError:
+            pass
+
+    # Apply ordering and limit
+    query = query.order_by(LanggananModel.id.desc()).limit(limit)
+
+    # Execute query
+    result = await db.execute(query)
+    langganan_list = result.scalars().unique().all()
+
+    if not langganan_list:
+        raise HTTPException(status_code=404, detail="Tidak ada data langganan untuk diekspor dengan filter yang diberikan.")
+
+    # Collect pelanggan_ids untuk batch query invoices
+    pelanggan_ids = [l.pelanggan_id for l in langganan_list if l.pelanggan_id]
+
+    # Batch query untuk semua invoice (avoid N+1 problem)
+    invoices_query = (
+        select(InvoiceModel)
+        .options(joinedload(InvoiceModel.pelanggan))
+        .where(InvoiceModel.pelanggan_id.in_(pelanggan_ids))
+        .order_by(InvoiceModel.pelanggan_id, InvoiceModel.tgl_invoice.desc())
+    )
+    invoices_result = await db.execute(invoices_query)
+    invoices = invoices_result.scalars().unique().all()
+
+    # Prepare data untuk Sheet 1: Data Langganan
+    sheet1_data = []
+    for langganan in langganan_list:
+        sheet1_data.append({
+            "ID Langganan": str(langganan.id) if langganan.id else "",
+            "Nama Pelanggan": langganan.pelanggan.nama if langganan.pelanggan else "N/A",
+            "Email": langganan.pelanggan.email if langganan.pelanggan else "N/A",
+            "No Telepon": format_phone_number(langganan.pelanggan.no_telp) if langganan.pelanggan and langganan.pelanggan.no_telp else "N/A",
+            "Alamat": langganan.pelanggan.alamat if langganan.pelanggan else "N/A",
+            "Paket": langganan.paket_layanan.nama_paket if langganan.paket_layanan else "N/A",
+            "Harga Paket": float(langganan.paket_layanan.harga) if langganan.paket_layanan else 0,
+            "Status Langganan": langganan.status,
+            "Tanggal Aktif": langganan.tgl_mulai_langganan,
+            "Jatuh Tempo": langganan.tgl_jatuh_tempo,
+            "Brand": langganan.pelanggan.harga_layanan.brand if langganan.pelanggan and langganan.pelanggan.harga_layanan else "N/A",
+            "Metode Pembayaran": langganan.metode_pembayaran,
+        })
+
+    # Prepare data untuk Sheet 2: History Pembayaran (hanya yang lunas)
+    sheet2_data = []
+    for invoice in invoices:
+        if invoice.paid_at:  # Hanya invoice yang sudah dibayar
+            # Get metode pembayaran dengan beberapa fallback options
+            metode_pembayaran = invoice.metode_pembayaran
+            if not metode_pembayaran or metode_pembayaran.strip() == "":
+                # Fallback 1: Gunakan xendit_status sebagai indikator
+                if invoice.xendit_status and invoice.xendit_status != "pending":
+                    metode_pembayaran = f"Xendit ({invoice.xendit_status})"
+                # Fallback 2: Gunakan invoice_type
+                elif invoice.invoice_type:
+                    metode_pembayaran = f"Transfer ({invoice.invoice_type.capitalize()})"
+                # Fallback 3: Default
+                else:
+                    metode_pembayaran = "Xendit Payment Gateway"
+
+            sheet2_data.append({
+                "Nama Pelanggan": invoice.pelanggan.nama if invoice.pelanggan else "N/A",
+                "Email": invoice.email or (invoice.pelanggan.email if invoice.pelanggan else "N/A"),
+                "No Invoice": invoice.invoice_number,
+                "Tanggal Bayar": invoice.paid_at,
+                "Jumlah Dibayar": float(invoice.paid_amount) if invoice.paid_amount else float(invoice.total_harga),
+                "Metode Pembayaran": metode_pembayaran,
+                "Status Pembayaran": "Lunas",
+            })
+
+    # Prepare data untuk Sheet 3: History Invoice (semua invoice)
+    sheet3_data = []
+    for invoice in invoices:
+        sheet3_data.append({
+            "Nama Pelanggan": invoice.pelanggan.nama if invoice.pelanggan else "N/A",
+            "Email": invoice.email or (invoice.pelanggan.email if invoice.pelanggan else "N/A"),
+            "No Invoice": invoice.invoice_number,
+            "Tanggal Invoice": invoice.tgl_invoice,
+            "Jatuh Tempo": invoice.tgl_jatuh_tempo,
+            "Total Harga": float(invoice.total_harga),
+            "Status Invoice": invoice.status_invoice,
+            "Tipe Invoice": invoice.invoice_type,
+        })
+
+    # Prepare data untuk Sheet 4: Summary Statistics
+    # Hitung agregasi data untuk pivot table-like summary
+    total_invoices = len(invoices)
+    total_langganan = len(langganan_list)
+
+    # Hitung total nilai semua invoice
+    total_nilai_semua = sum(float(inv.total_harga or 0) for inv in invoices)
+
+    # Hitung per status invoice
+    invoice_lunas = [inv for inv in invoices if inv.status_invoice == "Lunas"]
+    invoice_belum_bayar = [inv for inv in invoices if inv.status_invoice == "Belum Dibayar"]
+    invoice_expired = [inv for inv in invoices if inv.status_invoice == "Expired"]
+    invoice_batal = [inv for inv in invoices if inv.status_invoice == "Batal"]
+
+    # Hitung total nilai per status
+    total_nilai_lunas = sum(float(inv.total_harga or 0) for inv in invoice_lunas)
+    total_nilai_belum_bayar = sum(float(inv.total_harga or 0) for inv in invoice_belum_bayar)
+    total_nilai_expired = sum(float(inv.total_harga or 0) for inv in invoice_expired)
+    total_nilai_batal = sum(float(inv.total_harga or 0) for inv in invoice_batal)
+
+    # Hitung persentase
+    def calc_persentase(jumlah: int, total: int) -> float:
+        return (jumlah / total * 100) if total > 0 else 0.0
+
+    sheet4_data = [
+        # Summary User/Langganan
+        {
+            "Kategori": "Total User/Pelanggan",
+            "Jumlah": total_langganan,
+            "Persentase": 100.0,
+            "Total Nilai": 0,
+        },
+        {
+            "Kategori": "Langganan Aktif",
+            "Jumlah": len([l for l in langganan_list if l.status == "Aktif"]),
+            "Persentase": calc_persentase(len([l for l in langganan_list if l.status == "Aktif"]), total_langganan),
+            "Total Nilai": 0,
+        },
+        {
+            "Kategori": "Langganan Suspended",
+            "Jumlah": len([l for l in langganan_list if l.status == "Suspended"]),
+            "Persentase": calc_persentase(len([l for l in langganan_list if l.status == "Suspended"]), total_langganan),
+            "Total Nilai": 0,
+        },
+        {
+            "Kategori": "Langganan Berhenti",
+            "Jumlah": len([l for l in langganan_list if l.status == "Berhenti"]),
+            "Persentase": calc_persentase(len([l for l in langganan_list if l.status == "Berhenti"]), total_langganan),
+            "Total Nilai": 0,
+        },
+        {},  # Empty row separator
+        # Summary Invoice
+        {
+            "Kategori": "Total Invoice Terbit",
+            "Jumlah": total_invoices,
+            "Persentase": 100.0,
+            "Total Nilai": total_nilai_semua,
+        },
+        {
+            "Kategori": "Invoice Lunas",
+            "Jumlah": len(invoice_lunas),
+            "Persentase": calc_persentase(len(invoice_lunas), total_invoices),
+            "Total Nilai": total_nilai_lunas,
+        },
+        {
+            "Kategori": "Invoice Belum Dibayar",
+            "Jumlah": len(invoice_belum_bayar),
+            "Persentase": calc_persentase(len(invoice_belum_bayar), total_invoices),
+            "Total Nilai": total_nilai_belum_bayar,
+        },
+        {
+            "Kategori": "Invoice Expired",
+            "Jumlah": len(invoice_expired),
+            "Persentase": calc_persentase(len(invoice_expired), total_invoices),
+            "Total Nilai": total_nilai_expired,
+        },
+        {
+            "Kategori": "Invoice Batal",
+            "Jumlah": len(invoice_batal),
+            "Persentase": calc_persentase(len(invoice_batal), total_invoices),
+            "Total Nilai": total_nilai_batal,
+        },
+        {},  # Empty row separator
+        # Summary Pembayaran
+        {
+            "Kategori": "Total Pembayaran Masuk",
+            "Jumlah": len(invoice_lunas),
+            "Persentase": calc_persentase(len(invoice_lunas), total_invoices) if total_invoices > 0 else 0,
+            "Total Nilai": total_nilai_lunas,
+        },
+        {
+            "Kategori": "Outstanding (Belum Dibayar)",
+            "Jumlah": len(invoice_belum_bayar),
+            "Persentase": calc_persentase(len(invoice_belum_bayar), total_invoices) if total_invoices > 0 else 0,
+            "Total Nilai": total_nilai_belum_bayar,
+        },
+    ]
+
+    # Combine semua sheets
+    sheets_data = {
+        "Data Langganan": sheet1_data,
+        "History Pembayaran": sheet2_data,
+        "History Invoice": sheet3_data,
+        "Summary Statistics": sheet4_data,
+    }
+
+    # Gunakan multi-sheet export utility
+    return create_langganan_multi_sheet_export_response(sheets_data)
 
 
 # POST /langganan/import/csv - Import data langganan dari CSV
