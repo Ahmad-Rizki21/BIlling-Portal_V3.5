@@ -308,7 +308,24 @@ function formatDateShort(dateString: string) {
 
 function formatContent(content: string) {
   if (!content) return '';
-  // Mengganti literal \n dan newline karakter dengan <br>
+  
+  // Cek apakah konten adalah HTML lengkap (dengan DOCTYPE atau tag html)
+  const isFullHTML = content.includes('<!DOCTYPE') || content.includes('<html');
+  
+  if (isFullHTML) {
+    // Ekstrak style tags
+    const styleRegex = /<style[^>]*>([\s\S]*?)<\/style>/gi;
+    const styles = content.match(styleRegex) || [];
+    
+    // Ekstrak konten body
+    const bodyMatch = content.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+    const bodyContent = bodyMatch ? bodyMatch[1] : content;
+    
+    // Gabungkan style dan body content
+    return styles.join('\n') + '\n' + bodyContent;
+  }
+  
+  // Untuk konten biasa, ganti newline dengan <br>
   return content
     .replace(/\\n/g, '<br>')
     .replace(/\n/g, '<br>');
@@ -682,6 +699,12 @@ onMounted(fetchSK);
   color: rgb(var(--v-theme-on-surface));
   line-height: 1.7; /* DIUBAH */
   font-size: 0.95rem; /* DIUBAH */
+}
+
+/* Support untuk HTML content yang di-embed */
+.document-content :deep(.container),
+.document-content :deep(div) {
+  max-width: 100%;
 }
 
 .document-content :deep(h1),
