@@ -849,15 +849,43 @@ def read_root():
 @app.get("/health")
 async def health_check():
     """
-    Simple health check endpoint untuk monitoring server status.
-    Digunakan oleh frontend untuk mengecek apakah backend online.
+    Enhanced health check endpoint untuk monitoring server status.
+    Digunakan oleh frontend dan team NOC untuk mengecek apakah backend online.
+    Includes database connection pool status untuk early warning.
     """
-    return {
-        "status": "healthy",
-        "timestamp": datetime.now().isoformat(),
-        "service": "Artacom FTTH Billing System",
-        "version": "1.0.0"
-    }
+    from .database import get_connection_pool_status
+    
+    try:
+        # Get connection pool status
+        pool_status = await get_connection_pool_status()
+        
+        # Determine health based on pool utilization
+        pool_utilization = pool_status.get("utilization_percent", 0)
+        is_healthy = pool_utilization < 90  # Warning jika >90%
+        
+        return {
+            "status": "healthy" if is_healthy else "degraded",
+            "timestamp": datetime.now().isoformat(),
+            "service": "Artacom FTTH Billing System",
+            "version": "1.0.0",
+            "database": {
+                "status": pool_status.get("status", "unknown"),
+                "pool_size": pool_status.get("pool_size", 0),
+                "total_capacity": pool_status.get("total_capacity", 0),
+                "utilization_percent": pool_utilization,
+                "available_connections": pool_status.get("available_connections", 0)
+            }
+        }
+    except Exception as e:
+        logger = logging.getLogger("app.health")
+        logger.error(f"Health check failed: {e}")
+        return {
+            "status": "unhealthy",
+            "timestamp": datetime.now().isoformat(),
+            "service": "Artacom FTTH Billing System",
+            "version": "1.0.0",
+            "error": str(e)
+        }
 
 
 # Health Check endpoint dengan /api prefix untuk frontend compatibility

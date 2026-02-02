@@ -55,10 +55,12 @@ if environment == "production":
     POOL_TIMEOUT = 8    # Dari 15 → 8 detik untuk faster failover
     POOL_RECYCLE = 1200 # Dari 1800 → 1200 (20 menit) untuk fresh connections
 else:
-    # Development environment - resources yang lebih kecil
-    POOL_SIZE = 8       # Dari 5 → 8 untuk development yang lebih smooth
-    MAX_OVERFLOW = 12   # Total maks = 20 koneksi
-    POOL_TIMEOUT = 5    # Dari 10 → 5 detik untuk development feedback
+    # Development environment - OPTIMIZED untuk handle scheduler jobs
+    # FIX: Increased pool size untuk mencegah connection exhaustion
+    # saat scheduler jobs (generate invoice, suspend, verify payments) berjalan bersamaan
+    POOL_SIZE = 20      # Dari 8 → 20 untuk handle concurrent scheduler jobs
+    MAX_OVERFLOW = 30   # Dari 12 → 30 (total max = 50 koneksi)
+    POOL_TIMEOUT = 15   # Dari 5 → 15 detik untuk mencegah timeout saat high load
     POOL_RECYCLE = 600  # 10 menit untuk development
 
 # ====================================================================
@@ -76,7 +78,7 @@ engine = create_async_engine(
     pool_timeout=POOL_TIMEOUT, # Timeout dari config di atas
     pool_recycle=POOL_RECYCLE, # Recycle time dari config di atas
     connect_args={
-        "connect_timeout": 10,       # Timeout koneksi 10 detik
+        "connect_timeout": 20,       # Increased dari 10→20 detik untuk handle high load
         "charset": "utf8mb4",       # Support Unicode/emoji
         "sql_mode": "STRICT_TRANS_TABLES",  # Strict mode buat data consistency
     },

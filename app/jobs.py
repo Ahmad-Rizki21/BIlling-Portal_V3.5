@@ -336,7 +336,8 @@ async def job_generate_invoices() -> None:
     log_scheduler_event(logger, "job_generate_invoices", "started")
     target_due_date = date.today() + timedelta(days=5)
     total_invoices_created = 0
-    BATCH_SIZE = 100
+    # FIX: Reduced batch size dari 100→30 untuk mencegah connection pool exhaustion
+    BATCH_SIZE = 30  # Smaller batch = less DB connections used simultaneously
     offset = 0
 
     logger.info(f"🔍 Mencari langganan yang jatuh tempo pada: {target_due_date.strftime('%d %B %Y')} (H-5)")
@@ -462,7 +463,8 @@ async def job_suspend_services() -> None:
     total_services_suspended = 0
     total_invoices_overdue = 0
     current_date = date.today()
-    BATCH_SIZE = 50
+    # FIX: Reduced batch size dari 50→20 untuk mencegah connection pool exhaustion
+    BATCH_SIZE = 20  # Smaller batch = less DB connections used simultaneously
     offset = 0
 
     # LOGIKA BISNIS YANG BENAR:
