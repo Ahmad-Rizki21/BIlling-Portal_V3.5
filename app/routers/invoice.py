@@ -1776,6 +1776,25 @@ async def export_payment_links_excel(
     # FIX: Tambahkan .unique() untuk collection eager loading
     invoices = result.scalars().unique().all()
 
+    # Query untuk mendapatkan invoice pertama (ID terkecil) setiap pelanggan
+    # Ini untuk menandai "NEW USER"
+    from sqlalchemy import func as sql_func
+    pelanggan_ids = list(set([inv.pelanggan_id for inv in invoices]))
+    first_invoice_map = {}
+
+    if pelanggan_ids:
+        first_invoice_query = (
+            select(
+                InvoiceModel.pelanggan_id,
+                sql_func.min(InvoiceModel.id).label('first_invoice_id')
+            )
+            .where(InvoiceModel.pelanggan_id.in_(pelanggan_ids))
+            .group_by(InvoiceModel.pelanggan_id)
+        )
+        first_invoice_result = await db.execute(first_invoice_query)
+        for row in first_invoice_result:
+            first_invoice_map[row.pelanggan_id] = row.first_invoice_id
+
     # Buat workbook dan worksheet pertama untuk Payment Links
     wb = openpyxl.Workbook()
     ws = wb.active
@@ -1794,10 +1813,12 @@ async def export_payment_links_excel(
         "Tipe Invoice",  # Kolom baru untuk jenis invoice
         "Tanggal Invoice",
         "Tanggal Jatuh Tempo",
+        "TANGGAL BAYAR",  # Kolom baru untuk tanggal pembayaran
         "Payment Link",
         "Email",
         "No. Telepon",
         "Brand",
+        "NEW USER",  # Kolom baru untuk menandai user baru
     ]
 
     # Menambahkan header ke worksheet (dengan null check)
@@ -1874,10 +1895,25 @@ async def export_payment_links_excel(
             ws.cell(row=row_num, column=9, value=safe_format_date(invoice_date, "%Y-%m-%d"))
             ws.cell(row=row_num, column=10, value=safe_format_date(due_date, "%Y-%m-%d"))
 
-            ws.cell(row=row_num, column=11, value=invoice.payment_link)
-            ws.cell(row=row_num, column=12, value=invoice.email or "")
-            ws.cell(row=row_num, column=13, value=invoice.no_telp or "")
-            ws.cell(row=row_num, column=14, value=invoice.brand or "")
+            # TANGGAL BAYAR - Tampilkan paid_at jika status Lunas
+            if invoice.status_invoice == "Lunas" and invoice.paid_at:
+                # Format paid_at ke datetime WIB untuk display
+                paid_at_wib = invoice.paid_at
+                if paid_at_wib:
+                    ws.cell(row=row_num, column=11, value=paid_at_wib.strftime("%Y-%m-%d %H:%M"))
+                else:
+                    ws.cell(row=row_num, column=11, value="-")
+            else:
+                ws.cell(row=row_num, column=11, value="-")
+
+            ws.cell(row=row_num, column=12, value=invoice.payment_link)
+            ws.cell(row=row_num, column=13, value=invoice.email or "")
+            ws.cell(row=row_num, column=14, value=invoice.no_telp or "")
+            ws.cell(row=row_num, column=15, value=invoice.brand or "")
+
+            # NEW USER - Tandai jika ini adalah invoice pertama untuk pelanggan
+            is_new_user = first_invoice_map.get(invoice.pelanggan_id) == invoice.id
+            ws.cell(row=row_num, column=16, value="NEW USER" if is_new_user else "")
 
         # Auto-adjust column width (dengan null check)
         from openpyxl.utils import get_column_letter
