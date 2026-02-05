@@ -186,7 +186,7 @@ def update_pppoe_secret(api, old_id_pelanggan: str, data_teknis: DataTeknisModel
             target_secret = ppp_secrets.get(name=data_teknis.id_pelanggan)
             if not target_secret:
                 logger.error(f"PPPoE secret '{data_teknis.id_pelanggan}' tetap tidak ditemukan. Update dibatalkan.")
-                return
+                raise Exception(f"PPPoE secret '{data_teknis.id_pelanggan}' tidak ditemukan di Mikrotik.")
 
         # 2. Ambil ID internal dari secret yang ditemukan
         secret_id = target_secret[0]["id"]
@@ -208,7 +208,7 @@ def update_pppoe_secret(api, old_id_pelanggan: str, data_teknis: DataTeknisModel
             )
         elif new_status == "Suspended":
             update_payload["profile"] = "SUSPENDED"
-            update_payload["disabled"] = "yes"
+            update_payload["disabled"] = "yes"  # KEMBALIKAN KE DISABLED=YES (Blokir Total) sesuai request
             logger.info(f"Menonaktifkan '{old_id_pelanggan}' -> '{data_teknis.id_pelanggan}', profil: 'SUSPENDED'")
 
         # 5. Kirim perintah .set() dengan semua data baru

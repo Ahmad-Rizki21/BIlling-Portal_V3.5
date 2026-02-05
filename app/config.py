@@ -60,6 +60,7 @@ class Settings(BaseSettings):
         "ODP",                     # Manajemen ODP (sebelumnya "odp_management")
         "Trouble_Tickets",         # Sistem tiket trouble
         "Diskon",                  # Manajemen diskon
+        "AI_Analytics",            # Analisis cerdas data billing dengan AI
     ]
 
     # Daftar widget yang ada di dashboard admin dan pelanggan
@@ -176,6 +177,12 @@ class Settings(BaseSettings):
     # Key buat enkripsi data sensitif di database (password, dll)
     # HARUS DIUBAH DI PRODUCTION! Pakai Fernet key yang valid
     ENCRYPTION_KEY: str = "default_encryption_key_change_in_production"
+
+    # ====================================================================
+    # KONFIGURASI ALIBABA CLOUD AI
+    # ====================================================================
+    ALIBABA_CLOUD_API_KEY: str = ""  # Diambil dari .env
+
 
     @property
     def XENDIT_API_KEYS(self) -> dict:

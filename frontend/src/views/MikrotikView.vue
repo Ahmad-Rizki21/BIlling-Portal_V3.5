@@ -85,77 +85,136 @@
     <v-card elevation="3" class="rounded-lg">
       </v-card>
 
-    <!-- Main Data Table Card -->
-    <v-card elevation="3" class="rounded-lg">
-      <v-card-title class="d-flex align-center pa-6 bg-grey-lighten-5">
-        <v-icon start icon="mdi-format-list-bulleted-square" color="info"></v-icon>
-        <span class="text-h6 font-weight-bold">Daftar Server</span>
-        <v-spacer></v-spacer>
-        <v-chip color="info" variant="outlined" size="small">
-          {{ servers.length }} servers
-        </v-chip>
-      </v-card-title>
-      
-      <v-data-table
-        :headers="headers"
-        :items="servers"
-        :loading="loading"
-        item-value="id"
-        class="elevation-0"
-        :items-per-page="10"
+    <!-- Server Grid Layout -->
+    <div v-if="loading" class="d-flex justify-center py-8">
+      <v-progress-circular indeterminate color="primary" size="64"></v-progress-circular>
+    </div>
+    
+    <div v-else-if="servers.length === 0" class="text-center py-12">
+      <v-icon size="64" color="grey lighten-2">mdi-server-off</v-icon>
+      <h3 class="text-h6 text-grey darken-1 mt-4">Belum ada server yang ditambahkan</h3>
+      <v-btn color="primary" variant="text" class="mt-2" @click="openDialog()">
+        Tambah Server Baru
+      </v-btn>
+    </div>
+
+    <v-row v-else>
+      <v-col 
+        v-for="server in servers" 
+        :key="server.id" 
+        cols="12" 
+        md="6" 
+        lg="4"
       >
-      <template v-slot:loading>
-        <SkeletonLoader type="table" :rows="6" />
-      </template>
+        <v-card class="server-card h-100" elevation="0">
+          <div class="card-status-line" :class="server.is_active ? 'bg-success' : 'bg-grey'"></div>
+          
+          <v-card-text class="pa-5">
+            <!-- Header: Name & Status -->
+            <div class="d-flex justify-space-between align-start mb-4">
+              <div class="d-flex align-center">
+                <v-avatar 
+                  :color="server.is_active ? 'green-lighten-5' : 'grey-lighten-4'" 
+                  class="me-3 rounded-lg"
+                  size="48"
+                >
+                  <v-icon :color="server.is_active ? 'green-darken-1' : 'grey'" size="28">
+                    mdi-router-network
+                  </v-icon>
+                </v-avatar>
+                <div>
+                  <h3 class="text-h6 font-weight-bold text-grey-darken-3 lh-sm">{{ server.name }}</h3>
+                  <div class="d-flex align-center mt-1">
+                     <v-icon size="12" :color="server.is_active ? 'success' : 'grey'" class="me-1">mdi-circle</v-icon>
+                     <span class="text-caption font-weight-medium" :class="server.is_active ? 'text-success' : 'text-grey'">
+                       {{ server.is_active ? 'Active' : 'Nonaktif' }}
+                     </span>
+                  </div>
+                </div>
+              </div>
+              
+              <!-- Connection Badge -->
+              <v-chip
+                :color="getConnectionColor(server.last_connection_status)"
+                variant="flat"
+                size="small"
+                class="font-weight-bold px-3"
+              >
+                {{ server.last_connection_status || 'Unknown' }}
+              </v-chip>
+            </div>
 
-        <template v-slot:item.name="{ item }">
-          <div class="font-weight-bold">{{ item.name }}</div>
-        </template>
+            <v-divider class="mb-4 border-opacity-50"></v-divider>
 
-        <template v-slot:item.server_info="{ item }">
-          <div class="d-flex align-center gap-2">
-            <v-icon size="16" color="grey-darken-1">mdi-server</v-icon>
-            <span class="font-mono text-body-2">{{ item.host_ip }}:{{ item.port }}</span>
-          </div>
-        </template>
-
-        <template v-slot:item.is_active="{ item }">
-          <v-chip :color="item.is_active ? 'success' : 'grey'" size="small" variant="tonal">
-            <v-icon start size="14">{{ item.is_active ? 'mdi-check-circle' : 'mdi-close-circle' }}</v-icon>
-            {{ item.is_active ? 'Aktif' : 'Nonaktif' }}
-          </v-chip>
-        </template>
-
-        <template v-slot:item.last_connection_status="{ item }">
-            <v-chip :color="getConnectionColor(item.last_connection_status)" variant="tonal" size="small">
-              <v-icon start size="14">{{ getConnectionIcon(item.last_connection_status) }}</v-icon>
-              {{ item.last_connection_status || 'Belum diuji' }}
-            </v-chip>
-        </template>
-
-        <template v-slot:item.actions="{ item }">
-          <div class="d-flex justify-center ga-2">
-            <v-btn 
-              size="small" 
-              variant="tonal" 
-              color="teal" 
-              @click="handleTestConnection(item)"
-              class="text-none"
-              :loading="testingConnectionId === item.id"
-            >
-              <v-icon start size="16">mdi-connection</v-icon>
-              Test
-            </v-btn>
-            <v-btn size="small" variant="tonal" color="primary" @click="openDialog(item)">
-              <v-icon start size="16">mdi-pencil</v-icon> Edit
-            </v-btn>
-            <v-btn size="small" variant="tonal" color="error" @click="openDeleteDialog(item)">
-              <v-icon start size="16">mdi-delete</v-icon> Hapus
-            </v-btn>
-          </div>
-        </template>
-      </v-data-table>
-    </v-card>
+            <!-- Server Details Grid -->
+            <v-row dense class="server-details mb-4">
+              <v-col cols="6">
+                <div class="text-caption text-medium-emphasis mb-1">IP Address</div>
+                <div class="d-flex align-center font-weight-medium text-body-2">
+                  <v-icon size="14" class="me-1 text-primary">mdi-ip</v-icon>
+                  {{ server.host_ip }}
+                </div>
+              </v-col>
+              <v-col cols="6">
+                <div class="text-caption text-medium-emphasis mb-1">Port API</div>
+                 <div class="d-flex align-center font-weight-medium text-body-2">
+                  <v-icon size="14" class="me-1 text-orange">mdi-ethernet</v-icon>
+                  {{ server.port }}
+                </div>
+              </v-col>
+              <v-col cols="6" class="mt-3">
+                <div class="text-caption text-medium-emphasis mb-1">Username</div>
+                 <div class="d-flex align-center font-weight-medium text-body-2">
+                   <v-icon size="14" class="me-1 text-info">mdi-account</v-icon>
+                  {{ server.username }}
+                </div>
+              </v-col>
+               <v-col cols="6" class="mt-3">
+                <div class="text-caption text-medium-emphasis mb-1">ROS Version</div>
+                 <div class="d-flex align-center font-weight-medium text-body-2">
+                   <v-icon size="14" class="me-1 text-purple">mdi-information</v-icon>
+                  {{ server.ros_version || '-' }}
+                </div>
+              </v-col>
+            </v-row>
+            
+            <!-- Actions -->
+            <div class="d-flex gap-2 mt-auto pt-2">
+               <v-btn
+                block
+                variant="tonal"
+                color="primary"
+                class="flex-grow-1 text-none font-weight-bold"
+                :loading="testingConnectionId === server.id"
+                @click="handleTestConnection(server)"
+              >
+                <v-icon start>mdi-connection</v-icon>
+                Test Connection
+              </v-btn>
+              
+               <v-menu location="bottom end">
+                <template v-slot:activator="{ props }">
+                  <v-btn
+                    icon
+                    variant="text"
+                    color="grey-darken-1"
+                    v-bind="props"
+                    density="comfortable"
+                    class="rounded-lg border ml-2"
+                  >
+                    <v-icon>mdi-dots-vertical</v-icon>
+                  </v-btn>
+                </template>
+                <v-list density="compact" rounded="lg" elevation="4">
+                   <v-list-item @click="openDialog(server)" prepend-icon="mdi-pencil" title="Edit Server"></v-list-item>
+                   <v-list-item @click="openDeleteDialog(server)" prepend-icon="mdi-delete" title="Hapus" color="error"></v-list-item>
+                </v-list>
+              </v-menu>
+            </div>
+          </v-card-text>
+        </v-card>
+      </v-col>
+    </v-row>
 
     <!-- Enhanced Add/Edit Dialog -->
     <v-dialog v-model="dialog" max-width="700px" persistent>
@@ -430,6 +489,7 @@ const rules = {
 };
 
 // --- Headers ---
+// --- Headers (No longer needed for grid, but kept if we switch back) ---
 const headers = [
   { title: 'Nama Server', key: 'name', sortable: true },
   { title: 'Server Info', key: 'server_info', sortable: false },
@@ -601,15 +661,15 @@ function showSnackbar(text: string, color: 'success' | 'error' | 'info') {
 }
 
 function getConnectionColor(status: string | null): string {
-    if (status === 'success') return 'success';
-    if (status === 'failure') return 'error';
-    return 'grey';
+    if (status === 'success' || status === 'Success') return 'success';
+    if (status === 'failure' || status === 'Failed') return 'error';
+    return 'grey-lighten-1';
 }
 
 function getConnectionIcon(status: string | null): string {
-    if (status === 'success') return 'mdi-check-circle';
-    if (status === 'failure') return 'mdi-close-circle';
-    return 'mdi-help-circle';
+    if (status === 'success' || status === 'Success') return 'mdi-wifi-check';
+    if (status === 'failure' || status === 'Failed') return 'mdi-wifi-off';
+    return 'mdi-wifi-strength-off-outline';
 }
 </script>
 
@@ -801,6 +861,37 @@ function getConnectionIcon(status: string | null): string {
   box-shadow: 
     inset 0 2px 4px rgba(var(--v-theme-shadow), 0.06),
     0 4px 12px rgba(var(--v-theme-primary), 0.1);
+}
+
+/* Server Card Styling */
+.server-card {
+  border-radius: 16px;
+  border: 1px solid rgba(0,0,0,0.05);
+  box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+  background: white;
+  transition: all 0.3s ease;
+  overflow: hidden;
+  position: relative;
+}
+
+.server-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 32px rgba(0,0,0,0.08);
+  border-color: rgba(var(--v-theme-primary), 0.2);
+}
+
+.card-status-line {
+  height: 4px;
+  width: 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.server-details {
+  background-color: #f8fafc;
+  border-radius: 12px;
+  padding: 12px;
 }
 
 .filter-card .v-select :deep(.v-field--focused) {

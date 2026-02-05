@@ -521,7 +521,7 @@ async def job_suspend_services() -> None:
                         .where(
                             InvoiceModel.tgl_jatuh_tempo == target_due_date,  # Cari yang jatuh tempo tepat tanggal 1
                             LanggananModel.status == "Aktif",  # Masih aktif (belum suspend)
-                            InvoiceModel.status_invoice == "Belum Dibayar",  # Invoice belum lunas
+                            InvoiceModel.status_invoice.in_(["Belum Dibayar", "Expired", "Kadaluarsa"]),  # Invoice belum lunas (fix: cover expired/kadaluarsa juga)
                         )
                         .distinct(LanggananModel.id)  # Pastikan setiap langganan hanya diproses sekali
                         .options(selectinload(LanggananModel.pelanggan).selectinload(PelangganModel.data_teknis))
@@ -537,7 +537,7 @@ async def job_suspend_services() -> None:
                         .where(
                             InvoiceModel.tgl_jatuh_tempo == target_due_date,  # Cari yang jatuh tempo tepat tanggal 1
                             LanggananModel.status == "Aktif",
-                            InvoiceModel.status_invoice == "Belum Dibayar",
+                            InvoiceModel.status_invoice.in_(["Belum Dibayar", "Expired", "Kadaluarsa"]),
                         )
                         .distinct(LanggananModel.id)  # Pastikan setiap langganan hanya diproses sekali
                         .options(selectinload(LanggananModel.pelanggan).selectinload(PelangganModel.data_teknis))
@@ -565,11 +565,17 @@ async def job_suspend_services() -> None:
                             # Simpan info Mikrotik server untuk rollback nanti jika perlu
                             server_id = data_teknis.mikrotik_server_id
                             if server_id:
-                                from ..models.mikrotik_server import MikrotikServer as MikrotikServerModel
+                                from .models.mikrotik_server import MikrotikServer as MikrotikServerModel
                                 mikrotik_server_info = await db.get(MikrotikServerModel, server_id)
                             
                             # Update Mikrotik: disable + profile SUSPENDED
                             logger.info(f"🔄 [STEP 1/2] Suspend ke Mikrotik untuk Langganan ID: {langganan.id}...")
+                            
+                            # FIX 2: Set status in memory to "Suspended" BEFORE calling mikrotik update
+                            # Mikrotik logic depends on langganan.status to decide enable vs disable.
+                            # If we don't set this here, it sees "Aktif" and RE-ENABLES the user instead of suspending!
+                            langganan.status = "Suspended"
+                            
                             await mikrotik_service.trigger_mikrotik_update(db, langganan, data_teknis, data_teknis.id_pelanggan)
                             mikrotik_success = True
                             logger.info(f"✅ [STEP 1/2] Mikrotik suspend SUKSES untuk Langganan ID: {langganan.id}")
@@ -597,7 +603,7 @@ async def job_suspend_services() -> None:
                         update_invoice_stmt = (
                             update(InvoiceModel)
                             .where(InvoiceModel.pelanggan_id == langganan.pelanggan_id)
-                            .where(InvoiceModel.status_invoice == "Belum Dibayar")
+                            .where(InvoiceModel.status_invoice.in_(["Belum Dibayar", "Expired", "Kadaluarsa"]))
                             .values(status_invoice="Kadaluarsa")
                         )
                         invoice_update_result: Result = await db.execute(update_invoice_stmt)

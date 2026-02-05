@@ -35,62 +35,245 @@ async def get_revenue_report(
 ):
     start_datetime = datetime.combine(start_date, time.min)
     end_datetime = datetime.combine(end_date, time.max)
+    today_date = date.today()
 
-    # --- KONDISI FILTER UMUM ---
-    filter_conditions = [
+    # --- 1. FINANCIAL SUMMARY (CASH FLOW) ---
+    # Berdasarkan Pembayaran yang DITERIMA dalam periode ini (paid_at)
+    # Filter: paid_at between start and end
+    
+    payment_filter = [
         InvoiceModel.status_invoice == "Lunas",
         InvoiceModel.paid_at.between(start_datetime, end_datetime),
     ]
     if alamat:
-        filter_conditions.append(PelangganModel.alamat == alamat)
+        payment_filter.append(PelangganModel.alamat == alamat)
     if id_brand:
-        filter_conditions.append(PelangganModel.id_brand == id_brand)
-
-    # --- QUERY UNTUK SUMMARY (TOTAL PENDAPATAN & JUMLAH INVOICE) ---
-    # --- QUERY UNTUK SUMMARY (TOTAL PENDAPATAN & JUMLAH INVOICE) ---
-    
-    # 1. Query Active Invoices
-    summary_query = (
-        select(
-            func.coalesce(func.sum(InvoiceModel.total_harga), 0.0),
-            func.count(InvoiceModel.id),
-        )
+        payment_filter.append(PelangganModel.id_brand == id_brand)
+        
+    payment_query = (
+        select(InvoiceModel)
         .join(InvoiceModel.pelanggan)
-        .where(and_(*filter_conditions))
+        .where(and_(*payment_filter))
     )
-    active_pendapatan, active_invoices = (await db.execute(summary_query)).one()
+    # Execute for Active Invoices
+    paid_invoices_active = (await db.execute(payment_query)).scalars().all()
 
-    # 2. Query Archive Invoices
-    archive_filter_conditions = [
+    # Archive Invoices (Payments)
+    archive_payment_filter = [
         InvoiceArchiveModel.status_invoice == "Lunas",
         InvoiceArchiveModel.paid_at.between(start_datetime, end_datetime),
     ]
+    # Note: Pelanggan filter applies same way
     if alamat:
-        archive_filter_conditions.append(PelangganModel.alamat == alamat)
+        archive_payment_filter.append(PelangganModel.alamat == alamat)
     if id_brand:
-        archive_filter_conditions.append(PelangganModel.id_brand == id_brand)
+        archive_payment_filter.append(PelangganModel.id_brand == id_brand)
 
-    archive_summary_query = (
-        select(
-            func.coalesce(func.sum(InvoiceArchiveModel.total_harga), 0.0),
-            func.count(InvoiceArchiveModel.id),
-        )
+    archive_payment_query = (
+        select(InvoiceArchiveModel)
         .join(InvoiceArchiveModel.pelanggan)
-        .where(and_(*archive_filter_conditions))
+        .where(and_(*archive_payment_filter))
     )
-    archive_pendapatan, archive_invoices = (await db.execute(archive_summary_query)).one()
+    paid_invoices_archive = (await db.execute(archive_payment_query)).scalars().all()
 
-    # 3. Combine Results
-    total_pendapatan = (active_pendapatan or 0) + (archive_pendapatan or 0)
-    total_invoices = (active_invoices or 0) + (archive_invoices or 0)
+    all_paid_invoices = list(paid_invoices_active) + list(paid_invoices_archive)
 
-    # HAPUS SEMUA LOGIKA UNTUK MENGAMBIL RINCIAN DARI ENDPOINT INI
-    # KITA AKAN BUAT ENDPOINT BARU UNTUK ITU
+    total_pemasukan = sum(inv.total_harga or 0 for inv in all_paid_invoices)
+    
+    # Financial Summary Object
+    financial_summary = {
+        "total_pemasukan": total_pemasukan,
+        "total_pengeluaran": 0.0, # Placeholder, belum ada modul expense
+        "saldo_akhir": total_pemasukan # - pengeluaran
+    }
+
+    # --- 2. BILLING SUMMARY & TAX & PAYMENT METHODS ---
+    # Berdasarkan Tagihan yang DICETAK/DIBUAT dalam periode ini (tgl_invoice atau tgl_jatuh_tempo?)
+    # Biasanya laporan tagihan bulanan melihat tgl_jatuh_tempo di bulan tersebut.
+    # Kita gunakan tgl_jatuh_tempo karena lebih mencerminkan "Tagihan Bulan X".
+    
+    billing_filter = [
+        InvoiceModel.tgl_jatuh_tempo.between(start_date, end_date)
+    ]
+    if alamat:
+        billing_filter.append(PelangganModel.alamat == alamat)
+    if id_brand:
+        billing_filter.append(PelangganModel.id_brand == id_brand)
+    
+    # Eager load harga_layanan untuk perhitungan pajak
+    billing_query = (
+        select(InvoiceModel)
+        .join(InvoiceModel.pelanggan)
+        .options(selectinload(InvoiceModel.pelanggan).selectinload(PelangganModel.harga_layanan))
+        .where(and_(*billing_filter))
+    )
+    billed_invoices_active = (await db.execute(billing_query)).scalars().all()
+
+    # Archive Billing
+    billing_filter_archive = [
+        InvoiceArchiveModel.tgl_jatuh_tempo.between(start_date, end_date)
+    ]
+    if alamat:
+        billing_filter_archive.append(PelangganModel.alamat == alamat)
+    if id_brand:
+        billing_filter_archive.append(PelangganModel.id_brand == id_brand)
+    
+    billing_query_archive = (
+        select(InvoiceArchiveModel)
+        .join(InvoiceArchiveModel.pelanggan)
+        .options(selectinload(InvoiceArchiveModel.pelanggan).selectinload(PelangganModel.harga_layanan))
+        .where(and_(*billing_filter_archive))
+    )
+    billed_invoices_archive = (await db.execute(billing_query_archive)).scalars().all()
+
+    all_billed_invoices = list(billed_invoices_active) + list(billed_invoices_archive)
+    
+    # Initialize Aggregators
+    bill_stats = {
+        "total_tagihan": {"count": 0, "nominal": 0.0, "diskon": 0.0, "biaya_pasang": 0.0, "total": 0.0},
+        "lunas": {"count": 0, "nominal": 0.0, "diskon": 0.0, "biaya_pasang": 0.0, "total": 0.0},
+        "pending": {"count": 0, "nominal": 0.0, "diskon": 0.0, "biaya_pasang": 0.0, "total": 0.0},
+        "telat": {"count": 0, "nominal": 0.0, "diskon": 0.0, "biaya_pasang": 0.0, "total": 0.0},
+    }
+    
+    tax_stats = {
+        "total": {"ppn": 0.0, "bhp": 0.0, "uso": 0.0, "total_pajak": 0.0},
+        "lunas": {"ppn": 0.0, "bhp": 0.0, "uso": 0.0, "total_pajak": 0.0},
+        "pending": {"ppn": 0.0, "bhp": 0.0, "uso": 0.0, "total_pajak": 0.0},
+        "telat": {"ppn": 0.0, "bhp": 0.0, "uso": 0.0, "total_pajak": 0.0},
+    }
+    
+    payment_methods_map = {} # key: method name, val: {count, amount, pajak, diskon}
+
+    for inv in all_billed_invoices:
+        # Determine Category
+        category = "pending"
+        # Logika Status:
+        # 1. Lunas -> "lunas"
+        # 2. Belum Dibayar AND tgl_jatuh_tempo < today -> "telat"
+        # 3. Belum Dibayar AND tgl_jatuh_tempo >= today -> "pending"
+        # 4. Expired/Kadaluarsa -> "telat"
+        
+        status = inv.status_invoice
+        
+        # Safe Date Conversion for comparison
+        inv_due_date = inv.tgl_jatuh_tempo
+        if isinstance(inv_due_date, datetime):
+            inv_due_date = inv_due_date.date()
+            
+        if status == "Lunas":
+            category = "lunas"
+        elif status in ["Kadaluarsa", "Expired", "Suspend", "Suspended"]:
+            category = "telat"
+        elif status == "Belum Dibayar":
+            if inv_due_date < today_date:
+                category = "telat"
+            else:
+                category = "pending"
+        else:
+            category = "pending" # Default fallback
+
+        # Extract Values
+        qty = 1
+        total_final = float(inv.total_harga or 0)
+        diskon = float(inv.diskon_amount or 0)
+        biaya_pasang = 0.0 # Belum ada kolom biaya pasang explicit, asumsikan 0 atau ambil dari item lain nanti
+        
+        # Calculate Tax (Reverse Engineering or Fetch from Brand)
+        # Formula: Total Final = (Harga Dasar * (1 + TaxRate)) - Diskon
+        # Jadi: Harga Dasar * (1 + TaxRate) = Total Final + Diskon
+        # Harga Dasar = (Total Final + Diskon) / (1 + TaxRate)
+        # Pajak = (Total Final + Diskon) - Harga Dasar
+        
+        tax_rate = 0.11 # Default 11%
+        if inv.pelanggan and inv.pelanggan.harga_layanan and inv.pelanggan.harga_layanan.pajak:
+            tax_rate = float(inv.pelanggan.harga_layanan.pajak) / 100.0
+            
+        gross_amount = total_final + diskon
+        base_price = gross_amount / (1 + tax_rate)
+        pajak_amt = gross_amount - base_price
+        
+        nominal_gross = base_price # Nominal usually means pre-tax, pre-discount price OR gross bill?
+        # Di reference image: Nominal 83jt, Total 83jt (mirip). Diskon kecil.
+        # Let's use Gross Amount (inc tax, exc diskon) as "Nominal"? 
+        # Or Base Price? 
+        # Biasanya "Tagihan" = Subtotal. "Total" = Grand Total.
+        # Kita pakai Base Price sebagai "Nominal" (Harga Layanan murni).
+        
+        # Update Bill Stats (Category)
+        bill_stats[category]["count"] += qty
+        bill_stats[category]["nominal"] += base_price
+        bill_stats[category]["diskon"] += diskon
+        bill_stats[category]["biaya_pasang"] += biaya_pasang
+        bill_stats[category]["total"] += total_final
+        
+        # Update Bill Stats (Total)
+        bill_stats["total_tagihan"]["count"] += qty
+        bill_stats["total_tagihan"]["nominal"] += base_price
+        bill_stats["total_tagihan"]["diskon"] += diskon
+        bill_stats["total_tagihan"]["biaya_pasang"] += biaya_pasang
+        bill_stats["total_tagihan"]["total"] += total_final
+        
+        # Update Tax Stats
+        # Asumsi semua PPN, BHP/USO 0 dulu
+        tax_stats[category]["ppn"] += pajak_amt
+        tax_stats[category]["total_pajak"] += pajak_amt
+        
+        tax_stats["total"]["ppn"] += pajak_amt
+        tax_stats["total"]["total_pajak"] += pajak_amt
+
+        # Payment Method Stats
+        # Logic: 
+        # 1. If method is explicitly set -> Use it
+        # 2. If no method and Status is "Belum Dibayar" -> "Belum Dibayar"
+        # 3. If no method and Status is "Lunas" -> "Manual / Tunai" (Assumption for older/manual data)
+        # 4. Others -> Group by Status
+        
+        raw_method = inv.metode_pembayaran
+        
+        if raw_method:
+            method = raw_method
+        else:
+            if inv.status_invoice == "Belum Dibayar":
+                 method = "Belum Dibayar"
+            elif inv.status_invoice == "Lunas":
+                 method = "Manual / Tunai"
+            else:
+                 method = f"Status: {inv.status_invoice}"
+
+        # Clean key name
+        method = method.strip().title() 
+        
+        if method not in payment_methods_map:
+            payment_methods_map[method] = {"count": 0, "amount": 0.0, "pajak": 0.0, "diskon": 0.0}
+        
+        payment_methods_map[method]["count"] += 1
+        payment_methods_map[method]["amount"] += total_final
+        payment_methods_map[method]["pajak"] += pajak_amt
+        payment_methods_map[method]["diskon"] += diskon
+
+    # Convert Payment Methods Map to List
+    payment_methods_list = [
+        {
+            "method": k, 
+            "count": v["count"], 
+            "total_amount": v["amount"],
+            "pajak": v["pajak"],
+            "diskon": v["diskon"]
+        } 
+        for k, v in payment_methods_map.items()
+    ]
+    # Sort by amount desc
+    payment_methods_list.sort(key=lambda x: x["total_amount"], reverse=True)
 
     return RevenueReportResponse(
-        total_pendapatan=float(total_pendapatan),
-        total_invoices=total_invoices,
-        rincian_invoice=[],  # Selalu kembalikan list kosong
+        total_pendapatan=financial_summary["total_pemasukan"], # Legacy
+        total_invoices=bill_stats["total_tagihan"]["count"], # Legacy
+        financial_summary=financial_summary,
+        billing_summary=bill_stats,
+        tax_summary=tax_stats,
+        payment_methods=payment_methods_list,
+        rincian_invoice=[],  # Selalu kembalikan list kosong, detail via endpoint terpisah
     )
 
 
