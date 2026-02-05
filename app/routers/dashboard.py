@@ -990,7 +990,7 @@ async def get_invoice_generation_monitor(
     should_have_stmt = (
         select(func.count(Langganan.id))
         .where(
-            Langganan.tgl_jatuh_tempo == target_date_obj.day,
+            Langganan.tgl_jatuh_tempo == target_date_obj,
             Langganan.status == "Aktif"
         )
     )
@@ -1014,12 +1014,32 @@ async def get_invoice_generation_monitor(
     success_rate = round((total_generated / total_should_have * 100) if total_should_have > 0 else 100, 1)
 
     # Status
+    today = date.today()
+    generation_date = target_date_obj - timedelta(days=5)
+
+    # Status Determination
     if total_skipped == 0:
         status, status_color, status_icon = "HEALTHY", "success", "✅"
+        message = f"{status_icon} Semua invoice berhasil di-generate"
+    elif today < generation_date:
+        # Before schedule: It is NOT an error/critical yet
+        status, status_color, status_icon = "UPCOMING", "info", "🕒"
+        
+        # Hide skipped count to avoid red flag in UI (stat-box becomes green)
+        total_skipped = 0 
+        
+        # Format date manually to ensure Indonesian
+        months = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"]
+        gen_month_name = months[generation_date.month - 1]
+        gen_date_str = f"{generation_date.day} {gen_month_name} {generation_date.year}"
+        
+        message = f"{status_icon} Menunggu jadwal generate otomatis pada {gen_date_str} (H-5)"
     elif total_skipped <= 5:
         status, status_color, status_icon = "NEEDS_ATTENTION", "warning", "⚠️"
+        message = f"{status_icon} {total_skipped} pelanggan terlewat"
     else:
         status, status_color, status_icon = "CRITICAL", "error", "🔴"
+        message = f"{status_icon} {total_skipped} pelanggan terlewat"
 
     return {
         "target_date": target_date_obj.isoformat(),
@@ -1069,7 +1089,7 @@ async def get_future_invoice_projection(
     estimated_customers_stmt = (
         select(func.count(Langganan.id))
         .where(
-            Langganan.tgl_jatuh_tempo == target_date_obj.day,
+            Langganan.tgl_jatuh_tempo == target_date_obj,
             Langganan.status == "Aktif"
         )
     )

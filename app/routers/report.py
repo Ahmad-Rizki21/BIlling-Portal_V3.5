@@ -150,26 +150,17 @@ async def get_revenue_report(
         category = "pending"
         # Logika Status:
         # 1. Lunas -> "lunas"
-        # 2. Belum Dibayar AND tgl_jatuh_tempo < today -> "telat"
-        # 3. Belum Dibayar AND tgl_jatuh_tempo >= today -> "pending"
-        # 4. Expired/Kadaluarsa -> "telat"
-        
+        # 2. Belum Dibayar -> "pending" (tanpa mempedulikan tgl jatuh tempo)
+        # 3. Expired/Kadaluarsa -> "telat"
+
         status = inv.status_invoice
-        
-        # Safe Date Conversion for comparison
-        inv_due_date = inv.tgl_jatuh_tempo
-        if isinstance(inv_due_date, datetime):
-            inv_due_date = inv_due_date.date()
-            
+
         if status == "Lunas":
             category = "lunas"
         elif status in ["Kadaluarsa", "Expired", "Suspend", "Suspended"]:
             category = "telat"
         elif status == "Belum Dibayar":
-            if inv_due_date < today_date:
-                category = "telat"
-            else:
-                category = "pending"
+            category = "pending"
         else:
             category = "pending" # Default fallback
 
