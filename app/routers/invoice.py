@@ -356,15 +356,33 @@ async def _process_successful_payment(db: AsyncSession, invoice: InvoiceModel, p
                 # Skenario 1: INI ADALAH TAGIHAN GABUNGAN
                 # Convert Date to datetime untuk relativedelta - handle SQLAlchemy Date
                 current_due_datetime = safe_to_datetime(current_due_date)
-                next_due_datetime = current_due_datetime + relativedelta(months=2)
+                
+                if current_due_datetime.day == 1:
+                    # Jika jatuh tempo tgl 1 (misal 1 Maret), berarti cover Feb & Maret.
+                    # Next due: 1 April. (Current + 1 bulan)
+                    next_due_datetime = current_due_datetime + relativedelta(months=1)
+                else:
+                    # Jika jatuh tempo tgl 28 (misal 28 Feb), cover Feb & Maret.
+                    # Next due: 1 April. (Current + 2 bulan di-force tanggal 1)
+                    next_due_datetime = current_due_datetime + relativedelta(months=2)
+                
                 next_due_date = next_due_datetime.date().replace(day=1)
                 logger.info(f"Tagihan gabungan terdeteksi. Jatuh tempo berikutnya diatur ke {next_due_date}")
             else:
                 # Skenario 2: INI ADALAH TAGIHAN PRORATE BIASA
                 # Convert Date to datetime untuk relativedelta - handle SQLAlchemy Date
                 current_due_datetime = safe_to_datetime(current_due_date)
-                next_due_datetime = current_due_datetime + relativedelta(months=1)
-                next_due_date = next_due_datetime.date().replace(day=1)
+                
+                if current_due_datetime.day == 1:
+                    # Jika jatuh tempo tgl 1 (misal 1 Maret), ini adalah pembayaran untuk Feb.
+                    # Siklus Maret dimulai 1 Maret. Jadi Next Due tetap 1 Maret (agar tagihan Maret ter-generate/aktif).
+                    next_due_date = current_due_datetime.date()
+                else:
+                    # Jika jatuh tempo tgl 28 (misal 28 Feb), pembayaran Feb.
+                    # Next due: 1 Maret (Current + 1 bulan di-force tanggal 1).
+                    next_due_datetime = current_due_datetime + relativedelta(months=1)
+                    next_due_date = next_due_datetime.date().replace(day=1)
+                    
                 logger.info(f"Tagihan prorate biasa terdeteksi. Jatuh tempo berikutnya diatur ke {next_due_date}")
 
             # Reset harga langganan ke harga normal untuk bulan-bulan berikutnya
@@ -893,11 +911,19 @@ async def generate_manual_invoice(invoice_data: InvoiceGenerate, db: AsyncSessio
     if not paket.harga or not brand.pajak:
         raise HTTPException(status_code=400, detail="Harga paket atau pajak tidak valid")
 
+    # Target jatuh tempo untuk database
+    # Jika Prorate dan jatuh temponya tanggal 1, kita simpan sebagai tanggal terakhir bulan sebelumnya
+    # agar sesuai dengan keinginan Finance (visual 28 Feb bukan 1 Mar)
+    actual_due_date = langganan.tgl_jatuh_tempo
+    if langganan.metode_pembayaran == "Prorate" and actual_due_date.day == 1:
+        from datetime import timedelta
+        actual_due_date = actual_due_date - timedelta(days=1)
+
     # Check existing invoice - tapi allow jika status expired/kadaluarsa dan ini adalah reinvoice
     if not invoice_data.is_reinvoice:
         existing_invoice_stmt = select(InvoiceModel.id).where(
             InvoiceModel.pelanggan_id == langganan.pelanggan_id,
-            InvoiceModel.tgl_jatuh_tempo == langganan.tgl_jatuh_tempo,
+            InvoiceModel.tgl_jatuh_tempo == actual_due_date,
         )
         existing = (await db.execute(existing_invoice_stmt)).scalar_one_or_none()
         if existing:
@@ -915,9 +941,16 @@ async def generate_manual_invoice(invoice_data: InvoiceGenerate, db: AsyncSessio
     alamat_singkat = re.sub(r'[^a-zA-Z0-9]', '', pelanggan.alamat or '').upper()[:10]  # Take only first 10 chars
     brand_singkat = re.sub(r'[^a-zA-Z0-9]', '', brand.brand or '').upper()
     # Convert SQLAlchemy Date to Python date for datetime.combine
-    from datetime import date, datetime
+    from datetime import date, datetime, timedelta
     jatuh_tempo_python_date = date.fromisoformat(str(langganan.tgl_jatuh_tempo))
-    bulan_tahun = datetime.combine(jatuh_tempo_python_date, datetime.min.time()).strftime("%B-%Y").upper()
+    
+    # Logic penentuan nama bulan untuk Nomor Invoice
+    # Jika Prorate dan jatuh tempo tgl 1, gunakan bulan sebelumnya untuk penamaan
+    naming_date = jatuh_tempo_python_date
+    if langganan.metode_pembayaran == "Prorate" and naming_date.day == 1:
+        naming_date = naming_date - timedelta(days=1)
+        
+    bulan_tahun = datetime.combine(naming_date, datetime.min.time()).strftime("%B-%Y").upper()
 
     # 2. Generate ID suffix - gunakan id_pelanggan jika ada, fallback ke invoice.id
     # Ini mencegah issue "external_id" berujung "None" di Xendit (contoh: .../PARAMA/None)
@@ -1011,7 +1044,7 @@ async def generate_manual_invoice(invoice_data: InvoiceGenerate, db: AsyncSessio
             "no_telp": pelanggan.no_telp,
             "email": pelanggan.email,
             "tgl_invoice": date.today(),
-            "tgl_jatuh_tempo": langganan.tgl_jatuh_tempo,
+            "tgl_jatuh_tempo": actual_due_date, # Menggunakan actual_due_date yang sudah disesuaikan (misal 28 Feb)
             "status_invoice": "Belum Dibayar",
             # Tipe invoice
             "invoice_type": invoice_type,
@@ -1057,33 +1090,76 @@ async def generate_manual_invoice(invoice_data: InvoiceGenerate, db: AsyncSessio
             invoice_date = safe_to_datetime(invoice_date_obj) if invoice_date_obj else datetime.now()
             due_date = safe_to_datetime(due_date_obj) if due_date_obj else datetime.now()
 
+            # FIX: Untuk Prorate, periode harus dihitung berdasarkan due_date (tgl_jatuh_tempo)
+            # karena due_date adalah akhir dari periode yang ditagihkan
+            # Mulai periode = due_date - 1 bulan + 1 hari (awal bulan)
+            # Akhir periode = due_date (tanggal jatuh tempo)
+            due_date_only = due_date.date() if hasattr(due_date, 'date') else due_date
+
+            # Cek apakah ini invoice pertama (pelanggan baru)
+            # Invoice pertama: tgl_invoice sama dengan tgl mulai langganan (bukan tanggal 1)
+            is_first_invoice = invoice_date.day != 1
+
+            if is_first_invoice:
+                # Invoice pertama: gunakan tgl_invoice sebagai mulai periode
+                periode_start = invoice_date
+                
+                # Jika jatuh tempo tanggal 1, user ingin display-nya akhir bulan sebelumnya (misal 28 Feb)
+                # agar tidak membingungkan pelanggan (seolah-olah 1 hari di bulan baru)
+                if due_date.day == 1:
+                    periode_end = due_date - timedelta(days=1)
+                else:
+                    periode_end = due_date
+            else:
+                # Invoice berikutnya: mulai dari tanggal 1 bulan due_date
+                # Pastikan due_date adalah datetime
+                if due_date.day == 1:
+                    # Jika jatuh tempo tgl 1, anggap periode layanan adalah bulan SEBELUMNYA full
+                    # Contoh: Jatuh tempo 1 Mar, layanan 1-28 Feb
+                    periode_end = due_date - timedelta(days=1)
+                    periode_start = periode_end.replace(day=1)
+                else:
+                    # Jika jatuh tempo tgl 28, layanan 1-28 bulan itu
+                    periode_start = due_date.replace(day=1)
+                    periode_end = due_date
+
             # Cek apakah ini invoice gabungan
             if float(db_invoice.total_harga or 0) > (harga_normal_full + 1):
                 # INI TAGIHAN GABUNGAN
-                start_day = safe_get_day(invoice_date)
-                end_day = safe_get_day(due_date)
-                # FIX: Periode prorate harus diambil dari invoice_date, bukan due_date
-                # karena invoice_date adalah tanggal mulai langganan (tanggal pembuatan invoice)
-                periode_prorate_str = safe_format_date(invoice_date, "%B %Y")
-                due_date_datetime = safe_to_datetime(due_date)
-                next_month_date = due_date_datetime + relativedelta(months=1)
-                periode_berikutnya_str = safe_format_date(next_month_date.date(), "%B %Y")
+                # Periode pertama (prorate): dari invoice_date sampai akhir bulan itu
+                periode_prorate_end = invoice_date.replace(day=1) + relativedelta(months=1, days=-1)
+                periode_prorate_str = safe_format_date(periode_prorate_end, "%B %Y")
+
+                # Periode kedua (bulan penuh): bulan berikutnya
+                periode_berikutnya_start = periode_prorate_end + relativedelta(days=1)
+                periode_berikutnya_end = periode_berikutnya_start + relativedelta(months=1, days=-1)
 
                 deskripsi_xendit = (
                     f"Biaya internet up to {paket.kecepatan} Mbps. "
-                    f"Periode Prorate {start_day}-{end_day} {periode_prorate_str} + "
-                    f"Periode {periode_berikutnya_str}"
+                    f"Periode {invoice_date.day}-{periode_prorate_end.day} {periode_prorate_str} + "
+                    f"Periode {safe_format_date(periode_berikutnya_end, '%B %Y')}"
                 )
             else:
                 # INI TAGIHAN PRORATE BIASA
-                start_day = safe_get_day(invoice_date)
-                end_day = safe_get_day(due_date)
-                # FIX: Periode prorate harus diambil dari invoice_date, bukan due_date
-                # karena invoice_date adalah tanggal mulai langganan (tanggal pembuatan invoice)
-                periode_str = safe_format_date(invoice_date, "%B %Y")
+                # Generate deskripsi yang cerdas menangani perbedaan bulan/tahun
+                if periode_start.month == periode_end.month and periode_start.year == periode_end.year:
+                    # Case 1: Dalam satu bulan (e.g. 6-28 Februari 2026)
+                    periode_str = safe_format_date(periode_end, "%B %Y")
+                    period_desc = f"Periode Tgl {periode_start.day}-{periode_end.day} {periode_str}"
+                elif periode_start.year == periode_end.year:
+                     # Case 2: Beda bulan, tahun sama (e.g. 6 Februari - 1 Maret 2026)
+                     start_month = safe_format_date(periode_start, "%B")
+                     end_month_year = safe_format_date(periode_end, "%B %Y")
+                     period_desc = f"Periode Tgl {periode_start.day} {start_month} - {periode_end.day} {end_month_year}"
+                else:
+                     # Case 3: Beda tahun
+                     start_full = safe_format_date(periode_start, "%d %B %Y")
+                     end_full = safe_format_date(periode_end, "%d %B %Y")
+                     period_desc = f"Periode Tgl {start_full} - {end_full}"
+
                 deskripsi_xendit = (
                     f"Biaya berlangganan internet up to {paket.kecepatan} Mbps, "
-                    f"Periode Tgl {start_day}-{end_day} {periode_str}"
+                    f"{period_desc}"
                 )
 
         else:  # Otomatis
@@ -1323,12 +1399,23 @@ async def retry_invoice_xendit(
         jatuh_tempo_str = datetime.combine(jatuh_tempo_date, datetime.min.time()).strftime("%d/%m/%Y")
 
         if pelanggan.langganan[0].metode_pembayaran == "Prorate":
-            # FIX: Periode prorate harus diambil dari invoice_date, bukan jatuh_tempo_date
-            # karena invoice_date adalah tanggal mulai langganan (tanggal pembuatan invoice)
+            # Handle Smart Date Formatting (Consistency with generate_manual_invoice)
+            periode_start = invoice_date
+            if jatuh_tempo_date.day == 1:
+                periode_end = jatuh_tempo_date - timedelta(days=1)
+            else:
+                periode_end = jatuh_tempo_date
+
+            if periode_start.month == periode_end.month and periode_start.year == periode_end.year:
+                period_desc = f"Periode Tgl {periode_start.day}-{periode_end.day} {safe_format_date(periode_end, '%B %Y')}"
+            elif periode_start.year == periode_end.year:
+                period_desc = f"Periode Tgl {periode_start.day} {safe_format_date(periode_start, '%B')} - {periode_end.day} {safe_format_date(periode_end, '%B %Y')}"
+            else:
+                period_desc = f"Periode Tgl {safe_format_date(periode_start, '%d %B %Y')} - {safe_format_date(periode_end, '%d %B %Y')}"
+
             deskripsi_xendit = (
                 f"Biaya berlangganan internet up to {paket.kecepatan} Mbps, "
-                f"Periode Tgl {invoice_date.day}-{jatuh_tempo_date.day} "
-                f"{invoice_date.strftime('%B %Y')}"
+                f"{period_desc}"
             )
         else:  # Otomatis
             deskripsi_xendit = (
@@ -1494,12 +1581,23 @@ async def batch_retry_failed_invoices(
             jatuh_tempo_str = datetime.combine(jatuh_tempo_date, datetime.min.time()).strftime("%d/%m/%Y")
 
             if pelanggan.langganan[0].metode_pembayaran == "Prorate":
-                # FIX: Periode prorate harus diambil dari invoice_date, bukan jatuh_tempo_date
-                # karena invoice_date adalah tanggal mulai langganan (tanggal pembuatan invoice)
+                # Handle Smart Date Formatting (Consistency with generate_manual_invoice)
+                periode_start = invoice_date
+                if jatuh_tempo_date.day == 1:
+                    periode_end = jatuh_tempo_date - timedelta(days=1)
+                else:
+                    periode_end = jatuh_tempo_date
+
+                if periode_start.month == periode_end.month and periode_start.year == periode_end.year:
+                    period_desc = f"Periode Tgl {periode_start.day}-{periode_end.day} {safe_format_date(periode_end, '%B %Y')}"
+                elif periode_start.year == periode_end.year:
+                    period_desc = f"Periode Tgl {periode_start.day} {safe_format_date(periode_start, '%B')} - {periode_end.day} {safe_format_date(periode_end, '%B %Y')}"
+                else:
+                    period_desc = f"Periode Tgl {safe_format_date(periode_start, '%d %B %Y')} - {safe_format_date(periode_end, '%d %B %Y')}"
+
                 deskripsi_xendit = (
                     f"Biaya berlangganan internet up to {paket.kecepatan} Mbps, "
-                    f"Periode Tgl {invoice_date.day}-{jatuh_tempo_date.day} "
-                    f"{invoice_date.strftime('%B %Y')}"
+                    f"{period_desc}"
                 )
             else:
                 deskripsi_xendit = (

@@ -22,8 +22,8 @@ class CircuitState(Enum):
 
 @dataclass
 class CircuitBreakerConfig:
-    failure_threshold: int = 5  # Number of failures before tripping
-    recovery_timeout: int = 60  # Seconds to wait before trying again
+    failure_threshold: int = 3  # Number of failures before tripping
+    recovery_timeout: int = 10  # Seconds to wait before trying again
     expected_exception: tuple = (Exception,)  # Exceptions that count as failures
 
 

@@ -179,37 +179,50 @@
             </v-row>
             
             <!-- Actions -->
-            <div class="d-flex gap-2 mt-auto pt-2">
+            <div class="d-flex align-center gap-3 mt-auto pt-5">
                <v-btn
-                block
-                variant="tonal"
-                color="primary"
-                class="flex-grow-1 text-none font-weight-bold"
+                variant="flat"
+                color="indigo-darken-1"
+                class="flex-grow-1 text-none font-weight-bold action-btn-main shadow-sm"
                 :loading="testingConnectionId === server.id"
                 @click="handleTestConnection(server)"
+                height="44"
               >
-                <v-icon start>mdi-connection</v-icon>
+                <template v-slot:prepend>
+                  <v-icon size="18">mdi-api</v-icon>
+                </template>
                 Test Connection
               </v-btn>
               
-               <v-menu location="bottom end">
-                <template v-slot:activator="{ props }">
-                  <v-btn
-                    icon
-                    variant="text"
-                    color="grey-darken-1"
-                    v-bind="props"
-                    density="comfortable"
-                    class="rounded-lg border ml-2"
-                  >
-                    <v-icon>mdi-dots-vertical</v-icon>
-                  </v-btn>
-                </template>
-                <v-list density="compact" rounded="lg" elevation="4">
-                   <v-list-item @click="openDialog(server)" prepend-icon="mdi-pencil" title="Edit Server"></v-list-item>
-                   <v-list-item @click="openDeleteDialog(server)" prepend-icon="mdi-delete" title="Hapus" color="error"></v-list-item>
-                </v-list>
-              </v-menu>
+              <div class="d-flex gap-2">
+                <v-tooltip text="Edit Server" location="top">
+                  <template v-slot:activator="{ props }">
+                    <v-btn
+                      icon="mdi-pencil-outline"
+                      variant="tonal"
+                      color="indigo"
+                      v-bind="props"
+                      density="comfortable"
+                      class="rounded-lg action-btn-sub"
+                      @click="openDialog(server)"
+                    ></v-btn>
+                  </template>
+                </v-tooltip>
+
+                <v-tooltip text="Hapus Server" location="top">
+                  <template v-slot:activator="{ props }">
+                    <v-btn
+                      icon="mdi-delete-outline"
+                      variant="tonal"
+                      color="error"
+                      v-bind="props"
+                      density="comfortable"
+                      class="rounded-lg action-btn-sub"
+                      @click="openDeleteDialog(server)"
+                    ></v-btn>
+                  </template>
+                </v-tooltip>
+              </div>
             </div>
           </v-card-text>
         </v-card>
@@ -1089,4 +1102,37 @@ function getConnectionIcon(status: string | null): string {
 .v-switch :deep(.v-switch__thumb) {
   transition: all 0.3s ease;
 }
+
+/* Action Buttons Styling */
+.action-btn-main {
+  border-radius: 12px !important;
+  letter-spacing: 0.5px;
+  background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%) !important;
+  color: white !important;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.action-btn-main:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3) !important;
+  filter: brightness(1.1);
+}
+
+.action-btn-sub {
+  transition: all 0.2s ease !important;
+}
+
+.action-btn-sub:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.05);
+}
+
+.shadow-sm {
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05) !important;
+}
+
+.gap-1 { gap: 4px; }
+.gap-2 { gap: 8px; }
+.gap-3 { gap: 12px; }
+.gap-4 { gap: 16px; }
 </style>
