@@ -815,25 +815,23 @@ async function fetchFutureInvoiceMonitor() {
     }
 
     // Calculate dynamic dates
-    // Rule: Invoice generated on 27th of month M for usage in Month M+1 (Target 1st of M+1)
+    // Rule: Invoice generated H-5 (5 days before due date / target date)
+    // Target date = 1st of next month
     const today = new Date();
-    let genYear = today.getFullYear();
-    let genMonth = today.getMonth(); // 0-11
+    let targetYear = today.getFullYear();
+    let targetMonth = today.getMonth() + 1; // next month (0-indexed + 1)
     
-    // If today is after the 27th, we are looking at NEXT month's generation
-    if (today.getDate() >= 27) {
-      genMonth++;
-      if (genMonth > 11) {
-        genMonth = 0;
-        genYear++;
-      }
+    // If today is past the target date (1st of this month already passed), look at next month
+    if (targetMonth > 11) {
+      targetMonth = 0;
+      targetYear++;
     }
     
-    const genDate = new Date(genYear, genMonth, 27);
+    const targetDate = new Date(targetYear, targetMonth, 1);
     
-    // Target date is the 1st of the month after generation
-    // If gen is Jan 27, Target is Feb 1
-    const targetDate = new Date(genYear, genMonth + 1, 1);
+    // H-5: Generate date = target date - 5 days
+    // This correctly handles month boundaries (e.g., Mar 1 - 5 = Feb 24)
+    const genDate = new Date(targetDate.getTime() - 5 * 24 * 60 * 60 * 1000);
     
     // Format YYYY-MM-DD using local time
     const dateToYMD = (d: Date) => {
@@ -843,14 +841,16 @@ async function fetchFutureInvoiceMonitor() {
       return `${year}-${month}-${day}`;
     };
     const targetDateStr = dateToYMD(targetDate);
-    const genDateStr = dateToYMD(genDate);
 
     // Call the actual API endpoint
     const response = await apiClient.get(`/dashboard/future-invoice-projection?target_date=${targetDateStr}`);
+    
+    // Use generation_date from API response if available, otherwise use our calculated H-5
+    const apiGenDate = response.data.generation_date;
     futureInvoiceMonitorData.value = {
       ...response.data,
-      target_date: targetDateStr, // Ensure these are set 
-      generation_date: genDateStr
+      target_date: targetDateStr,
+      generation_date: apiGenDate || dateToYMD(genDate)
     };
     
     // Calculate days until if provided or missing
@@ -861,18 +861,19 @@ async function fetchFutureInvoiceMonitor() {
   } catch (error) {
     console.error('Error fetching future invoice monitor:', error);
 
-    // Fallback logic
+    // Fallback logic — use H-5 calculation (not hardcoded 27th)
     const today = new Date();
-    let genYear = today.getFullYear();
-    let genMonth = today.getMonth();
+    let targetYear = today.getFullYear();
+    let targetMonth = today.getMonth() + 1; // next month
     
-    if (today.getDate() >= 27) {
-      genMonth++;
-      if (genMonth > 11) {genMonth = 0; genYear++;}
+    if (targetMonth > 11) {
+      targetMonth = 0;
+      targetYear++;
     }
     
-    const genDate = new Date(genYear, genMonth, 27);
-    const targetDate = new Date(genYear, genMonth + 1, 1);
+    const targetDate = new Date(targetYear, targetMonth, 1);
+    // H-5: target date minus 5 days
+    const genDate = new Date(targetDate.getTime() - 5 * 24 * 60 * 60 * 1000);
     const dateToYMD = (d: Date) => {
       const year = d.getFullYear();
       const month = String(d.getMonth() + 1).padStart(2, '0');

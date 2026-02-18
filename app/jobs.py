@@ -388,7 +388,6 @@ async def job_generate_invoices() -> None:
     total_invoices_created = 0
     # FIX: Reduced batch size dari 100→30 untuk mencegah connection pool exhaustion
     BATCH_SIZE = 30  # Smaller batch = less DB connections used simultaneously
-    offset = 0
 
     logger.info(f"🔍 Mencari langganan yang jatuh tempo pada: {target_due_date.strftime('%d %B %Y')} (H-5)")
 
@@ -396,29 +395,40 @@ async def job_generate_invoices() -> None:
         # PENTING: Disable expire_on_commit untuk mencegah object expired saat loop + commit
         # Ini mencegah error MissingGreenlet saat akses atribut object di iterasi berikutnya
         db.expire_on_commit = False
-        while True:
+
+        # FIX: Gunakan ID-based batching untuk mencegah record terlewat
+        # Offset-based pagination tanpa ORDER BY bisa skip record jika urutan data berubah
+        try:
+            all_ids_stmt = (
+                select(LanggananModel.id)
+                .where(
+                    LanggananModel.tgl_jatuh_tempo >= target_due_date,
+                    LanggananModel.tgl_jatuh_tempo < target_due_date + timedelta(days=1),
+                    LanggananModel.status == "Aktif",
+                )
+            )
+            all_langganan_ids = (await db.execute(all_ids_stmt)).scalars().all()
+        except Exception as e:
+            error_details = traceback.format_exc()
+            logger.error(f"[FAIL] Gagal mengambil daftar langganan. Details:\n{error_details}")
+            all_langganan_ids = []
+
+        if all_langganan_ids:
+            logger.info(f"📊 Ditemukan {len(all_langganan_ids)} langganan yang sesuai untuk invoice H-5")
+
+        for batch_start in range(0, len(all_langganan_ids), BATCH_SIZE):
+            batch_ids = all_langganan_ids[batch_start:batch_start + BATCH_SIZE]
             try:
-                # FIX: Handle potential DateTime vs Date mismatch
-                # Gunakan range filter agar lebih aman menangkap tgl_jatuh_tempo yang mungkin ada jam-nya
-                base_stmt = (
+                batch_stmt = (
                     select(LanggananModel)
-                    .where(
-                        LanggananModel.tgl_jatuh_tempo >= target_due_date,
-                        LanggananModel.tgl_jatuh_tempo < target_due_date + timedelta(days=1),
-                        LanggananModel.status == "Aktif",
-                    )
+                    .where(LanggananModel.id.in_(batch_ids))
                     .options(
                         selectinload(LanggananModel.pelanggan).selectinload(PelangganModel.harga_layanan),
                         selectinload(LanggananModel.pelanggan).selectinload(PelangganModel.data_teknis),
                         selectinload(LanggananModel.paket_layanan),
                     )
                 )
-
-                batch_stmt = base_stmt.offset(offset).limit(BATCH_SIZE)
                 subscriptions_batch = (await db.execute(batch_stmt)).scalars().unique().all()
-
-                if not subscriptions_batch:
-                    break
 
                 # Process each subscription in the batch
                 # Duplicate check is now handled inside generate_single_invoice()
@@ -445,13 +455,10 @@ async def job_generate_invoices() -> None:
                         logger.error(f"❌ Gagal generate invoice untuk Langganan ID {langganan.id}: {e}")
                         await db.rollback()
 
-
-                offset += BATCH_SIZE
-
             except Exception as e:
                 await db.rollback()
                 error_details = traceback.format_exc()
-                logger.error(f"[FAIL] Scheduler 'job_generate_invoices' failed at offset {offset}. Details:\n{error_details}")
+                logger.error(f"[FAIL] Scheduler 'job_generate_invoices' failed at batch index {batch_start}. Details:\n{error_details}")
                 break
 
     if total_invoices_created > 0:
@@ -515,7 +522,6 @@ async def job_suspend_services() -> None:
     current_date = date.today()
     # FIX: Reduced batch size dari 50→20 untuk mencegah connection pool exhaustion
     BATCH_SIZE = 20  # Smaller batch = less DB connections used simultaneously
-    offset = 0
 
     # LOGIKA BISNIS YANG BENAR:
     # Cek apakah hari ini adalah tanggal 5 untuk melakukan suspend utama
@@ -559,47 +565,43 @@ async def job_suspend_services() -> None:
     logger.info(f"🔍 Mencari pelanggan yang jatuh tempo tanggal {target_due_date.strftime('%d %B %Y')} dan belum bayar (Payment link generated H-5)")
 
     async with SessionType() as db:
-        while True:
+        # FIX: Gunakan ID-based batching untuk mencegah user terlewat saat suspend
+        # Offset-based pagination menyebabkan skip karena record yang sudah diproses
+        # berubah status dari "Aktif" ke "Suspended" sehingga result set menyusut
+        try:
+            if is_retroactive_day:
+                logger.info(f"🔍 Retroactive mode: mencari pelanggan yang belum disuspend dari tanggal 5")
+
+            id_stmt = (
+                select(LanggananModel.id)
+                .join(
+                    InvoiceModel,
+                    LanggananModel.pelanggan_id == InvoiceModel.pelanggan_id,
+                )
+                .where(
+                    InvoiceModel.tgl_jatuh_tempo.in_([target_due_date, end_of_prev_month]),
+                    LanggananModel.status == "Aktif",
+                    InvoiceModel.status_invoice.in_(["Belum Dibayar", "Expired", "Kadaluarsa"]),
+                )
+                .distinct()
+            )
+            all_langganan_ids = (await db.execute(id_stmt)).scalars().all()
+        except Exception as e:
+            logger.error(f"[FAIL] Gagal mengambil daftar langganan untuk suspend. Details: {traceback.format_exc()}")
+            all_langganan_ids = []
+
+        if all_langganan_ids:
+            logger.info(f"📊 Ditemukan {len(all_langganan_ids)} langganan yang perlu di-suspend")
+
+        for batch_start in range(0, len(all_langganan_ids), BATCH_SIZE):
+            batch_ids = all_langganan_ids[batch_start:batch_start + BATCH_SIZE]
             try:
-                # Filter tambahan untuk retroactive: hindari yang sudah disuspend
-                if is_retroactive_day:
-                    logger.info(f"🔍 Retroactive mode: mencari pelanggan yang belum disuspend dari tanggal 5")
-                    base_stmt = (
-                        select(LanggananModel)
-                        .join(
-                            InvoiceModel,
-                            LanggananModel.pelanggan_id == InvoiceModel.pelanggan_id,
-                        )
-                        .where(
-                            InvoiceModel.tgl_jatuh_tempo == target_due_date,  # Cari yang jatuh tempo tepat tanggal 1
-                            LanggananModel.status == "Aktif",  # Masih aktif (belum suspend)
-                            InvoiceModel.status_invoice.in_(["Belum Dibayar", "Expired", "Kadaluarsa"]),  # Invoice belum lunas (fix: cover expired/kadaluarsa juga)
-                        )
-                        .distinct(LanggananModel.id)  # Pastikan setiap langganan hanya diproses sekali
-                        .options(selectinload(LanggananModel.pelanggan).selectinload(PelangganModel.data_teknis))
-                    )
-                else:
-                    # Normal mode (tanggal 5)
-                    base_stmt = (
-                        select(LanggananModel)
-                        .join(
-                            InvoiceModel,
-                            LanggananModel.pelanggan_id == InvoiceModel.pelanggan_id,
-                        )
-                        .where(
-                            InvoiceModel.tgl_jatuh_tempo.in_([target_due_date, end_of_prev_month]),  # Cari yang tanggal 1 ATAU akhir bulan lalu
-                            LanggananModel.status == "Aktif",
-                            InvoiceModel.status_invoice.in_(["Belum Dibayar", "Expired", "Kadaluarsa"]),
-                        )
-                        .distinct(LanggananModel.id)  # Pastikan setiap langganan hanya diproses sekali
-                        .options(selectinload(LanggananModel.pelanggan).selectinload(PelangganModel.data_teknis))
-                    )
-
-                batch_stmt = base_stmt.offset(offset).limit(BATCH_SIZE)
+                batch_stmt = (
+                    select(LanggananModel)
+                    .where(LanggananModel.id.in_(batch_ids))
+                    .options(selectinload(LanggananModel.pelanggan).selectinload(PelangganModel.data_teknis))
+                )
                 overdue_batch = (await db.execute(batch_stmt)).scalars().unique().all()
-
-                if not overdue_batch:
-                    break
 
                 for langganan in overdue_batch:
                     suspend_type = "RETROACTIVE" if is_retroactive_day else "SCHEDULED"
@@ -725,12 +727,10 @@ async def job_suspend_services() -> None:
                         # Lanjut ke pelanggan berikutnya
                         continue
 
-                offset += BATCH_SIZE
-
             except Exception as e:
                 await db.rollback()
                 logger.error(
-                    f"[FAIL] Scheduler 'job_suspend_services' failed at offset {offset}. Details: {traceback.format_exc()}"
+                    f"[FAIL] Scheduler 'job_suspend_services' failed at batch index {batch_start}. Details: {traceback.format_exc()}"
                 )
                 break
 
