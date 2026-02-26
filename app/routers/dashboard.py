@@ -976,15 +976,31 @@ async def get_invoice_generation_monitor(
 
     from datetime import date, timedelta
 
-    # Calculate target date (tanggal 1 bulan depan jika tidak ditentukan)
+    # Calculate smart target date if not provided
+    # RULE: Monitor targets the most recently started/finished run.
+    # If today >= H-5 of Month M+1, then M+1 is current (we monitor it).
+    # Else, Month M is current.
     if target_date:
         target_date_obj = date.fromisoformat(target_date)
     else:
-        today = date.today()
-        if today.month == 12:
-            target_date_obj = date(today.year + 1, 1, 1)
+        from datetime import date as date_type
+        today = date_type.today()
+        # M = 1st of this month
+        m = today.replace(day=1)
+        # M+1 = 1st of next month
+        if m.month == 12:
+            m_plus_1 = date_type(m.year + 1, 1, 1)
         else:
-            target_date_obj = date(today.year, today.month + 1, 1)
+            m_plus_1 = date_type(m.year, m.month + 1, 1)
+        
+        # Generation for M+1 happens on M+1 minus 5 days
+        # We also consider time (13:00) but date check is usually enough for dashboard default
+        gen_date_m_plus_1 = m_plus_1 - timedelta(days=5)
+        
+        if today >= gen_date_m_plus_1:
+            target_date_obj = m_plus_1
+        else:
+            target_date_obj = m
 
     # Get langganan yang seharusnya dapat invoice
     should_have_stmt = (
@@ -1061,7 +1077,7 @@ async def get_invoice_generation_monitor(
 
 @router.get("/future-invoice-projection")
 async def get_future_invoice_projection(
-    target_date: str = "2026-01-01",
+    target_date: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
     current_user: UserModel = Depends(get_current_active_user)
 ):
@@ -1083,8 +1099,36 @@ async def get_future_invoice_projection(
         )
     from datetime import date, timedelta
 
-    target_date_obj = date.fromisoformat(target_date)
-    today = date.today()
+    from datetime import date as date_type
+    today = date_type.today()
+
+    # Calculate smart target date if not provided
+    # RULE: Projection targets the NEXT upcoming run whose generation hasn't passed.
+    if target_date:
+        target_date_obj = date.fromisoformat(target_date)
+    else:
+        # M = 1st of this month
+        m = today.replace(day=1)
+        # M+1 = 1st of next month
+        if m.month == 12:
+            m_plus_1 = date_type(m.year + 1, 1, 1)
+        else:
+            m_plus_1 = date_type(m.year, m.month + 1, 1)
+        
+        # Gen for M+1 happens on M+1 minus 5 days
+        gen_date_m_plus_1 = m_plus_1 - timedelta(days=5)
+        
+        if today >= gen_date_m_plus_1:
+            # If M+1 gen is already done, project for M+2
+            if m_plus_1.month == 12:
+                target_date_obj = date_type(m_plus_1.year + 1, 1, 1)
+            else:
+                target_date_obj = date_type(m_plus_1.year, m_plus_1.month + 1, 1)
+        else:
+            # If M+1 gen is not yet done, project for M+1
+            target_date_obj = m_plus_1
+
+    target_date = target_date_obj.isoformat()
 
     # Hitung hari hingga target date
     days_until = (target_date_obj - today).days if target_date_obj > today else 0

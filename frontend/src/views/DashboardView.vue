@@ -677,7 +677,7 @@ const selectedLoyalitasSegmen = ref('');
 const invoiceMonitorData = ref<any>(null);
 const loadingInvoiceMonitor = ref(false);
 
-// Future Invoice Monitor State (for 2026-01-01)
+// Future Invoice Monitor State (Dynamic)
 const futureInvoiceMonitorData = ref<any>(null);
 const loadingFutureInvoiceMonitor = ref(false);
 
@@ -814,33 +814,40 @@ async function fetchFutureInvoiceMonitor() {
       return;
     }
 
-    // Calculate dynamic dates
-    // Rule: Invoice generated H-5 (5 days before due date / target date)
-    // Target date = 1st of next month
+    // RULE: Projection targets the NEXT upcoming run whose generation hasn't passed.
+    // Generation Date is H-5
     const today = new Date();
-    let targetYear = today.getFullYear();
-    let targetMonth = today.getMonth() + 1; // next month (0-indexed + 1)
     
-    // If today is past the target date (1st of this month already passed), look at next month
+    // Target 1 = 1st of next month
+    let targetYear = today.getFullYear();
+    let targetMonth = today.getMonth() + 1;
     if (targetMonth > 11) {
       targetMonth = 0;
       targetYear++;
     }
+    const t1 = new Date(targetYear, targetMonth, 1);
+    const genDateT1 = new Date(t1.getTime() - 5 * 24 * 60 * 60 * 1000);
     
-    const targetDate = new Date(targetYear, targetMonth, 1);
+    let finalTargetDate = t1;
     
-    // H-5: Generate date = target date - 5 days
-    // This correctly handles month boundaries (e.g., Mar 1 - 5 = Feb 24)
-    const genDate = new Date(targetDate.getTime() - 5 * 24 * 60 * 60 * 1000);
-    
-    // Format YYYY-MM-DD using local time
+    // If today is past/at T1's generation date, then T1 is "Current", so we project T2
+    if (today >= genDateT1) {
+      let t2Month = targetMonth + 1;
+      let t2Year = targetYear;
+      if (t2Month > 11) {
+        t2Month = 0;
+        t2Year++;
+      }
+      finalTargetDate = new Date(t2Year, t2Month, 1);
+    }
+
     const dateToYMD = (d: Date) => {
       const year = d.getFullYear();
       const month = String(d.getMonth() + 1).padStart(2, '0');
       const day = String(d.getDate()).padStart(2, '0');
       return `${year}-${month}-${day}`;
     };
-    const targetDateStr = dateToYMD(targetDate);
+    const targetDateStr = dateToYMD(finalTargetDate);
 
     // Call the actual API endpoint
     const response = await apiClient.get(`/dashboard/future-invoice-projection?target_date=${targetDateStr}`);
@@ -850,7 +857,7 @@ async function fetchFutureInvoiceMonitor() {
     futureInvoiceMonitorData.value = {
       ...response.data,
       target_date: targetDateStr,
-      generation_date: apiGenDate || dateToYMD(genDate)
+      generation_date: apiGenDate || dateToYMD(finalTargetDate === t1 ? genDateT1 : new Date(finalTargetDate.getTime() - 5 * 24 * 60 * 60 * 1000))
     };
     
     // Calculate days until if provided or missing
@@ -1734,7 +1741,7 @@ onMounted(async () => {
 
     if (canViewFutureProjection.value) {
       console.log('Fetching future invoice monitor...');
-      fetchFutureInvoiceMonitor(); // Load future invoice monitor for 2026-01-01
+      fetchFutureInvoiceMonitor(); // Load future invoice monitor dynamically
     }
 
   } catch (error) {
