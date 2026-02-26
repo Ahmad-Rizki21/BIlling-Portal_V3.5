@@ -262,7 +262,7 @@
           </template>
 
           <template v-slot:item.status_invoice="{ item }">
-            <div class="d-flex align-center gap-1">
+            <div class="d-flex align-center justify-start gap-1">
               <v-chip
                 :color="getStatusColor(item.payment_link_status || item.status_invoice)"
                 variant="elevated"
@@ -380,20 +380,20 @@
                 </v-tooltip>
 
                 <!-- Button Buat Reinvoice -->
-<v-tooltip location="top" v-if="auth.hasPermission('create_invoices')">
-  <template v-slot:activator="{ props }">
-    <v-btn
-      v-if="canCreateReinvoice(item)"
-      icon="mdi-refresh"
-      v-bind="props"
-      variant="text"
-      size="small"
-      color="warning"
-      @click="createReinvoice(item)"
-    ></v-btn>
-  </template>
-  <span>Buat Reinvoice</span>
-</v-tooltip>
+            <v-tooltip location="top" v-if="auth.hasPermission('create_invoices')">
+              <template v-slot:activator="{ props }">
+                <v-btn
+                  v-if="canCreateReinvoice(item)"
+                  icon="mdi-refresh"
+                  v-bind="props"
+                  variant="text"
+                  size="small"
+                  color="warning"
+                  @click="createReinvoice(item)"
+                ></v-btn>
+              </template>
+              <span>Buat Reinvoice</span>
+            </v-tooltip>
 
             </div>
           </template>
@@ -470,7 +470,7 @@
                 <template v-slot:prepend>
                   <v-icon :color="item.status_invoice === 'Kadaluarsa' ? 'error' : 'warning'" class="me-4">mdi-calendar-alert</v-icon>
                 </template>
-                <v-list-item-title>Jatuh Tempo</v-list-item-title>
+                <v-list-item-title>Periode</v-list-item-title>
                 <template v-slot:append>
                   <div class="text-right">
                     <div>{{ formatDate(item.tgl_jatuh_tempo) }}</div>
@@ -616,7 +616,7 @@
                 <v-col cols="12" md="6">
                   <v-text-field
                     :model-value="formatDate(selectedLanggananDetails.tgl_jatuh_tempo)"
-                    label="Jatuh Tempo"
+                    label="Periode"
                     variant="outlined"
                     readonly
                     prepend-inner-icon="mdi-calendar-end"
@@ -823,8 +823,14 @@ const headers = [
   { title: 'Nomor Invoice', key: 'invoice_number', width: '200px' },
   { title: 'Pelanggan', key: 'pelanggan_id', width: '250px' },
   { title: 'Total Tagihan', key: 'total_harga', align: 'end' as const, width: '150px' },
-  { title: 'Status', key: 'status_invoice', align: 'center' as const, width: '130px' },
-  { title: 'Jatuh Tempo', key: 'tgl_jatuh_tempo', align: 'center' as const, width: '150px' },
+  { 
+    title: 'Status', 
+    key: 'status_invoice', 
+    align: 'start' as const, 
+    width: '130px',
+    value: (item: any) => item.payment_link_status || item.status_invoice
+  },
+  { title: 'Periode', key: 'tgl_jatuh_tempo', align: 'start' as const, width: '150px' },
   { title: 'Actions', key: 'actions', sortable: false, align: 'center' as const, width: '120px' },
 ];
 
