@@ -84,8 +84,7 @@ npm run dev
 - **Vite**: Build tool
 
 ### Infrastructure
-- **PostgreSQL**: Database utama
-- **Redis**: Cache dan session storage
+- **MySQL**: Database utama
 - **Nginx**: Reverse proxy dan load balancer (opsional untuk production)
 - **Local Development**: Development environment langsung di mesin lokal
 
@@ -94,8 +93,7 @@ npm run dev
 ### Prerequisites
 - Python 3.9+
 - Node.js 16+
-- PostgreSQL 12+
-- Redis (opsional, untuk cache)
+- MySQL
 
 ### Setup Backend
 ```bash
