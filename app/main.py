@@ -58,6 +58,13 @@ from .jobs import (
     job_archive_historical_invoices, # Archive invoice lama
 )
 
+# Import Telegram AI Monitor jobs
+from .services.telegram_ai_monitor import (
+    run_daily_report,           # Laporan harian ke Telegram
+    run_error_alert,            # Alert error ke Telegram
+    run_server_health_check,    # Server health check
+)
+
 # Import untuk logging
 from .logging_config import setup_logging
 from .logging_utils import sanitize_log_data
@@ -104,6 +111,7 @@ from .routers import (
 from .routers import rate_limiter_monitor  # Rate limiter monitoring
 from .routers import user  # User management
 from .routers import error_report  # Error reporting system
+from .routers import telegram_monitor  # Telegram AI Monitor
 
 # WebSocket manager untuk notifikasi real-time
 from .websocket_manager import manager
@@ -559,62 +567,56 @@ async def websocket_notifications(websocket: WebSocket, token: str = Query(...))
 
         logger.info(f"[{endpoint_name}] Token received, attempting validation...")
 
-        # Dapatkan database session
-        db_generator = get_db()
-        db = await db_generator.__anext__()
+        # PERBAIKAN: Gunakan context manager untuk session database agar koneksi segera dilepas
+        # Kita tidak menggunakan get_db() di sini karena WebSocket adalah long-running connection
+        async with AsyncSessionLocal() as db:
+            # Verifikasi token dan dapatkan user
+            user = await get_user_from_token(token, db)
+            
+            if not user:
+                # Handle URL encoded token atau expired
+                import urllib.parse
+                try:
+                    decoded_token = urllib.parse.unquote(token)
+                except Exception:
+                    decoded_token = token
 
-        # Verifikasi token dan dapatkan user
-        user = await get_user_from_token(token, db)
-        if not user:
-            # Handle URL encoded token
-            import urllib.parse
-            try:
-                decoded_token = urllib.parse.unquote(token)
-            except Exception:
-                decoded_token = token
+                token_preview = decoded_token[:20] + "..." if len(decoded_token) > 20 else decoded_token
+                logger.warning(f"[{endpoint_name}] Invalid token - Preview: {token_preview}")
 
-            # Log detail token untuk debugging (hanya sebagian untuk security)
-            token_preview = decoded_token[:20] + "..." if len(decoded_token) > 20 else decoded_token
-            logger.warning(f"[{endpoint_name}] Invalid token provided - Token preview: {token_preview}, Length: {len(decoded_token)}")
+                try:
+                    from .auth import verify_access_token
+                    payload = verify_access_token(decoded_token)
+                    await websocket.close(code=4401, reason="Token valid but user not found")
+                except Exception as decode_error:
+                    if "expired" in str(decode_error).lower():
+                        await websocket.close(code=4401, reason="Token expired")
+                    else:
+                        await websocket.close(code=4400, reason="Invalid token format")
+                return
 
-            # Coba decode token untuk melihat expiry dan beri feedback yang lebih berguna
-            try:
-                from .auth import verify_access_token
-                payload = verify_access_token(decoded_token)
-                exp = payload.get('exp', 'unknown')
-                exp_time = datetime.fromtimestamp(exp) if isinstance(exp, (int, float)) else 'unknown'
-                logger.warning(f"[{endpoint_name}] Token decode successful but user not found. Expiry: {exp_time}")
+            # Ambil data yang dibutuhkan sebelum session ditutup
+            user_id = user.id
+            user_name = user.name
+            user_email = user.email
+            user_roles = list(manager.user_roles.get(user_id, []))
 
-                # Kirim pesan error yang lebih informatif ke client
-                await websocket.close(code=4401, reason="Token valid but user not found - Please refresh your page and login again")
-            except Exception as decode_error:
-                error_type = type(decode_error).__name__
-                logger.warning(f"[{endpoint_name}] Token decode failed ({error_type}): {str(decode_error)}")
-
-                # Berikan pesan error yang lebih spesifik berdasarkan tipe error
-                if "expired" in str(decode_error).lower():
-                    await websocket.close(code=4401, reason="Token expired - Please refresh your page and login again")
-                elif "signature" in str(decode_error).lower():
-                    await websocket.close(code=4400, reason="Token signature invalid - Please refresh your page and login again")
-                else:
-                    await websocket.close(code=4400, reason="Invalid token format - Please refresh your page and login again")
-            return
-
-        logger.info(f"[{endpoint_name}] Authentication successful: {user.name} (ID: {user.id}, Email: {user.email})")
+        logger.info(f"[{endpoint_name}] Authentication successful: {user_name} (ID: {user_id}, Email: {user_email})")
 
         # Connect WebSocket menggunakan manager
-        await manager.connect(websocket, user.id)
-        logger.info(f"[{endpoint_name}] Connection established for user {user.id} from IP {client_ip}")
+        await manager.connect(websocket, user_id)
+        logger.info(f"[{endpoint_name}] Connection established for user {user_id} from IP {client_ip}")
+
 
         # Kirim pesan konfirmasi ke client
         await websocket.send_text(json.dumps({
             "type": "connection_established",
             "message": "WebSocket connected successfully",
-            "user_id": user.id,
+            "user_id": user_id,
             "timestamp": datetime.now().isoformat(),
             "server_info": {
                 "active_connections": len(manager.active_connections),
-                "user_roles": list(manager.user_roles.get(user.id, []))
+                "user_roles": user_roles
             }
         }))
 
@@ -624,7 +626,7 @@ async def websocket_notifications(websocket: WebSocket, token: str = Query(...))
                 # Tunggu pesan dari client
                 data = await websocket.receive_text()
                 log_message = data[:100] + "..." if len(data) > 100 else data
-                logger.debug(f"[{endpoint_name}] Message from user {user.id}: {log_message}")
+                logger.debug(f"[{endpoint_name}] Message from user {user_id}: {log_message}")
 
                 # Handle ping/pong untuk keep-alive
                 if data.lower() == "ping":
@@ -643,19 +645,19 @@ async def websocket_notifications(websocket: WebSocket, token: str = Query(...))
                         await websocket.send_text(json.dumps({
                             "type": "status_response",
                             "status": "connected",
-                            "user_id": user.id,
+                            "user_id": user_id,
                             "timestamp": datetime.now().isoformat()
                         }))
 
                 except json.JSONDecodeError:
-                    logger.warning(f"[{endpoint_name}] Non-JSON message from user {user.id}: {log_message}")
+                    logger.warning(f"[{endpoint_name}] Non-JSON message from user {user_id}: {log_message}")
 
         except WebSocketDisconnect:
-            logger.info(f"[{endpoint_name}] WebSocket disconnected for user {user.id}")
+            logger.info(f"[{endpoint_name}] WebSocket disconnected for user {user_id}")
         except Exception as e:
-            logger.error(f"[{endpoint_name}] WebSocket error for user {user.id}: {e}")
+            logger.error(f"[{endpoint_name}] WebSocket error for user {user_id}: {e}")
         finally:
-            await manager.disconnect(user.id)
+            await manager.disconnect(user_id)
 
     except Exception as e:
         logger.error(f"[{endpoint_name}] WebSocket connection error: {e}")
@@ -664,9 +666,8 @@ async def websocket_notifications(websocket: WebSocket, token: str = Query(...))
         except Exception as e:
             logger.debug(f"[{endpoint_name}] Failed to cleanly close WebSocket during final cleanup: {e}")
     finally:
-        # Tutup database session
-        if db:
-            await db.close()
+        # Session database sudah ditutup otomatis oleh context manager
+        pass
 
 
 # Event handler untuk startup aplikasi
@@ -759,6 +760,44 @@ async def startup_event():
     # Mengirim pengingat pembayaran setiap hari jam 8 pagi.
     #scheduler.add_job(job_send_payment_reminders, 'cron', hour=8, minute=0, timezone='Asia/Jakarta', id="send_reminders_job", replace_existing=True)
     #==============================================================REMAINDERS INVOICE=======================================================================#
+
+    #==============================================================TELEGRAM AI MONITOR=======================================================================#
+    # 🤖 Laporan harian Billing System ke Telegram via Qwen AI
+    # Jalan 2x sehari: pagi jam 08:00 dan malam jam 20:00
+    # scheduler.add_job(
+    #     run_daily_report,
+    #     'cron',
+    #     hour='8,20',
+    #     minute=0,
+    #     timezone='Asia/Jakarta',
+    #     id="telegram_daily_report_job",
+    #     replace_existing=True,
+    #     max_instances=1,
+    #     misfire_grace_time=600  # 10 menit grace time
+    # )
+
+    # # 🚨 Error Alert - Cek error kritis setiap 1 jam
+    # scheduler.add_job(
+    #     run_error_alert,
+    #     'interval',
+    #     hours=1,
+    #     id="telegram_error_alert_job",
+    #     replace_existing=True,
+    #     max_instances=1
+    # )
+
+    # # 🏥 Server Health Check - Setiap hari jam 06:00
+    # scheduler.add_job(
+    #     run_server_health_check,
+    #     'cron',
+    #     hour=6,
+    #     minute=0,
+    #     timezone='Asia/Jakarta',
+    #     id="telegram_health_check_job",
+    #     replace_existing=True,
+    #     max_instances=1
+    # )
+    #==============================================================TELEGRAM AI MONITOR=======================================================================#
     
     # Log scheduler info
     print("="*80)
@@ -772,6 +811,9 @@ async def startup_event():
     print("✅ Payment Link Retry: AKTIF - Setiap 1 jam (auto-recovery)")
     print("ℹ️  Traffic Monitoring: Dinonaktifkan")
     print("⏭️  Archive Invoice: Dinonaktifkan (manual trigger)")
+    print("✅ Telegram Daily Report: AKTIF - Setiap hari jam 08:00 & 20:00 WIB")
+    print("✅ Telegram Error Alert: AKTIF - Setiap 1 jam")
+    print("✅ Telegram Health Check: AKTIF - Setiap hari jam 06:00 WIB")
     print("="*80)
 
     # 6. Mulai scheduler dengan safety check
@@ -837,6 +879,7 @@ app.include_router(trouble_ticket.router)
 app.include_router(traffic_monitoring.router)
 app.include_router(rate_limiter_monitor.router)
 app.include_router(error_report.router)
+app.include_router(telegram_monitor.router)
 
 
 # Endpoint root untuk verifikasi

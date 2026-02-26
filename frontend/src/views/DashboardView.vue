@@ -317,9 +317,9 @@
                 <div class="stat-label">Status Sistem</div>
                 <div class="stat-value">{{ futureInvoiceMonitorData.system_status || 'Siap' }}</div>
               </div>
-              <div class="stat-box">
-                <div class="stat-label">Menuju {{ futureInvoiceMonitorData ? formatDate(futureInvoiceMonitorData.target_date) : '...' }}</div>
-                <div class="stat-value">{{ futureInvoiceMonitorData.days_until }} hari</div>
+              <div class="stat-box" :class="futureInvoiceMonitorData.generation_days_until <= 2 ? 'warning' : ''">
+                <div class="stat-label">Ke Jadwal Generate</div>
+                <div class="stat-value">{{ futureInvoiceMonitorData.generation_days_until }} hari</div>
               </div>
               <div class="stat-box">
                 <div class="stat-label">Jadwal Generate</div>

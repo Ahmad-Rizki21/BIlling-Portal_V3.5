@@ -49,6 +49,7 @@ from ..config import settings
 from ..services import xendit_service, mikrotik_service
 from ..services.payment_callback_service import check_duplicate_callback, log_callback_processing
 from ..services.rate_limiter import create_invoice_with_rate_limit, InvoicePriority
+from ..utils.phone_utils import normalize_phone_for_xendit
 
 # Import our logging utilities
 from ..logging_utils import sanitize_log_data
@@ -584,6 +585,7 @@ async def handle_xendit_callback(
         raise HTTPException(status_code=400, detail="Format external_id tidak valid")
 
     # VALIDASI TOKEN SECARA LANGSUNG
+    correct_token = None  # FIX: Inisialisasi untuk mencegah NameError jika tidak ada token yang cocok
     # 1. Coba validasi dengan token ARTACOMINDO (Jakinet, Nagrak)
     artacom_token = settings.XENDIT_CALLBACK_TOKENS.get("ARTACOMINDO")
     if artacom_token and x_callback_token == artacom_token:
@@ -692,6 +694,15 @@ async def handle_xendit_callback(
         logger.info(f"Invoice {invoice.invoice_number} already has status Lunas, callback ignored.")
         return {"message": "Invoice already processed"}
 
+    # SAFETY NET: Simpan status original untuk potensi Mikrotik rollback
+    _original_langganan_status = None
+    _rollback_langganan = None
+    _rollback_data_teknis = None
+    if invoice.pelanggan and invoice.pelanggan.langganan:
+        _rollback_langganan = invoice.pelanggan.langganan[0]
+        _original_langganan_status = _rollback_langganan.status
+        _rollback_data_teknis = getattr(invoice.pelanggan, 'data_teknis', None)
+
     try:
         if xendit_status == "PAID":
             await _process_successful_payment(db, invoice, payload)
@@ -711,6 +722,26 @@ async def handle_xendit_callback(
     except Exception as e:
         await db.rollback()
         logger.error(f"Error processing Xendit callback for external_id {external_id}: {str(e)}")
+
+        # SAFETY NET: Rollback Mikrotik jika unsuspend berhasil tapi commit gagal
+        if (xendit_status == "PAID" and _original_langganan_status == "Suspended"
+                and _rollback_langganan and _rollback_data_teknis):
+            try:
+                logger.warning(f"🔄 Attempting Mikrotik rollback for langganan ID {_rollback_langganan.id}...")
+                _rollback_langganan.status = "Suspended"
+                await mikrotik_service.trigger_mikrotik_update(
+                    db, _rollback_langganan, _rollback_data_teknis, _rollback_data_teknis.id_pelanggan
+                )
+                logger.info(f"✅ Mikrotik rollback successful for langganan ID {_rollback_langganan.id}")
+            except Exception as rollback_error:
+                logger.error(f"❌ CRITICAL: Mikrotik rollback FAILED: {rollback_error}")
+                _rollback_data_teknis.mikrotik_sync_pending = True
+                try:
+                    db.add(_rollback_data_teknis)
+                    await db.commit()
+                except Exception:
+                    logger.error("⚠️ Could not mark mikrotik_sync_pending. Manual intervention required.")
+
         raise HTTPException(status_code=500, detail="Internal server error while processing callback.")
 
     return {"message": "Callback processed successfully"}
@@ -1171,17 +1202,8 @@ async def generate_manual_invoice(invoice_data: InvoiceGenerate, db: AsyncSessio
         # Format nomor telepon untuk Xendit (tanpa '+')
         no_telp_bersih = ""
         if pelanggan.no_telp:
-            # Hapus spasi dan karakter non-numerik kecuali '+' di awal
-            no_telp_bersih = "".join(filter(str.isdigit, pelanggan.no_telp))
-            # Handle '0' di depan -> '62'
-            if no_telp_bersih.startswith("0"):
-                no_telp_bersih = "62" + no_telp_bersih[1:]
-            # Jika sudah '62' di depan, biarkan
-            elif no_telp_bersih.startswith("62"):
-                pass
-            # Untuk format lain, coba tambahkan '62' (asumsi nomor lokal tanpa 0)
-            else:
-                no_telp_bersih = "62" + no_telp_bersih
+            # Gunakan helper universal yang handle semua format: 08xx, 62xx, +62xx, 8xx
+            no_telp_bersih = normalize_phone_for_xendit(pelanggan.no_telp)
 
         no_telp_xendit = no_telp_bersih if no_telp_bersih else None
 
@@ -1280,10 +1302,40 @@ async def mark_invoice_as_paid(invoice_id: int, payload: MarkAsPaidRequest, db: 
 
     invoice.metode_pembayaran = payload.metode_pembayaran
 
+    # SAFETY NET: Simpan status original untuk potensi Mikrotik rollback
+    _original_status = None
+    _rollback_langganan = None
+    _rollback_data_teknis = None
+    if invoice.pelanggan and invoice.pelanggan.langganan:
+        _rollback_langganan = invoice.pelanggan.langganan[0]
+        _original_status = _rollback_langganan.status
+        _rollback_data_teknis = getattr(invoice.pelanggan, 'data_teknis', None)
+
     await _process_successful_payment(db, invoice)
 
-    await db.commit()
-    await db.refresh(invoice)
+    try:
+        await db.commit()
+        await db.refresh(invoice)
+    except Exception as commit_error:
+        await db.rollback()
+        logger.error(f"❌ Commit gagal saat mark-as-paid untuk invoice {invoice_id}: {commit_error}")
+        # Rollback Mikrotik jika unsuspend sudah dilakukan
+        if _original_status == "Suspended" and _rollback_langganan and _rollback_data_teknis:
+            try:
+                _rollback_langganan.status = "Suspended"
+                await mikrotik_service.trigger_mikrotik_update(
+                    db, _rollback_langganan, _rollback_data_teknis, _rollback_data_teknis.id_pelanggan
+                )
+                logger.info(f"✅ Mikrotik rollback successful for langganan ID {_rollback_langganan.id}")
+            except Exception as rollback_error:
+                logger.error(f"❌ CRITICAL: Mikrotik rollback FAILED: {rollback_error}")
+                _rollback_data_teknis.mikrotik_sync_pending = True
+                try:
+                    db.add(_rollback_data_teknis)
+                    await db.commit()
+                except Exception:
+                    pass
+        raise HTTPException(status_code=500, detail="Gagal menyimpan perubahan pembayaran.")
 
     # Clear sidebar cache untuk update badge count
     try:
@@ -1428,7 +1480,7 @@ async def retry_invoice_xendit(
         harga_dasar = float(paket.harga)
         pajak = floor(harga_dasar * (pajak_persen / 100) + 0.5)
 
-        no_telp_xendit = f"+62{pelanggan.no_telp.lstrip('0')}" if pelanggan.no_telp else ""
+        no_telp_xendit = normalize_phone_for_xendit(pelanggan.no_telp)
 
         # Coba buat payment link lagi
         xendit_response = await create_invoice_with_rate_limit(
@@ -1610,7 +1662,7 @@ async def batch_retry_failed_invoices(
             harga_dasar = float(paket.harga)
             pajak = floor(harga_dasar * (pajak_persen / 100) + 0.5)
 
-            no_telp_xendit = f"+62{pelanggan.no_telp.lstrip('0')}" if pelanggan.no_telp else ""
+            no_telp_xendit = normalize_phone_for_xendit(pelanggan.no_telp)
 
             # Coba buat payment link
             xendit_response = await create_invoice_with_rate_limit(
@@ -2615,7 +2667,7 @@ async def fix_missing_payment_links(
                 paket=paket,
                 deskripsi_xendit=f"Invoice Payment - {invoice.invoice_number}",
                 pajak=float(invoice.total_harga) - float(paket.harga) if paket else 0,
-                no_telp_xendit=f"+62{pelanggan.no_telp.lstrip('0')}" if pelanggan.no_telp else ""
+                no_telp_xendit=normalize_phone_for_xendit(pelanggan.no_telp)
             )
 
             # Update invoice
@@ -2637,6 +2689,99 @@ async def fix_missing_payment_links(
         "failed_count": failed_count
     }
 
+
+@router.get("/affected-phone-format")
+async def get_affected_phone_format_invoices(
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user),
+    _: None = Depends(has_permission("view_invoices")),
+):
+    """
+    Endpoint untuk mengidentifikasi invoice yang terdampak format nomor telepon salah.
+    
+    Masalah: Nomor yang disimpan di DB sebagai 62xxx (misalnya 6281283725103)
+    sebelumnya diformat menjadi +6262xxx (dobel prefix) saat dikirim ke Xendit,
+    sehingga pelanggan tersebut TIDAK menerima WhatsApp notification dari Xendit.
+    
+    Endpoint ini mengembalikan:
+    - Daftar invoice "Belum Dibayar" yang nomornya berawalan 62 di database
+    - Payment link yang bisa dishare manual via WhatsApp oleh finance
+    - Nomor WhatsApp yang benar (sudah dinormalisasi)
+    
+    USAGE: GET /invoices/affected-phone-format
+    Finance kemudian bisa copy payment link dan kirim manual ke pelanggan.
+    """
+    from ..utils.phone_utils import normalize_phone_for_xendit
+
+    try:
+        # Cari invoice yang masih "Belum Dibayar" dan punya payment link
+        stmt = (
+            select(InvoiceModel)
+            .where(
+                InvoiceModel.status_invoice == "Belum Dibayar",
+                InvoiceModel.payment_link.isnot(None),
+            )
+            .options(
+                joinedload(InvoiceModel.pelanggan)
+            )
+            .order_by(InvoiceModel.created_at.desc())
+        )
+
+        result = await db.execute(stmt)
+        invoices = result.unique().scalars().all()
+
+        affected_invoices = []
+        for inv in invoices:
+            if not inv.pelanggan or not inv.pelanggan.no_telp:
+                continue
+
+            raw_phone = inv.pelanggan.no_telp.strip()
+            
+            # Identifikasi nomor yang PASTI terdampak:
+            # 1. Nomor yang sudah dalam format 62xxx (tanpa 0) di database
+            #    → sebelumnya jadi +6262xxx (SALAH)
+            # 2. Nomor yang dalam format +62xxx di database  
+            #    → sebelumnya jadi +6262xxx (SALAH)
+            digits_only = ''.join(c for c in raw_phone if c.isdigit())
+            
+            is_affected = False
+            reason = ""
+            
+            if digits_only.startswith('62') and not raw_phone.startswith('0'):
+                is_affected = True
+                reason = f"Nomor di DB: '{raw_phone}' → dikirim ke Xendit sebagai '+62{digits_only}' (dobel 62)"
+            
+            if is_affected:
+                correct_phone = normalize_phone_for_xendit(raw_phone)
+                affected_invoices.append({
+                    "invoice_id": inv.id,
+                    "invoice_number": inv.invoice_number,
+                    "pelanggan_nama": inv.pelanggan.nama,
+                    "no_telp_di_db": raw_phone,
+                    "no_telp_salah_lama": f"+62{digits_only}",
+                    "no_telp_benar": correct_phone,
+                    "no_wa_share": correct_phone.replace("+", ""),
+                    "payment_link": inv.payment_link,
+                    "total_harga": float(inv.total_harga) if inv.total_harga else 0,
+                    "tgl_jatuh_tempo": str(inv.tgl_jatuh_tempo),
+                    "reason": reason,
+                })
+
+        return {
+            "success": True,
+            "total_affected": len(affected_invoices),
+            "message": (
+                f"Ditemukan {len(affected_invoices)} invoice yang terdampak format nomor telepon salah. "
+                f"Finance bisa share payment link ke nomor WhatsApp yang benar secara manual."
+                if affected_invoices
+                else "Tidak ada invoice yang terdampak. Semua notifikasi WhatsApp sudah terkirim dengan benar."
+            ),
+            "affected_invoices": affected_invoices,
+        }
+
+    except Exception as e:
+        logger.error(f"Error checking affected phone format: {e}")
+        raise HTTPException(status_code=500, detail=f"Gagal mengecek invoice terdampak: {str(e)}")
 
 @router.get("/summary")
 async def get_invoice_summary(

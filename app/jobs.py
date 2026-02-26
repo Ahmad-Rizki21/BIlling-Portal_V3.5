@@ -39,6 +39,7 @@ from .models import Diskon as DiskonModel
 from .routers.invoice import _process_successful_payment, safe_format_date
 from .services import mikrotik_service, xendit_service
 from .services.rate_limiter import create_invoice_with_rate_limit, InvoicePriority
+from .utils.phone_utils import normalize_phone_for_xendit
 
 logger = logging.getLogger("app.jobs")
 
@@ -276,7 +277,7 @@ async def generate_single_invoice(db: AsyncSession, langganan: LanggananModel) -
                 f"jatuh tempo pembayaran tanggal {jatuh_tempo_str_lengkap}"
             )
 
-        no_telp_xendit = f"+62{pelanggan.no_telp.lstrip('0')}" if pelanggan.no_telp else ""
+        no_telp_xendit = normalize_phone_for_xendit(pelanggan.no_telp)
 
         # Determine priority for rate limiting
         priority = InvoicePriority.NORMAL
@@ -1035,7 +1036,7 @@ async def job_retry_failed_invoices() -> None:
                         harga_dasar = float(paket.harga if paket else 0.0)
                         pajak = math.floor(harga_dasar * (pajak_persen / 100) + 0.5)
 
-                        no_telp_xendit = f"+62{pelanggan.no_telp.lstrip('0')}" if pelanggan.no_telp else ""
+                        no_telp_xendit = normalize_phone_for_xendit(pelanggan.no_telp)
 
                         # Coba buat payment link lagi
                         xendit_response = await create_invoice_with_rate_limit(

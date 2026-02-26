@@ -53,6 +53,8 @@ from datetime import datetime, timedelta, timezone
 
 logger = logging.getLogger("app.services.xendit")
 
+from ..utils.phone_utils import normalize_phone_for_xendit
+
 
 async def create_xendit_invoice(
     invoice: InvoiceModel,
@@ -187,7 +189,7 @@ async def create_xendit_invoice(
         "customer": {
             "given_names": pelanggan.nama,
             "email": pelanggan.email,
-            "mobile_number": no_telp_xendit if no_telp_xendit else f"+62{pelanggan.no_telp.lstrip('0')}" if pelanggan.no_telp else None,
+            "mobile_number": no_telp_xendit if no_telp_xendit else normalize_phone_for_xendit(pelanggan.no_telp) or None,
         },
         "currency": "IDR",
         "with_short_url": True,
@@ -275,9 +277,11 @@ async def create_xendit_invoice(
 async def get_paid_invoice_ids_since(days: int) -> list[str]:
     """
     Mengambil daftar external_id dari semua invoice PAID dari SEMUA BRAND.
+    FIX: Menggunakan pagination untuk handle volume pembayaran besar (>100).
     """
     start_date = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
     all_paid_ids = []
+    MAX_PAGES = 20  # Safety limit mencegah infinite loop
 
     for brand_name, api_key in settings.XENDIT_API_KEYS.items():
         if not api_key:
@@ -289,23 +293,53 @@ async def get_paid_invoice_ids_since(days: int) -> list[str]:
         headers = {"Authorization": f"Basic {encoded_key}"}
 
         base_url = "https://api.xendit.co/v2/invoices"
-        query_params = {"statuses[]": "PAID", "paid_after": start_date, "limit": 1000}
+        PAGE_SIZE = 100
+        last_invoice_id = None
+        brand_paid_ids = []
+        page_count = 0
 
-        # Gunakan httpx dengan params, ini cara yang lebih modern dan aman
+        # FIX: Gunakan pagination loop untuk ambil SEMUA data, bukan hanya 1 halaman
         async with httpx.AsyncClient(timeout=30.0) as client:
-            try:
-                # httpx akan meng-encode 'statuses[]' dengan benar menjadi statuses%5B%5D=PAID
-                response = await client.get(base_url, headers=headers, params=query_params)
-                response.raise_for_status()
+            while page_count < MAX_PAGES:
+                page_count += 1
+                query_params = {
+                    "statuses[]": "PAID",
+                    "paid_after": start_date,
+                    "limit": PAGE_SIZE,
+                }
+                if last_invoice_id:
+                    query_params["after_id"] = last_invoice_id
 
-                # Cek apakah response.json() menghasilkan dict dan punya key 'data'
-                response_data = response.json()
-                invoices_data = response_data.get("data", []) if isinstance(response_data, dict) else []
+                try:
+                    response = await client.get(base_url, headers=headers, params=query_params)
+                    response.raise_for_status()
 
-                brand_paid_ids = [inv.get("external_id") for inv in invoices_data if inv.get("external_id")]
-                all_paid_ids.extend(brand_paid_ids)
-                logger.info(f"Ditemukan {len(brand_paid_ids)} pembayaran lunas untuk brand {brand_name}.")
-            except httpx.HTTPStatusError as e:
-                logger.error(f"Error saat mengambil data dari Xendit untuk brand {brand_name}: {e.response.text}")
+                    response_data = response.json()
+                    invoices_data = response_data.get("data", []) if isinstance(response_data, dict) else []
+
+                    if not invoices_data:
+                        break
+
+                    page_ids = [inv.get("external_id") for inv in invoices_data if inv.get("external_id")]
+                    brand_paid_ids.extend(page_ids)
+
+                    # Jika jumlah hasil < PAGE_SIZE, ini halaman terakhir
+                    if len(invoices_data) < PAGE_SIZE:
+                        break
+
+                    # Set cursor untuk halaman berikutnya
+                    last_invoice_id = invoices_data[-1].get("id")
+                    if not last_invoice_id:
+                        break
+
+                except httpx.HTTPStatusError as e:
+                    logger.error(f"Error saat mengambil data dari Xendit untuk brand {brand_name}: {e.response.text}")
+                    break
+                except Exception as e:
+                    logger.error(f"Network error saat mengambil data Xendit untuk brand {brand_name}: {e}")
+                    break
+
+        all_paid_ids.extend(brand_paid_ids)
+        logger.info(f"Ditemukan {len(brand_paid_ids)} pembayaran lunas untuk brand {brand_name} ({page_count} halaman).")
 
     return all_paid_ids

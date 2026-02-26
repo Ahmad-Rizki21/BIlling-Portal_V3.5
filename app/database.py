@@ -168,27 +168,50 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 # Health check function untuk monitoring connection pool
 async def get_connection_pool_status() -> dict:
     """Get current connection pool status for monitoring."""
-    import threading
-
-    from sqlalchemy import event
-    from sqlalchemy.pool import Pool
-
-    # We'll use a simulated approach since SQLAlchemy async doesn't expose all pool metrics
-    # In a real implementation, you would need to track this differently
     pool = engine.pool
+    try:
+        # FIX: Gunakan real pool metrics dari SQLAlchemy pool object
+        pool_size = pool.size()
+        checked_out = pool.checkedout()
+        checked_in = pool.checkedin()
+        overflow = pool.overflow()
+        total_capacity = pool_size + MAX_OVERFLOW
+        active_connections = checked_out
 
-    # Return mock data since the actual methods don't exist in async pool
-    return {
-        "pool_size": getattr(pool, "size", 0),  # This might not be available in async pool
-        "checked_out": 0,  # Not available in async pool
-        "checked_in": 0,  # Not available in async pool
-        "overflow": 0,  # Not available in async pool
-        "invalid": 0,  # Not available in async pool
-        "total_capacity": POOL_SIZE + MAX_OVERFLOW,
-        "utilization_percent": 0,  # Not calculable without actual pool metrics
-        "available_connections": POOL_SIZE,  # Estimated
-        "status": "healthy",
-    }
+        utilization = round((active_connections / total_capacity) * 100, 2) if total_capacity > 0 else 0
+
+        if utilization >= CONNECTION_POOL_CRITICAL_THRESHOLD:
+            pool_status = "critical"
+        elif utilization >= CONNECTION_POOL_WARN_THRESHOLD:
+            pool_status = "warning"
+        else:
+            pool_status = "healthy"
+
+        return {
+            "pool_size": pool_size,
+            "checked_out": checked_out,
+            "checked_in": checked_in,
+            "overflow": overflow,
+            "invalid": 0,
+            "total_capacity": total_capacity,
+            "utilization_percent": utilization,
+            "available_connections": total_capacity - active_connections,
+            "status": pool_status,
+        }
+    except Exception as e:
+        # Fallback: jika pool metrics tidak tersedia (misal async adapter berbeda)
+        logger.warning(f"Could not get real pool metrics, using estimates: {e}")
+        return {
+            "pool_size": POOL_SIZE,
+            "checked_out": 0,
+            "checked_in": 0,
+            "overflow": 0,
+            "invalid": 0,
+            "total_capacity": POOL_SIZE + MAX_OVERFLOW,
+            "utilization_percent": 0,
+            "available_connections": POOL_SIZE,
+            "status": "unknown",
+        }
 
 
 # Optimized database dependency with retry mechanism for dashboard queries

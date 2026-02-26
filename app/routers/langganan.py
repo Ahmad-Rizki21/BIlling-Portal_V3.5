@@ -47,22 +47,10 @@ from datetime import date as date_class
 def format_phone_number(phone_number: str) -> str:
     """
     Format phone number to international format (62 prefix).
-    Converts numbers starting with 0 to 62 format.
+    Mendukung semua format input: 08xx, 62xx, +62xx, 8xx.
     """
-    if not phone_number or phone_number.strip() == '':
-        return phone_number
-
-    phone = phone_number.strip()
-
-    # Remove any non-digit characters first
-    phone_digits = ''.join(c for c in phone if c.isdigit())
-
-    # If starts with 0, replace with 62
-    if phone_digits.startswith('0'):
-        return '62' + phone_digits[1:]
-
-    # If already starts with 62 or doesn't start with 0, return as is
-    return phone_digits
+    from ..utils.phone_utils import normalize_phone_display
+    return normalize_phone_display(phone_number)
 
 
 async def apply_diskon_to_langganan_price(langganan: LanggananModel, db: AsyncSession) -> float:
@@ -1152,8 +1140,12 @@ async def import_from_csv_langganan(
     }
     brand_ids_to_find = {row.get("id_brand", "").strip() for row in reader if row.get("id_brand")}
 
-    pelanggan_q = await db.execute(select(PelangganModel).where(func.lower(PelangganModel.email).in_(emails_to_find)))
-    pelanggan_map = {p.email.lower(): p for p in pelanggan_q.scalars().all()}
+    pelanggan_q = await db.execute(
+        select(PelangganModel)
+        .options(joinedload(PelangganModel.harga_layanan))
+        .where(func.lower(PelangganModel.email).in_(emails_to_find))
+    )
+    pelanggan_map = {p.email.lower(): p for p in pelanggan_q.scalars().unique().all()}
 
     paket_q = await db.execute(
         select(PaketLayananModel).where(
@@ -1230,12 +1222,17 @@ async def import_from_csv_langganan(
                 else:
                     tgl_jatuh_tempo_value = data_import.tgl_jatuh_tempo
 
+            # Hitung harga include PPN (sama seperti create langganan manual)
+            harga_paket = float(paket.harga)
+            pajak_persen = float(pelanggan.harga_layanan.pajak) if pelanggan.harga_layanan else 0.0
+            harga_dengan_ppn = harga_paket * (1 + (pajak_persen / 100))
+
             new_langganan_data = {
                 "pelanggan_id": pelanggan.id,
                 "paket_layanan_id": paket.id,
                 "status": data_import.status,
                 "metode_pembayaran": data_import.metode_pembayaran,
-                "harga_awal": paket.harga,
+                "harga_awal": round(harga_dengan_ppn, 0),
                 "tgl_jatuh_tempo": tgl_jatuh_tempo_value,
             }
             langganan_to_create.append(LanggananModel(**new_langganan_data))
@@ -1269,6 +1266,91 @@ async def import_from_csv_langganan(
     logger.info(f"Import CSV langganan selesai: {len(langganan_to_create)} berhasil, {len(errors)} error, {skipped_rows} baris kosong dilewati")
 
     return {"message": success_message}
+
+
+# --- ONE-TIME FIX: Perbaiki harga langganan yang diimport tanpa PPN ---
+
+
+@router.post("/fix-imported-prices")
+async def fix_imported_langganan_prices(
+    dry_run: bool = Query(True, description="True = preview saja, False = benar-benar update"),
+    alamat: Optional[str] = Query(None, description="Filter berdasarkan alamat pelanggan (contoh: 'Pulogebang')"),
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user)
+):
+    """
+    ONE-TIME FIX: Memperbaiki harga langganan yang diimport tanpa PPN.
+    
+    Cara kerja:
+    - Cari semua langganan dimana harga_awal == harga paket (tanpa PPN)
+    - Update harga_awal menjadi harga paket + PPN
+    
+    Parameter:
+    - dry_run=true (default): Preview data yang akan diupdate, TANPA mengubah apapun
+    - dry_run=false: Benar-benar update harga ke database
+    - alamat: Filter berdasarkan alamat pelanggan (opsional, contoh: 'Pulogebang')
+    """
+    # Query semua langganan dengan relasi paket dan pelanggan (untuk pajak)
+    query = (
+        select(LanggananModel)
+        .join(LanggananModel.pelanggan)
+        .options(
+            joinedload(LanggananModel.paket_layanan),
+            joinedload(LanggananModel.pelanggan).joinedload(PelangganModel.harga_layanan),
+        )
+    )
+
+    # Filter berdasarkan alamat jika diberikan
+    if alamat:
+        query = query.where(PelangganModel.alamat.ilike(f"%{alamat}%"))
+
+    result = await db.execute(query)
+    all_langganan = result.scalars().unique().all()
+
+    affected = []
+    for langganan in all_langganan:
+        if not langganan.paket_layanan or not langganan.pelanggan or not langganan.pelanggan.harga_layanan:
+            continue
+
+        harga_paket = float(langganan.paket_layanan.harga)
+        harga_awal = float(langganan.harga_awal) if langganan.harga_awal else 0.0
+        pajak_persen = float(langganan.pelanggan.harga_layanan.pajak)
+
+        # Cek apakah harga_awal sama dengan harga paket (tanpa PPN)
+        # Toleransi Rp 1 untuk masalah pembulatan
+        if pajak_persen > 0 and abs(harga_awal - harga_paket) < 1:
+            harga_baru = round(harga_paket * (1 + (pajak_persen / 100)), 0)
+
+            affected.append({
+                "langganan_id": langganan.id,
+                "pelanggan_nama": langganan.pelanggan.nama if langganan.pelanggan else "N/A",
+                "alamat": langganan.pelanggan.alamat if langganan.pelanggan else "N/A",
+                "brand": langganan.pelanggan.harga_layanan.brand if langganan.pelanggan.harga_layanan else "N/A",
+                "paket": langganan.paket_layanan.nama_paket,
+                "harga_paket": harga_paket,
+                "pajak_persen": pajak_persen,
+                "harga_lama": harga_awal,
+                "harga_baru": harga_baru,
+                "selisih": harga_baru - harga_awal,
+            })
+
+            if not dry_run:
+                langganan.harga_awal = harga_baru
+                db.add(langganan)
+
+    if not dry_run and affected:
+        await db.commit()
+        logger.info(f"🔧 FIX IMPORTED PRICES: {len(affected)} langganan berhasil diupdate dengan PPN (filter alamat: {alamat or 'semua'})")
+
+    filter_info = f" (filter: alamat '{alamat}')" if alamat else ""
+    return {
+        "mode": "PREVIEW (dry_run)" if dry_run else "UPDATED",
+        "total_affected": len(affected),
+        "filter_alamat": alamat or "Semua",
+        "message": f"{'Preview' if dry_run else 'Berhasil update'} {len(affected)} langganan yang harganya belum include PPN{filter_info}.",
+        "hint": "Jalankan dengan dry_run=false untuk benar-benar update." if dry_run else "Harga sudah diupdate!",
+        "data": affected,
+    }
 
 
 # INVOICE GABUNGAN PRORATE + HARGA PAKET BUAT 2 BULAN

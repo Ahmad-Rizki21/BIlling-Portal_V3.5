@@ -267,6 +267,9 @@ async def trigger_mikrotik_update(
 
     api, connection = get_api_connection(mikrotik_server_info)
     if not api:
+        # FIX: Return connection ke pool jika ada, mencegah connection leak
+        if connection:
+            mikrotik_pool.return_connection(connection, mikrotik_server_info.host_ip, int(mikrotik_server_info.port))
         return
 
     try:

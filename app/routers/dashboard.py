@@ -1013,27 +1013,31 @@ async def get_invoice_generation_monitor(
     total_skipped = total_should_have - total_generated
     success_rate = round((total_generated / total_should_have * 100) if total_should_have > 0 else 100, 1)
 
-    # Status
-    today = date.today()
-    generation_date = target_date_obj - timedelta(days=5)
-
     # Status Determination
+    now = datetime.now()
+    today = now.date()
+    generation_date = target_date_obj - timedelta(days=5)
+    # Jadwal generate adalah jam 13:00 (1 siang)
+    generation_hour = 13
+
     if total_skipped == 0:
         status, status_color, status_icon = "HEALTHY", "success", "✅"
         message = f"{status_icon} Semua invoice berhasil di-generate"
-    elif today < generation_date:
-        # Before schedule: It is NOT an error/critical yet
+    elif today < generation_date or (today == generation_date and now.hour < generation_hour):
+        # Sebelum jadwal: Jangan tampilkan statistik sebagai "hasil" dulu agar tidak menyesatkan
         status, status_color, status_icon = "UPCOMING", "info", "🕒"
         
-        # Hide skipped count to avoid red flag in UI (stat-box becomes green)
+        # Reset hasil sementara (manual) ke 0 untuk monitor otomatis agar tidak membingungkan
+        total_generated = 0 
         total_skipped = 0 
+        success_rate = 0.0
         
         # Format date manually to ensure Indonesian
         months = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"]
         gen_month_name = months[generation_date.month - 1]
         gen_date_str = f"{generation_date.day} {gen_month_name} {generation_date.year}"
         
-        message = f"{status_icon} Menunggu jadwal generate otomatis pada {gen_date_str} (H-5)"
+        message = f"{status_icon} Menunggu jadwal otomatis hari ini jam {generation_hour}:00 WIB" if today == generation_date else f"{status_icon} Menunggu jadwal generate otomatis pada {gen_date_str} (H-5)"
     elif total_skipped <= 5:
         status, status_color, status_icon = "NEEDS_ATTENTION", "warning", "⚠️"
         message = f"{status_icon} {total_skipped} pelanggan terlewat"
@@ -1106,7 +1110,10 @@ async def get_future_invoice_projection(
     projection_date = target_date_obj - timedelta(days=5)
 
     # Status sistem logic updated
-    if today >= projection_date:
+    now = datetime.now()
+    generation_hour = 13
+
+    if today > projection_date or (today == projection_date and now.hour >= generation_hour):
         # Check if invoices have been generated
         # Logic matches invoice-generation-monitor
         target_year, target_month = target_date_obj.year, target_date_obj.month
@@ -1128,9 +1135,14 @@ async def get_future_invoice_projection(
             else:
                 system_status = "Sebagian Selesai"
         else:
-             system_status = "Terlewat" if today > projection_date else "Menunggu Jadwal"
+             system_status = "Terlewat"
+    elif today == projection_date and now.hour < generation_hour:
+        system_status = "Menunggu Jadwal"
     else:
         system_status = "Siap" if days_until > 30 else "Persiapan"
+
+    # Hitung hari hingga generation date (H-5)
+    generation_days_until = (projection_date - today).days if projection_date > today else 0
 
     return {
         "target_date": target_date,
@@ -1138,6 +1150,7 @@ async def get_future_invoice_projection(
         "total_active_customers": total_active,
         "days_until": days_until,
         "generation_date": projection_date.isoformat(),
+        "generation_days_until": generation_days_until,
         "system_status": system_status,
         "is_future": days_until > 0,
         "percentage_of_active": round((estimated_customers / total_active * 100) if total_active > 0 else 0, 1)

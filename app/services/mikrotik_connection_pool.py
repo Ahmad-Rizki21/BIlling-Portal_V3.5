@@ -154,7 +154,11 @@ class MikrotikConnectionPool:
         """Create a new Mikrotik API connection."""
         try:
             connection = routeros_api.RouterOsApiPool(
-                host_ip, username=username, password=password, port=port, plaintext_login=True
+                host_ip, 
+                username=username, 
+                password=password, 
+                port=port, 
+                plaintext_login=True
             )
             api = connection.get_api()
 
@@ -250,7 +254,12 @@ class MikrotikConnectionPool:
                             del self.active_connections[conn_id]  # type: ignore
                 except Exception as e:
                     # Connection is unhealthy
-                    logger.warning(f"Unhealthy connection for {pool_key}: {e}")
+                    # Sembunyikan pesan Bad file descriptor jika ini adalah proses pembersihan rutin
+                    if "Bad file descriptor" in str(e) or "[Errno 9]" in str(e):
+                        logger.debug(f"Cleaning up stale socket for {pool_key} (Bad file descriptor)")
+                    else:
+                        logger.warning(f"Unhealthy connection for {pool_key}: {e}")
+                    
                     try:
                         conn_info["connection"].disconnect()
                     except:
@@ -712,4 +721,5 @@ class MikrotikConnectionPool:
 
 
 # Global connection pool instance
-mikrotik_pool = MikrotikConnectionPool(max_connections=10, timeout=30, idle_timeout=300)
+# Menggunakan idle_timeout 60 detik (sejalan dengan Mikrotik default API timeout)
+mikrotik_pool = MikrotikConnectionPool(max_connections=15, timeout=15, idle_timeout=60)
