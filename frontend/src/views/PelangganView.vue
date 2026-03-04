@@ -796,105 +796,144 @@
     </v-dialog>
 
     <!-- Import Dialog -->
-    <v-dialog v-model="dialogImport" max-width="800px" :fullscreen="display.mobile.value" persistent class="import-dialog">
-      <v-card class="import-card">
-        <div class="import-header">
-          <v-icon class="mr-3">mdi-upload</v-icon>
-          <span class="import-title">Import Pelanggan dari CSV</span>
-          <v-spacer></v-spacer>
-          <v-btn
-            icon
-            variant="text"
-            @click="closeImportDialog"
-            size="small"
-          >
-            <v-icon color="white">mdi-close</v-icon>
-          </v-btn>
+    <v-dialog v-model="dialogImport" max-width="900px" :fullscreen="display.mobile.value" persistent class="import-dialog">
+      <v-card class="import-card overflow-hidden">
+        <div class="import-header-gradient">
+          <div class="d-flex align-center pa-6">
+            <v-avatar color="white" size="48" class="elevation-4 me-4">
+              <v-icon color="success" size="28">mdi-file-upload-outline</v-icon>
+            </v-avatar>
+            <div class="flex-grow-1">
+              <h2 class="text-h5 font-weight-bold text-white mb-1">Import Data Pelanggan</h2>
+              <p class="text-body-2 text-white mb-0" style="opacity: 0.9;">Pilih file CSV untuk menambahkan data secara massal</p>
+            </div>
+            <v-btn
+              icon="mdi-close"
+              variant="text"
+              color="white"
+              @click="closeImportDialog"
+              size="small"
+              class="close-button-import"
+            ></v-btn>
+          </div>
         </div>
 
-        <v-card-text class="import-content">
-          <v-sheet
-            border
-            rounded="lg"
-            class="template-card pa-4 mb-6"
-            color="surface-variant"
-          >
-            <div class="d-flex flex-column flex-sm-row align-center gap-4">
-              <div class="template-icon">
-                <v-icon color="success" size="32">mdi-file-document-outline</v-icon>
-              </div>
-              <div class="flex-grow-1 text-center text-sm-left">
-                <div class="template-title">Gunakan Template Kami</div>
-                <p class="template-subtitle">
-                  Unduh template CSV untuk memastikan format data sesuai dengan sistem.
+        <v-card-text class="import-content pa-6">
+          <v-row>
+            <v-col cols="12" md="5" class="border-right-md pe-md-6">
+              <div class="step-guide mb-6">
+                <h3 class="text-subtitle-1 font-weight-bold mb-4 d-flex align-center">
+                  <v-avatar color="success" size="24" class="me-2 text-caption">1</v-avatar>
+                  Persiapkan File
+                </h3>
+                <p class="text-body-2 text-medium-emphasis mb-4">
+                  Pastikan file CSV Anda menggunakan format yang benar. Kami menyarankan untuk mengunduh template terlebih dahulu.
                 </p>
+                <v-hover v-slot="{ isHovering, props }">
+                  <v-card
+                    v-bind="props"
+                    :elevation="isHovering ? 4 : 1"
+                    variant="outlined"
+                    class="template-download-card pa-4 mb-4 cursor-pointer"
+                    @click="downloadCsvTemplate"
+                    :loading="downloadingTemplate"
+                    border-color="success-lighten-4"
+                  >
+                    <div class="d-flex align-center">
+                      <v-icon color="success" size="32" class="me-3">mdi-file-excel-outline</v-icon>
+                      <div class="flex-grow-1">
+                        <div class="text-subtitle-2 font-weight-bold">Template_Pelanggan.csv</div>
+                        <div class="text-caption text-medium-emphasis">Klik untuk mengunduh</div>
+                      </div>
+                      <v-icon color="success">mdi-download</v-icon>
+                    </div>
+                  </v-card>
+                </v-hover>
+                
+                <div class="format-info pa-3 rounded-lg bg-surface-variant">
+                  <div class="text-caption font-weight-bold mb-1">Format Kolom:</div>
+                  <div class="text-caption text-medium-emphasis">
+                    nama, email, no_ktp, no_telp, alamat, blok, unit, tgl_instalasi, layanan, id_brand
+                  </div>
+                </div>
               </div>
-              <v-btn
-                color="success"
-                variant="elevated"
-                @click="downloadCsvTemplate"
-                :loading="downloadingTemplate"
-                prepend-icon="mdi-download"
-                class="template-btn"
-                :block="display.mobile.value"
-              >
-                Unduh Template
-              </v-btn>
-            </div>
-          </v-sheet>
+            </v-col>
 
-          <div class="mb-4">
-            <h6 class="text-h6 mb-3 d-flex align-center upload-title">
-              <v-icon class="mr-2">mdi-cloud-upload</v-icon>
-              Unggah File CSV
-            </h6>
-            <v-file-input
-              :model-value="fileToImport"
-              @update:model-value="handleFileSelection"
-              label="Pilih file .csv"
-              accept=".csv"
-              variant="outlined"
-              prepend-icon=""
-              prepend-inner-icon="mdi-paperclip"
-              show-size
-              clearable
-              hide-details="auto"
-              class="file-input"
-              density="comfortable"
-            >
-            </v-file-input>
-          </div>
+            <v-col cols="12" md="7" class="ps-md-6">
+              <div class="step-guide">
+                <h3 class="text-subtitle-1 font-weight-bold mb-4 d-flex align-center">
+                  <v-avatar color="success" size="24" class="me-2 text-caption">2</v-avatar>
+                  Unggah File
+                </h3>
+                
+                <div 
+                  class="simple-dropzone"
+                  :class="{ 'dropzone-active': fileToImport.length > 0 }"
+                  @click="triggerFileSelect"
+                >
+                  <v-file-input
+                    ref="fileInputRef"
+                    :model-value="fileToImport"
+                    @update:model-value="handleFileSelection"
+                    accept=".csv"
+                    class="d-none"
+                  ></v-file-input>
+                  
+                  <template v-if="fileToImport.length === 0">
+                    <v-icon size="48" color="success" class="mb-3 opacity-60">mdi-cloud-upload-outline</v-icon>
+                    <div class="text-subtitle-1 font-weight-bold">Klik untuk Pilih File</div>
+                    <div class="text-caption text-medium-emphasis">Hanya mendukung format .CSV</div>
+                  </template>
+                  <template v-else>
+                    <v-icon size="48" color="success" class="mb-3">mdi-file-check-outline</v-icon>
+                    <div class="text-subtitle-1 font-weight-bold text-success">{{ fileToImport[0].name }}</div>
+                    <div class="text-caption text-medium-emphasis">{{ (fileToImport[0].size / 1024).toFixed(2) }} KB</div>
+                    <v-btn
+                      variant="text"
+                      color="error"
+                      size="small"
+                      class="mt-2 text-none"
+                      @click.stop="fileToImport = []"
+                    >
+                      Hapus & Ganti
+                    </v-btn>
+                  </template>
+                </div>
+              </div>
+            </v-col>
+          </v-row>
 
           <v-expand-transition>
-            <div v-if="importErrors.length > 0" class="mt-4">
+            <div v-if="importErrors.length > 0" class="mt-6">
               <v-alert
                 type="error"
                 variant="tonal"
                 prominent
                 border="start"
-                class="error-alert"
+                class="error-alert rounded-xl pa-4"
               >
                 <template v-slot:title>
                   <div class="d-flex justify-space-between align-center">
-                    <span>Import Gagal</span>
-                    <v-chip color="error" size="small">
-                      {{ importErrors.length }} Kesalahan
+                    <span class="font-weight-bold">Terjadi Kesalahan</span>
+                    <v-chip color="error" size="small" class="font-weight-bold">
+                      {{ importErrors.length }} Baris Bermasalah
                     </v-chip>
                   </div>
                 </template>
 
-                <p class="mb-3">Mohon perbaiki kesalahan berikut di file CSV Anda dan coba lagi.</p>
-                <v-divider class="mb-3"></v-divider>
-
-                <div class="error-list">
-                  <div
-                    v-for="(error, i) in importErrors"
-                    :key="i"
-                    class="error-item d-flex align-start mb-2"
+                <div class="error-list mt-4">
+                  <v-virtual-scroll
+                    :items="importErrors"
+                    height="120"
+                    class="rounded-lg bg-surface-variant overflow-y-auto"
                   >
-                    <v-icon size="small" color="error" class="mr-2 mt-1">mdi-alert-circle</v-icon>
-                    <span class="text-body-2">{{ error }}</span>
-                  </div>
+                    <template v-slot:default="{ item, index }">
+                      <div class="error-item-modern d-flex align-start pa-2 border-bottom">
+                        <v-icon size="16" color="error" class="me-2 mt-1">mdi-alert-circle</v-icon>
+                        <span class="text-caption">{{ item }}</span>
+                      </div>
+                    </template>
+                  </v-virtual-scroll>
                 </div>
               </v-alert>
             </div>
@@ -903,15 +942,15 @@
 
         <v-divider></v-divider>
 
-        <v-card-actions class="import-actions">
-          <v-spacer></v-spacer>
+        <v-card-actions class="pa-6 bg-grey-lighten-5">
           <v-btn
             variant="text"
             @click="closeImportDialog"
-            class="nav-btn"
+            class="px-6 text-none font-weight-medium rounded-lg"
           >
             Batal
           </v-btn>
+          <v-spacer></v-spacer>
           <v-btn
             color="success"
             variant="elevated"
@@ -919,9 +958,9 @@
             :loading="importing"
             :disabled="fileToImport.length === 0"
             prepend-icon="mdi-upload"
-            class="import-btn"
+            class="px-8 text-none font-weight-bold rounded-lg elevation-4 import-cta-btn"
           >
-            Import Sekarang
+            Mulai Import Sekarang
           </v-btn>
         </v-card-actions>
       </v-card>
@@ -989,6 +1028,11 @@ const exporting = ref(false);
 const downloadingTemplate = ref(false);
 const fileToImport = ref<File[]>([]);
 const importErrors = ref<string[]>([]);
+const fileInputRef = ref<any>(null);
+
+function triggerFileSelect() {
+  fileInputRef.value?.click();
+}
 
 const searchQuery = ref('');
 const selectedAlamat = ref<string | null>(null);
@@ -2425,6 +2469,91 @@ function showSnackbar(text: string, color: 'success' | 'error' | 'warning') {
   font-size: 1.1em;
   font-weight: bold;
   vertical-align: middle;
+}
+
+
+/* ============================================
+   NEW MODERN IMPORT DIALOG STYLES
+   ============================================ */
+
+.import-header-gradient {
+  background: linear-gradient(135deg, #43a047 0%, #2e7d32 100%);
+  position: relative;
+}
+
+.close-button-import {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+}
+
+.template-download-card {
+  border: 1px solid rgba(var(--v-theme-success), 0.2) !important;
+  background-color: rgba(var(--v-theme-success), 0.02) !important;
+  transition: all 0.3s ease;
+  border-radius: 12px;
+}
+
+.template-download-card:hover {
+  background-color: rgba(var(--v-theme-success), 0.05) !important;
+  border-color: rgba(var(--v-theme-success), 0.5) !important;
+  transform: translateY(-2px);
+}
+
+.simple-dropzone {
+  border: 2px dashed rgba(var(--v-theme-success), 0.3);
+  background-color: rgba(var(--v-theme-success), 0.02);
+  border-radius: 20px;
+  height: 250px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-align: center;
+  padding: 24px;
+}
+
+.simple-dropzone:hover {
+  border-color: rgba(var(--v-theme-success), 0.8);
+  background-color: rgba(var(--v-theme-success), 0.05);
+}
+
+.dropzone-active {
+  border-style: solid;
+  border-color: rgba(var(--v-theme-success), 0.8);
+  background-color: rgba(var(--v-theme-success), 0.08);
+}
+
+.error-item-modern {
+  border-bottom: 1px solid rgba(var(--v-theme-error), 0.1);
+}
+
+.error-item-modern:last-child {
+  border-bottom: none;
+}
+
+.border-right-md {
+  border-right: 1px solid rgba(var(--v-theme-outline-variant), 0.5);
+}
+
+@media (max-width: 959px) {
+  .border-right-md {
+    border-right: none;
+    border-bottom: 1px solid rgba(var(--v-theme-outline-variant), 0.5);
+    padding-bottom: 24px;
+    margin-bottom: 24px;
+  }
+}
+
+.import-cta-btn {
+  letter-spacing: 0;
+  height: 48px !important;
+}
+
+.format-info {
+  background-color: rgba(var(--v-theme-surface-variant), 0.3) !important;
 }
 
 </style>
