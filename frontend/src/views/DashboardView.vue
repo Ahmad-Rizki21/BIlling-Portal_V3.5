@@ -183,7 +183,7 @@
           <SkeletonLoader v-if="loading" type="chart" />
           <template v-else-if="statusChartData">
             <Chart type="doughnut" :data="statusChartData" :options="donutChartOptions" />
-            <div class="total-in-center">
+            <div class="total-in-center" :class="{ 'is-hidden': statusChartHovered }">
               <h3>{{ totalSubscriptions }}</h3>
               <span>Total Langganan</span>
             </div>
@@ -207,7 +207,7 @@
           <SkeletonLoader v-if="loading" type="chart" />
           <template v-else-if="loyalitasChartData">
             <Chart type="doughnut" :data="loyalitasChartData" :options="loyalitasDonutOptions" />
-            <div class="total-in-center">
+            <div class="total-in-center" :class="{ 'is-hidden': loyalitasChartHovered }">
               <h3>{{ totalActiveCustomers }}</h3>
               <span>Pelanggan Aktif</span>
             </div>
@@ -350,7 +350,7 @@
       </div>
     </div>
 
-    <v-dialog v-model="dialogPaketDetail" max-width="700px" persistent>
+    <v-dialog v-model="dialogPaketDetail" max-width="700px" scrollable>
       <v-card class="package-detail-card elevation-12">
         <div class="dialog-header">
           <div class="header-gradient"></div>
@@ -479,7 +479,7 @@
           </v-card>
         </v-dialog>
 
-        <v-dialog v-model="dialogLoyalitas" max-width="800px" persistent>
+        <v-dialog v-model="dialogLoyalitas" max-width="800px" scrollable>
           <v-card class="loyalitas-detail-card elevation-12">
             <div class="dialog-header">
               <div class="header-gradient"></div>
@@ -685,6 +685,10 @@ const loadingFutureInvoiceMonitor = ref(false);
 const userRole = ref<string>('');
 const canViewInvoiceMonitor = ref<boolean>(false);
 const canViewFutureProjection = ref<boolean>(false);
+
+// State untuk menyembunyikan teks tengah saat hover data
+const statusChartHovered = ref(false);
+const loyalitasChartHovered = ref(false);
 
 // --- Computed Properties ---
 const customerStats = computed(() =>
@@ -1016,21 +1020,25 @@ const chartGridColor = computed(() => {
   return theme.global.current.value.dark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)';
 });
 
-// PERBAIKAN: Loyalitas donut options dengan tipe yang tepat
 const loyalitasDonutOptions = computed((): ChartOptions<'doughnut'> => ({
   responsive: true,
   maintainAspectRatio: false,
   cutout: '70%',
-  onClick: handleLoyalitasChartClick,
+  onHover: (event: any, elements: any[]) => {
+    if (event.native) {
+      event.native.target.style.cursor = elements.length > 0 ? 'pointer' : 'default';
+    }
+    loyalitasChartHovered.value = elements.length > 0;
+  },
   plugins: {
     legend: {
-      position: 'bottom' as const, // PERBAIKAN: Explicit as const
+      position: 'bottom' as const, 
       labels: {
         color: chartAxisColor.value,
         usePointStyle: true,
-        pointStyle: 'circle' as const, // PERBAIKAN: Explicit as const
-        padding: 20,
-        font: { size: 12, weight: 'bold' as const }
+        pointStyle: 'circle' as const, 
+        padding: 12,
+        font: { size: 11, weight: 'bold' as const }
       }
     },
     tooltip: {
@@ -1162,7 +1170,13 @@ const pieChartOptions = computed((): ChartOptions<'pie'> => ({
 const donutChartOptions = computed((): ChartOptions<'doughnut'> => ({
   responsive: true,
   maintainAspectRatio: false,
-  cutout: '70%',
+  cutout: '75%',
+  onHover: (event: any, elements: any[]) => {
+    if (event.native) {
+      event.native.target.style.cursor = elements.length > 0 ? 'pointer' : 'default';
+    }
+    statusChartHovered.value = elements.length > 0;
+  },
   plugins: {
     legend: {
       position: 'bottom' as const,
@@ -1816,23 +1830,36 @@ onMounted(async () => {
 
 .total-in-center {
   position: absolute;
-  top: 50%;
+  top: 44%;
   left: 50%;
   transform: translate(-50%, -50%);
   text-align: center;
-  pointer-events: none; /* Agar tidak mengganggu tooltip chart */
+  pointer-events: none;
+  transition: all 0.3s ease;
+  z-index: 1;
+}
+
+.total-in-center.is-hidden {
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.8);
+  visibility: hidden;
 }
 
 .total-in-center h3 {
-  font-size: 2rem;
+  font-size: 1.8rem;
   font-weight: 800;
-  line-height: 1.2;
+  line-height: 1;
+  margin: 0 !important;
+  color: rgb(var(--v-theme-on-surface));
 }
 
 .total-in-center span {
-  font-size: 0.8rem;
-  font-weight: 500;
-  opacity: 0.7;
+  font-size: 0.75rem;
+  font-weight: 600;
+  opacity: 0.8;
+  display: block;
+  margin-top: 2px;
+  color: rgb(var(--v-theme-on-surface));
 }
 
 /* Gunakan flexbox untuk membagi kartu menjadi dua bagian */
@@ -2627,11 +2654,15 @@ onMounted(async () => {
 }
 
 /* Dialog Card Styling - Optimized */
-.package-detail-card {
+.package-detail-card,
+.loyalitas-detail-card {
   border-radius: 16px !important;
   overflow: hidden;
   position: relative;
   background: rgba(255, 255, 255, 0.98);
+  display: flex !important;
+  flex-direction: column !important;
+  max-height: 90vh !important;
 }
 
 /* Header Section */
@@ -2639,6 +2670,7 @@ onMounted(async () => {
   position: relative;
   padding: 0;
   overflow: hidden;
+  flex-shrink: 0 !important;
 }
 
 .header-gradient {
@@ -2708,6 +2740,8 @@ onMounted(async () => {
 .dialog-content {
   padding: 2rem !important;
   background: linear-gradient(180deg, rgba(248, 250, 252, 0.8) 0%, rgba(255, 255, 255, 0.9) 100%);
+  overflow-y: auto !important;
+  flex: 1 1 auto !important;
 }
 
 /* Summary Section */
@@ -2920,6 +2954,7 @@ onMounted(async () => {
   padding: 1.5rem 2rem !important;
   background: rgba(248, 250, 252, 0.6);
   border-top: 1px solid rgba(0, 0, 0, 0.06);
+  flex-shrink: 0 !important;
 }
 
 .close-action-btn {

@@ -303,3 +303,4 @@ test-results.xml
 .cxx
 local.properties
 node_modules/
+tmp/
