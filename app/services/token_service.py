@@ -54,6 +54,7 @@ from jose.exceptions import JWTError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import and_
+from sqlalchemy.exc import IntegrityError
 from ..models.user import User as UserModel
 from ..models.token_blacklist import TokenBlacklist as TokenBlacklistModel
 from ..config import settings
@@ -185,6 +186,11 @@ class TokenService:
             db.add(db_blacklist)
             await db.commit()
             logger.info(f"Token {jti} blacklisted for user {user_id}")
+
+        except IntegrityError:
+            # Race condition: token sudah di-blacklist oleh concurrent request lain
+            await db.rollback()
+            logger.info(f"Token {jti} already blacklisted by concurrent request - safely ignored")
 
         except Exception as e:
             await db.rollback()

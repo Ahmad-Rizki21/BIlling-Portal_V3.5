@@ -128,7 +128,11 @@ async def create_data_teknis(
         db_data_teknis.odp = odp
     db.add(db_data_teknis)
     await db.commit()
-    await db.refresh(db_data_teknis, attribute_names=["pelanggan"])  # Eager load pelanggan
+
+    # Simpan info yang dibutuhkan untuk notifikasi SEBELUM session berubah
+    data_teknis_id = db_data_teknis.id
+    pelanggan_id_for_notif = db_data_teknis.pelanggan_id
+    pelanggan_nama = pelanggan.nama if pelanggan else "N/A"
 
     try:
         # 1. Cari semua user ID dengan role "Finance"
@@ -138,13 +142,12 @@ async def create_data_teknis(
 
         if finance_user_ids:
             # 2. Siapkan payload notifikasi dengan format yang konsisten
-            pelanggan_nama = db_data_teknis.pelanggan.nama if db_data_teknis.pelanggan else "N/A"
             notification_payload = {
                 "type": "new_technical_data",
                 "message": f"Data teknis untuk {pelanggan_nama} telah ditambahkan. Siap dibuatkan langganan.",
                 "timestamp": datetime.now().isoformat(),
                 "data": {
-                    "pelanggan_id": db_data_teknis.pelanggan_id,
+                    "pelanggan_id": pelanggan_id_for_notif,
                     "pelanggan_nama": pelanggan_nama,
                     "timestamp": datetime.now().isoformat(),
                 },
@@ -161,7 +164,20 @@ async def create_data_teknis(
     except Exception as e:
         # Jika gagal membuat secret, jangan batalkan proses.
         # Cukup catat errornya. Data teknis tetap berhasil dibuat.
-        logger.error(f"Data teknis ID {db_data_teknis.id} berhasil disimpan, " f"namun gagal membuat secret di Mikrotik: {e}")
+        logger.error(f"Data teknis ID {data_teknis_id} berhasil disimpan, " f"namun gagal membuat secret di Mikrotik: {e}")
+
+    # Re-query TERAKHIR dengan eager loading penuh tepat sebelum return
+    # untuk menghindari MissingGreenlet error saat Pydantic serialize response.
+    # Harus dilakukan di sini (bukan lebih awal) karena operasi di atas
+    # (notifikasi, mikrotik trigger) bisa melakukan db.commit() yang meng-expire object.
+    result = await db.execute(
+        select(DataTeknisModel)
+        .options(
+            selectinload(DataTeknisModel.pelanggan).selectinload(PelangganModel.harga_layanan)
+        )
+        .where(DataTeknisModel.id == data_teknis_id)
+    )
+    db_data_teknis = result.scalar_one()
 
     return db_data_teknis
 

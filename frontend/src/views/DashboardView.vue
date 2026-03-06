@@ -183,7 +183,7 @@
           <SkeletonLoader v-if="loading" type="chart" />
           <template v-else-if="statusChartData">
             <Chart type="doughnut" :data="statusChartData" :options="donutChartOptions" />
-            <div class="total-in-center">
+            <div class="total-in-center" :class="{ 'is-hidden': statusChartHovered }">
               <h3>{{ totalSubscriptions }}</h3>
               <span>Total Langganan</span>
             </div>
@@ -207,7 +207,7 @@
           <SkeletonLoader v-if="loading" type="chart" />
           <template v-else-if="loyalitasChartData">
             <Chart type="doughnut" :data="loyalitasChartData" :options="loyalitasDonutOptions" />
-            <div class="total-in-center">
+            <div class="total-in-center" :class="{ 'is-hidden': loyalitasChartHovered }">
               <h3>{{ totalActiveCustomers }}</h3>
               <span>Pelanggan Aktif</span>
             </div>
@@ -350,7 +350,7 @@
       </div>
     </div>
 
-    <v-dialog v-model="dialogPaketDetail" max-width="700px" persistent>
+    <v-dialog v-model="dialogPaketDetail" max-width="700px" scrollable>
       <v-card class="package-detail-card elevation-12">
         <div class="dialog-header">
           <div class="header-gradient"></div>
@@ -479,7 +479,7 @@
           </v-card>
         </v-dialog>
 
-        <v-dialog v-model="dialogLoyalitas" max-width="800px" persistent>
+        <v-dialog v-model="dialogLoyalitas" max-width="800px" scrollable>
           <v-card class="loyalitas-detail-card elevation-12">
             <div class="dialog-header">
               <div class="header-gradient"></div>
@@ -677,7 +677,7 @@ const selectedLoyalitasSegmen = ref('');
 const invoiceMonitorData = ref<any>(null);
 const loadingInvoiceMonitor = ref(false);
 
-// Future Invoice Monitor State (for 2026-01-01)
+// Future Invoice Monitor State (Dynamic)
 const futureInvoiceMonitorData = ref<any>(null);
 const loadingFutureInvoiceMonitor = ref(false);
 
@@ -685,6 +685,10 @@ const loadingFutureInvoiceMonitor = ref(false);
 const userRole = ref<string>('');
 const canViewInvoiceMonitor = ref<boolean>(false);
 const canViewFutureProjection = ref<boolean>(false);
+
+// State untuk menyembunyikan teks tengah saat hover data
+const statusChartHovered = ref(false);
+const loyalitasChartHovered = ref(false);
 
 // --- Computed Properties ---
 const customerStats = computed(() =>
@@ -814,33 +818,40 @@ async function fetchFutureInvoiceMonitor() {
       return;
     }
 
-    // Calculate dynamic dates
-    // Rule: Invoice generated H-5 (5 days before due date / target date)
-    // Target date = 1st of next month
+    // RULE: Projection targets the NEXT upcoming run whose generation hasn't passed.
+    // Generation Date is H-5
     const today = new Date();
-    let targetYear = today.getFullYear();
-    let targetMonth = today.getMonth() + 1; // next month (0-indexed + 1)
     
-    // If today is past the target date (1st of this month already passed), look at next month
+    // Target 1 = 1st of next month
+    let targetYear = today.getFullYear();
+    let targetMonth = today.getMonth() + 1;
     if (targetMonth > 11) {
       targetMonth = 0;
       targetYear++;
     }
+    const t1 = new Date(targetYear, targetMonth, 1);
+    const genDateT1 = new Date(t1.getTime() - 5 * 24 * 60 * 60 * 1000);
     
-    const targetDate = new Date(targetYear, targetMonth, 1);
+    let finalTargetDate = t1;
     
-    // H-5: Generate date = target date - 5 days
-    // This correctly handles month boundaries (e.g., Mar 1 - 5 = Feb 24)
-    const genDate = new Date(targetDate.getTime() - 5 * 24 * 60 * 60 * 1000);
-    
-    // Format YYYY-MM-DD using local time
+    // If today is past/at T1's generation date, then T1 is "Current", so we project T2
+    if (today >= genDateT1) {
+      let t2Month = targetMonth + 1;
+      let t2Year = targetYear;
+      if (t2Month > 11) {
+        t2Month = 0;
+        t2Year++;
+      }
+      finalTargetDate = new Date(t2Year, t2Month, 1);
+    }
+
     const dateToYMD = (d: Date) => {
       const year = d.getFullYear();
       const month = String(d.getMonth() + 1).padStart(2, '0');
       const day = String(d.getDate()).padStart(2, '0');
       return `${year}-${month}-${day}`;
     };
-    const targetDateStr = dateToYMD(targetDate);
+    const targetDateStr = dateToYMD(finalTargetDate);
 
     // Call the actual API endpoint
     const response = await apiClient.get(`/dashboard/future-invoice-projection?target_date=${targetDateStr}`);
@@ -850,7 +861,7 @@ async function fetchFutureInvoiceMonitor() {
     futureInvoiceMonitorData.value = {
       ...response.data,
       target_date: targetDateStr,
-      generation_date: apiGenDate || dateToYMD(genDate)
+      generation_date: apiGenDate || dateToYMD(finalTargetDate === t1 ? genDateT1 : new Date(finalTargetDate.getTime() - 5 * 24 * 60 * 60 * 1000))
     };
     
     // Calculate days until if provided or missing
@@ -1009,21 +1020,25 @@ const chartGridColor = computed(() => {
   return theme.global.current.value.dark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)';
 });
 
-// PERBAIKAN: Loyalitas donut options dengan tipe yang tepat
 const loyalitasDonutOptions = computed((): ChartOptions<'doughnut'> => ({
   responsive: true,
   maintainAspectRatio: false,
   cutout: '70%',
-  onClick: handleLoyalitasChartClick,
+  onHover: (event: any, elements: any[]) => {
+    if (event.native) {
+      event.native.target.style.cursor = elements.length > 0 ? 'pointer' : 'default';
+    }
+    loyalitasChartHovered.value = elements.length > 0;
+  },
   plugins: {
     legend: {
-      position: 'bottom' as const, // PERBAIKAN: Explicit as const
+      position: 'bottom' as const, 
       labels: {
         color: chartAxisColor.value,
         usePointStyle: true,
-        pointStyle: 'circle' as const, // PERBAIKAN: Explicit as const
-        padding: 20,
-        font: { size: 12, weight: 'bold' as const }
+        pointStyle: 'circle' as const, 
+        padding: 12,
+        font: { size: 11, weight: 'bold' as const }
       }
     },
     tooltip: {
@@ -1155,7 +1170,13 @@ const pieChartOptions = computed((): ChartOptions<'pie'> => ({
 const donutChartOptions = computed((): ChartOptions<'doughnut'> => ({
   responsive: true,
   maintainAspectRatio: false,
-  cutout: '70%',
+  cutout: '75%',
+  onHover: (event: any, elements: any[]) => {
+    if (event.native) {
+      event.native.target.style.cursor = elements.length > 0 ? 'pointer' : 'default';
+    }
+    statusChartHovered.value = elements.length > 0;
+  },
   plugins: {
     legend: {
       position: 'bottom' as const,
@@ -1734,7 +1755,7 @@ onMounted(async () => {
 
     if (canViewFutureProjection.value) {
       console.log('Fetching future invoice monitor...');
-      fetchFutureInvoiceMonitor(); // Load future invoice monitor for 2026-01-01
+      fetchFutureInvoiceMonitor(); // Load future invoice monitor dynamically
     }
 
   } catch (error) {
@@ -1809,23 +1830,36 @@ onMounted(async () => {
 
 .total-in-center {
   position: absolute;
-  top: 50%;
+  top: 44%;
   left: 50%;
   transform: translate(-50%, -50%);
   text-align: center;
-  pointer-events: none; /* Agar tidak mengganggu tooltip chart */
+  pointer-events: none;
+  transition: all 0.3s ease;
+  z-index: 1;
+}
+
+.total-in-center.is-hidden {
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.8);
+  visibility: hidden;
 }
 
 .total-in-center h3 {
-  font-size: 2rem;
+  font-size: 1.8rem;
   font-weight: 800;
-  line-height: 1.2;
+  line-height: 1;
+  margin: 0 !important;
+  color: rgb(var(--v-theme-on-surface));
 }
 
 .total-in-center span {
-  font-size: 0.8rem;
-  font-weight: 500;
-  opacity: 0.7;
+  font-size: 0.75rem;
+  font-weight: 600;
+  opacity: 0.8;
+  display: block;
+  margin-top: 2px;
+  color: rgb(var(--v-theme-on-surface));
 }
 
 /* Gunakan flexbox untuk membagi kartu menjadi dua bagian */
@@ -2620,11 +2654,15 @@ onMounted(async () => {
 }
 
 /* Dialog Card Styling - Optimized */
-.package-detail-card {
+.package-detail-card,
+.loyalitas-detail-card {
   border-radius: 16px !important;
   overflow: hidden;
   position: relative;
   background: rgba(255, 255, 255, 0.98);
+  display: flex !important;
+  flex-direction: column !important;
+  max-height: 90vh !important;
 }
 
 /* Header Section */
@@ -2632,6 +2670,7 @@ onMounted(async () => {
   position: relative;
   padding: 0;
   overflow: hidden;
+  flex-shrink: 0 !important;
 }
 
 .header-gradient {
@@ -2701,6 +2740,8 @@ onMounted(async () => {
 .dialog-content {
   padding: 2rem !important;
   background: linear-gradient(180deg, rgba(248, 250, 252, 0.8) 0%, rgba(255, 255, 255, 0.9) 100%);
+  overflow-y: auto !important;
+  flex: 1 1 auto !important;
 }
 
 /* Summary Section */
@@ -2913,6 +2954,7 @@ onMounted(async () => {
   padding: 1.5rem 2rem !important;
   background: rgba(248, 250, 252, 0.6);
   border-top: 1px solid rgba(0, 0, 0, 0.06);
+  flex-shrink: 0 !important;
 }
 
 .close-action-btn {
