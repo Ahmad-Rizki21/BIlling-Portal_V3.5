@@ -235,63 +235,114 @@ async def get_all_invoices(
     elif start_date or end_date:
         check_archive = True
 
-    # Jika perlu cek arsip, kita gunakan logic gabungan
+    # --- OPTIMASI PERFORMANCE (Pagination Cerdas): Hindari Fetch Semua ke Memori ---
+    # Jika perlu cek arsip, kita gunakan logic paginasi dua tahap (Main then Archive)
     if check_archive:
-        # Eksekusi query utama dulu (tanpa pagination limit/offset di sini)
-        result_main = await db.execute(query)
-        invoices_main = result_main.scalars().unique().all()
-
-        # Query untuk arsip
-        query_archive = (
-            select(InvoiceArchiveModel).join(InvoiceArchiveModel.pelanggan)
-            .options(
-                joinedload(InvoiceArchiveModel.pelanggan)
-            )
-        )
-        
-        # Apply filters to archive query
+        # 1. Hitung total di tabel utama (matching filters)
+        count_main_stmt = select(func.count(InvoiceModel.id)).join(InvoiceModel.pelanggan)
         if search:
             search_term = f"%{search}%"
-            query_archive = query_archive.where(
+            is_numeric_search = search.strip().isdigit()
+            count_main_stmt = count_main_stmt.where(
                 or_(
-                    InvoiceArchiveModel.invoice_number.ilike(search_term),
+                    InvoiceModel.invoice_number.ilike(search_term),
                     PelangganModel.nama.ilike(search_term),
-                    InvoiceArchiveModel.id_pelanggan.ilike(search_term),
+                    InvoiceModel.id_pelanggan.ilike(search_term),
+                    InvoiceModel.pelanggan_id == int(search.strip()) if is_numeric_search else False,
                 )
             )
-        
         if status_invoice:
-            query_archive = query_archive.where(InvoiceArchiveModel.status_invoice == status_invoice)
-            
+            count_main_stmt = count_main_stmt.where(InvoiceModel.status_invoice == status_invoice)
         if start_date:
-            query_archive = query_archive.where(InvoiceArchiveModel.tgl_jatuh_tempo >= start_date)
+            count_main_stmt = count_main_stmt.where(InvoiceModel.tgl_jatuh_tempo >= start_date)
         if end_date:
-            query_archive = query_archive.where(InvoiceArchiveModel.tgl_jatuh_tempo <= end_date)
+            count_main_stmt = count_main_stmt.where(InvoiceModel.tgl_jatuh_tempo <= end_date)
+            
+        count_main_result = await db.execute(count_main_stmt)
+        count_main = count_main_result.scalar_one()
 
-        # Execute archive query
-        result_archive = await db.execute(query_archive)
-        invoices_archive = result_archive.scalars().unique().all()
+        results_to_return = []
         
-        # Gabungkan hasil
-        all_invoices = list(invoices_main) + list(invoices_archive)
-        
-        # Sortir gabungan (default by created_at desc, atau tgl_invoice desc)
-        # Handle created_at is None in archive if any
-        # Menggunakan tgl_invoice sebagai primary sort key karena lebih reliable untuk invoice lama
-        all_invoices.sort(key=lambda x: x.tgl_invoice or x.created_at or datetime.min, reverse=True)
-        
-        # Manual Pagination slice
-        start_idx = skip
-        end_idx = skip + (limit if limit else len(all_invoices))
-        return all_invoices[start_idx:end_idx]
+        # 2. Tentukan berapa banyak yang diambil dari tabel utama
+        if skip < count_main:
+            # Masih ada jatah di tabel utama
+            main_limit = limit if limit else (count_main - skip)
+            # Batasi limit agar tidak overload jika limit=None (misal minta 10rb data)
+            actual_main_limit = min(main_limit, 5000)
+            
+            query_main = query.offset(skip).limit(actual_main_limit)
+            result_main = await db.execute(query_main)
+            results_to_return = list(result_main.scalars().unique().all())
+            
+            # Jika masih butuh data (limit belum terpenuhi) dan limit diatur
+            if limit and len(results_to_return) < limit:
+                needed_from_archive = limit - len(results_to_return)
+                
+                query_archive = (
+                    select(InvoiceArchiveModel).join(InvoiceArchiveModel.pelanggan)
+                    .options(joinedload(InvoiceArchiveModel.pelanggan))
+                    .order_by(InvoiceArchiveModel.tgl_invoice.desc()) # Newest archive first
+                    .limit(needed_from_archive)
+                )
+                
+                # Apply filter yang sama ke arsip
+                if search:
+                    query_archive = query_archive.where(
+                        or_(
+                            InvoiceArchiveModel.invoice_number.ilike(search_term),
+                            PelangganModel.nama.ilike(search_term),
+                            InvoiceArchiveModel.id_pelanggan.ilike(search_term),
+                        )
+                    )
+                if status_invoice:
+                    query_archive = query_archive.where(InvoiceArchiveModel.status_invoice == status_invoice)
+                if start_date:
+                    query_archive = query_archive.where(InvoiceArchiveModel.tgl_jatuh_tempo >= start_date)
+                if end_date:
+                    query_archive = query_archive.where(InvoiceArchiveModel.tgl_jatuh_tempo <= end_date)
+                    
+                result_archive = await db.execute(query_archive)
+                results_to_return.extend(list(result_archive.scalars().unique().all()))
+        else:
+            # Skip sudah melewati jatah tabel utama, ambil murni dari arsip
+            archive_skip = skip - count_main
+            archive_limit = limit if limit else 100 # Default safe limit
+            actual_archive_limit = min(archive_limit, 5000)
+            
+            query_archive = (
+                select(InvoiceArchiveModel).join(InvoiceArchiveModel.pelanggan)
+                .options(joinedload(InvoiceArchiveModel.pelanggan))
+                .order_by(InvoiceArchiveModel.tgl_invoice.desc())
+                .offset(archive_skip)
+                .limit(actual_archive_limit)
+            )
+            
+            # Apply filters...
+            if search:
+                query_archive = query_archive.where(
+                    or_(
+                        InvoiceArchiveModel.invoice_number.ilike(search_term),
+                        PelangganModel.nama.ilike(search_term),
+                        InvoiceArchiveModel.id_pelanggan.ilike(search_term),
+                    )
+                )
+            if status_invoice:
+                query_archive = query_archive.where(InvoiceArchiveModel.status_invoice == status_invoice)
+            if start_date:
+                query_archive = query_archive.where(InvoiceArchiveModel.tgl_jatuh_tempo >= start_date)
+            if end_date:
+                query_archive = query_archive.where(InvoiceArchiveModel.tgl_jatuh_tempo <= end_date)
+                
+            result_archive = await db.execute(query_archive)
+            results_to_return = list(result_archive.scalars().unique().all())
+            
+        return results_to_return
 
-    # Terapkan paginasi setelah semua filter (jika tidak cek arsip)
-    query = query.order_by(InvoiceModel.created_at.desc()) # Ensure default sort
-    query = query.offset(skip).limit(limit)
-    # ---------------------------
+    # Terapkan paginasi normal jika tidak cek arsip
+    effective_limit = limit if limit is not None else 50 # Default safe limit
+    query = query.offset(skip).limit(min(effective_limit, 5000))
 
     result = await db.execute(query)
-    # FIX: Tambahkan .unique() untuk collection eager loading
     return result.scalars().unique().all()
 
 
@@ -1881,17 +1932,15 @@ async def export_payment_links_excel(
     """Export payment links dari invoice ke file Excel."""
     from datetime import datetime
 
+    # Bangun kueri dasar
     query = (
         select(InvoiceModel)
         .join(InvoiceModel.pelanggan)
         .options(
-            joinedload(InvoiceModel.pelanggan)
-            .joinedload(PelangganModel.harga_layanan)
-        )
-        # Eager load langganan untuk metode_pembayaran
-        .options(
-            joinedload(InvoiceModel.pelanggan)
-            .joinedload(PelangganModel.langganan)
+            # Gunakan joinedload untuk relasi one-to-one (pelanggan & harga_layanan)
+            joinedload(InvoiceModel.pelanggan).joinedload(PelangganModel.harga_layanan),
+            # Gunakan selectinload untuk relasi one-to-many (langganan) - Efisien untuk batching
+            joinedload(InvoiceModel.pelanggan).selectinload(PelangganModel.langganan)
         )
     )
 
@@ -1923,16 +1972,34 @@ async def export_payment_links_excel(
     query = query.where(InvoiceModel.payment_link.isnot(None))
 
     result = await db.execute(query)
-    # FIX: Tambahkan .unique() untuk collection eager loading
-    invoices = result.scalars().unique().all()
+    # --- OPTIMASI EXPORT: Gunakan sistem Batching untuk skalabilitas ---
+    # Hitung total count dulu
+    count_stmt = select(func.count()).select_from(query.subquery())
+    count_result = await db.execute(count_stmt)
+    total_count = count_result.scalar() or 0
 
-    # Query untuk mendapatkan invoice pertama (ID terkecil) setiap pelanggan
-    # Ini untuk menandai "NEW USER"
-    from sqlalchemy import func as sql_func
-    pelanggan_ids = list(set([inv.pelanggan_id for inv in invoices]))
+    if total_count == 0:
+        # Kembalikan file kosong dengan header jika tidak ada data
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        headers = ["ID Invoice", "Nomor Invoice", "Nama Pelanggan", "ID Pelanggan", "Alamat Pelanggan", "Total Harga", "Status Invoice", "Tipe Invoice", "Tanggal Invoice", "Tanggal Jatuh Tempo", "TANGGAL BAYAR", "Payment Link", "Email", "No. Telepon", "Brand", "NEW USER"]
+        for col_num, header in enumerate(headers, 1):
+            ws.cell(row=1, column=col_num, value=header)
+        output = io.BytesIO()
+        wb.save(output)
+        output.seek(0)
+        return StreamingResponse(output, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": f"attachment; filename=payment-links-empty.xlsx"})
+
+    # Ambil semua pelanggan_id yang terlibat untuk menentukan "NEW USER"
+    # Kita tidak ambil objek lengkap, cuma ID saja agar hemat memori
+    p_ids_stmt = select(InvoiceModel.pelanggan_id).select_from(query.subquery()).distinct()
+    p_ids_result = await db.execute(p_ids_stmt)
+    pelanggan_ids = [row[0] for row in p_ids_result.all()]
+    
     first_invoice_map = {}
-
     if pelanggan_ids:
+        # Query untuk mendapatkan invoice pertama (ID terkecil) setiap pelanggan secara bulk
+        from sqlalchemy import func as sql_func
         first_invoice_query = (
             select(
                 InvoiceModel.pelanggan_id,
@@ -1945,46 +2012,74 @@ async def export_payment_links_excel(
         for row in first_invoice_result:
             first_invoice_map[row.pelanggan_id] = row.first_invoice_id
 
-    # Buat workbook dan worksheet pertama untuk Payment Links
+    # Inisialisasi statistik untuk sheet Matrix
+    lunas_count = 0
+    belum_dibayar_count = 0
+    kadaluarsa_count = 0
+    otomatis_count = 0
+    manual_count = 0
+    reinvoice_count = 0
+
+    # Buat workbook dan worksheet
     wb = openpyxl.Workbook()
     ws = wb.active
-    if ws is not None:
-        ws.title = "Payment Links Invoice"
+    ws.title = "Payment Links Invoice"
 
-    # Definisikan header
     headers = [
-        "ID Invoice",
-        "Nomor Invoice",
-        "Nama Pelanggan",
-        "ID Pelanggan",
-        "Alamat Pelanggan",
-        "Total Harga",
-        "Status Invoice",
-        "Tipe Invoice",  # Kolom baru untuk jenis invoice
-        "Tanggal Invoice",
-        "Tanggal Jatuh Tempo",
-        "TANGGAL BAYAR",  # Kolom baru untuk tanggal pembayaran
-        "Payment Link",
-        "Email",
-        "No. Telepon",
-        "Brand",
-        "NEW USER",  # Kolom baru untuk menandai user baru
+        "ID Invoice", "Nomor Invoice", "Nama Pelanggan", "ID Pelanggan", "Alamat Pelanggan",
+        "Total Harga", "Status Invoice", "Tipe Invoice", "Tanggal Invoice", "Tanggal Jatuh Tempo",
+        "TANGGAL BAYAR", "Payment Link", "Email", "No. Telepon", "Brand", "NEW USER"
     ]
+    
+    # Styling header
+    from openpyxl.styles import Font, PatternFill, Alignment
+    header_font = Font(bold=True)
+    header_fill = PatternFill(start_color="CCCCCC", end_color="CCCCCC", fill_type="solid")
 
-    # Menambahkan header ke worksheet (dengan null check)
-    if ws is not None:
-        for col_num, header in enumerate(headers, 1):
-            cell = ws.cell(row=1, column=col_num, value=header)
-            # Gunakan import langsung untuk styles
-            from openpyxl.styles import Font, PatternFill, Alignment
+    for col_num, header in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col_num, value=header)
+        cell.font = header_font
+        cell.fill = header_fill
 
-            if cell is not None:
-                cell.font = Font(bold=True)
-                cell.fill = PatternFill(start_color="CCCCCC", end_color="CCCCCC", fill_type="solid")
+    # --- Proses data dalam BATCH (per 500 data) ---
+    batch_size = 500
+    row_num = 2
+    
+    # Kueri sudah dioptimasi di atas (loading strategy), tidak perlu .options lagi di sini
+    for offset in range(0, total_count, batch_size):
+        batch_query = query.offset(offset).limit(batch_size)
+        batch_result = await db.execute(batch_query)
+        batch_invoices = batch_result.scalars().unique().all()
+        
+        for invoice in batch_invoices:
+            # Hitung Stats
+            if invoice.status_invoice == 'Lunas': lunas_count += 1
+            elif invoice.status_invoice == 'Belum Dibayar': belum_dibayar_count += 1
+            elif invoice.status_invoice in ['Kadaluarsa', 'Expired']: kadaluarsa_count += 1
+            
+            if getattr(invoice, 'is_reinvoice', False): reinvoice_count += 1
+            elif invoice.invoice_type == 'automatic': otomatis_count += 1
+            elif invoice.invoice_type == 'manual': manual_count += 1
 
-    # Isi data (dengan null check)
-    if ws is not None:
-        for row_num, invoice in enumerate(invoices, 2):
+            # Tentukan metode pembayaran
+            metode_pembayaran = "Otomatis"
+            if invoice.pelanggan and hasattr(invoice.pelanggan, 'langganan'):
+                langganan_aktif = next((l for l in invoice.pelanggan.langganan if l.status == "Aktif"), None)
+                if langganan_aktif:
+                    metode_pembayaran = langganan_aktif.metode_pembayaran or "Otomatis"
+
+            # Build tipe invoice display
+            type_parts = []
+            if getattr(invoice, 'is_reinvoice', False):
+                type_parts.append("Reinvoice")
+                type_parts.append(metode_pembayaran)
+            else:
+                inv_type = invoice.invoice_type or "manual"
+                type_parts.append("Otomatis" if inv_type == "automatic" else inv_type.capitalize())
+                if metode_pembayaran == "Prorate": type_parts.append("Prorate")
+            if getattr(invoice, 'diskon_id', None): type_parts.append("Diskon")
+            
+            # Tulis ke Excel
             ws.cell(row=row_num, column=1, value=invoice.id)
             ws.cell(row=row_num, column=2, value=invoice.invoice_number)
             ws.cell(row=row_num, column=3, value=invoice.pelanggan.nama if invoice.pelanggan else "")
@@ -1992,124 +2087,53 @@ async def export_payment_links_excel(
             ws.cell(row=row_num, column=5, value=invoice.pelanggan.alamat if invoice.pelanggan else "")
             ws.cell(row=row_num, column=6, value=float(invoice.total_harga) if invoice.total_harga else 0)
             ws.cell(row=row_num, column=7, value=invoice.status_invoice)
-
-            # Tipe invoice dengan mapping yang user-friendly
-            # Format: [Tipe] - [Metode] - [Diskon jika ada]
-            # Contoh: "Otomatis - Diskon", "Prorate - Reinvoice", "Manual"
-
-            # Tentukan metode pembayaran (ambil dari langganan pelanggan)
-            metode_pembayaran = "Otomatis"  # Default
-            if invoice.pelanggan and hasattr(invoice.pelanggan, 'langganan'):
-                # Cari langganan yang aktif
-                langganan_aktif = None
-                for langganan in invoice.pelanggan.langganan:
-                    if langganan.status == "Aktif":
-                        langganan_aktif = langganan
-                        break
-                if langganan_aktif:
-                    metode_pembayaran = langganan_aktif.metode_pembayaran or "Otomatis"
-
-            # Bangun tipe invoice string
-            type_parts = []
-
-            # Tambah tipe invoice (Otomatis/Manual)
-            if getattr(invoice, 'is_reinvoice', False):
-                type_parts.append("Reinvoice")
-                # Untuk reinvoice, gunakan metode pembayaran dari langganan
-                type_parts.append(metode_pembayaran)
-            else:
-                invoice_type = invoice.invoice_type or "manual"
-                if invoice_type == "automatic":
-                    type_parts.append("Otomatis")
-                elif invoice_type == "manual":
-                    type_parts.append("Manual")
-                else:
-                    type_parts.append(invoice_type.capitalize())
-
-                # Tambah metode pembayaran jika berbeda
-                if metode_pembayaran == "Prorate":
-                    type_parts.append("Prorate")
-
-            # Tambah flag diskon jika ada
-            if getattr(invoice, 'diskon_id', None) and invoice.diskon_id:
-                type_parts.append("Diskon")
-
-            # Gabungkan semua bagian dengan " - "
-            invoice_type_display = " - ".join(type_parts)
-            ws.cell(row=row_num, column=8, value=invoice_type_display)
-
-            # Handle SQLAlchemy Date untuk Excel export
-            invoice_date = invoice.tgl_invoice
-            due_date = invoice.tgl_jatuh_tempo
-
-            ws.cell(row=row_num, column=9, value=safe_format_date(invoice_date, "%Y-%m-%d"))
-            ws.cell(row=row_num, column=10, value=safe_format_date(due_date, "%Y-%m-%d"))
-
-            # TANGGAL BAYAR - Tampilkan paid_at jika status Lunas
+            ws.cell(row=row_num, column=8, value=" - ".join(type_parts))
+            ws.cell(row=row_num, column=9, value=safe_format_date(invoice.tgl_invoice, "%Y-%m-%d"))
+            ws.cell(row=row_num, column=10, value=safe_format_date(invoice.tgl_jatuh_tempo, "%Y-%m-%d"))
+            
+            # Tanggal Bayar
+            val_paid = "-"
             if invoice.status_invoice == "Lunas" and invoice.paid_at:
-                # Format paid_at ke datetime WIB untuk display
-                paid_at_wib = invoice.paid_at
-                if paid_at_wib:
-                    ws.cell(row=row_num, column=11, value=paid_at_wib.strftime("%Y-%m-%d %H:%M"))
-                else:
-                    ws.cell(row=row_num, column=11, value="-")
-            else:
-                ws.cell(row=row_num, column=11, value="-")
-
+                val_paid = invoice.paid_at.strftime("%Y-%m-%d %H:%M")
+            ws.cell(row=row_num, column=11, value=val_paid)
+            
             ws.cell(row=row_num, column=12, value=invoice.payment_link)
             ws.cell(row=row_num, column=13, value=invoice.email or "")
             ws.cell(row=row_num, column=14, value=invoice.no_telp or "")
             ws.cell(row=row_num, column=15, value=invoice.brand or "")
-
-            # NEW USER - Tandai jika ini adalah invoice pertama untuk pelanggan
+            
             is_new_user = first_invoice_map.get(invoice.pelanggan_id) == invoice.id
             ws.cell(row=row_num, column=16, value="NEW USER" if is_new_user else "")
+            
+            row_num += 1
 
-        # Auto-adjust column width (dengan null check)
-        from openpyxl.utils import get_column_letter
-
-        if ws is not None:
-            for column in ws.columns:
-                max_length = 0
-                # Handle column[0].column yang mungkin None
-                first_cell = column[0] if column else None
-                if first_cell and hasattr(first_cell, "column") and first_cell.column is not None:
-                    column_letter = get_column_letter(first_cell.column)
-                    for cell in column:
-                        try:
-                            if len(str(cell.value)) > max_length:
-                                max_length = len(str(cell.value))
-                        except:
-                            pass
-                    adjusted_width = min(max_length + 2, 50)
-                    if ws is not None:
-                        ws.column_dimensions[column_letter].width = adjusted_width
+    # Auto-adjust column width
+    from openpyxl.utils import get_column_letter
+    for column in ws.columns:
+        max_length = 0
+        first_cell = column[0]
+        if first_cell and hasattr(first_cell, "column") and first_cell.column:
+            col_letter = get_column_letter(first_cell.column)
+            for cell in column:
+                try: 
+                    if len(str(cell.value)) > max_length: max_length = len(str(cell.value))
+                except: pass
+            ws.column_dimensions[col_letter].width = min(max_length + 2, 50)
 
     # Buat sheet kedua untuk Matrix Persentase Invoice
     ws_matrix = wb.create_sheet("Matrix Persentase Invoice")
     if ws_matrix is not None:
         # Hitung statistik dari invoices yang sudah difilter
-        total_invoices = len(invoices)
-        if total_invoices > 0:
-            # Hitung berdasarkan status invoice
-            lunas_count = len([inv for inv in invoices if inv.status_invoice == 'Lunas'])
-            belum_dibayar_count = len([inv for inv in invoices if inv.status_invoice == 'Belum Dibayar'])
-            kadaluarsa_count = len([inv for inv in invoices if inv.status_invoice == 'Kadaluarsa'])
-
-            # Hitung berdasarkan tipe invoice
-            otomatis_count = len([inv for inv in invoices if inv.invoice_type == 'automatic'])
-            manual_count = len([inv for inv in invoices if inv.invoice_type == 'manual'])
-            reinvoice_count = len([inv for inv in invoices if getattr(inv, 'is_reinvoice', False)])
-
-            # Hitung persentase status
-            lunas_percent = (lunas_count / total_invoices) * 100
-            belum_dibayar_percent = (belum_dibayar_count / total_invoices) * 100
-            kadaluarsa_percent = (kadaluarsa_count / total_invoices) * 100
-
+        if total_count > 0:
+            # Hitung persentase status (Variabel sudah dihitung di batch loop di atas)
+            lunas_percent = (lunas_count / total_count) * 100
+            belum_dibayar_percent = (belum_dibayar_count / total_count) * 100
+            kadaluarsa_percent = (kadaluarsa_count / total_count) * 100
+            
             # Hitung persentase tipe
-            otomatis_percent = (otomatis_count / total_invoices) * 100
-            manual_percent = (manual_count / total_invoices) * 100
-            reinvoice_percent = (reinvoice_count / total_invoices) * 100
+            otomatis_percent = (otomatis_count / total_count) * 100
+            manual_percent = (manual_count / total_count) * 100
+            reinvoice_percent = (reinvoice_count / total_count) * 100
 
             # Format tanggal untuk header
             start_date_str = start_date.strftime('%d/%m/%Y') if start_date else 'Awal'
@@ -2136,7 +2160,7 @@ async def export_payment_links_excel(
         ws_matrix.cell(row=2, column=1).font = title_font
         ws_matrix.merge_cells('A2:D2')
 
-        ws_matrix.cell(row=3, column=1, value=f"Total Invoice (Filter Aktif): {total_invoices}")
+        ws_matrix.cell(row=3, column=1, value=f"Total Invoice (Filter Aktif): {total_count}")
         ws_matrix.cell(row=3, column=1).font = title_font
         ws_matrix.merge_cells('A3:D3')
 
@@ -2158,7 +2182,7 @@ async def export_payment_links_excel(
 
         # Data Total Invoice
         ws_matrix.cell(row=6, column=1, value="Total Invoice")
-        ws_matrix.cell(row=6, column=2, value=total_invoices)
+        ws_matrix.cell(row=6, column=2, value=total_count)
         ws_matrix.cell(row=6, column=3, value="100.0%")
         ws_matrix.cell(row=6, column=4, value="████████████████████")
         for col in range(1, 5):
@@ -2550,11 +2574,15 @@ async def get_invoice_count(
 
     if search:
         search_term = f"%{search}%"
+        is_numeric_search = search.strip().isdigit()
+        
         count_query_archive = count_query_archive.where(
             or_(
                 InvoiceArchiveModel.invoice_number.ilike(search_term),
                 PelangganModel.nama.ilike(search_term),
                 InvoiceArchiveModel.id_pelanggan.ilike(search_term),
+                # Tambahkan filter langsung untuk pelanggan_id (BigInteger foreign key)
+                InvoiceArchiveModel.pelanggan_id == int(search.strip()) if is_numeric_search else False,
             )
         )
 

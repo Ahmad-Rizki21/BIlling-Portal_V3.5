@@ -1434,14 +1434,18 @@ async function fetchInvoiceSummary() {
 onMounted(async () => {
   loading.value = true;
 
-  // Fetch user permissions first
+  // Fetch user permissions first (harus selesai duluan karena widget tergantung permission)
   await fetchUserPermissions();
 
   let data: any = null; // Deklarasi data di luar try-catch
   try {
-    // Fetch dashboard data biasa
-    const response = await apiClient.get('/dashboard/');
-    data = response.data;
+    // PERFORMANCE: Jalankan dashboard data dan invoice summary secara PARALEL
+    const [dashboardResponse, invoiceSummary] = await Promise.all([
+      apiClient.get('/dashboard/'),
+      fetchInvoiceSummary(),
+    ]);
+
+    data = dashboardResponse.data;
 
     revenueData.value = data.revenue_summary;
 
@@ -1452,8 +1456,7 @@ onMounted(async () => {
       color: getColorForStat(card.title)
     }));
 
-    // Fetch invoice summary terpisah (tapi jangan replace allStats)
-    const invoiceSummary = await fetchInvoiceSummary();
+    // Tambahkan stats dari invoice summary jika berhasil (sama seperti sebelumnya)
 
     // Tambahkan stats dari invoice summary jika berhasil
     if (invoiceSummary) {
