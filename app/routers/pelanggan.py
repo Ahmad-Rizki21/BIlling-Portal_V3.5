@@ -242,6 +242,9 @@ async def read_all_pelanggan(
     search: Optional[str] = None,
     alamat: Optional[str] = None,
     id_brand: Optional[str] = None,
+    layanan: Optional[str] = Query(None, description="Filter berdasarkan tipe layanan (e.g., 'Internet 10 Mbps')"),
+    tgl_instalasi_from: Optional[date] = Query(None, description="Filter tanggal instalasi mulai dari (format: YYYY-MM-DD)"),
+    tgl_instalasi_to: Optional[date] = Query(None, description="Filter tanggal instalasi sampai dengan (format: YYYY-MM-DD)"),
     fields: Optional[str] = Query(None, description="Comma-separated field names to include (e.g., 'id,nama,email,no_telp')"),
     for_invoice_selection: bool = False,
     use_minimal_loading: bool = Query(False, description="Use minimal eager loading for faster response (skips langganan and paket_layanan loading)"),
@@ -285,6 +288,18 @@ async def read_all_pelanggan(
     if id_brand:
         base_query = base_query.where(PelangganModel.id_brand == id_brand)
         count_query = count_query.where(PelangganModel.id_brand == id_brand)
+
+    if layanan:
+        base_query = base_query.where(PelangganModel.layanan == layanan)
+        count_query = count_query.where(PelangganModel.layanan == layanan)
+
+    if tgl_instalasi_from:
+        base_query = base_query.where(PelangganModel.tgl_instalasi >= tgl_instalasi_from)
+        count_query = count_query.where(PelangganModel.tgl_instalasi >= tgl_instalasi_from)
+
+    if tgl_instalasi_to:
+        base_query = base_query.where(PelangganModel.tgl_instalasi <= tgl_instalasi_to)
+        count_query = count_query.where(PelangganModel.tgl_instalasi <= tgl_instalasi_to)
 
     if connection_status:
         if connection_status == "unconfigured":
