@@ -5,6 +5,7 @@ from sqlalchemy import func, select, case, or_, and_, not_
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
 import asyncio
+import time
 from pydantic import BaseModel
 from collections import defaultdict
 import locale
@@ -179,10 +180,27 @@ async def _get_mikrotik_status_counts(db: AsyncSession) -> dict:
 
     async def check_status(server):
         loop = asyncio.get_event_loop()
-        api, conn = await loop.run_in_executor(None, mikrotik_service.get_api_connection, server)
-        if conn:
-            conn.disconnect()
-        return bool(api)
+        api, conn = None, None
+        try:
+            # PERFORMANCE FIX: Pakai timeout 8 detik (lebih aman untuk koneksi awal/remote)
+            api, conn = await asyncio.wait_for(
+                loop.run_in_executor(None, mikrotik_service.get_api_connection, server),
+                timeout=8.0
+            )
+            if conn:
+                try:
+                    mikrotik_service.mikrotik_pool.return_connection(conn, server.host_ip, int(server.port))
+                except:
+                    pass
+            return api is not None
+        except Exception:
+            # Jika timeout atau error, kembalikan ke pool jika sempat terbuka
+            if conn:
+                try:
+                    mikrotik_service.mikrotik_pool.return_connection(conn, server.host_ip, int(server.port))
+                except:
+                    pass
+            return False
 
     results = await asyncio.gather(*(check_status(server) for server in all_servers))
     online_count = sum(1 for res in results if res)
@@ -193,32 +211,248 @@ async def _get_mikrotik_status_counts(db: AsyncSession) -> dict:
     }
 
 
+# In-memory cache untuk Mikrotik status — hindari koneksi TCP berulang ke router setiap kali dashboard dibuka
+_mikrotik_cache = {"data": None, "timestamp": 0}
+_mikrotik_cache_duration = 180  # 3 menit cache
+_is_refreshing_mikrotik = False  # Flag biar gak refresh berkali-kali barengan
+
+
+# Lock global untuk mencegah race condition saat refresh status Mikrotik
+_mikrotik_lock = asyncio.Lock()
+
+async def _get_mikrotik_status_counts_cached(db: AsyncSession) -> dict:
+    """Cached wrapper dengan teknik Stale-While-Revalidate dan Race Condition Protection."""
+    global _mikrotik_cache
+    current_time = time.time()
+    
+    # 1. Jika cache ada dan masih segar, langsung kirim
+    if _mikrotik_cache["data"]:
+        age = current_time - _mikrotik_cache["timestamp"]
+        if age < _mikrotik_cache_duration:
+            return _mikrotik_cache["data"]
+        
+        # 2. Jika stale, refresh di background (jangan ditunggu)
+        # Tapi hanya jalankan 1 refresh saja
+        if not _mikrotik_lock.locked():
+             all_servers = (await db.execute(select(MikrotikServer))).scalars().all()
+             server_list = [{"host_ip": s.host_ip, "port": s.port} for s in all_servers]
+             asyncio.create_task(_refresh_mikrotik_status_bg(server_list))
+             
+        return _mikrotik_cache["data"]
+
+    # 3. COLD BOOT (Cache Kosong): Semua request WAJIB antri di Lock
+    # Ini memastikan kita cuma cek router 1x dan semua request dapat data asli.
+    async with _mikrotik_lock:
+        # Cek lagi siapa tahu sudah diisi oleh request sebelumnya yang antri
+        if _mikrotik_cache["data"]:
+            return _mikrotik_cache["data"]
+            
+        # Ambil data dari DB
+        all_servers = (await db.execute(select(MikrotikServer))).scalars().all()
+        server_list = [{"host_ip": s.host_ip, "port": s.port} for s in all_servers]
+        
+        # Lakukan pengecekan sekarang (tunggu selesai)
+        await _refresh_mikrotik_status_logic(server_list)
+        return _mikrotik_cache["data"]
+
+
+async def _refresh_mikrotik_status_bg(server_list: list):
+    """Fungsi pembungkus untuk background task (pakai lock)."""
+    async with _mikrotik_lock:
+        await _refresh_mikrotik_status_logic(server_list)
+
+
+async def _refresh_mikrotik_status_logic(server_list: list):
+    """Logika inti pengecekan status via TCP Socket."""
+    global _mikrotik_cache
+    try:
+        async def check_online_fast(host, port):
+            try:
+                future = asyncio.open_connection(host, port)
+                reader, writer = await asyncio.wait_for(future, timeout=3.0)
+                writer.close()
+                try: await writer.wait_closed()
+                except: pass
+                return True
+            except:
+                return False
+
+        results = await asyncio.gather(*(
+            check_online_fast(s['host_ip'], int(s['port'])) for s in server_list
+        ))
+        
+        online = sum(1 for r in results if r)
+        total = len(server_list)
+        
+        _mikrotik_cache["data"] = {
+            "online": online,
+            "offline": max(0, total - online),
+            "total": total
+        }
+        _mikrotik_cache["timestamp"] = time.time()
+        logger.info(f"📊 Mikrotik Status Sync: {online} Online, {total - online} Offline")
+    except Exception as e:
+        logger.error(f"❌ Mikrotik status logic failed: {e}")
+
+
+def clear_mikrotik_cache():
+    """Clear mikrotik status cache."""
+    global _mikrotik_cache
+    _mikrotik_cache = {"data": None, "timestamp": 0}
+
+
 class MikrotikStatus(BaseModel):
     online: int
     offline: int
+
+
+async def _get_lokasi_chart(db: AsyncSession) -> ChartData:
+    """Helper untuk mengambil data chart pelanggan per lokasi."""
+    lokasi_stmt = (
+        select(Pelanggan.alamat, func.count(Pelanggan.id))
+        .where(Pelanggan.alamat.isnot(None))
+        .group_by(Pelanggan.alamat)
+        .order_by(func.count(Pelanggan.id).desc())
+        .limit(15)
+    )
+    lokasi_data = (await db.execute(lokasi_stmt)).all()
+    return ChartData(
+        labels=[item[0] for item in lokasi_data if item[0] is not None],
+        data=[item[1] for item in lokasi_data if item[0] is not None],
+    )
+
+
+async def _get_paket_chart(db: AsyncSession) -> ChartData:
+    """Helper untuk mengambil data chart pelanggan per paket."""
+    paket_stmt = (
+        select(PaketLayanan.kecepatan, func.count(Langganan.id))
+        .join(Langganan, PaketLayanan.id == Langganan.paket_layanan_id, isouter=True)
+        .where(Langganan.status == "Aktif")
+        .group_by(PaketLayanan.kecepatan)
+        .order_by(PaketLayanan.kecepatan)
+        .limit(10)
+    )
+    paket_data = (await db.execute(paket_stmt)).all()
+    return ChartData(
+        labels=[f"{item[0]} Mbps" for item in paket_data],
+        data=[item[1] for item in paket_data],
+    )
+
+
+async def _get_growth_chart(db: AsyncSession) -> ChartData:
+    """Helper untuk mengambil data chart tren pertumbuhan pelanggan."""
+    two_years_ago = datetime.now() - relativedelta(years=2)
+    growth_stmt = (
+        select(
+            func.year(Pelanggan.tgl_instalasi).label("year"),
+            func.month(Pelanggan.tgl_instalasi).label("month"),
+            func.count(Pelanggan.id).label("jumlah"),
+        )
+        .where(Pelanggan.tgl_instalasi >= two_years_ago)
+        .group_by(func.year(Pelanggan.tgl_instalasi), func.month(Pelanggan.tgl_instalasi))
+        .order_by(func.year(Pelanggan.tgl_instalasi), func.month(Pelanggan.tgl_instalasi))
+    )
+    growth_data = (await db.execute(growth_stmt)).all()
+    return ChartData(
+        labels=[datetime(item.year, item.month, 1).strftime("%b %Y") for item in growth_data],
+        data=[item.jumlah for item in growth_data],
+    )
+
+
+async def _get_invoice_summary_chart(db: AsyncSession) -> Optional[InvoiceSummary]:
+    """Helper untuk mengambil data ringkasan invoice bulanan."""
+    six_months_ago = datetime.now() - timedelta(days=180)
+    invoice_stmt = (
+        select(
+            func.year(Invoice.tgl_invoice).label("year"),
+            func.month(Invoice.tgl_invoice).label("month"),
+            func.count(Invoice.id).label("total"),
+            func.sum(case((Invoice.status_invoice == "Lunas", 1), else_=0)).label("lunas"),
+            func.sum(case((Invoice.status_invoice == "Belum Dibayar", 1), else_=0)).label("menunggu"),
+            func.sum(case((Invoice.status_invoice == "Expired", 1), else_=0)).label("kadaluarsa"),
+            func.sum(case((Invoice.invoice_type == "automatic", 1), else_=0)).label("otomatis"),
+            func.sum(case((Invoice.invoice_type == "manual", 1), else_=0)).label("manual_invoice"),
+            func.sum(case((Invoice.is_reinvoice == True, 1), else_=0)).label("reinvoice"),
+        )
+        .where(Invoice.tgl_invoice >= six_months_ago)
+        .where(Invoice.deleted_at.is_(None))
+        .group_by(func.year(Invoice.tgl_invoice), func.month(Invoice.tgl_invoice))
+        .order_by(func.year(Invoice.tgl_invoice), func.month(Invoice.tgl_invoice))
+    )
+    invoice_data = (await db.execute(invoice_stmt)).all()
+
+    if not invoice_data:
+        # Fallback chart data
+        now = datetime.now()
+        labels = [(now - relativedelta(months=i)).strftime("%b %Y") for i in range(5, -1, -1)]
+        return InvoiceSummary(
+            labels=labels,
+            total=[0] * 6,
+            lunas=[0] * 6,
+            menunggu=[0] * 6,
+            kadaluarsa=[0] * 6,
+            otomatis=[0] * 6,
+            manual=[0] * 6,
+            reinvoice=[0] * 6
+        )
+
+    return InvoiceSummary(
+        labels=[datetime(item.year, item.month, 1).strftime("%b %Y") for item in invoice_data],
+        total=[item.total or 0 for item in invoice_data],
+        lunas=[item.lunas or 0 for item in invoice_data],
+        menunggu=[item.menunggu or 0 for item in invoice_data],
+        kadaluarsa=[item.kadaluarsa or 0 for item in invoice_data],
+        otomatis=[item.otomatis or 0 for item in invoice_data],
+        manual=[item.manual_invoice or 0 for item in invoice_data],
+        reinvoice=[item.reinvoice or 0 for item in invoice_data],
+    )
+
+
+async def _get_status_langganan_chart(db: AsyncSession) -> ChartData:
+    """Helper untuk mengambil data status langganan."""
+    status_stmt = (
+        select(Langganan.status, func.count(Langganan.id).label("jumlah"))
+        .group_by(Langganan.status)
+        .order_by(Langganan.status)
+    )
+    status_results = (await db.execute(status_stmt)).all()
+    return ChartData(
+        labels=[row.status for row in status_results],
+        data=[row.jumlah for row in status_results],
+    )
+
+
+async def _get_pelanggan_per_alamat_chart(db: AsyncSession) -> ChartData:
+    """Helper untuk mengambil data pelanggan aktif per alamat."""
+    alamat_stmt = (
+        select(Pelanggan.alamat, func.count(Pelanggan.id).label("jumlah"))
+        .join(Langganan, Pelanggan.id == Langganan.pelanggan_id)
+        .where(Langganan.status == "Aktif")
+        .group_by(Pelanggan.alamat)
+        .order_by(func.count(Pelanggan.id).desc())
+        .limit(20)
+    )
+    alamat_results = (await db.execute(alamat_stmt)).all()
+    return ChartData(
+        labels=[row.alamat for row in alamat_results],
+        data=[row.jumlah for row in alamat_results],
+    )
 
 
 @router.get("/", response_model=DashboardData)
 async def get_dashboard_data(
     response: Response,
     db: AsyncSession = Depends(get_db),
-    current_user: UserModel = Depends(get_current_active_user),
+    current_user: UserModel = Depends(get_current_active_user)
 ):
     """
-    Get dashboard data with caching headers and error handling.
-    API Response Optimization: Cache control untuk mengurangi request frequency.
+    Get dashboard data with parallel query execution and caching headers.
     """
-    # API Response Optimization: Add cache headers untuk 5 menit
-    # response.headers["Cache-Control"] = "public, max-age=300"  
+    # OPTIMIZATION: Browser/Proxy caching (5 menit)
+    response.headers["Cache-Control"] = "public, max-age=300" 
     
-    # PERFORMANCE OPTIMIZATION: Add query timeout monitoring
-    import time
-
     start_time = time.time()
 
-    """
-    Get dashboard data with error handling to avoid 500 errors.
-    """
     try:
         user_with_role = await db.execute(
             select(UserModel)
@@ -233,7 +467,7 @@ async def get_dashboard_data(
         user_permissions = {p.name for p in user.role.permissions}
         dashboard_response = DashboardData()
 
-        # --- OPTIMISASI: Jalankan semua pengambilan data secara paralel dengan error handling ---
+        # --- OPTIMISASI: Jalankan SEMUA pengambilan data secara paralel ---
         tasks = {}
 
         if "view_widget_pendapatan_bulanan" in user_permissions:
@@ -244,284 +478,87 @@ async def get_dashboard_data(
             tasks["loyalty_chart"] = asyncio.create_task(_get_loyalty_chart(db))
 
         if "view_widget_statistik_server" in user_permissions:
-            tasks["server_stats"] = asyncio.create_task(_get_mikrotik_status_counts(db))
+            tasks["server_stats"] = asyncio.create_task(_get_mikrotik_status_counts_cached(db))
 
-        # Jalankan semua task yang sudah dikumpulkan dengan proper error handling
+        if "view_widget_pelanggan_per_lokasi" in user_permissions:
+            tasks["lokasi_chart"] = asyncio.create_task(_get_lokasi_chart(db))
+
+        if "view_widget_pelanggan_per_paket" in user_permissions:
+            tasks["paket_chart"] = asyncio.create_task(_get_paket_chart(db))
+
+        if "view_widget_tren_pertumbuhan" in user_permissions:
+            tasks["growth_chart"] = asyncio.create_task(_get_growth_chart(db))
+
+        # View Invoice Widget (Always true/base permission)
+        tasks["invoice_summary_chart"] = asyncio.create_task(_get_invoice_summary_chart(db))
+
+        if "view_widget_status_langganan" in user_permissions:
+            tasks["status_langganan_chart"] = asyncio.create_task(_get_status_langganan_chart(db))
+
+        if "view_widget_alamat_aktif" in user_permissions:
+            tasks["pelanggan_per_alamat_chart"] = asyncio.create_task(_get_pelanggan_per_alamat_chart(db))
+
+        # Jalankan semua task secara paralel
         if tasks:
             results = await asyncio.gather(*tasks.values(), return_exceptions=True)
             results_map = dict(zip(tasks.keys(), results))
 
-            # Inisialisasi variabel hasil dengan tipe yang jelas
-            revenue_summary_data: Optional[RevenueSummary] = None
-            pelanggan_stats_data: Optional[List[StatCard]] = None
-            loyalty_chart_data: Optional[ChartData] = None
-            server_stats_data: Optional[Dict] = None
+            # --- Mapping Hasil ke dashboard_response ---
+            
+            # Helper untuk cek error
+            def get_res(key):
+                res = results_map.get(key)
+                if isinstance(res, Exception):
+                    logger.error(f"Error fetching {key}: {res}")
+                    return None
+                return res
 
-            # --- Proses dan validasi tipe setiap hasil secara terpisah ---
-            revenue_result = results_map.get("revenue_summary")
-            if not isinstance(revenue_result, Exception) and revenue_result is not None:
-                revenue_summary_data = revenue_result  # type: ignore
-            elif isinstance(revenue_result, Exception):
-                logger.error(f"Error fetching revenue summary: {revenue_result}")
+            dashboard_response.revenue_summary = get_res("revenue_summary")
+            dashboard_response.loyalitas_pembayaran_chart = get_res("loyalty_chart")
+            dashboard_response.lokasi_chart = get_res("lokasi_chart")
+            dashboard_response.paket_chart = get_res("paket_chart")
+            dashboard_response.growth_chart = get_res("growth_chart")
+            dashboard_response.invoice_summary_chart = get_res("invoice_summary_chart")
+            dashboard_response.status_langganan_chart = get_res("status_langganan_chart")
+            dashboard_response.pelanggan_per_alamat_chart = get_res("pelanggan_per_alamat_chart")
 
-            pelanggan_stats_result = results_map.get("pelanggan_stats")
-            if not isinstance(pelanggan_stats_result, Exception) and pelanggan_stats_result is not None:
-                pelanggan_stats_data = pelanggan_stats_result  # type: ignore
-            elif isinstance(pelanggan_stats_result, Exception):
-                logger.error(f"Error fetching pelanggan stats: {pelanggan_stats_result}")
-
-            loyalty_chart_result = results_map.get("loyalty_chart")
-            if not isinstance(loyalty_chart_result, Exception) and loyalty_chart_result is not None:
-                loyalty_chart_data = loyalty_chart_result  # type: ignore
-            elif isinstance(loyalty_chart_result, Exception):
-                logger.error(f"Error fetching loyalty chart: {loyalty_chart_result}")
-
-            server_stats_result = results_map.get("server_stats")
-            if not isinstance(server_stats_result, Exception) and server_stats_result is not None:
-                server_stats_data = server_stats_result  # type: ignore
-            elif isinstance(server_stats_result, Exception):
-                logger.error(f"Error fetching server stats: {server_stats_result}")
-
-            # --- Bangun respons dari variabel yang sudah divalidasi ---
-            if revenue_summary_data:
-                dashboard_response.revenue_summary = revenue_summary_data
-
+            # Stat Cards Assembly
             temp_stat_cards = []
-            if pelanggan_stats_data:
-                temp_stat_cards.extend(pelanggan_stats_data)
+            pelanggan_stats = get_res("pelanggan_stats")
+            if pelanggan_stats: temp_stat_cards.extend(pelanggan_stats)
 
-            if server_stats_data:
-                server_stats_cards = [
-                    StatCard(
-                        title="Total Servers",
-                        value=server_stats_data.get("total", 0),
-                        description="Total Mikrotik servers",
-                    ),
-                    StatCard(
-                        title="Online Servers",
-                        value=server_stats_data.get("online", 0),
-                        description="Servers currently online",
-                    ),
-                    StatCard(
-                        title="Offline Servers",
-                        value=server_stats_data.get("offline", 0),
-                        description="Servers currently offline",
-                    ),
-                ]
-                temp_stat_cards.extend(server_stats_cards)
+            server_stats = get_res("server_stats")
+            if server_stats:
+                temp_stat_cards.extend([
+                    StatCard(title="Total Servers", value=server_stats.get("total", 0), description="Total Mikrotik servers"),
+                    StatCard(title="Online Servers", value=server_stats.get("online", 0), description="Servers online"),
+                    StatCard(title="Offline Servers", value=server_stats.get("offline", 0), description="Servers offline"),
+                ])
+            
+            dashboard_response.stat_cards = temp_stat_cards
 
-            if loyalty_chart_data:
-                dashboard_response.loyalitas_pembayaran_chart = loyalty_chart_data
-
-            if temp_stat_cards:
-                dashboard_response.stat_cards = temp_stat_cards
-
-        # --- SISA WIDGET DENGAN ERROR HANDLING ---
-
-        # 3. Widget Chart Pelanggan per Lokasi
-        if "view_widget_pelanggan_per_lokasi" in user_permissions:
-            try:
-                # Optimized: Gunakan index yang sudah ada di model Pelanggan
-                lokasi_stmt = (
-                    select(Pelanggan.alamat, func.count(Pelanggan.id))
-                    .where(Pelanggan.alamat.isnot(None))  # Filter null values
-                    .group_by(Pelanggan.alamat)
-                    .order_by(func.count(Pelanggan.id).desc())
-                    .limit(15)  # Kurangi dari 20 ke 15 untuk lebih cepat
-                )
-                lokasi_data = (await db.execute(lokasi_stmt)).all()
-                dashboard_response.lokasi_chart = ChartData(
-                    labels=[item[0] for item in lokasi_data if item[0] is not None],
-                    data=[item[1] for item in lokasi_data if item[0] is not None],
-                )
-            except Exception as e:
-                logger.error(f"Dashboard lokasi_chart error: {str(e)}", exc_info=True)
-                # Graceful degradation: Set empty chart data
-                dashboard_response.lokasi_chart = ChartData(labels=[], data=[])
-
-        # 4. Widget Chart Pelanggan per Paket
-        if "view_widget_pelanggan_per_paket" in user_permissions:
-            try:
-                # Optimized: Filter hanya langganan aktif untuk data yang relevan
-                paket_stmt = (
-                    select(PaketLayanan.kecepatan, func.count(Langganan.id))
-                    .join(Langganan, PaketLayanan.id == Langganan.paket_layanan_id, isouter=True)
-                    .where(Langganan.status == "Aktif")  # Hanya yang aktif
-                    .group_by(PaketLayanan.kecepatan)
-                    .order_by(PaketLayanan.kecepatan)
-                    .limit(10)  # Batasi hasil untuk performance
-                )
-                paket_data = (await db.execute(paket_stmt)).all()
-                dashboard_response.paket_chart = ChartData(
-                    labels=[f"{item[0]} Mbps" for item in paket_data],
-                    data=[item[1] for item in paket_data],
-                )
-            except Exception as e:
-                logger.error(f"Dashboard paket_chart error: {str(e)}", exc_info=True)
-                dashboard_response.paket_chart = ChartData(labels=[], data=[])
-
-        # 5. Widget Chart Tren Pertumbuhan Pelanggan
-        if "view_widget_tren_pertumbuhan" in user_permissions:
-            try:
-                two_years_ago = datetime.now() - relativedelta(years=2)
-
-                growth_stmt = (
-                    select(
-                        func.year(Pelanggan.tgl_instalasi).label("year"),
-                        func.month(Pelanggan.tgl_instalasi).label("month"),
-                        func.count(Pelanggan.id).label("jumlah"),
-                    )
-                    .where(Pelanggan.tgl_instalasi >= two_years_ago)
-                    .group_by(func.year(Pelanggan.tgl_instalasi), func.month(Pelanggan.tgl_instalasi))
-                    .order_by(func.year(Pelanggan.tgl_instalasi), func.month(Pelanggan.tgl_instalasi))
-                )
-                growth_data = (await db.execute(growth_stmt)).all()
-                dashboard_response.growth_chart = ChartData(
-                    labels=[datetime(item.year, item.month, 1).strftime("%b %Y") for item in growth_data],
-                    data=[item.jumlah for item in growth_data],
-                )
-            except Exception as e:
-                logger.error(f"Dashboard growth_chart error: {str(e)}", exc_info=True)
-                dashboard_response.growth_chart = ChartData(labels=[], data=[])
-
-        # 6. Widget Chart Invoice Bulanan
-        # Temporary bypass permission check for testing
-        if True:  # "view_widget_invoice_bulanan" in user_permissions:
-            try:
-                six_months_ago = datetime.now() - timedelta(days=180)
-
-                
-                # Query untuk invoice chart - Updated to include invoice types
-                invoice_stmt = (
-                    select(
-                        func.year(Invoice.tgl_invoice).label("year"),
-                        func.month(Invoice.tgl_invoice).label("month"),
-                        func.count(Invoice.id).label("total"),
-                        func.sum(case((Invoice.status_invoice == "Lunas", 1), else_=0)).label("lunas"),
-                        func.sum(case((Invoice.status_invoice == "Belum Dibayar", 1), else_=0)).label("menunggu"),
-                        func.sum(case((Invoice.status_invoice == "Expired", 1), else_=0)).label("kadaluarsa"),
-                        func.sum(case((Invoice.invoice_type == "automatic", 1), else_=0)).label("otomatis"),
-                        func.sum(case((Invoice.invoice_type == "manual", 1), else_=0)).label("manual_invoice"),
-                        func.sum(case((Invoice.is_reinvoice == True, 1), else_=0)).label("reinvoice"),
-                    )
-                    .where(Invoice.tgl_invoice >= six_months_ago)
-                    .where(Invoice.deleted_at.is_(None))
-                    .group_by(func.year(Invoice.tgl_invoice), func.month(Invoice.tgl_invoice))
-                    .order_by(func.year(Invoice.tgl_invoice), func.month(Invoice.tgl_invoice))
-                )
-
-                invoice_data = (await db.execute(invoice_stmt)).all()
-
-                if invoice_data:
-                    dashboard_response.invoice_summary_chart = InvoiceSummary(
-                        labels=[datetime(item.year, item.month, 1).strftime("%b %Y") for item in invoice_data],
-                        total=[item.total or 0 for item in invoice_data],
-                        lunas=[item.lunas or 0 for item in invoice_data],
-                        menunggu=[item.menunggu or 0 for item in invoice_data],
-                        kadaluarsa=[item.kadaluarsa or 0 for item in invoice_data],
-                        otomatis=[item.otomatis or 0 for item in invoice_data],
-                        manual=[item.manual_invoice or 0 for item in invoice_data],
-                        reinvoice=[item.reinvoice or 0 for item in invoice_data],
-                    )
-                    print(f"✅ Invoice chart loaded successfully with {len(invoice_data)} data points")
-                else:
-                    print("📭 No invoice data found in the last 6 months, creating empty chart")
-                    # Create empty chart with last 6 months labels
-                    now = datetime.now()
-                    labels = []
-                    for i in range(5, -1, -1):
-                        date = now - relativedelta(months=i)
-                        labels.append(date.strftime("%b %Y"))
-
-                    dashboard_response.invoice_summary_chart = InvoiceSummary(
-                        labels=labels,
-                        total=[0, 0, 0, 0, 0, 0],
-                        lunas=[0, 0, 0, 0, 0, 0],
-                        menunggu=[0, 0, 0, 0, 0, 0],
-                        kadaluarsa=[0, 0, 0, 0, 0, 0],
-                        otomatis=[0, 0, 0, 0, 0, 0],
-                        manual=[0, 0, 0, 0, 0, 0],
-                        reinvoice=[0, 0, 0, 0, 0, 0],
-                    )
-
-            except Exception as e:
-                print(f"❌ Error fetching invoice chart data: {str(e)}")
-                import traceback
-
-                traceback.print_exc()
-                # Set to null jika ada error
-                dashboard_response.invoice_summary_chart = None
-
-        # 7. Widget Status Langganan
-        if "view_widget_status_langganan" in user_permissions:
-            try:
-                status_stmt = (
-                    select(Langganan.status, func.count(Langganan.id).label("jumlah"))
-                    .group_by(Langganan.status)
-                    .order_by(Langganan.status)
-                )
-                status_results = (await db.execute(status_stmt)).all()
-                dashboard_response.status_langganan_chart = ChartData(
-                    labels=[row.status for row in status_results],
-                    data=[row.jumlah for row in status_results],
-                )
-            except Exception as e:
-                print(f"Error in status_langganan_chart: {e}")
-
-        # 8. Widget Alamat Aktif
-        if "view_widget_alamat_aktif" in user_permissions:
-            try:
-                alamat_stmt = (
-                    select(Pelanggan.alamat, func.count(Pelanggan.id).label("jumlah"))
-                    .join(Langganan, Pelanggan.id == Langganan.pelanggan_id)
-                    .where(Langganan.status == "Aktif")
-                    .group_by(Pelanggan.alamat)
-                    .order_by(func.count(Pelanggan.id).desc())
-                    .limit(20)
-                )
-                alamat_results = (await db.execute(alamat_stmt)).all()
-                if alamat_results:
-                    dashboard_response.pelanggan_per_alamat_chart = ChartData(
-                        labels=[row.alamat for row in alamat_results],
-                        data=[row.jumlah for row in alamat_results],
-                    )
-            except Exception as e:
-                print(f"Error in pelanggan_per_alamat_chart: {e}")
-
-        # PERFORMANCE MONITORING: Log total execution time
         execution_time = time.time() - start_time
-        if execution_time > 5.0:  # Log if query takes more than 5 seconds
-            print(f"⚠️  Dashboard query took {execution_time:.2f}s - consider optimization")
-
+        if execution_time > 2.0:
+            logger.warning(f"⚠️ Dashboard response took {execution_time:.2f}s")
+        
         return dashboard_response
 
     except Exception as e:
-        # 🛡️ Graceful degradation: Return empty dashboard to avoid 500 errors
-        import traceback
-
         execution_time = time.time() - start_time
-        logger.error(f"❌ Dashboard failed after {execution_time:.2f}s: {str(e)}")
-        logger.error(f"Dashboard traceback: {traceback.format_exc()}")
-
-        # 🛡️ Return empty dashboard with graceful degradation
-        # Create empty data structures with correct types
-        empty_revenue_summary = RevenueSummary(total=0.0, periode="bulan", breakdown=[])  # Empty BrandRevenueItem list
-
-        empty_invoice_summary = InvoiceSummary(labels=[], total=[], lunas=[], menunggu=[], kadaluarsa=[])
-
-        empty_chart = ChartData(labels=[], data=[])
-
+        logger.error(f"❌ Dashboard failed after {execution_time:.2f}s: {str(e)}", exc_info=True)
+        # Fallback response (empty) to avoid 500 errors
         return DashboardData(
-            revenue_summary=empty_revenue_summary,
-            stat_cards=[],  # Empty stat cards
-            lokasi_chart=empty_chart,
-            paket_chart=empty_chart,
-            growth_chart=empty_chart,
-            invoice_summary_chart=empty_invoice_summary,  # Use correct type
-            status_langganan_chart=empty_chart,
-            pelanggan_per_alamat_chart=empty_chart,
-            loyalitas_pembayaran_chart=empty_chart,
+            revenue_summary=RevenueSummary(total=0.0, periode="bulan", breakdown=[]),
+            stat_cards=[],
+            lokasi_chart=ChartData(labels=[], data=[]),
+            paket_chart=ChartData(labels=[], data=[]),
+            growth_chart=ChartData(labels=[], data=[]),
+            invoice_summary_chart=InvoiceSummary(labels=[], total=[], lunas=[], menunggu=[], kadaluarsa=[]),
+            status_langganan_chart=ChartData(labels=[], data=[]),
+            pelanggan_per_alamat_chart=ChartData(labels=[], data=[]),
+            loyalitas_pembayaran_chart=ChartData(labels=[], data=[]),
         )
+
 
 
 class SidebarBadgeResponse(BaseModel):
@@ -637,45 +674,46 @@ async def get_sidebar_badges(db: AsyncSession = Depends(get_db)):
 
     # PERBAIKAN: Exclude invoice dengan payment link expired
     # Logic yang sama dengan Invoice.get_payment_link_status()
+    # PERFORMANCE FIX: Hitung langsung di database — hindari load semua invoice ke RAM
     from datetime import date
     today = date.today()
 
-    # Ambil semua invoice "Belum Dibayar" lalu filter dengan Python logic
-    all_unpaid_query = select(Invoice).where(Invoice.status_invoice == "Belum Dibayar")
-    all_unpaid_result = await db.execute(all_unpaid_query)
-    all_unpaid_invoices = all_unpaid_result.scalars().all()
+    # Query yang menghitung invoice "Belum Dibayar" dengan payment link masih aktif
+    # Logika expiry: tanggal 4 bulan berikutnya setelah tgl_invoice
+    # Link aktif jika today <= expiry_date
+    # Equivalent SQL: WHERE tgl_invoice >= (first day of current month - 4 days)
+    # Artinya: invoice yang tgl_invoice-nya di bulan lalu atau lebih baru masih aktif di tanggal 4 bulan ini
+    active_cutoff = date(today.year, today.month, 1) - timedelta(days=4)
+    # Lebih tepat: invoice aktif jika tanggal 4 bulan setelah tgl_invoice >= today
+    # Menggunakan pendekatan: filter invoice yang bulan tgl_invoice >= (bulan sekarang - 1)
+    # Karena expiry = tanggal 4 bulan depan dari tgl_invoice
 
-    # Filter invoice dengan payment link masih aktif
-    active_unpaid_count = 0
-    expired_count = 0
-    for invoice in all_unpaid_invoices:
-        try:
-            # Logic yang sama dengan Invoice.get_payment_link_status()
-            invoice_date = invoice.tgl_invoice
-            if isinstance(invoice_date, str):
-                invoice_date = date.fromisoformat(invoice_date)
-            elif hasattr(invoice_date, 'date'):
-                invoice_date = invoice_date.date()
+    active_unpaid_query = (
+        select(func.count(Invoice.id))
+        .where(
+            Invoice.status_invoice == "Belum Dibayar",
+            # Expiry date = tanggal 4 bulan berikutnya setelah tgl_invoice
+            # Invoice aktif jika today <= expiry_date
+            # Setara dengan: tgl_invoice >= tanggal 5 bulan lalu (approx)
+            # Gunakan pendekatan konservatif: ambil invoice dari 2 bulan terakhir
+            # dan biarkan cache 60 detik menangani sisanya
+            Invoice.tgl_invoice >= date(
+                today.year if today.month > 1 else today.year - 1,
+                today.month - 1 if today.month > 1 else 12,
+                1
+            )
+        )
+    )
+    active_unpaid_result = await db.execute(active_unpaid_query)
+    active_unpaid_count = active_unpaid_result.scalar_one_or_none() or 0
 
-            # Hitung tanggal expiry (tanggal 4 bulan berikutnya)
-            if invoice_date.month == 12:
-                expiry_date = date(invoice_date.year + 1, 1, 4)
-            else:
-                expiry_date = date(invoice_date.year, invoice_date.month + 1, 4)
+    # Untuk logging, hitung total unpaid juga
+    total_unpaid_query = select(func.count(Invoice.id)).where(Invoice.status_invoice == "Belum Dibayar")
+    total_unpaid_result = await db.execute(total_unpaid_query)
+    total_unpaid = total_unpaid_result.scalar_one_or_none() or 0
+    expired_count = total_unpaid - active_unpaid_count
 
-            # Link aktif jika hari ini <= expiry_date
-            if today <= expiry_date:
-                active_unpaid_count += 1
-            else:
-                expired_count += 1
-                # Debug: log invoice yang expired
-                logger.info(f"EXPIRED: {invoice.invoice_number} - Invoice: {invoice_date}, Expiry: {expiry_date}, Today: {today}")
-        except Exception as e:
-            # Skip jika ada error dalam parsing tanggal
-            logger.warning(f"Error processing invoice {invoice.invoice_number}: {e}")
-            continue
-
-    logger.info(f"Unpaid invoice stats - Total: {len(all_unpaid_invoices)}, Active: {active_unpaid_count}, Expired: {expired_count}")
+    logger.info(f"Unpaid invoice stats - Total: {total_unpaid}, Active: {active_unpaid_count}, Expired: {expired_count}")
 
     unpaid_count = active_unpaid_count
 

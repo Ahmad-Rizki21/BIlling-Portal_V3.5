@@ -1268,7 +1268,7 @@ const showPppoePassword = ref(false);
 // --- State Baru untuk Paginasi Mobile dan Desktop ---
 const mobilePage = ref(1);
 const desktopPage = ref(1);
-const itemsPerPage = ref(15); // Jumlah item per halaman untuk mobile dan desktop
+const itemsPerPage = ref(10); // Jumlah item per halaman untuk mobile dan desktop
 const hasMoreData = ref(true);
 const loadingMore = ref(false);
 const selectedOlt = ref<string | null>(null);

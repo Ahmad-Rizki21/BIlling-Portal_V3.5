@@ -187,7 +187,7 @@ class LanggananBase(BaseModel):
         if v_float < 0:
             raise ValueError("Harga awal tidak boleh negatif")
 
-        return round(v_float, 2)
+        return round(v_float, 0)
 
     @validator("status", pre=True)
     def validate_status(cls, v):
@@ -367,7 +367,7 @@ class LanggananUpdate(BaseModel):
         if v_float < 0:
             raise ValueError("Harga awal tidak boleh negatif")
 
-        return round(v_float, 2)
+        return round(v_float, 0)
 
 
 # -- Schema untuk Import --

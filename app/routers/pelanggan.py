@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 from pydantic_core import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, selectinload
 from typing import List, Optional, Dict, Any
 from datetime import datetime, date
 import io
@@ -138,11 +138,11 @@ async def auto_update_langganan(db: AsyncSession, pelanggan_id: int, old_layanan
 
         if brand_info:
             pajak_rate = float(brand_info.pajak) / 100
-            new_harga = float(new_paket.harga) * (1 + pajak_rate)
+            new_harga = round(float(new_paket.harga) * (1 + pajak_rate), 0)
             active_langganan.harga_awal = new_harga
 
         db.add(active_langganan)
-        logger.info(f"Update langganan: Pelanggan {pelanggan_id} {old_paket_name} → {new_paket.nama_paket}")
+        logger.info(f"Update langganan: Pelanggan {pelanggan_id} {old_paket_name} â†’ {new_paket.nama_paket}")
 
     except Exception as e:
         logger.error(f"Gagal auto-update langganan pelanggan {pelanggan_id}: {e}", exc_info=True)
@@ -167,7 +167,7 @@ async def create_pelanggan(
 ):
     """
     Create pelanggan dengan database transaction untuk data consistency.
-    ✅ TRANSACTION-SAFE: Semua operasi atomic atau rollback semua.
+    âœ… TRANSACTION-SAFE: Semua operasi atomic atau rollback semua.
     """
     try:
         # 1. Create pelanggan record
@@ -207,17 +207,17 @@ async def create_pelanggan(
     except Exception as e:
         # Rollback transaction jika exception terjadi
         await db.rollback()
-        logger.error(f"❌ Transaction failed during pelanggan creation: {e}")
+        logger.error(f"âŒ Transaction failed during pelanggan creation: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Gagal membuat pelanggan: {str(e)}")
 
     # Kirim notifications setelah transaction berhasil commit
-    # ✅ SAFE: Pelanggan sudah committed, notification failure tidak affect data
+    # âœ… SAFE: Pelanggan sudah committed, notification failure tidak affect data
     if notification_payload:
         try:
             await manager.broadcast_to_roles(notification_payload, list(target_user_ids))
-            logger.info(f"✅ Notification sent for new pelanggan: {db_pelanggan.nama}")
+            logger.info(f"âœ… Notification sent for new pelanggan: {db_pelanggan.nama}")
         except Exception as e:
-            logger.warning(f"⚠️  Notification failed but pelanggan created: {e}")
+            logger.warning(f"âš ï¸  Notification failed but pelanggan created: {e}")
             # Don't raise exception - pelanggan sudah berhasil dibuat
 
     return db_pelanggan
@@ -242,6 +242,9 @@ async def read_all_pelanggan(
     search: Optional[str] = None,
     alamat: Optional[str] = None,
     id_brand: Optional[str] = None,
+    layanan: Optional[str] = Query(None, description="Filter berdasarkan tipe layanan (e.g., 'Internet 10 Mbps')"),
+    tgl_instalasi_from: Optional[date] = Query(None, description="Filter tanggal instalasi mulai dari (format: YYYY-MM-DD)"),
+    tgl_instalasi_to: Optional[date] = Query(None, description="Filter tanggal instalasi sampai dengan (format: YYYY-MM-DD)"),
     fields: Optional[str] = Query(None, description="Comma-separated field names to include (e.g., 'id,nama,email,no_telp')"),
     for_invoice_selection: bool = False,
     use_minimal_loading: bool = Query(False, description="Use minimal eager loading for faster response (skips langganan and paket_layanan loading)"),
@@ -286,6 +289,18 @@ async def read_all_pelanggan(
         base_query = base_query.where(PelangganModel.id_brand == id_brand)
         count_query = count_query.where(PelangganModel.id_brand == id_brand)
 
+    if layanan:
+        base_query = base_query.where(PelangganModel.layanan == layanan)
+        count_query = count_query.where(PelangganModel.layanan == layanan)
+
+    if tgl_instalasi_from:
+        base_query = base_query.where(PelangganModel.tgl_instalasi >= tgl_instalasi_from)
+        count_query = count_query.where(PelangganModel.tgl_instalasi >= tgl_instalasi_from)
+
+    if tgl_instalasi_to:
+        base_query = base_query.where(PelangganModel.tgl_instalasi <= tgl_instalasi_to)
+        count_query = count_query.where(PelangganModel.tgl_instalasi <= tgl_instalasi_to)
+
     if connection_status:
         if connection_status == "unconfigured":
             # Filter customers who DO NOT have a DataTeknis record
@@ -325,7 +340,7 @@ async def read_all_pelanggan(
             data_query = base_query.options(
                 joinedload(PelangganModel.data_teknis),
                 joinedload(PelangganModel.harga_layanan),
-                joinedload(PelangganModel.langganan).joinedload(LanggananModel.paket_layanan),
+                selectinload(PelangganModel.langganan).joinedload(LanggananModel.paket_layanan),
             ).order_by(PelangganModel.id.desc())
 
     if limit is not None:
@@ -382,7 +397,7 @@ async def export_data(
 
     # PERFORMANCE MONITORING: Log export parameters (sanitized)
     # Don't log potentially sensitive search terms or addresses
-    print(f"📊 Exporting pelanggan {format}: skip={skip}, limit={limit}, id_brand={id_brand}")
+    print(f"ðŸ“Š Exporting pelanggan {format}: skip={skip}, limit={limit}, id_brand={id_brand}")
 
     # Apply pagination to prevent memory overload
     # Optimized: Menambahkan eager loading untuk mencegah N+1 queries
@@ -391,7 +406,7 @@ async def export_data(
         .options(
             joinedload(PelangganModel.harga_layanan),
             joinedload(PelangganModel.data_teknis),
-            joinedload(PelangganModel.langganan).joinedload(LanggananModel.paket_layanan),
+            selectinload(PelangganModel.langganan).joinedload(LanggananModel.paket_layanan),
         )
         .order_by(PelangganModel.id.desc())
         .offset(skip)
@@ -417,7 +432,7 @@ async def export_data(
     pelanggan_list = result.scalars().unique().all()
 
     # PERFORMANCE MONITORING: Log export results
-    print(f"✅ Pelanggan export returning {len(pelanggan_list)} records")
+    print(f"âœ… Pelanggan export returning {len(pelanggan_list)} records")
 
     if not pelanggan_list:
         raise HTTPException(status_code=404, detail="Tidak ada data pelanggan untuk diekspor dengan filter yang diberikan.")
@@ -564,7 +579,7 @@ async def update_pelanggan(
 ):
     """
     Update pelanggan dengan database transaction untuk data consistency.
-    ✅ TRANSACTION-SAFE: Semua perubahan atomic atau rollback semua.
+    âœ… TRANSACTION-SAFE: Semua perubahan atomic atau rollback semua.
     """
     try:
         # 1. Get existing pelanggan dengan eager loading
@@ -624,13 +639,13 @@ async def update_pelanggan(
         new_layanan = update_data.get("layanan")
 
         if new_layanan:
-            logger.info(f"Auto-update langganan: Pelanggan {pelanggan_id} '{old_layanan}' → '{new_layanan}'")
+            logger.info(f"Auto-update langganan: Pelanggan {pelanggan_id} '{old_layanan}' â†’ '{new_layanan}'")
 
         if new_layanan:
-            logger.info(f"🔄 Service update requested: Pelanggan {pelanggan_id} '{old_layanan}' → '{new_layanan}', Brand: {db_pelanggan.id_brand}")
+            logger.info(f"ðŸ”„ Service update requested: Pelanggan {pelanggan_id} '{old_layanan}' â†’ '{new_layanan}', Brand: {db_pelanggan.id_brand}")
             await auto_update_langganan(db, pelanggan_id, old_layanan, new_layanan, db_pelanggan.id_brand)
         else:
-            logger.info(f"ℹ️ No layanan field in update_data")
+            logger.info(f"â„¹ï¸ No layanan field in update_data")
 
         # 7. Mark for update
         db.add(db_pelanggan)
@@ -639,12 +654,12 @@ async def update_pelanggan(
         # Commit transaction
         await db.commit()
 
-        logger.info(f"✅ Pelanggan {pelanggan_id} updated successfully")
+        logger.info(f"âœ… Pelanggan {pelanggan_id} updated successfully")
 
     except Exception as e:
         # Rollback transaction jika exception terjadi
         await db.rollback()
-        logger.error(f"❌ Transaction failed during pelanggan update: {e}")
+        logger.error(f"âŒ Transaction failed during pelanggan update: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Gagal update pelanggan: {str(e)}")
 
     # Refresh data setelah commit untuk response
@@ -670,7 +685,7 @@ async def delete_pelanggan(
         raise HTTPException(status_code=404, detail="Pelanggan tidak ditemukan")
 
     try:
-        logger.info(f"🔄 Starting cascade delete for pelanggan {pelanggan_id}: {db_pelanggan.nama}")
+        logger.info(f"ðŸ”„ Starting cascade delete for pelanggan {pelanggan_id}: {db_pelanggan.nama}")
 
         # 1. Delete DataTeknis (one-to-one relationship)
         data_teknis_stmt = select(DataTeknisModel).where(DataTeknisModel.pelanggan_id == pelanggan_id)
@@ -678,7 +693,7 @@ async def delete_pelanggan(
         data_teknis = data_teknis_result.scalar_one_or_none()
         if data_teknis:
             await db.delete(data_teknis)
-            logger.info(f"✅ Deleted DataTeknis for pelanggan {pelanggan_id}")
+            logger.info(f"âœ… Deleted DataTeknis for pelanggan {pelanggan_id}")
 
         # 2. Delete all Langganan (one-to-many relationship)
         langganan_stmt = select(LanggananModel).where(LanggananModel.pelanggan_id == pelanggan_id)
@@ -686,7 +701,7 @@ async def delete_pelanggan(
         langganans = langganan_result.scalars().all()
         for langganan in langganans:
             await db.delete(langganan)
-        logger.info(f"✅ Deleted {len(langganans)} Langganan records for pelanggan {pelanggan_id}")
+        logger.info(f"âœ… Deleted {len(langganans)} Langganan records for pelanggan {pelanggan_id}")
 
         # 3. Delete all Invoices (one-to-many relationship)
         invoice_stmt = select(InvoiceModel).where(InvoiceModel.pelanggan_id == pelanggan_id)
@@ -694,20 +709,20 @@ async def delete_pelanggan(
         invoices = invoice_result.scalars().all()
         for invoice in invoices:
             await db.delete(invoice)
-        logger.info(f"✅ Deleted {len(invoices)} Invoice records for pelanggan {pelanggan_id}")
+        logger.info(f"âœ… Deleted {len(invoices)} Invoice records for pelanggan {pelanggan_id}")
 
         # 4. Finally delete the pelanggan record
         await db.delete(db_pelanggan)
-        logger.info(f"✅ Deleted Pelanggan record for pelanggan {pelanggan_id}")
+        logger.info(f"âœ… Deleted Pelanggan record for pelanggan {pelanggan_id}")
 
         # Commit transaksi
         await db.commit()
 
-        logger.info(f"🎉 Cascade delete completed successfully for pelanggan {pelanggan_id}")
+        logger.info(f"ðŸŽ‰ Cascade delete completed successfully for pelanggan {pelanggan_id}")
     except Exception as e:
         # Rollback transaksi jika ada error
         await db.rollback()
-        logger.error(f"❌ Transaction failed during cascade delete: {e}")
+        logger.error(f"âŒ Transaction failed during cascade delete: {e}")
         raise HTTPException(
             status_code=500,
             detail=f"Gagal menghapus pelanggan dan data terkait: {str(e)}",
@@ -868,7 +883,7 @@ async def import_from_csv(
             else:
                 data["tgl_instalasi"] = None  # type: ignore
 
-            # 🔒 Ensure proper type casting before schema creation
+            # ðŸ”’ Ensure proper type casting before schema creation
             # Convert date string to proper date type if needed
             tgl_instalasi_value = data.get("tgl_instalasi")
             if tgl_instalasi_value:

@@ -216,7 +216,7 @@
             :loading="loading"
             item-value="id"
             class="invoice-table"
-            :items-per-page="15"
+            :items-per-page="10"
             :loading-text="'Memuat data invoice...'"
             :no-data-text="'Tidak ada data invoice'"
             show-select
@@ -588,18 +588,49 @@
           </div>
           <v-autocomplete
             v-model="selectedLanggananId"
+            v-model:search="langgananSearch"
             :items="langgananForSelect"
+            :loading="isSearchingLangganan"
+            :no-filter="true"
             item-title="title"
             item-value="id"
             label="Pilih Langganan Pelanggan"
-            placeholder="Ketik nama pelanggan atau ID langganan..."
+            placeholder="Ketik minimal 3 huruf nama pelanggan..."
             variant="outlined"
             density="comfortable"
             clearable
+            persistent-hint
+            :hint="selectedLanggananId ? '' : newUserLangganans.length > 0 ? `${newUserLangganans.length} user baru tersedia — atau ketik nama untuk mencari` : 'Ketik nama untuk mencari pelanggan'"
             :prepend-inner-icon="'mdi-account-search'"
             class="mb-4"
-            no-data-text="Tidak ada data langganan ditemukan"
+            no-data-text="Ketik untuk mencari pelanggan"
+            loading-text="Sedang mencari data dari server..."
+            @update:search="onSearchUpdate"
           >
+            <template v-slot:item="{ item, props: itemProps }">
+              <v-list-item v-bind="itemProps">
+                <template v-slot:prepend>
+                  <v-avatar size="32" :color="item.raw?.raw?.is_new_user ? 'success' : 'primary'" class="me-2">
+                    <v-icon color="white" size="16">
+                      {{ item.raw?.raw?.is_new_user ? 'mdi-account-plus' : 'mdi-account' }}
+                    </v-icon>
+                  </v-avatar>
+                </template>
+                <template v-slot:append v-if="item.raw?.raw?.is_new_user">
+                  <v-chip color="success" variant="elevated" size="x-small" class="font-weight-bold">
+                    <v-icon start size="12">mdi-new-box</v-icon>
+                    NEW
+                  </v-chip>
+                </template>
+              </v-list-item>
+            </template>
+            <template v-slot:no-data>
+              <v-list-item>
+                <v-list-item-title>
+                  {{ langgananSearch?.length < 3 ? 'Ketik minimal 3 karakter...' : 'Tidak ditemukan pelanggan' }}
+                </v-list-item-title>
+              </v-list-item>
+            </template>
           </v-autocomplete>
           <v-expand-transition>
             <div v-if="selectedLanggananDetails">
@@ -777,6 +808,11 @@ const invoices = ref<Invoice[]>([]);
 const invoicesForExistingUserCheck = ref<Invoice[]>([]); // Khusus untuk cek existing user
 const pelangganList = ref<PelangganSelectItem[]>([]);
 const langgananList = ref<any[]>([]);
+const searchedLangganans = ref<any[]>([]); // Data hasil pencarian autocomplete
+const newUserLangganans = ref<any[]>([]); // Data langganan user baru (belum punya invoice)
+const selectedLanggananData = ref<any>(null); // Data langganan yang sedang dipilih secara utuh
+const langgananSearch = ref(''); // Input teks pencarian
+const isSearchingLangganan = ref(false); // Loading state autocomplete
 const loading = ref(true);
 
 // const customerList = ref([]);
@@ -838,13 +874,29 @@ const headers = [
 
 // --- Computed Properties ---
 const langgananForSelect = computed(() => {
-  if (!langgananList.value || loading.value) return [];
+  // Gabungkan: new users + hasil pencarian + data terpilih
+  let sourceList = [...newUserLangganans.value];
+  
+  // Tambahkan hasil pencarian (hindari duplikasi)
+  for (const item of searchedLangganans.value) {
+    if (!sourceList.some(l => l.id === item.id)) {
+      sourceList.push(item);
+    }
+  }
+  
+  // Jika ada data terpilih, pastikan masukan ke dalam list agar Title-nya muncul di autocomplete
+  if (selectedLanggananData.value && !sourceList.some(l => l.id === selectedLanggananData.value.id)) {
+    sourceList.push(selectedLanggananData.value);
+  }
+
+  if (sourceList.length === 0) return [];
 
   // Filter langganan yang valid untuk invoice generation
-  return langgananList.value
+  return sourceList
     .filter(langganan => {
-      // Hanya tampilkan langganan dengan status aktif
-      if (langganan.status === 'Berhenti' || langganan.status === 'Tidak Aktif') {
+      // Izinkan status Aktif dan Suspended (Suspended tetap perlu ditagih agar bisa aktif kembali)
+      const allowedStatus = ['Aktif', 'Suspended'];
+      if (!allowedStatus.includes(langganan.status)) {
         return false;
       }
       return true;
@@ -860,17 +912,10 @@ const langgananForSelect = computed(() => {
         return null;
       }
 
-      // Check apakah user sudah existing (pernah ada invoice)
-      const allInvoicesForCheck = [
-        ...(invoices.value || []),
-        ...(invoicesForExistingUserCheck.value || [])
-      ];
-
-      const existingInvoices = allInvoicesForCheck.filter(inv => inv.pelanggan_id === pelanggan.id);
-      const hasHistoryInvoices = existingInvoices.length > 0;
-
-      // NEW USER hanya untuk user yang benar-benar baru
-      const isNewUser = !hasHistoryInvoices;
+      // Gunakan flag is_new_user dari backend (lebih akurat, menggunakan query database langsung)
+      // Backend /new-users endpoint menggunakan LEFT JOIN + IS NULL untuk benar-benar
+      // memastikan pelanggan tidak punya invoice sama sekali
+      const isNewUser = langganan.is_new_user === true;
       
       const pelangganName = pelanggan.nama || `ID: ${pelanggan.id}`;
 
@@ -897,20 +942,25 @@ const langgananForSelect = computed(() => {
 });
 
 const selectedLanggananDetails = computed(() => {
-  if (!selectedLanggananId.value || !langgananList.value) return null;
-  const langganan = langgananList.value.find(lang => lang.id === selectedLanggananId.value);
+  if (!selectedLanggananId.value) return null;
+  return selectedLanggananData.value;
+});
+
+// Watcher untuk sinkronisasi selectedLanggananId dengan data utuhnya
+watch(selectedLanggananId, async (newId) => {
+  if (!newId) {
+    selectedLanggananData.value = null;
+    return;
+  }
   
-  if (!langganan) return null;
-  
-  // Gunakan embedded pelanggan langsung
-  const pelanggan = langganan.pelanggan || null;
-  
-  return {
-    ...langganan,
-    pelanggan: pelanggan,
-    harga_awal: langganan.harga_awal || 0,
-    tgl_jatuh_tempo: langganan.tgl_jatuh_tempo || new Date()
-  };
+  // 1. Coba cari di list yang sudah ada di memori (termasuk new users)
+  const found = [...newUserLangganans.value, ...searchedLangganans.value, ...langgananList.value].find(l => l.id === newId);
+  if (found) {
+    selectedLanggananData.value = found;
+  } else {
+    // 2. Jika tidak ada (kasus input manual ID atau reload), ambil dari API
+    await fetchSpecificLangganan(newId);
+  }
 });
 
 
@@ -1024,9 +1074,10 @@ function formatCurrency(value: number): string {
 // --- Methods --- (Tidak ada perubahan di bawah ini, biarkan seperti semula)
 onMounted(() => {
   fetchInvoices();
+  // TIDAK LAGI FETCH SEMUA DATA DI AWAL (Over-fetching Prevention)
   // fetchPelangganForSelect();
-  fetchLanggananForSelect();
-  fetchAllInvoicesForExistingUserCheck(); // Load history invoice untuk accurate NEW user detection
+  // fetchLanggananForSelect(); 
+  // fetchAllInvoicesForExistingUserCheck(); // Tidak perlu lagi - deteksi new user sekarang dari backend /new-users
   window.addEventListener('new-notification', handleNewNotification);
 });
 
@@ -1213,7 +1264,31 @@ function openDetailDialog(item: Invoice) {
 
 function openGenerateDialog() {
   selectedLanggananId.value = null;
+  searchedLangganans.value = [];
+  langgananSearch.value = '';
   dialogGenerate.value = true;
+  // Fetch new users saat dialog dibuka
+  fetchNewUserLangganans();
+}
+
+async function fetchNewUserLangganans() {
+  isSearchingLangganan.value = true;
+  try {
+    const response = await apiClient.get<any>('/langganan/new-users');
+    const data = Array.isArray(response.data) ? response.data : response.data.data;
+    if (Array.isArray(data)) {
+      // Tandai semua sebagai new user
+      newUserLangganans.value = data.map((item: any) => ({
+        ...item,
+        is_new_user: true,
+      }));
+    }
+  } catch (error) {
+    console.error('Error fetching new user langganans:', error);
+    newUserLangganans.value = [];
+  } finally {
+    isSearchingLangganan.value = false;
+  }
 }
 
 async function generateManualInvoice() {
@@ -1268,6 +1343,8 @@ async function generateManualInvoice() {
 function closeDialog() {
   dialogGenerate.value = false;
   selectedLanggananId.value = null;
+  newUserLangganans.value = [];
+  searchedLangganans.value = [];
 }
 
 async function copyPaymentLink(link: string | null | undefined) {
@@ -1448,6 +1525,7 @@ function closeReinvoiceDialog() {
 }
 
 // Function untuk melakukan reinvoice (dipindah dari createReinvoice lama)
+// Function untuk melakukan reinvoice (dipindah dari createReinvoice lama)
 async function confirmReinvoice() {
   if (!itemToReinvoice.value) return;
 
@@ -1469,6 +1547,61 @@ async function confirmReinvoice() {
     showSnackbar(errorMessage, 'error');
   } finally {
     creatingReinvoice.value = false;
+  }
+}
+
+// --- OPTIMASI AUTOCOMPLETE (Remote Search) ---
+
+// Fungsi yang dipanggil saat user mengetik di autocomplete
+function onSearchUpdate(val: string) {
+  // Jika val bernilai null atau string kosong, jangan langsung hapus list result
+  // Ini menghindari 'flicker' saat item diklik atau search box di-clear sebentar
+  if (!val || val.length < 3) {
+    // Biarkan searchedLangganans tetap ada jika sudah ada item yang dipilih
+    if (!selectedLanggananId.value) {
+      searchedLangganans.value = [];
+    }
+    return;
+  }
+  // Jalankan pencarian dengan debounce
+  debouncedLanggananSearch(val);
+}
+
+// Debounce pencarian agar tidak terlalu sering menekan server
+const debouncedLanggananSearch = debounce(async (query: string) => {
+  if (!query || query.length < 3) return;
+  
+  isSearchingLangganan.value = true;
+  try {
+    const response = await apiClient.get<any>(
+      `/langganan/?for_invoice_selection=true&limit=20&search=${encodeURIComponent(query)}`
+    );
+    const data = Array.isArray(response.data) ? response.data : response.data.data;
+    
+    if (Array.isArray(data)) {
+      searchedLangganans.value = data;
+    }
+  } catch (error) {
+    console.error('❌ Error searching langganan:', error);
+  } finally {
+    isSearchingLangganan.value = false;
+  }
+}, 500);
+
+async function fetchSpecificLangganan(id: number) {
+  // Digunakan untuk mengambil detail 1 langganan secara paksa dari API
+  try {
+    const response = await apiClient.get(`/langganan/${id}`);
+    if (response.data) {
+      selectedLanggananData.value = response.data;
+      // Juga tambahkan ke list pencarian agar filter computed tidak membuangnya saat mapping
+      if (!searchedLangganans.value.some(l => l.id === id)) {
+        searchedLangganans.value.push(response.data);
+      }
+    }
+  } catch (error) {
+    console.error('Error fetching specific langganan:', error);
+    selectedLanggananData.value = null;
   }
 }
 </script>

@@ -826,391 +826,355 @@
   - `d-block d-md-none`: Menampilkan daftar kartu hanya di layar kecil (mobile).
   - `d-none d-md-block`: Menyembunyikan tabel di layar kecil dan menampilkannya di layar medium ke atas (desktop).
 -->
-<v-dialog v-model="dialog" max-width="900px" persistent scrollable>
-  <v-card class="subscription-modal elevation-12 rounded-xl">
-    <!-- Enhanced Header with Gradient -->
-    <v-card-title class="pa-0">
-      <div class="form-header-gradient pa-6">
-        <div class="d-flex align-center position-relative">
-          <v-avatar size="48" color="white" class="elevation-4 me-4">
-            <v-icon :color="editedIndex === -1 ? 'primary' : 'warning'" size="28">
-              {{ editedIndex === -1 ? 'mdi-plus-circle' : 'mdi-pencil' }}
-            </v-icon>
-          </v-avatar>
-          <div class="flex-grow-1">
-            <h2 class="text-h5 font-weight-bold text-white mb-1">{{ formTitle }}</h2>
-            <p class="text-body-2 text-white mb-0" style="opacity: 0.9;">
-              {{ editedIndex === -1 ? 'Tambahkan langganan baru untuk pelanggan' : 'Perbarui informasi langganan' }}
-            </p>
-          </div>
-          <v-btn
-            icon="mdi-close"
-            variant="text"
-            color="white"
-            @click="closeDialog"
-            size="small"
-            class="close-button-modal"
-          ></v-btn>
+<v-dialog v-model="dialog" max-width="640px" persistent scrollable :fullscreen="smAndDown">
+  <v-card class="subscription-modal-v2" :class="{ 'rounded-0': smAndDown }">
+    <!-- Clean Modern Header -->
+    <div class="modal-header-v2">
+      <div class="modal-header-v2__inner">
+        <div class="modal-header-v2__icon-wrap">
+          <v-icon size="22">
+            {{ editedIndex === -1 ? 'mdi-plus' : 'mdi-pencil' }}
+          </v-icon>
         </div>
-        <div class="form-header-decoration"></div>
+        <div class="modal-header-v2__text">
+          <h2 class="modal-header-v2__title">{{ formTitle }}</h2>
+          <p class="modal-header-v2__subtitle">
+            {{ editedIndex === -1 ? 'Tambahkan langganan baru untuk pelanggan' : 'Perbarui informasi langganan' }}
+          </p>
+        </div>
+        <v-btn
+          icon="mdi-close"
+          variant="text"
+          @click="closeDialog"
+          size="small"
+          class="modal-header-v2__close"
+        ></v-btn>
       </div>
-    </v-card-title>
+    </div>
 
-    <!-- Form Content with Better Spacing -->
-    <v-card-text class="modal-content pa-6" style="max-height: 70vh;">
+    <!-- Form Content -->
+    <v-card-text class="modal-body-v2">
       <v-form ref="formRef" v-model="formValid" lazy-validation>
         
-        <!-- Customer Selection Section -->
-        <v-card class="form-section-card mb-6 elevation-2 rounded-lg" variant="outlined">
-          <v-card-text class="pa-5">
-            <div class="d-flex align-center mb-4">
-              <v-avatar size="32" color="primary" variant="tonal" class="me-3">
-                <v-icon size="18" color="primary">mdi-account</v-icon>
-              </v-avatar>
-              <h3 class="text-h6 font-weight-bold text-primary mb-0">Informasi Pelanggan</h3>
-            </div>
-            
-            <label class="input-label d-block mb-2 text-body-2 font-weight-medium">
-              Pilih Pelanggan
-              <span class="text-error ms-1">*</span>
-            </label>
-            <v-autocomplete
-              v-model="editedItem.pelanggan_id"
-              :items="dropdownPelangganSource"
-              item-title="nama"
-              item-value="id"
-              placeholder="Ketik nama pelanggan untuk mencari..."
-              variant="outlined"
-              prepend-inner-icon="mdi-account-search"
-              :rules="[rules.required]"
-              :disabled="editedIndex !== -1"
-              density="comfortable"
-              clearable
-              hide-details="auto"
-              class="enhanced-field"
-            >
-              <template v-slot:append-inner>
-                <v-tooltip
-                  v-if="selectedPelangganHasDataTeknis !== null"
-                  :text="dataTeknisIndicatorText"
-                  location="top"
-                >
-                  <v-icon
-                    :color="dataTeknisIndicatorColor"
-                    size="20"
-                    class="mr-2"
-                  >
-                    {{ selectedPelangganHasDataTeknis ? 'mdi-check-circle' : 'mdi-alert-circle' }}
-                  </v-icon>
-                </v-tooltip>
-                <v-progress-circular
-                  v-if="checkingDataTeknis"
-                  indeterminate
+        <!-- Section 1: Informasi Pelanggan -->
+        <div class="form-section-v2">
+          <div class="form-section-v2__header">
+            <v-icon size="18" class="form-section-v2__icon">mdi-account-outline</v-icon>
+            <span class="form-section-v2__label">Informasi Pelanggan</span>
+          </div>
+          
+          <label class="field-label-v2">
+            Pilih Pelanggan
+            <span class="field-label-v2__req">*</span>
+          </label>
+          <v-autocomplete
+            v-model="editedItem.pelanggan_id"
+            :items="dropdownPelangganSource"
+            item-title="nama"
+            item-value="id"
+            placeholder="Ketik nama pelanggan untuk mencari..."
+            variant="outlined"
+            prepend-inner-icon="mdi-account-search"
+            :rules="[rules.required]"
+            :disabled="editedIndex !== -1"
+            density="comfortable"
+            clearable
+            hide-details="auto"
+            class="field-v2"
+          >
+            <template v-slot:append-inner>
+              <v-tooltip
+                v-if="selectedPelangganHasDataTeknis !== null"
+                :text="dataTeknisIndicatorText"
+                location="top"
+              >
+                <v-icon
+                  :color="dataTeknisIndicatorColor"
                   size="20"
-                  width="2"
-                  color="primary"
                   class="mr-2"
-                ></v-progress-circular>
-              </template>
-              <template v-slot:item="{ props, item }">
-                <v-list-item v-bind="props" class="px-4">
-                  <template v-slot:prepend>
-                    <v-avatar color="primary" size="32">
-                      <v-icon color="white" size="16">mdi-account</v-icon>
-                    </v-avatar>
-                  </template>
-                  <template v-slot:title>
-                    <div class="font-weight-medium d-flex align-center">
-                      <span class="flex-grow-1">{{ item.raw.nama }}</span>
-                      <v-chip
-                        v-if="editedIndex === -1 || isPelangganBaru(item.raw.id)"
-                        size="x-small"
-                        color="success"
-                        variant="elevated"
-                        class="ms-2 flex-shrink-0"
-                      >
-                        USER BARU
-                      </v-chip>
-                    </div>
-                  </template>
-                </v-list-item>
-              </template>
-            </v-autocomplete>
-
-            <!-- Warning Message -->
-            <v-alert
-              v-if="selectedPelangganHasDataTeknis === false"
-              type="warning"
-              variant="tonal"
-              icon="mdi-alert-outline"
-              class="mt-4"
-              border="start"
-              density="compact"
-            >
-              <div class="text-body-2">
-                <strong>Perhatian:</strong> Pelanggan ini belum memiliki data teknis.
-                Silakan hubungi tim NOC untuk menambahkan data teknis terlebih dahulu sebelum membuat langganan.
-              </div>
-            </v-alert>
-          </v-card-text>
-        </v-card>
-
-        <!-- Package and Payment Section -->
-        <v-card class="form-section-card mb-6 elevation-2 rounded-lg" variant="outlined">
-          <v-card-text class="pa-5">
-            <div class="d-flex align-center mb-4">
-              <v-avatar size="32" color="indigo" variant="tonal" class="me-3">
-                <v-icon size="18" color="indigo">mdi-wifi</v-icon>
-              </v-avatar>
-              <h3 class="text-h6 font-weight-bold text-indigo mb-0">Paket & Pembayaran</h3>
-            </div>
-            
-            <v-row>
-              <v-col cols="12" md="6">
-                <label class="input-label d-block mb-2 text-body-2 font-weight-medium">
-                  Pilih Paket Layanan
-                  <span class="text-error ms-1">*</span>
-                </label>
-                <v-select
-                  v-model="editedItem.paket_layanan_id"
-                  :items="filteredPaketLayanan"
-                  :loading="paketLoading"
-                  item-title="nama_paket"
-                  item-value="id"
-                  :disabled="!editedItem.pelanggan_id || isPaketLocked"
-                  placeholder="Pilih pelanggan terlebih dahulu"
-                  variant="outlined"
-                  prepend-inner-icon="mdi-wifi-star"
-                  :rules="[rules.required]"
-                  density="comfortable"
-                  hide-details="auto"
-                  class="enhanced-field"
                 >
-                  <template v-slot:item="{ props, item }">
-                    <v-list-item v-bind="props" class="px-4">
-                      <template v-slot:prepend>
-                        <v-avatar color="indigo" size="32">
-                          <v-icon color="white" size="16">mdi-wifi</v-icon>
-                        </v-avatar>
-                      </template>
-                      <v-list-item-title class="font-weight-medium">{{ item.raw.nama_paket }}</v-list-item-title>
-                      <v-list-item-subtitle>{{ item.raw.kecepatan }} Mbps - {{ formatCurrency(item.raw.harga) }}</v-list-item-subtitle>
-                    </v-list-item>
-                  </template>
-                </v-select>
-              </v-col>
-              
-              <v-col cols="12" md="6">
-                <label class="input-label d-block mb-2 text-body-2 font-weight-medium">
-                  Metode Pembayaran
-                  <span class="text-error ms-1">*</span>
-                </label>
-                <v-select
-                  v-model="editedItem.metode_pembayaran"
-                  :items="[
-                    { title: 'Otomatis (Bulanan)', value: 'Otomatis' }, 
-                    { title: 'Prorate (Proporsional)', value: 'Prorate' }
-                  ]"
-                  variant="outlined"
-                  prepend-inner-icon="mdi-cash-multiple"
-                  density="comfortable"
-                  hide-details="auto"
-                  class="enhanced-field"
-                ></v-select>
-              </v-col>
-            </v-row>
-
-            <!-- Pricing Display for Otomatis -->
-            <div v-if="editedItem.metode_pembayaran === 'Otomatis'" class="mt-4">
-              <v-text-field
-                :model-value="editedItem.harga_awal"
-                label="Total Harga Bulanan"
-                variant="outlined"
-                prepend-inner-icon="mdi-currency-usd"
-                prefix="Rp"
-                readonly
-                density="comfortable"
-                class="price-field"
-                hide-details
-              ></v-text-field>
-            </div>
-
-            <!-- Prorate Options -->
-            <template v-if="editedItem.metode_pembayaran === 'Prorate'">
-              <v-row class="mt-2">
-                <v-col cols="12" md="6">
-                  <label class="input-label d-block mb-2 text-body-2 font-weight-medium">
-                    Tanggal Mulai Langganan
-                  </label>
-                  <v-text-field
-                    v-model="editedItem.tgl_mulai_langganan"
-                    type="date"
-                    variant="outlined"
-                    prepend-inner-icon="mdi-calendar-start"
-                    density="comfortable"
-                    hide-details="auto"
-                    class="enhanced-field"
-                  ></v-text-field>
-                </v-col>
-                
-                <v-col cols="12" md="6" class="d-flex align-center">
-                  <v-switch
-                    v-model="isProratePlusFull"
-                    color="primary"
-                    label="Sertakan tagihan penuh bulan depan"
-                    inset
-                    hide-details
-                    density="comfortable"
-                  ></v-switch>
-                </v-col>
-              </v-row>
-
-              <!-- Prorate Pricing Info -->
-              <div class="mt-4">
-                <v-alert
-                  v-if="isProratePlusFull && hargaProrate > 0"
-                  variant="tonal"
-                  color="info"
-                  icon="mdi-information-outline"
-                  density="compact"
-                  class="mb-4"
-                >
-                  <div class="text-body-2">
-                    <strong>Rincian Tagihan Pertama:</strong>
-                    <div class="ms-2 mt-1">
-                      • Biaya Prorate: {{ formatCurrency(hargaProrate) }}<br>
-                      • Biaya Bulan Depan: {{ formatCurrency(hargaNormal) }}
-                    </div>
-                  </div>
-                </v-alert>
-
-                <v-text-field
-                  :model-value="editedItem.harga_awal"
-                  :label="isProratePlusFull ? 'Total Tagihan Pertama' : 'Total Harga Prorate'"
-                  variant="outlined"
-                  prepend-inner-icon="mdi-currency-usd-circle"
-                  prefix="Rp"
-                  readonly
-                  density="comfortable"
-                  class="price-field"
-                  hide-details
-                ></v-text-field>
-              </div>
+                  {{ selectedPelangganHasDataTeknis ? 'mdi-check-circle' : 'mdi-alert-circle' }}
+                </v-icon>
+              </v-tooltip>
+              <v-progress-circular
+                v-if="checkingDataTeknis"
+                indeterminate
+                size="20"
+                width="2"
+                color="primary"
+                class="mr-2"
+              ></v-progress-circular>
             </template>
-          </v-card-text>
-        </v-card>
+            <template v-slot:item="{ props, item }">
+              <v-list-item v-bind="props" class="px-4">
+                <template v-slot:prepend>
+                  <v-avatar color="primary" size="32">
+                    <v-icon color="white" size="16">mdi-account</v-icon>
+                  </v-avatar>
+                </template>
+                <template v-slot:title>
+                  <div class="font-weight-medium d-flex align-center">
+                    <span class="flex-grow-1">{{ item.raw.nama }}</span>
+                    <v-chip
+                      v-if="editedIndex === -1 || isPelangganBaru(item.raw.id)"
+                      size="x-small"
+                      color="success"
+                      variant="elevated"
+                      class="ms-2 flex-shrink-0"
+                    >
+                      USER BARU
+                    </v-chip>
+                  </div>
+                </template>
+              </v-list-item>
+            </template>
+          </v-autocomplete>
 
-        <!-- Status and Schedule Section -->
-        <v-card class="form-section-card elevation-2 rounded-lg" variant="outlined">
-          <v-card-text class="pa-5">
-            <div class="d-flex align-center mb-4">
-              <v-avatar size="32" color="success" variant="tonal" class="me-3">
-                <v-icon size="18" color="success">mdi-cog</v-icon>
-              </v-avatar>
-              <h3 class="text-h6 font-weight-bold text-success mb-0">Status & Jadwal</h3>
+          <!-- Warning Message -->
+          <v-alert
+            v-if="selectedPelangganHasDataTeknis === false"
+            type="warning"
+            variant="tonal"
+            icon="mdi-alert-outline"
+            class="mt-3"
+            border="start"
+            density="compact"
+          >
+            <div class="text-body-2">
+              <strong>Perhatian:</strong> Pelanggan ini belum memiliki data teknis.
+              Silakan hubungi tim NOC untuk menambahkan data teknis terlebih dahulu sebelum membuat langganan.
             </div>
+          </v-alert>
+        </div>
+
+        <!-- Section 2: Paket & Pembayaran -->
+        <div class="form-section-v2">
+          <div class="form-section-v2__header">
+            <v-icon size="18" class="form-section-v2__icon">mdi-wifi</v-icon>
+            <span class="form-section-v2__label">Paket & Pembayaran</span>
+          </div>
+          
+          <v-row>
+            <v-col cols="12" md="6">
+              <label class="field-label-v2">
+                Pilih Paket Layanan
+                <span class="field-label-v2__req">*</span>
+              </label>
+              <v-select
+                v-model="editedItem.paket_layanan_id"
+                :items="filteredPaketLayanan"
+                :loading="paketLoading"
+                item-title="nama_paket"
+                item-value="id"
+                :disabled="!editedItem.pelanggan_id || isPaketLocked"
+                placeholder="Pilih pelanggan terlebih dahulu"
+                variant="outlined"
+                prepend-inner-icon="mdi-wifi-star"
+                :rules="[rules.required]"
+                density="comfortable"
+                hide-details="auto"
+                class="field-v2"
+              >
+                <template v-slot:item="{ props, item }">
+                  <v-list-item v-bind="props" class="px-4">
+                    <template v-slot:prepend>
+                      <v-avatar color="primary" size="32" variant="tonal">
+                        <v-icon size="16">mdi-wifi</v-icon>
+                      </v-avatar>
+                    </template>
+                    <v-list-item-title class="font-weight-medium">{{ item.raw.nama_paket }}</v-list-item-title>
+                    <v-list-item-subtitle>{{ item.raw.kecepatan }} Mbps - {{ formatCurrency(item.raw.harga) }}</v-list-item-subtitle>
+                  </v-list-item>
+                </template>
+              </v-select>
+            </v-col>
             
-            <v-row>
+            <v-col cols="12" md="6">
+              <label class="field-label-v2">
+                Metode Pembayaran
+                <span class="field-label-v2__req">*</span>
+              </label>
+              <v-select
+                v-model="editedItem.metode_pembayaran"
+                :items="[
+                  { title: 'Otomatis (Bulanan)', value: 'Otomatis' }, 
+                  { title: 'Prorate (Proporsional)', value: 'Prorate' }
+                ]"
+                variant="outlined"
+                prepend-inner-icon="mdi-cash-multiple"
+                density="comfortable"
+                hide-details="auto"
+                class="field-v2"
+              ></v-select>
+            </v-col>
+          </v-row>
+
+          <!-- Pricing Display for Otomatis -->
+          <div v-if="editedItem.metode_pembayaran === 'Otomatis'" class="mt-4">
+            <div class="price-display-v2">
+              <div class="price-display-v2__label">Total Harga Bulanan</div>
+              <div class="price-display-v2__value">Rp {{ editedItem.harga_awal?.toLocaleString('id-ID') || '0' }}</div>
+            </div>
+          </div>
+
+          <!-- Prorate Options -->
+          <template v-if="editedItem.metode_pembayaran === 'Prorate'">
+            <v-row class="mt-2">
               <v-col cols="12" md="6">
-                <label class="input-label d-block mb-2 text-body-2 font-weight-medium">
-                  Status Langganan
-                  <span class="text-error ms-1">*</span>
-                </label>
-                <v-select
-                  v-model="editedItem.status"
-                  :items="[
-                    { title: 'Aktif', value: 'Aktif' },
-                    { title: 'Suspended', value: 'Suspended' },
-                    { title: 'Berhenti', value: 'Berhenti' }
-                  ]"
-                  variant="outlined"
-                  prepend-inner-icon="mdi-check-circle-outline"
-                  :rules="[rules.required]"
-                  density="comfortable"
-                  hide-details="auto"
-                  class="enhanced-field"
-                ></v-select>
-              </v-col>
-              
-              <v-col cols="12" md="6">
-                <label class="input-label d-block mb-2 text-body-2 font-weight-medium">
-                  Tanggal Jatuh Tempo
-                  <span class="text-error ms-1">*</span>
+                <label class="field-label-v2">
+                  Tanggal Mulai Langganan
                 </label>
                 <v-text-field
-                  v-model="editedItem.tgl_jatuh_tempo"
+                  v-model="editedItem.tgl_mulai_langganan"
                   type="date"
                   variant="outlined"
-                  prepend-inner-icon="mdi-calendar-alert"
-                  :rules="[rules.required]"
+                  prepend-inner-icon="mdi-calendar-start"
                   density="comfortable"
                   hide-details="auto"
-                  class="enhanced-field"
+                  class="field-v2"
                 ></v-text-field>
+              </v-col>
+              
+              <v-col cols="12" md="6" class="d-flex align-center">
+                <v-switch
+                  v-model="isProratePlusFull"
+                  color="primary"
+                  label="Sertakan tagihan penuh bulan depan"
+                  inset
+                  hide-details
+                  density="comfortable"
+                ></v-switch>
               </v-col>
             </v-row>
 
-            <!-- Status Modem Section -->
-            <v-expand-transition>
-              <div v-if="editedItem.status === 'Aktif' || editedItem.status === 'Berhenti'" class="mt-4">
-                <label class="input-label d-block mb-2 text-body-2 font-weight-medium">
-                  Status Modem
-                  <span class="text-caption text-medium-emphasis ms-2">
-                    (Wajib diisi)
-                  </span>
-                </label>
-                <v-select
-                  v-model="editedItem.status_modem"
-                  :items="getStatusModemOptions(editedItem.status)"
-                  item-title="title"
-                  item-value="value"
-                  variant="outlined"
-                  prepend-inner-icon="mdi-wifi-router"
-                  density="comfortable"
-                  hide-details="auto"
-                  class="enhanced-field status-modem-field"
-                ></v-select>
-              </div>
-            </v-expand-transition>
+            <!-- Prorate Pricing Info -->
+            <div class="mt-4">
+              <v-alert
+                v-if="isProratePlusFull && hargaProrate > 0"
+                variant="tonal"
+                color="info"
+                icon="mdi-information-outline"
+                density="compact"
+                class="mb-4"
+              >
+                <div class="text-body-2">
+                  <strong>Rincian Tagihan Pertama:</strong>
+                  <div class="ms-2 mt-1">
+                    • Biaya Prorate: {{ formatCurrency(hargaProrate) }}<br>
+                    • Biaya Bulan Depan: {{ formatCurrency(hargaNormal) }}
+                  </div>
+                </div>
+              </v-alert>
 
-            <!-- Alasan Berhenti Section -->
-            <v-expand-transition>
-              <div v-if="editedItem.status === 'Berhenti'" class="mt-4">
-                <label class="input-label d-block mb-2 text-body-2 font-weight-medium">
-                  Alasan Berhenti
-                  <span class="text-caption text-medium-emphasis ms-2">(Opsional)</span>
-                </label>
-                <v-textarea
-                  v-model="editedItem.alasan_berhenti"
-                  label="Tuliskan alasan pelanggan berhenti berlangganan..."
-                  variant="outlined"
-                  prepend-inner-icon="mdi-text-box-outline"
-                  rows="3"
-                  auto-grow
-                  density="comfortable"
-                  hide-details="auto"
-                  class="enhanced-field alasan-field"
-                  placeholder="Contoh: Pindah rumah, tidak puas dengan layanan, alasan ekonomi, dll."
-                ></v-textarea>
+              <div class="price-display-v2">
+                <div class="price-display-v2__label">{{ isProratePlusFull ? 'Total Tagihan Pertama' : 'Total Harga Prorate' }}</div>
+                <div class="price-display-v2__value">Rp {{ editedItem.harga_awal?.toLocaleString('id-ID') || '0' }}</div>
               </div>
-            </v-expand-transition>
-          </v-card-text>
-        </v-card>
+            </div>
+          </template>
+        </div>
+
+        <!-- Section 3: Status & Jadwal -->
+        <div class="form-section-v2 form-section-v2--last">
+          <div class="form-section-v2__header">
+            <v-icon size="18" class="form-section-v2__icon">mdi-tune-vertical</v-icon>
+            <span class="form-section-v2__label">Status & Jadwal</span>
+          </div>
+          
+          <v-row>
+            <v-col cols="12" md="6">
+              <label class="field-label-v2">
+                Status Langganan
+                <span class="field-label-v2__req">*</span>
+              </label>
+              <v-select
+                v-model="editedItem.status"
+                :items="[
+                  { title: 'Aktif', value: 'Aktif' },
+                  { title: 'Suspended', value: 'Suspended' },
+                  { title: 'Berhenti', value: 'Berhenti' }
+                ]"
+                variant="outlined"
+                prepend-inner-icon="mdi-check-circle-outline"
+                :rules="[rules.required]"
+                density="comfortable"
+                hide-details="auto"
+                class="field-v2"
+              ></v-select>
+            </v-col>
+            
+            <v-col cols="12" md="6">
+              <label class="field-label-v2">
+                Tanggal Jatuh Tempo
+                <span class="field-label-v2__req">*</span>
+              </label>
+              <v-text-field
+                v-model="editedItem.tgl_jatuh_tempo"
+                type="date"
+                variant="outlined"
+                prepend-inner-icon="mdi-calendar-alert"
+                :rules="[rules.required]"
+                density="comfortable"
+                hide-details="auto"
+                class="field-v2"
+              ></v-text-field>
+            </v-col>
+          </v-row>
+
+          <!-- Status Modem Section -->
+          <v-expand-transition>
+            <div v-if="editedItem.status === 'Aktif' || editedItem.status === 'Berhenti'" class="mt-4">
+              <label class="field-label-v2">
+                Status Modem
+                <span class="text-caption text-medium-emphasis ms-1">(Wajib diisi)</span>
+              </label>
+              <v-select
+                v-model="editedItem.status_modem"
+                :items="getStatusModemOptions(editedItem.status)"
+                item-title="title"
+                item-value="value"
+                variant="outlined"
+                prepend-inner-icon="mdi-wifi-router"
+                density="comfortable"
+                hide-details="auto"
+                class="field-v2"
+              ></v-select>
+            </div>
+          </v-expand-transition>
+
+          <!-- Alasan Berhenti Section -->
+          <v-expand-transition>
+            <div v-if="editedItem.status === 'Berhenti'" class="mt-4">
+              <label class="field-label-v2">
+                Alasan Berhenti
+                <span class="text-caption text-medium-emphasis ms-1">(Opsional)</span>
+              </label>
+              <v-textarea
+                v-model="editedItem.alasan_berhenti"
+                label="Tuliskan alasan pelanggan berhenti berlangganan..."
+                variant="outlined"
+                prepend-inner-icon="mdi-text-box-outline"
+                rows="3"
+                auto-grow
+                density="comfortable"
+                hide-details="auto"
+                class="field-v2"
+                placeholder="Contoh: Pindah rumah, tidak puas dengan layanan, alasan ekonomi, dll."
+              ></v-textarea>
+            </div>
+          </v-expand-transition>
+        </div>
       </v-form>
     </v-card-text>
 
-    <!-- Enhanced Action Buttons -->
-    <v-divider></v-divider>
-    <v-card-actions class="action-footer pa-5">
-      <v-spacer></v-spacer>
+    <!-- Clean Action Footer -->
+    <div class="modal-footer-v2">
       <v-btn
-        variant="outlined"
-        color="grey-darken-1"
+        variant="text"
         @click="closeDialog"
-        class="text-none px-6"
+        class="text-none px-5 modal-footer-v2__cancel"
         size="large"
       >
-        <v-icon start>mdi-close</v-icon>
         Batal
       </v-btn>
       <v-btn
@@ -1219,13 +1183,13 @@
         @click="saveLangganan"
         :loading="saving"
         :disabled="!isFormValid || (selectedPelangganHasDataTeknis === false)"
-        class="text-none px-6 save-button"
+        class="text-none px-6 modal-footer-v2__submit"
         size="large"
       >
         <v-icon start size="18">{{ editedIndex === -1 ? 'mdi-plus' : 'mdi-content-save' }}</v-icon>
         {{ editedIndex === -1 ? 'Tambah Langganan' : 'Simpan Perubahan' }}
       </v-btn>
-    </v-card-actions>
+    </div>
   </v-card>
 </v-dialog>
     <!-- Enhanced Delete Dialog -->
@@ -1759,13 +1723,13 @@ import SkeletonLoader from '@/components/SkeletonLoader.vue';
 const router = useRouter();
 
 // --- Responsive State ---
-const { mobile } = useDisplay();
+const { mobile, smAndDown } = useDisplay();
 const fieldDensity = computed(() => mobile.value ? 'compact' : 'comfortable');
 const notificationPelangganList = ref<PelangganSelectItem[] | null>(null);
 
 const mobilePage = ref(1);
 const desktopPage = ref(1);
-const itemsPerPage = ref(25); // Jumlah item yang di-load setiap kali di mobile & desktop
+const itemsPerPage = ref(10); // Jumlah item yang di-load setiap kali di mobile & desktop
 const hasMoreData = ref(true);
 const loadingMore = ref(false);
 
@@ -4123,156 +4087,6 @@ function showSnackbar(text: string, color: 'success' | 'error' | 'warning') {
    ============================================ */
 
 
-/* Modal Styling */
-.subscription-modal {
-  border-radius: 16px !important;
-  overflow: hidden;
-}
-
-.modal-header {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  padding: 24px;
-}
-
-.header-content {
-  display: flex;
-  align-items: center;
-  width: 100%;
-}
-
-.header-title {
-  font-size: 2rem !important;
-  font-weight: 800 !important;
-  margin-bottom: 4px;
-  line-height: 1.2;
-}
-
-.header-subtitle {
-  font-size: 0.9rem;
-  opacity: 0.9;
-  margin-bottom: 0;
-  line-height: 1.3;
-}
-
-.modal-content {
-  padding: 24px;
-  max-height: 70vh;
-  overflow-y: auto;
-}
-
-.form-section {
-  margin-bottom: 32px;
-}
-
-.form-section:last-child {
-  margin-bottom: 16px;
-}
-
-.section-title {
-  font-size: 1rem;
-  font-weight: 600;
-  color: rgb(var(--v-theme-on-surface));
-  margin-bottom: 16px;
-  display: flex;
-  align-items: center;
-  padding-bottom: 8px;
-  border-bottom: 2px solid rgba(var(--v-border-color), 0.12);
-}
-
-.price-field {
-  background-color: rgba(var(--v-theme-primary), 0.05);
-}
-
-.modal-actions {
-  padding: 20px 24px;
-  border-top: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
-  background-color: rgba(var(--v-theme-surface), 0.5);
-}
-
-/* Responsive Design */
-@media (max-width: 768px) {
-  .modal-header {
-    padding: 20px;
-  }
-  
-  .header-title {
-    font-size: 1.8rem !important;
-  }
-  
-  .header-subtitle {
-    font-size: 1rem !important;
-  }
-  
-  .modal-content {
-    padding: 20px;
-    max-height: 65vh;
-  }
-  
-  .form-section {
-    margin-bottom: 24px;
-  }
-  
-  .section-title {
-    font-size: 0.95rem;
-    margin-bottom: 12px;
-  }
-}
-
-@media (max-width: 600px) {
-  .modal-header {
-    padding: 16px;
-  }
-  
-  .header-content {
-    flex-direction: column;
-    text-align: center;
-    gap: 8px;
-  }
-  
-  .modal-content {
-    padding: 16px;
-  }
-  
-  .modal-actions {
-    padding: 16px;
-    flex-direction: column;
-    gap: 8px;
-  }
-  
-  .modal-actions .v-btn {
-    width: 100%;
-  }
-}
-
-/* Landscape Mobile Optimization */
-@media (max-height: 600px) and (orientation: landscape) {
-  .modal-content {
-    max-height: 50vh;
-    padding: 16px 24px;
-  }
-  
-  .form-section {
-    margin-bottom: 20px;
-  }
-  
-  .section-title {
-    margin-bottom: 12px;
-    font-size: 0.9rem;
-  }
-  
-  .modal-header {
-    padding: 16px 24px;
-  }
-  
-  .header-title {
-    font-size: 1rem;
-  }
-  
-  .header-subtitle {
-    font-size: 0.8rem;
-  }
-}
 
 /* Import Button */
 .import-btn {
@@ -5680,272 +5494,298 @@ function showSnackbar(text: string, color: 'success' | 'error' | 'warning') {
   --v-data-table-header-height: 60px;
 }
 
-/* Enhanced Form Styling */
-.subscription-modal {
-  border-radius: 20px !important;
+/* ============================================
+   SUBSCRIPTION MODAL V2 — CLEAN MODERN DESIGN
+   ============================================ */
+
+/* Modal Card */
+.subscription-modal-v2 {
+  border-radius: 16px !important;
   overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.04) !important;
 }
 
-.form-header-gradient {
-  background: linear-gradient(135deg, #1976d2 0%, #1565c0 50%, #0d47a1 100%);
+.v-theme--dark .subscription-modal-v2 {
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.06) !important;
+}
+
+/* Header */
+.modal-header-v2 {
+  border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.08);
   position: relative;
-  overflow: hidden;
 }
 
-/* Close Button Fix */
-.close-button-modal {
-  position: relative;
-  z-index: 10;
-  transition: all 0.2s ease;
-}
-
-.close-button-modal:hover {
-  background-color: rgba(255, 255, 255, 0.2) !important;
-  transform: scale(1.1);
-}
-
-.form-header-decoration {
+.modal-header-v2::after {
+  content: '';
   position: absolute;
-  top: -50%;
-  right: -10%;
-  width: 300px;
-  height: 300px;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.15) 0%, transparent 70%);
-  border-radius: 50%;
-  pointer-events: none;
-  z-index: 1;
+  bottom: -1px;
+  left: 0;
+  width: 80px;
+  height: 3px;
+  background: rgb(var(--v-theme-primary));
+  border-radius: 0 3px 0 0;
 }
 
-/* Form Section Cards */
-.form-section-card {
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  border: 1px solid rgba(var(--v-theme-outline-variant), 0.2) !important;
-  background: linear-gradient(145deg, 
-    rgba(var(--v-theme-surface), 0.95) 0%, 
-    rgba(var(--v-theme-background), 0.98) 100%) !important;
+.modal-header-v2__inner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 20px 24px;
 }
 
-.form-section-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(var(--v-theme-shadow), 0.12) !important;
-  border-color: rgba(var(--v-theme-primary), 0.3) !important;
+.modal-header-v2__icon-wrap {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: rgba(var(--v-theme-primary), 0.08);
+  color: rgb(var(--v-theme-primary));
+  flex-shrink: 0;
 }
 
-/* Dark Mode Specific Styles */
-.v-theme--dark .form-section-card {
-  background: linear-gradient(145deg, 
-    rgba(66, 66, 66, 0.4) 0%, 
-    rgba(48, 48, 48, 0.6) 100%) !important;
-  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+.v-theme--dark .modal-header-v2__icon-wrap {
+  background: rgba(var(--v-theme-primary), 0.15);
 }
 
-.v-theme--dark .form-section-card:hover {
-  background: linear-gradient(145deg, 
-    rgba(66, 66, 66, 0.6) 0%, 
-    rgba(48, 48, 48, 0.8) 100%) !important;
-  border-color: rgba(var(--v-theme-primary), 0.5) !important;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4) !important;
+.modal-header-v2__text {
+  flex: 1;
+  min-width: 0;
 }
 
-.v-theme--dark .input-label {
-  color: rgba(255, 255, 255, 0.9);
+.modal-header-v2__title {
+  font-size: 1.125rem;
+  font-weight: 700;
+  line-height: 1.3;
+  color: rgba(var(--v-theme-on-surface), 0.92);
+  margin: 0;
 }
 
-/* Enhanced Field Styling */
-.enhanced-field :deep(.v-field) {
-  background-color: rgba(var(--v-theme-surface), 0.6) !important;
-  border-radius: 12px !important;
-  border: 1px solid rgba(var(--v-theme-outline-variant), 0.2) !important;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+.modal-header-v2__subtitle {
+  font-size: 0.8125rem;
+  color: rgba(var(--v-theme-on-surface), 0.5);
+  margin: 2px 0 0;
+  line-height: 1.4;
 }
 
-.enhanced-field :deep(.v-field:hover) {
-  background-color: rgba(var(--v-theme-surface), 0.9) !important;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(var(--v-theme-shadow), 0.08);
-  border-color: rgba(var(--v-theme-primary), 0.3) !important;
+.modal-header-v2__close {
+  color: rgba(var(--v-theme-on-surface), 0.4) !important;
+  flex-shrink: 0;
+  transition: color 0.2s ease, background-color 0.2s ease !important;
 }
 
-.enhanced-field :deep(.v-field--focused) {
-  background-color: rgba(var(--v-theme-surface), 1) !important;
-  transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(var(--v-theme-primary), 0.15);
-  border-color: rgb(var(--v-theme-primary)) !important;
-  border-width: 2px !important;
+.modal-header-v2__close:hover {
+  color: rgba(var(--v-theme-on-surface), 0.7) !important;
+  background-color: rgba(var(--v-theme-on-surface), 0.06) !important;
 }
 
-/* Dark Mode Field Enhancements */
-.v-theme--dark .enhanced-field :deep(.v-field) {
-  background-color: rgba(66, 66, 66, 0.4) !important;
-  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+/* Body */
+.modal-body-v2 {
+  padding: 24px !important;
+  max-height: 68vh;
+  overflow-y: auto;
 }
 
-.v-theme--dark .enhanced-field :deep(.v-field:hover) {
-  background-color: rgba(66, 66, 66, 0.6) !important;
-  border-color: rgba(var(--v-theme-primary), 0.5) !important;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+.modal-body-v2::-webkit-scrollbar {
+  width: 5px;
 }
 
-.v-theme--dark .enhanced-field :deep(.v-field--focused) {
-  background-color: rgba(66, 66, 66, 0.8) !important;
-  border-color: rgb(var(--v-theme-primary)) !important;
-  box-shadow: 0 6px 20px rgba(var(--v-theme-primary), 0.3);
+.modal-body-v2::-webkit-scrollbar-track {
+  background: transparent;
 }
 
-.enhanced-field :deep(.v-field__prepend-inner .v-icon) {
-  color: rgba(var(--v-theme-primary), 0.6) !important;
+.modal-body-v2::-webkit-scrollbar-thumb {
+  background: rgba(var(--v-theme-on-surface), 0.12);
+  border-radius: 10px;
+}
+
+.modal-body-v2::-webkit-scrollbar-thumb:hover {
+  background: rgba(var(--v-theme-on-surface), 0.2);
+}
+
+/* Form Sections */
+.form-section-v2 {
+  padding-bottom: 24px;
+  margin-bottom: 24px;
+  border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.06);
+}
+
+.form-section-v2--last {
+  padding-bottom: 0;
+  margin-bottom: 0;
+  border-bottom: none;
+}
+
+.form-section-v2__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.form-section-v2__icon {
+  color: rgba(var(--v-theme-on-surface), 0.4) !important;
+}
+
+.form-section-v2__label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: rgba(var(--v-theme-on-surface), 0.55);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+
+/* Field Labels */
+.field-label-v2 {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: rgba(var(--v-theme-on-surface), 0.72);
+  line-height: 1.4;
+}
+
+.field-label-v2__req {
+  color: rgb(var(--v-theme-error));
+  margin-left: 2px;
+}
+
+/* Field Styling */
+.field-v2 :deep(.v-field) {
+  border-radius: 10px !important;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.field-v2 :deep(.v-field--focused) {
+  box-shadow: 0 0 0 3px rgba(var(--v-theme-primary), 0.1);
+}
+
+.field-v2 :deep(.v-field__prepend-inner .v-icon) {
+  color: rgba(var(--v-theme-on-surface), 0.35) !important;
   transition: color 0.2s ease;
 }
 
-.enhanced-field:hover :deep(.v-field__prepend-inner .v-icon),
-.enhanced-field :deep(.v-field--focused .v-field__prepend-inner .v-icon) {
+.field-v2 :deep(.v-field--focused .v-field__prepend-inner .v-icon) {
   color: rgb(var(--v-theme-primary)) !important;
 }
 
-/* Price Field Special Styling */
-.price-field :deep(.v-field) {
-  background: linear-gradient(135deg, #e8f5e8 0%, #f1f8e9 100%) !important;
-  border: 2px solid rgba(76, 175, 80, 0.3) !important;
-  font-weight: 600;
+/* Price Display */
+.price-display-v2 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-radius: 10px;
+  background: rgba(var(--v-theme-primary), 0.04);
+  border: 1px solid rgba(var(--v-theme-primary), 0.1);
 }
 
-.v-theme--dark .price-field :deep(.v-field) {
-  background: linear-gradient(135deg, rgba(76, 175, 80, 0.15) 0%, rgba(76, 175, 80, 0.1) 100%) !important;
-  border: 2px solid rgba(76, 175, 80, 0.4) !important;
+.v-theme--dark .price-display-v2 {
+  background: rgba(var(--v-theme-primary), 0.08);
+  border-color: rgba(var(--v-theme-primary), 0.18);
 }
 
-.price-field :deep(.v-field__input) {
-  color: #2e7d32 !important;
-  font-size: 1.1rem !important;
-  font-weight: 700 !important;
-}
-
-.v-theme--dark .price-field :deep(.v-field__input) {
-  color: #81c784 !important;
-}
-
-.price-field :deep(.v-field__prepend-inner .v-icon) {
-  color: #4caf50 !important;
-}
-
-.v-theme--dark .price-field :deep(.v-field__prepend-inner .v-icon) {
-  color: #81c784 !important;
-}
-
-/* Input Labels */
-.input-label {
-  color: rgba(var(--v-theme-on-surface), 0.87);
-  font-size: 0.875rem;
+.price-display-v2__label {
+  font-size: 0.8125rem;
   font-weight: 500;
-  letter-spacing: 0.25px;
+  color: rgba(var(--v-theme-on-surface), 0.55);
 }
 
-/* Action Footer */
-.action-footer {
-  background: linear-gradient(135deg, #fafafa 0%, #f5f5f5 100%);
-  border-top: 1px solid rgba(var(--v-theme-outline-variant), 0.2);
+.price-display-v2__value {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: rgb(var(--v-theme-primary));
+  letter-spacing: -0.01em;
 }
 
-.v-theme--dark .action-footer {
-  background: linear-gradient(135deg, rgba(48, 48, 48, 0.8) 0%, rgba(33, 33, 33, 0.9) 100%);
-  border-top: 1px solid rgba(255, 255, 255, 0.12);
+/* Footer */
+.modal-footer-v2 {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 16px 24px;
+  border-top: 1px solid rgba(var(--v-theme-on-surface), 0.08);
+  background: rgba(var(--v-theme-surface-variant), 0.15);
 }
 
-.save-button {
-  background: linear-gradient(135deg, #1976d2 0%, #1565c0 100%) !important;
-  box-shadow: 0 4px 12px rgba(25, 118, 210, 0.3) !important;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+.v-theme--dark .modal-footer-v2 {
+  background: rgba(0, 0, 0, 0.15);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.modal-footer-v2__cancel {
+  color: rgba(var(--v-theme-on-surface), 0.55) !important;
+  font-weight: 500 !important;
+}
+
+.modal-footer-v2__cancel:hover {
+  color: rgba(var(--v-theme-on-surface), 0.8) !important;
+  background: rgba(var(--v-theme-on-surface), 0.04) !important;
+}
+
+.modal-footer-v2__submit {
   font-weight: 600 !important;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.2px;
+  border-radius: 10px !important;
+  box-shadow: 0 2px 8px rgba(var(--v-theme-primary), 0.25) !important;
+  transition: box-shadow 0.2s ease, transform 0.15s ease !important;
 }
 
-.save-button:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(25, 118, 210, 0.4) !important;
-  background: linear-gradient(135deg, #1565c0 0%, #0d47a1 100%) !important;
+.modal-footer-v2__submit:hover:not(:disabled) {
+  box-shadow: 0 4px 14px rgba(var(--v-theme-primary), 0.35) !important;
+  transform: translateY(-1px);
 }
 
-.save-button:active {
+.modal-footer-v2__submit:active:not(:disabled) {
   transform: translateY(0);
 }
 
-/* Modal Content Scrollbar */
-.modal-content::-webkit-scrollbar {
-  width: 8px;
-}
+/* Responsive — Mobile */
+@media (max-width: 959px) {
+  .subscription-modal-v2 {
+    border-radius: 0 !important;
+  }
 
-.modal-content::-webkit-scrollbar-track {
-  background: rgba(var(--v-theme-surface-variant), 0.3);
-  border-radius: 4px;
-}
+  .modal-header-v2__inner {
+    padding: 16px;
+  }
 
-.modal-content::-webkit-scrollbar-thumb {
-  background: rgba(var(--v-theme-primary), 0.3);
-  border-radius: 4px;
-  transition: background 0.2s ease;
-}
+  .modal-header-v2__title {
+    font-size: 1rem;
+  }
 
-.modal-content::-webkit-scrollbar-thumb:hover {
-  background: rgba(var(--v-theme-primary), 0.5);
-}
+  .modal-body-v2 {
+    padding: 16px !important;
+    max-height: none;
+  }
 
-/* Smooth Dialog Animation */
-.v-dialog > .v-overlay__content {
-  animation: modalSlideIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-}
+  .form-section-v2 {
+    padding-bottom: 20px;
+    margin-bottom: 20px;
+  }
 
-@keyframes modalSlideIn {
-  from {
-    opacity: 0;
-    transform: translateY(-30px) scale(0.95);
+  .modal-footer-v2 {
+    padding: 12px 16px;
+    flex-direction: column-reverse;
+    gap: 8px;
   }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
 
-/* Responsive Improvements */
-@media (max-width: 768px) {
-  .form-header-gradient {
-    padding: 1.25rem !important;
-  }
-  
-  .form-header-gradient h2 {
-    font-size: 1.25rem !important;
-  }
-  
-  .form-header-gradient p {
-    font-size: 0.813rem !important;
-  }
-  
-  .v-dialog > .v-overlay__content {
-    margin: 0.5rem !important;
-    max-width: calc(100vw - 1rem) !important;
-  }
-  
-  .form-section-card {
-    margin-bottom: 1rem !important;
-  }
-  
-  .modal-content {
-    padding: 1rem !important;
-  }
-  
-  .action-footer {
-    padding: 1rem !important;
-  }
-  
-  .action-footer .v-btn {
-    font-size: 0.875rem !important;
-    padding: 0 1rem !important;
+  .modal-footer-v2 .v-btn {
+    width: 100%;
   }
 }
 
-/* Alert Enhancements */
-.form-section-card .v-alert {
-  border-radius: 12px !important;
-  border-left-width: 4px !important;
+/* Responsive — Tablet */
+@media (min-width: 960px) and (max-width: 1264px) {
+  .modal-header-v2__inner {
+    padding: 18px 22px;
+  }
+
+  .modal-body-v2 {
+    padding: 20px !important;
+  }
 }
 
 /* Switch Styling */
