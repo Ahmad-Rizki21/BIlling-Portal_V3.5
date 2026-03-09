@@ -75,10 +75,11 @@
     <v-navigation-drawer
       v-model="drawer"
       :rail="rail && !isMobile"
+      :rail-width="70"
       :temporary="isMobile"
       :permanent="!isMobile"
       class="modern-drawer elevation-3"
-      :width="isMobile ? '300' : '300'"
+      width="300"
       :key="forceRender"
     >
       <!-- Header Section -->
@@ -126,7 +127,7 @@
       <v-divider class="my-2"></v-divider>
 
       <!-- Navigation Menu -->
-      <div class="navigation-container" :key="'nav-wrapper-' + forceRender">
+      <div class="navigation-container" :key="'nav-wraspper-' + forceRender">
         <v-list nav class="navigation-list" :key="menuKey">
           <template v-for="group in filteredMenuGroups" :key="group.title + '-' + menuKey">
             <!-- Group Header -->
@@ -1813,7 +1814,7 @@ onUnmounted(() => {
 }
 
 .sidebar-header-modern.rail-mode {
-  padding: 0 8px;
+  padding: 0;
   justify-content: center;
 }
 
@@ -2122,10 +2123,12 @@ onUnmounted(() => {
 
 /* Rail Mode */
 .v-navigation-drawer--rail .navigation-list {
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+  padding: 0 !important;
+  margin: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  width: 100% !important;
 }
 
 .v-navigation-drawer--rail .menu-group-header {
@@ -2133,22 +2136,24 @@ onUnmounted(() => {
 }
 
 .v-navigation-drawer--rail .menu-item {
-  justify-content: center;
+  justify-content: center !important;
   padding: 0 !important;
-  margin: 4px 0;
-  width: 64px;
-  height: 48px;
-  display: flex;
-  align-items: center;
-  border-radius: 8px;
+  margin: 8px auto !important;
+  width: 54px !important;
+  height: 54px !important;
+  display: flex !important;
+  align-items: center !important;
+  border-radius: 14px;
 }
 
 .v-navigation-drawer--rail .menu-item :deep(.v-list-item__prepend) {
-  margin-inline-end: 0 !important;
-  width: 100%;
-  display: flex;
-  justify-content: center;
-  align-items: center;
+  margin: 0 !important;
+  padding: 0 !important;
+  width: 100% !important;
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+  min-width: unset !important;
 }
 
 .v-navigation-drawer--rail .menu-item :deep(.v-list-item__content) {
@@ -2165,8 +2170,8 @@ onUnmounted(() => {
 
 .v-navigation-drawer--rail .menu-item :deep(.v-icon) {
   opacity: 1 !important;
-  font-size: 22px !important;
-  margin: 0 auto !important;
+  font-size: 24px !important;
+  margin: 0 !important;
 }
 
 .v-navigation-drawer--rail .menu-item.v-list-item--active::after {
@@ -2210,15 +2215,15 @@ onUnmounted(() => {
 }
 
 .v-navigation-drawer--rail .logout-btn {
-  min-width: 48px;
-  width: 48px;
-  height: 48px;
+  min-width: 54px !important;
+  width: 54px !important;
+  height: 54px !important;
   padding: 0 !important;
-  border-radius: 8px;
-  margin: 0 auto;
-  display: flex;
-  justify-content: center;
-  align-items: center;
+  border-radius: 14px;
+  margin: 0 auto !important;
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
 }
 
 .v-navigation-drawer--rail .logo-wrapper {
