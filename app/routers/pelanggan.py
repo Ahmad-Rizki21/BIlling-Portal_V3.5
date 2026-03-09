@@ -138,7 +138,7 @@ async def auto_update_langganan(db: AsyncSession, pelanggan_id: int, old_layanan
 
         if brand_info:
             pajak_rate = float(brand_info.pajak) / 100
-            new_harga = float(new_paket.harga) * (1 + pajak_rate)
+            new_harga = round(float(new_paket.harga) * (1 + pajak_rate), 0)
             active_langganan.harga_awal = new_harga
 
         db.add(active_langganan)
