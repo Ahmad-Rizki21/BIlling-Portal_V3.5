@@ -499,6 +499,7 @@
           item-value="id"
           class="elegant-table"
           :server-items-length="totalPelangganCount"
+          :items-per-page="itemsPerPage"
           hover
           show-select
           return-object
@@ -510,7 +511,7 @@
           </template>
 
           <template v-slot:item.nomor="{ index }">
-            {{ index + 1 }}
+            {{ (desktopPage - 1) * itemsPerPage + index + 1 }}
           </template>
 
           <template v-slot:item.nama="{ item }">
@@ -1259,7 +1260,7 @@ const activeFilterCount = computed(() => {
 // --- State Baru untuk Paginasi Mobile dan Desktop ---
 const mobilePage = ref(1);
 const desktopPage = ref(1);
-const itemsPerPage = ref(15);
+const itemsPerPage = ref(10);
 const hasMoreData = ref(true);
 const loadingMore = ref(false);
 

@@ -216,7 +216,7 @@
             :loading="loading"
             item-value="id"
             class="invoice-table"
-            :items-per-page="15"
+            :items-per-page="10"
             :loading-text="'Memuat data invoice...'"
             :no-data-text="'Tidak ada data invoice'"
             show-select

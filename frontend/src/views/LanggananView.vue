@@ -1729,7 +1729,7 @@ const notificationPelangganList = ref<PelangganSelectItem[] | null>(null);
 
 const mobilePage = ref(1);
 const desktopPage = ref(1);
-const itemsPerPage = ref(15); // Jumlah item yang di-load setiap kali di mobile & desktop
+const itemsPerPage = ref(10); // Jumlah item yang di-load setiap kali di mobile & desktop
 const hasMoreData = ref(true);
 const loadingMore = ref(false);
 
