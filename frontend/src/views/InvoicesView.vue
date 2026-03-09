@@ -600,13 +600,30 @@
             density="comfortable"
             clearable
             persistent-hint
-            :hint="selectedLanggananId ? '' : 'Ketik nama untuk mencari pelanggan'"
+            :hint="selectedLanggananId ? '' : newUserLangganans.length > 0 ? `${newUserLangganans.length} user baru tersedia — atau ketik nama untuk mencari` : 'Ketik nama untuk mencari pelanggan'"
             :prepend-inner-icon="'mdi-account-search'"
             class="mb-4"
             no-data-text="Ketik untuk mencari pelanggan"
             loading-text="Sedang mencari data dari server..."
             @update:search="onSearchUpdate"
           >
+            <template v-slot:item="{ item, props: itemProps }">
+              <v-list-item v-bind="itemProps">
+                <template v-slot:prepend>
+                  <v-avatar size="32" :color="item.raw?.raw?.is_new_user ? 'success' : 'primary'" class="me-2">
+                    <v-icon color="white" size="16">
+                      {{ item.raw?.raw?.is_new_user ? 'mdi-account-plus' : 'mdi-account' }}
+                    </v-icon>
+                  </v-avatar>
+                </template>
+                <template v-slot:append v-if="item.raw?.raw?.is_new_user">
+                  <v-chip color="success" variant="elevated" size="x-small" class="font-weight-bold">
+                    <v-icon start size="12">mdi-new-box</v-icon>
+                    NEW
+                  </v-chip>
+                </template>
+              </v-list-item>
+            </template>
             <template v-slot:no-data>
               <v-list-item>
                 <v-list-item-title>
@@ -792,6 +809,7 @@ const invoicesForExistingUserCheck = ref<Invoice[]>([]); // Khusus untuk cek exi
 const pelangganList = ref<PelangganSelectItem[]>([]);
 const langgananList = ref<any[]>([]);
 const searchedLangganans = ref<any[]>([]); // Data hasil pencarian autocomplete
+const newUserLangganans = ref<any[]>([]); // Data langganan user baru (belum punya invoice)
 const selectedLanggananData = ref<any>(null); // Data langganan yang sedang dipilih secara utuh
 const langgananSearch = ref(''); // Input teks pencarian
 const isSearchingLangganan = ref(false); // Loading state autocomplete
@@ -856,8 +874,15 @@ const headers = [
 
 // --- Computed Properties ---
 const langgananForSelect = computed(() => {
-  // Gabungkan hasil pencarian dengan data yang sedang dipilih (agar tidak hilang saat search di-clear)
-  let sourceList = [...searchedLangganans.value];
+  // Gabungkan: new users + hasil pencarian + data terpilih
+  let sourceList = [...newUserLangganans.value];
+  
+  // Tambahkan hasil pencarian (hindari duplikasi)
+  for (const item of searchedLangganans.value) {
+    if (!sourceList.some(l => l.id === item.id)) {
+      sourceList.push(item);
+    }
+  }
   
   // Jika ada data terpilih, pastikan masukan ke dalam list agar Title-nya muncul di autocomplete
   if (selectedLanggananData.value && !sourceList.some(l => l.id === selectedLanggananData.value.id)) {
@@ -887,17 +912,10 @@ const langgananForSelect = computed(() => {
         return null;
       }
 
-      // Check apakah user sudah existing (pernah ada invoice)
-      const allInvoicesForCheck = [
-        ...(invoices.value || []),
-        ...(invoicesForExistingUserCheck.value || [])
-      ];
-
-      const existingInvoices = allInvoicesForCheck.filter(inv => inv.pelanggan_id === pelanggan.id);
-      const hasHistoryInvoices = existingInvoices.length > 0;
-
-      // NEW USER hanya untuk user yang benar-benar baru
-      const isNewUser = !hasHistoryInvoices;
+      // Gunakan flag is_new_user dari backend (lebih akurat, menggunakan query database langsung)
+      // Backend /new-users endpoint menggunakan LEFT JOIN + IS NULL untuk benar-benar
+      // memastikan pelanggan tidak punya invoice sama sekali
+      const isNewUser = langganan.is_new_user === true;
       
       const pelangganName = pelanggan.nama || `ID: ${pelanggan.id}`;
 
@@ -935,8 +953,8 @@ watch(selectedLanggananId, async (newId) => {
     return;
   }
   
-  // 1. Coba cari di list yang sudah ada di memori
-  const found = [...searchedLangganans.value, ...langgananList.value].find(l => l.id === newId);
+  // 1. Coba cari di list yang sudah ada di memori (termasuk new users)
+  const found = [...newUserLangganans.value, ...searchedLangganans.value, ...langgananList.value].find(l => l.id === newId);
   if (found) {
     selectedLanggananData.value = found;
   } else {
@@ -1059,8 +1077,7 @@ onMounted(() => {
   // TIDAK LAGI FETCH SEMUA DATA DI AWAL (Over-fetching Prevention)
   // fetchPelangganForSelect();
   // fetchLanggananForSelect(); 
-  
-  fetchAllInvoicesForExistingUserCheck(); // Load history invoice untuk accurate NEW user detection
+  // fetchAllInvoicesForExistingUserCheck(); // Tidak perlu lagi - deteksi new user sekarang dari backend /new-users
   window.addEventListener('new-notification', handleNewNotification);
 });
 
@@ -1247,7 +1264,31 @@ function openDetailDialog(item: Invoice) {
 
 function openGenerateDialog() {
   selectedLanggananId.value = null;
+  searchedLangganans.value = [];
+  langgananSearch.value = '';
   dialogGenerate.value = true;
+  // Fetch new users saat dialog dibuka
+  fetchNewUserLangganans();
+}
+
+async function fetchNewUserLangganans() {
+  isSearchingLangganan.value = true;
+  try {
+    const response = await apiClient.get<any>('/langganan/new-users');
+    const data = Array.isArray(response.data) ? response.data : response.data.data;
+    if (Array.isArray(data)) {
+      // Tandai semua sebagai new user
+      newUserLangganans.value = data.map((item: any) => ({
+        ...item,
+        is_new_user: true,
+      }));
+    }
+  } catch (error) {
+    console.error('Error fetching new user langganans:', error);
+    newUserLangganans.value = [];
+  } finally {
+    isSearchingLangganan.value = false;
+  }
 }
 
 async function generateManualInvoice() {
@@ -1302,6 +1343,8 @@ async function generateManualInvoice() {
 function closeDialog() {
   dialogGenerate.value = false;
   selectedLanggananId.value = null;
+  newUserLangganans.value = [];
+  searchedLangganans.value = [];
 }
 
 async function copyPaymentLink(link: string | null | undefined) {

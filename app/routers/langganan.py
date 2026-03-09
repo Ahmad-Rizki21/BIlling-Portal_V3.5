@@ -403,8 +403,6 @@ async def get_all_langganan(
 
     return LanggananListResponse(data=langganan_response_data, total_count=total_count)
 
-    return LanggananListResponse(data=langganan_response_data, total_count=total_count)
-
 
 # GET /langganan/export - Export data langganan ke CSV atau Excel
 # Buat export data langganan ke file dengan format yang dipilih (CSV/Excel) dengan filter yang sama seperti list
@@ -505,6 +503,85 @@ async def export_langganan(
 
     # Gunakan export utility yang sudah dioptimasi
     return create_langganan_export_response(export_data, format.lower())
+
+
+# GET /langganan/new-users - Ambil langganan pelanggan baru (belum punya invoice)
+# Endpoint khusus untuk finance team buat ambil data pelanggan yang baru ditambahkan langganan
+# tapi belum pernah ada invoice sama sekali
+# Response: list langganan dari "new users" dengan status Aktif/Suspended
+# Performance: LEFT JOIN dengan invoice table, filter NULL → artinya belum punya invoice
+@router.get("/new-users", response_model=LanggananListResponse)
+async def get_new_user_langganans(
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user)
+):
+    """
+    Mengambil semua langganan dari pelanggan yang belum pernah memiliki invoice.
+    Digunakan oleh tim Finance untuk membuat invoice manual bagi pelanggan baru.
+    """
+    from sqlalchemy.orm import selectinload
+
+    # Strategi: LEFT JOIN langganan -> pelanggan -> invoice, lalu filter invoice.id IS NULL
+    # Ini lebih akurat daripada NOT IN (yang bisa bermasalah dengan NULL values)
+    query = (
+        select(LanggananModel)
+        .join(LanggananModel.pelanggan)
+        .outerjoin(InvoiceModel, InvoiceModel.pelanggan_id == PelangganModel.id)
+        .options(
+            joinedload(LanggananModel.pelanggan).options(
+                joinedload(PelangganModel.harga_layanan),
+                joinedload(PelangganModel.data_teknis),
+            ),
+            joinedload(LanggananModel.paket_layanan),
+        )
+        .where(LanggananModel.status.in_(["Aktif", "Suspended"]))
+        .where(InvoiceModel.id == None)  # Hanya pelanggan yang TIDAK punya invoice sama sekali
+        .order_by(LanggananModel.id.desc())
+    )
+
+    result = await db.execute(query)
+    langganan_list = result.unique().scalars().all()
+
+    # Tandai semua sebagai new user
+    for langganan in langganan_list:
+        langganan.is_new_user = True
+
+    # Apply diskon
+    tanggal_hari_ini = date_class.today()
+    diskon_query = (
+        select(DiskonModel)
+        .where(DiskonModel.is_active == True)
+        .where((DiskonModel.tgl_mulai.is_(None)) | (DiskonModel.tgl_mulai <= tanggal_hari_ini))
+        .where((DiskonModel.tgl_selesai.is_(None)) | (DiskonModel.tgl_selesai >= tanggal_hari_ini))
+        .order_by(DiskonModel.persentase_diskon.desc())
+    )
+    all_discounts_result = await db.execute(diskon_query)
+    all_active_discounts = all_discounts_result.scalars().all()
+
+    discount_map = {}
+    for d in all_active_discounts:
+        if d.cluster not in discount_map:
+            discount_map[d.cluster] = d
+
+    langganan_response_data = []
+    for langganan in langganan_list:
+        harga_asli = float(langganan.harga_awal) if langganan.harga_awal else 0.0
+
+        if langganan.metode_pembayaran == "Prorate":
+            harga_with_diskon = harga_asli
+        else:
+            cluster = langganan.pelanggan.alamat if langganan.pelanggan and langganan.pelanggan.alamat else None
+            diskon_applied = discount_map.get(cluster) if cluster else None
+            harga_with_diskon = calculate_final_price_with_diskon(harga_asli, diskon_applied)
+
+        langganan_schema = LanggananSchema.model_validate(langganan)
+        langganan_dict = langganan_schema.model_dump()
+        langganan_dict['harga_awal'] = harga_with_diskon
+        langganan_dict['is_new_user'] = True
+
+        langganan_response_data.append(langganan_dict)
+
+    return LanggananListResponse(data=langganan_response_data, total_count=len(langganan_response_data))
 
 
 # GET /langganan/{langganan_id} - Ambil detail langganan
