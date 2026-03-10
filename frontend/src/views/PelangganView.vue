@@ -1685,13 +1685,16 @@ async function importFromCsv() {
     
     console.error("Gagal mengimpor data:", error);
     if (error.response?.data?.errors) {
-      // Jika backend mengirimkan daftar error yang spesifik
+      // Jika backend mengirimkan daftar error yang spesifik secara langsung
       importErrors.value = error.response.data.errors;
     } else if (error.response?.data?.detail) {
-      // Jika backend mengirimkan satu pesan error umum
+      // Jika backend mengirimkan lewat HTTPException detail
       const detailMsg = error.response.data.detail;
       if (typeof detailMsg === 'string') {
         importErrors.value = [detailMsg];
+      } else if (typeof detailMsg === 'object' && detailMsg.errors && Array.isArray(detailMsg.errors)) {
+        // Tangkap isi detail.errors dari bulk_import service
+        importErrors.value = detailMsg.errors;
       } else {
         importErrors.value = ["Terjadi kesalahan yang tidak diketahui."];
       }
