@@ -81,27 +81,26 @@ jobs:
           path: deploy/
 
   deploy-staging:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs: build-and-push
     if: github.ref == 'refs/heads/optimization/v5.0' && github.event_name == 'push'
 
     steps:
-      - name: Deploy to Staging VPS via SSH
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.STAGING_SSH_HOST }}
-          username: ${{ secrets.STAGING_SSH_USER }}
-          key: ${{ secrets.STAGING_SSH_KEY }}
-          script: |
-            # Folder staging di server (pastikan folder ini ada di VPS Anda)
-            cd ~/billing-staging
+      - name: Deploy to Local Staging VM
+        run: |
+          # Pergi ke folder aplikasi di VM lokal Anda
+          # Pastikan folder ini sudah ada: mkdir -p ~/billing-staging
+          cd ~/billing-staging
 
-            # Login ke GHCR (GitHub Container Registry)
-            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+          # Ambil docker-compose.yml terbaru dari repo (opsional, bisa manual juga)
+          # curl -O https://raw.githubusercontent.com/${{ github.repository }}/optimization/v5.0/docker-compose.yml
 
-            # Tarik image terbaru & jalankan
-            docker-compose pull
-            docker-compose up -d
+          # Login ke GHCR
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-            # Bersihkan image lama yang sudah tidak terpakai
-            docker image prune -f
+          # Tarik image terbaru & jalankan
+          docker-compose pull
+          docker-compose up -d
+
+          # Bersihkan image lama
+          docker image prune -f
