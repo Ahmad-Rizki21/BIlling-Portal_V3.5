@@ -11,7 +11,12 @@ from alembic import context
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 # Import the Base from app.database
-from app.database import Base
+from app.database import Base, DATABASE_URL
+
+# Ambil URL database dari env jika ada, dan ganti driver async ke sync untuk Alembic
+if DATABASE_URL:
+    sync_url = DATABASE_URL.replace("aiomysql", "pymysql")
+    context.config.set_main_option("sqlalchemy.url", sync_url)
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
