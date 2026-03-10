@@ -97,8 +97,8 @@ jobs:
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
           # Tarik image terbaru & jalankan dengan tag spesifik
-          IMAGE_TAG=$IMAGE_TAG docker-compose pull
-          IMAGE_TAG=$IMAGE_TAG docker-compose up -d
+          IMAGE_TAG=$IMAGE_TAG docker compose pull
+          IMAGE_TAG=$IMAGE_TAG docker compose up -d
 
           # Bersihkan image lama
           docker image prune -f
