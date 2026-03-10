@@ -41,7 +41,9 @@ jobs:
           context: .
           file: ./Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta-backend.outputs.tags }}
+          tags: |
+            ${{ steps.meta-backend.outputs.tags }}
+            ghcr.io/${{ env.IMAGE_NAME }}-backend:${{ github.ref_name }}
           labels: ${{ steps.meta-backend.outputs.labels }}
 
       - name: Extract metadata (tags, labels) for Frontend
@@ -56,7 +58,9 @@ jobs:
           context: ./frontend
           file: ./frontend/Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta-frontend.outputs.tags }}
+          tags: |
+            ${{ steps.meta-frontend.outputs.tags }}
+            ghcr.io/${{ env.IMAGE_NAME }}-frontend:${{ github.ref_name }}
           labels: ${{ steps.meta-frontend.outputs.labels }}
 
   deploy:
@@ -90,8 +94,8 @@ jobs:
         run: |
           cd ~/billing-staging
 
-          # Tentukan tag berdasarkan branch (misal: optimization-v5.0)
-          export IMAGE_TAG=$(echo ${GITHUB_REF#refs/heads/} | sed 's/\//-/g')
+          # Tentukan tag berdasarkan branch
+          export IMAGE_TAG=${{ github.ref_name }}
 
           # Login ke GHCR
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
