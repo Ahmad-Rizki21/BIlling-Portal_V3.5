@@ -88,19 +88,17 @@ jobs:
     steps:
       - name: Deploy to Local Staging VM
         run: |
-          # Pergi ke folder aplikasi di VM lokal Anda
-          # Pastikan folder ini sudah ada: mkdir -p ~/billing-staging
           cd ~/billing-staging
 
-          # Ambil docker-compose.yml terbaru dari repo (opsional, bisa manual juga)
-          # curl -O https://raw.githubusercontent.com/${{ github.repository }}/optimization/v5.0/docker-compose.yml
+          # Tentukan tag berdasarkan branch (misal: optimization-v5.0)
+          export IMAGE_TAG=$(echo ${GITHUB_REF#refs/heads/} | sed 's/\//-/g')
 
           # Login ke GHCR
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-          # Tarik image terbaru & jalankan
-          docker-compose pull
-          docker-compose up -d
+          # Tarik image terbaru & jalankan dengan tag spesifik
+          IMAGE_TAG=$IMAGE_TAG docker-compose pull
+          IMAGE_TAG=$IMAGE_TAG docker-compose up -d
 
           # Bersihkan image lama
           docker image prune -f
