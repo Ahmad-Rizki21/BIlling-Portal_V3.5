@@ -20,12 +20,10 @@ import os
 import time
 from datetime import datetime
 
-# Library untuk scheduling (auto-jobs)
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from apscheduler.schedulers.base import SchedulerAlreadyRunningError
 
 # FastAPI core components
-from fastapi import FastAPI, Query, Request, Response, WebSocket, WebSocketDisconnect, status
+from fastapi import FastAPI, Query, Request, Response, WebSocket, WebSocketDisconnect, status, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
@@ -47,23 +45,8 @@ from .config import settings
 from .database import AsyncSessionLocal, Base, engine, get_db, init_encryption
 
 
-# Import job-job terjadwal (auto-invoice, suspend, dll)
-from .jobs import (
-    job_generate_invoices,      # Auto generate invoice H-5 jatuh tempo
-    job_retry_failed_invoices,  # Retry invoice yang gagal dibuat payment link
-    job_retry_mikrotik_syncs,   # Retry sync mikrotik yang gagal
-    job_send_payment_reminders, # Kirim reminder pembayaran
-    job_suspend_services,       # Suspend layanan telat bayar
-    job_verify_payments,        # Verifikasi pembayaran masuk
-    job_archive_historical_invoices, # Archive invoice lama
-)
-
-# Import Telegram AI Monitor jobs
-from .services.telegram_ai_monitor import (
-    run_daily_report,           # Laporan harian ke Telegram
-    run_error_alert,            # Alert error ke Telegram
-    run_server_health_check,    # Server health check
-)
+# Scheduler helpers
+from .core.scheduler import setup_scheduler, start_scheduler, shutdown_scheduler
 
 # Import untuk logging
 from .logging_config import setup_logging
@@ -688,198 +671,63 @@ async def startup_event():
     # Setiap job diberi 'id' unik untuk mencegah duplikasi penjadwalan.
     # 'replace_existing=True' memastikan jika server restart, job lama akan diganti.
 
-    #==============================================================GENERATE INVOICE====================================================================================#
-    # Generate invoice setiap hari jam 10:00 pagi untuk langganan yang jatuh tempo 5 hari lagi (H-5).
-    #scheduler.add_job(job_generate_invoices, 'cron', hour=10, minute=0, timezone='Asia/Jakarta', id="generate_invoices_job", replace_existing=True)
-    #==============================================================GENERATE INVOICE====================================================================================#
-
-    #==============================================================SUSPEND SERVICES (ENHANCED WITH ROLLBACK)=======================================================================#
-    # Suspend services tepat tanggal 5 jam 00:00 untuk pelanggan yang telat bayar dari jatuh tempo tanggal 1.
-    # ENHANCED: Sekarang dengan automatic Mikrotik rollback jika database gagal (ZERO INCONSISTENCY!)
-    # scheduler.add_job(
-    #     job_suspend_services,
-    #     'cron',
-    #     day=5,
-    #     hour=0,
-    #     minute=0,
-    #     timezone='Asia/Jakarta',
-    #     id="suspend_services_job",
-    #     replace_existing=True,
-    #     max_instances=1,  # Prevent duplicate runs
-    #     misfire_grace_time=300  # 5 minutes grace time for missed runs
-    # )
-    #==============================================================SUSPEND SERVICES (ENHANCED WITH ROLLBACK)=======================================================================#
-
-
-    #==============================================================VERIFY PAYMENTS (PAYMENT RECONCILIATION)=======================================================================#
-    # Memverifikasi pembayaran yang mungkin terlewat setiap 15 menit.
-    # Penting untuk antisipasi webhook callback yang gagal dari Xendit
-    #scheduler.add_job(job_verify_payments, 'interval', minutes=15, id="verify_payments_job", replace_existing=True, max_instances=1)
-    #==============================================================VERIFY PAYMENTS (PAYMENT RECONCILIATION)=======================================================================#
-
-
-    #==============================================================MIKROTIK SYNC RETRY=======================================================================#
-    # Mencoba ulang sinkronisasi Mikrotik yang gagal setiap 5 menit.
-    # Penting untuk user yang suspend/unsuspend gagal di Mikrotik
-    #scheduler.add_job(job_retry_mikrotik_syncs, 'interval', minutes=5, id="retry_mikrotik_syncs_job", replace_existing=True, max_instances=1)
-    #==============================================================MIKROTIK SYNC RETRY=======================================================================#
-
-
-    #==============================================================RETRY FAILED INVOICES=======================================================================#
-    # Retry invoice yang gagal dibuat payment link setiap 1 jam
-    # Penting untuk invoice yang gagal generate payment link ke Xendit
-    #scheduler.add_job(job_retry_failed_invoices, 'interval', hours=1, id="retry_failed_invoices_job", replace_existing=True, max_instances=1)
-    #==============================================================RETRY FAILED INVOICES=======================================================================#
-
-    #==============================================================COLLECT TRAFFIC DARI MIKROTIK=======================================================================#
-    # 5. Setup traffic monitoring jobs
-    # from .jobs_traffic import setup_traffic_monitoring_jobs
-    # setup_traffic_monitoring_jobs(scheduler)
-    #==============================================================COLLECT TRAFFIC DARI MIKROTIK=======================================================================#
-
-    #==============================================================ARCHIVE INVOICE LAMA=======================================================================#
-    # Archive invoice lama setiap 3 bulan sekali (Januari, April, Juli, Oktober)
-    # Job ini memindahkan invoice dengan status Lunas/Kadaluarsa/Batal yang lebih dari 12 bulan
-    # ke tabel invoices_archive untuk menjaga performa database
-    # scheduler.add_job(
-    #     job_archive_historical_invoices,
-    #     'cron',
-    #     month='1,4,7,10',  # Januari, April, Juli, Oktober
-    #     day=1,             # Tanggal 1 setiap triwulan
-    #     hour=3,            # Jam 03:00 pagi (traffic minimal)
-    #     minute=0,
-    #     timezone='Asia/Jakarta',
-    #     id="archive_invoices_job",
-    #     replace_existing=True,
-    #     max_instances=1,        # Cegah job duplikat
-    #     misfire_grace_time=3600 # 1 jam grace time jika server sempat mati
-    # )
-    #==============================================================ARCHIVE INVOICE LAMA=======================================================================#
-
-    #==============================================================REMAINDERS INVOICE=======================================================================#
-    # Mengirim pengingat pembayaran setiap hari jam 8 pagi.
-    #scheduler.add_job(job_send_payment_reminders, 'cron', hour=8, minute=0, timezone='Asia/Jakarta', id="send_reminders_job", replace_existing=True)
-    #==============================================================REMAINDERS INVOICE=======================================================================#
-
-    #==============================================================TELEGRAM AI MONITOR=======================================================================#
-    # 🤖 Laporan harian Billing System ke Telegram via Qwen AI
-    # Jalan 2x sehari: pagi jam 08:00 dan malam jam 20:00
-    # scheduler.add_job(
-    #     run_daily_report,
-    #     'cron',
-    #     hour='8,20',
-    #     minute=0,
-    #     timezone='Asia/Jakarta',
-    #     id="telegram_daily_report_job",
-    #     replace_existing=True,
-    #     max_instances=1,
-    #     misfire_grace_time=600  # 10 menit grace time
-    # )
-
-    # # 🚨 Error Alert - Cek error kritis setiap 1 jam
-    # scheduler.add_job(
-    #     run_error_alert,
-    #     'interval',
-    #     hours=1,
-    #     id="telegram_error_alert_job",
-    #     replace_existing=True,
-    #     max_instances=1
-    # )
-
-    # # 🏥 Server Health Check - Setiap hari jam 06:00
-    # scheduler.add_job(
-    #     run_server_health_check,
-    #     'cron',
-    #     hour=6,
-    #     minute=0,
-    #     timezone='Asia/Jakarta',
-    #     id="telegram_health_check_job",
-    #     replace_existing=True,
-    #     max_instances=1
-    # )
-    #==============================================================TELEGRAM AI MONITOR=======================================================================#
-    
-    # Log scheduler info
-    print("="*80)
-    print("📅 SCHEDULED JOBS STATUS")
-    print("="*80)
-    print("✅ Invoice Generation: AKTIF - Setiap hari jam 10:00 WIB (H-5 sebelum jatuh tempo)")
-    print("✅ Suspend Services: AKTIF - Setiap tanggal 5 jam 00:00 WIB (ENHANCED with Rollback!)")
-    print("⏭️  Payment Reminders: Dinonaktifkan (manual trigger)")
-    print("✅ Payment Verification: AKTIF - Setiap 15 menit (antisipasi webhook gagal)")
-    print("✅ Mikrotik Sync Retry: AKTIF - Setiap 5 menit (auto-recovery)")
-    print("✅ Payment Link Retry: AKTIF - Setiap 1 jam (auto-recovery)")
-    print("ℹ️  Traffic Monitoring: Dinonaktifkan")
-    print("⏭️  Archive Invoice: Dinonaktifkan (manual trigger)")
-    print("✅ Telegram Daily Report: AKTIF - Setiap hari jam 08:00 & 20:00 WIB")
-    print("✅ Telegram Error Alert: AKTIF - Setiap 1 jam")
-    print("✅ Telegram Health Check: AKTIF - Setiap hari jam 06:00 WIB")
-    print("="*80)
-
-    # 6. Mulai scheduler dengan safety check
-    try:
-        scheduler.start()
-        print("🚀 Scheduler telah dimulai dengan Archive Invoice Job!")
-        logger.info("✅ Application startup complete - Archive Invoice Job Active")
-    except SchedulerAlreadyRunningError:
-        print("⚠️  Scheduler sudah berjalan, melanjutkan dengan instance yang ada...")
-        logger.warning("⚠️ Scheduler already running, continuing with existing instance")
-    except Exception as e:
-        print(f"❌ Error starting scheduler: {str(e)}")
-        logger.error(f"❌ Error starting scheduler: {str(e)}")
-        raise
+    # 3. Inisialisasi dan jalankan scheduler
+    setup_scheduler(scheduler)
+    start_scheduler(scheduler)
 
 
 # Event handler untuk shutdown aplikasi
 @app.on_event("shutdown")
 async def shutdown_event():
     logger = logging.getLogger("app.main")
-    try:
-        scheduler.shutdown(wait=False)
-        print("✅ Scheduler telah dimatikan dengan aman.")
-        logger.info("✅ Scheduler shutdown completed successfully")
-    except Exception as e:
-        print(f"⚠️  Warning saat mematikan scheduler: {str(e)}")
-        logger.warning(f"⚠️ Warning during scheduler shutdown: {str(e)}")
+    shutdown_scheduler(scheduler)
 
 
-# API_PREFIX = os.getenv("API_PREFIX", "")
+# ==========================================================
+# --- MODUL API ROUTER (CENTRALIZED PREFIX) ---
+# ==========================================================
+# Kita bungkus semua router ke dalam satu big router agar bisa dikasih prefix sekaligus
+# Ini mempermudah maintenance jika ingin mengubah "/api" di satu tempat saja
+api_router = APIRouter(prefix=settings.API_PREFIX)
 
-# Meng-include semua router
-app.include_router(pelanggan.router)
-app.include_router(diskon.router)
-app.include_router(user.router)
-app.include_router(role.router)
-app.include_router(auth.router)
-app.include_router(data_teknis.router)
-app.include_router(harga_layanan.router)
-app.include_router(langganan.router)
-app.include_router(sk.router)
-app.include_router(paket_layanan.router)
-app.include_router(invoice.router)
-app.include_router(mikrotik_server.router)
-app.include_router(uploads.router)
-app.include_router(calculator.router)
-# app.include_router(system_log.router)
-app.include_router(global_search.router)
-app.include_router(activity_log.router)
-app.include_router(notifications.router)
-app.include_router(dashboard.router)
-app.include_router(permission.router)
-app.include_router(report.router)
-app.include_router(olt.router)
-app.include_router(odp.router)
-app.include_router(topology.router)
-app.include_router(settings_router.router)
-app.include_router(inventory.router)
-app.include_router(inventory_status.router)
-app.include_router(inventory_type.router)
-app.include_router(dashboard_pelanggan.router)
-app.include_router(trouble_ticket.router)
-app.include_router(traffic_monitoring.router)
-app.include_router(rate_limiter_monitor.router)
-app.include_router(error_report.router)
-app.include_router(telegram_monitor.router)
+# Meng-include semua router ke big router
+api_router.include_router(pelanggan.router)
+api_router.include_router(diskon.router)
+api_router.include_router(user.router)
+api_router.include_router(role.router)
+api_router.include_router(auth.router)
+api_router.include_router(data_teknis.router)
+api_router.include_router(harga_layanan.router)
+api_router.include_router(langganan.router)
+api_router.include_router(sk.router)
+api_router.include_router(paket_layanan.router)
+api_router.include_router(invoice.router)
+api_router.include_router(mikrotik_server.router)
+api_router.include_router(uploads.router)
+api_router.include_router(calculator.router)
+# api_router.include_router(system_log.router)
+api_router.include_router(global_search.router)
+api_router.include_router(activity_log.router)
+api_router.include_router(notifications.router)
+api_router.include_router(dashboard.router)
+api_router.include_router(permission.router)
+api_router.include_router(report.router)
+api_router.include_router(olt.router)
+api_router.include_router(odp.router)
+api_router.include_router(topology.router)
+api_router.include_router(settings_router.router)
+api_router.include_router(inventory.router)
+api_router.include_router(inventory_status.router)
+api_router.include_router(inventory_type.router)
+api_router.include_router(dashboard_pelanggan.router)
+api_router.include_router(trouble_ticket.router)
+api_router.include_router(traffic_monitoring.router)
+api_router.include_router(rate_limiter_monitor.router)
+api_router.include_router(error_report.router)
+api_router.include_router(telegram_monitor.router)
+
+# Daftarkan big router ke main app
+app.include_router(api_router)
 
 
 # Endpoint root untuk verifikasi
@@ -888,8 +736,8 @@ def read_root():
     return {"message": "Selamat datang di API Billing System"}
 
 
-# Health Check Endpoint untuk monitoring
-@app.get("/health")
+# Health Check Endpoint untuk monitoring (Sekarang otomatis jadi /api/health karena dalam api_router)
+@api_router.get("/health")
 async def health_check():
     """
     Enhanced health check endpoint untuk monitoring server status.
@@ -929,22 +777,6 @@ async def health_check():
             "version": "1.0.0",
             "error": str(e)
         }
-
-
-# Health Check endpoint dengan /api prefix untuk frontend compatibility
-@app.get("/api/health")
-async def health_check_api():
-    """
-    Health check endpoint dengan /api prefix.
-    Memastikan frontend bisa mengecek status backend dengan mudah.
-    """
-    return {
-        "status": "healthy",
-        "timestamp": datetime.now().isoformat(),
-        "service": "Artacom FTTH Billing System",
-        "version": "1.0.0",
-        "api_version": "v1"
-    }
 
 
 # ====================================================================
@@ -1063,8 +895,8 @@ async def global_exception_handler(request: Request, exc: Exception):
     )
 
 
-# Test endpoint untuk webhook
-@app.post("/test-webhook")
+# Test endpoint untuk webhook (Sekarang otomatis jadi /api/test-webhook karena dalam api_router)
+@api_router.post("/test-webhook")
 async def test_webhook(request: Request):
     logger = logging.getLogger("app.test")
     body = await request.body()

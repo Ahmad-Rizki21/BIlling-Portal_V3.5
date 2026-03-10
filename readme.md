@@ -11,22 +11,29 @@ Sistem billing untuk layanan Fiber to the Home (FTTH) dengan fitur lengkap.
 - **Monitoring Dashboard**: Real-time monitoring dan reporting
 - **Mobile Support**: Aplikasi mobile dengan Capacitor
 
+## 🛠️ Arsitektur & Performa
+
+Sistem ini menggunakan arsitektur modern dengan pemisahan Client-Server, Service Layer Pattern, dan sistem Worker untuk tugas latar belakang. Detail optimasi terbaru dapat dilihat di [Release Notes V5 Optimization](file:///c:/laragon/www/Billing-Jelantik/RELEASE_NOTES_V5_OPTIMIZATION.md).
+
 ## CI/CD Pipeline
 
 Project ini menggunakan GitHub Actions yang modern dan reliable:
 
 ### 🔄 Automated Testing
+
 - **Backend Tests**: Pytest dengan coverage reporting
 - **Frontend Tests**: TypeScript checking, linting, dan build validation
 - **Security Scans**: Bandit dan Safety untuk vulnerability detection
 - **Code Quality**: Flake8, Black, dan MyPy untuk code standards
 
 ### 🚀 Automated Deployment
+
 - **Automated database migrations**
 - **Health checks** dan monitoring
 - **Rollback capabilities** jika deployment gagal
 
 ### 📊 Environment Support
+
 - **Development**: Local development dengan hot reload
 - **Staging**: Branch `dev` untuk testing
 - **Production**: Branch `main` dengan full monitoring
@@ -71,6 +78,7 @@ npm run dev
 ## Teknologi
 
 ### Backend
+
 - **FastAPI**: Framework API modern Python
 - **SQLAlchemy**: ORM untuk database
 - **Alembic**: Database migrations
@@ -78,12 +86,14 @@ npm run dev
 - **Mikrotik API**: Network device management
 
 ### Frontend
+
 - **Vue.js 3**: Progressive JavaScript framework
 - **Vuetify**: Material Design component framework
 - **Pinia**: State management
 - **Vite**: Build tool
 
 ### Infrastructure
+
 - **MySQL**: Database utama
 - **Nginx**: Reverse proxy dan load balancer (opsional untuk production)
 - **Local Development**: Development environment langsung di mesin lokal
@@ -91,11 +101,13 @@ npm run dev
 ## Instalasi
 
 ### Prerequisites
+
 - Python 3.9+
 - Node.js 16+
 - MySQL
 
 ### Setup Backend
+
 ```bash
 # Clone repository
 git clone https://github.com/Ahmad-Rizki21/BIlling-Portal_V3.5.git
@@ -124,6 +136,7 @@ uvicorn app.main:app --reload
 ```
 
 ### Setup Frontend
+
 ```bash
 # Navigate to frontend directory
 cd frontend
@@ -139,6 +152,7 @@ npm run build
 ```
 
 ### Production Deployment (Tanpa Docker)
+
 ```bash
 # Setup production environment
 sudo apt install postgresql nginx redis-server
@@ -194,6 +208,7 @@ SECRET_KEY=your_secret_key
 ## API Documentation
 
 API documentation tersedia di:
+
 - Development: `http://localhost:8000/docs`
 - Production: `https://your-domain.com/docs`
 

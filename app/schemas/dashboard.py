@@ -84,6 +84,19 @@ class LoyalitasUserDetail(BaseModel):
         validate_assignment = True
 
 
+class BreakdownItem(BaseModel):
+    """Mewakili satu item dalam rincian (misal: satu lokasi atau satu brand)."""
+    nama: str
+    jumlah: int
+
+
+class PaketDetail(BaseModel):
+    """Mewakili rincian lengkap untuk satu jenis paket."""
+    total_pelanggan: int
+    breakdown_lokasi: List[BreakdownItem]
+    breakdown_brand: List[BreakdownItem]
+
+
 # Skema utama yang menggabungkan semua data
 class DashboardData(BaseModel):
     revenue_summary: Optional[RevenueSummary] = None

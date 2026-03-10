@@ -1,21 +1,16 @@
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import func, or_
+from sqlalchemy import func
 from sqlalchemy.future import select
 from typing import List, Optional
+from datetime import datetime
+import logging
 import csv
 import io
-from datetime import datetime, date
-import chardet
-from pydantic import BaseModel, ValidationError
-from sqlalchemy.orm import joinedload, selectinload
-import logging
-from io import BytesIO
-from collections import Counter
-from fastapi.responses import StreamingResponse
 import uuid
-
-# --- PASTIKAN SEMUA IMPORT INI ADA DAN BENAR ---
+from collections import Counter
+from pydantic import BaseModel
+from fastapi.responses import StreamingResponse
 
 # Impor model Pelanggan dengan nama asli 'Pelanggan', lalu kita beri alias 'PelangganModel'
 from ..models.pelanggan import Pelanggan as PelangganModel
@@ -45,6 +40,7 @@ from ..schemas.data_teknis import (
     IPCheckResponse,
 )
 from ..utils.export import create_data_teknis_export_response
+from ..services.data_teknis_service import DataTeknisService
 
 
 class ProfileUsage(BaseModel):
@@ -75,111 +71,9 @@ async def create_data_teknis(
     db: AsyncSession = Depends(get_db),
     current_user: UserModel = Depends(get_current_active_user)
 ):
-    """
-    Membuat data teknis baru untuk seorang pelanggan.
-    """
-    # Pisahkan ID relasi dari data utama
-    data_dict = data_teknis.model_dump()
-    pelanggan_id = data_dict.pop("pelanggan_id")
-    mikrotik_server_id = data_dict.pop("mikrotik_server_id", None)
-    odp_id = data_dict.pop("odp_id", None)
-    data_dict.pop("odp", None)  # Secara eksplisit hapus field 'odp' yang salah
-
-    # Validasi: Pastikan pelanggan dengan ID yang diberikan ada
-    # Eager load harga_layanan to prevent MissingGreenlet error during response serialization
-    pelanggan = await db.get(
-        PelangganModel,
-        pelanggan_id,
-        options=[selectinload(PelangganModel.harga_layanan)]
-    )
-    if not pelanggan:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Pelanggan dengan id {pelanggan_id} tidak ditemukan.",
-        )
-
-    # Cek apakah pelanggan ini sudah punya data teknis
-    existing_data_teknis_query = await db.execute(select(DataTeknisModel).where(DataTeknisModel.pelanggan_id == pelanggan_id))
-    if existing_data_teknis_query.scalar_one_or_none():
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"Data teknis untuk pelanggan dengan id {pelanggan_id} sudah ada.",
-        )
-
-    # Buat instance model dengan data non-relasi
-    db_data_teknis = DataTeknisModel(**data_dict)
-
-    # Tetapkan relasi menggunakan objek yang diambil dari DB
-    db_data_teknis.pelanggan = pelanggan
-
-    if mikrotik_server_id:
-        mikrotik_server = await db.get(MikrotikServerModel, mikrotik_server_id)
-        if not mikrotik_server:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Server Mikrotik dengan id {mikrotik_server_id} tidak ditemukan.",
-            )
-        db_data_teknis.mikrotik_server = mikrotik_server
-
-    if odp_id:
-        odp = await db.get(ODPModel, odp_id)
-        if not odp:
-            raise HTTPException(status_code=404, detail=f"ODP dengan id {odp_id} tidak ditemukan.")
-        db_data_teknis.odp = odp
-    db.add(db_data_teknis)
-    await db.commit()
-
-    # Simpan info yang dibutuhkan untuk notifikasi SEBELUM session berubah
-    data_teknis_id = db_data_teknis.id
-    pelanggan_id_for_notif = db_data_teknis.pelanggan_id
-    pelanggan_nama = pelanggan.nama if pelanggan else "N/A"
-
-    try:
-        # 1. Cari semua user ID dengan role "Finance"
-        finance_role_query = select(UserModel.id).join(RoleModel).where(func.lower(RoleModel.name) == "Finance")
-        result = await db.execute(finance_role_query)
-        finance_user_ids = list(result.scalars().all())
-
-        if finance_user_ids:
-            # 2. Siapkan payload notifikasi dengan format yang konsisten
-            notification_payload = {
-                "type": "new_technical_data",
-                "message": f"Data teknis untuk {pelanggan_nama} telah ditambahkan. Siap dibuatkan langganan.",
-                "timestamp": datetime.now().isoformat(),
-                "data": {
-                    "pelanggan_id": pelanggan_id_for_notif,
-                    "pelanggan_nama": pelanggan_nama,
-                    "timestamp": datetime.now().isoformat(),
-                },
-            }
-            # 3. Kirim notifikasi ke semua user Finance yang online
-            await manager.broadcast_to_roles(notification_payload, finance_user_ids)
-            logger.info(f"Notifikasi data teknis baru dikirim ke {len(finance_user_ids)} user Finance.")
-    except Exception as e:
-        logger.error(f"Gagal mengirim notifikasi data teknis baru: {str(e)}")
-
-    try:
-        # Panggil fungsi trigger setelah data berhasil disimpan
-        await mikrotik_service.trigger_mikrotik_create(db, db_data_teknis)
-    except Exception as e:
-        # Jika gagal membuat secret, jangan batalkan proses.
-        # Cukup catat errornya. Data teknis tetap berhasil dibuat.
-        logger.error(f"Data teknis ID {data_teknis_id} berhasil disimpan, " f"namun gagal membuat secret di Mikrotik: {e}")
-
-    # Re-query TERAKHIR dengan eager loading penuh tepat sebelum return
-    # untuk menghindari MissingGreenlet error saat Pydantic serialize response.
-    # Harus dilakukan di sini (bukan lebih awal) karena operasi di atas
-    # (notifikasi, mikrotik trigger) bisa melakukan db.commit() yang meng-expire object.
-    result = await db.execute(
-        select(DataTeknisModel)
-        .options(
-            selectinload(DataTeknisModel.pelanggan).selectinload(PelangganModel.harga_layanan)
-        )
-        .where(DataTeknisModel.id == data_teknis_id)
-    )
-    db_data_teknis = result.scalar_one()
-
-    return db_data_teknis
+    """Membuat data teknis baru untuk seorang pelanggan."""
+    service = DataTeknisService(db)
+    return await service.create_data_teknis(data_teknis)
 
 
 @router.get("/by-pelanggan/{pelanggan_id}", response_model=List[DataTeknisSchema])
@@ -188,22 +82,18 @@ async def read_data_teknis_by_pelanggan(
     db: AsyncSession = Depends(get_db),
     current_user: UserModel = Depends(get_current_active_user)
 ):
-    """
-    Mengambil data teknis berdasarkan ID pelanggan.
-    """
-    # Eager load pelanggan and harga_layanan to prevent MissingGreenlet error
-    query = select(DataTeknisModel).options(
-        joinedload(DataTeknisModel.pelanggan).selectinload(PelangganModel.harga_layanan)
-    ).where(DataTeknisModel.pelanggan_id == pelanggan_id)
+    """Mengambil data teknis berdasarkan ID pelanggan."""
+    service = DataTeknisService(db)
+    query = await service.get_filtered_data_teknis_stmt()
+    query = query.where(DataTeknisModel.pelanggan_id == pelanggan_id)
     result = await db.execute(query)
-    data_teknis_list = list(result.scalars().all())
-    return data_teknis_list
+    return list(result.unique().scalars().all())
 
 
 @router.get("/", response_model=DataTeknisResponse)
 async def read_all_data_teknis(
     skip: int = 0,
-    limit: Optional[int] = Query(default=50, le=500, description="Maximum 500 records per request for optimal performance"),
+    limit: Optional[int] = Query(default=50, le=500, description="Max 500 records per request"),
     search: Optional[str] = None,
     olt: Optional[str] = None,
     profile: Optional[str] = None,
@@ -213,78 +103,24 @@ async def read_all_data_teknis(
     db: AsyncSession = Depends(get_db),
     current_user: UserModel = Depends(get_current_active_user)
 ):
-    """
-    Mengambil daftar semua data teknis dengan paginasi, filter, dan total hitungan.
-    """
-    # Eager load pelanggan and harga_layanan to prevent MissingGreenlet error
-    query = select(DataTeknisModel).options(
-        joinedload(DataTeknisModel.pelanggan).selectinload(PelangganModel.harga_layanan)
+    """Mengambil daftar semua data teknis dengan paginasi, filter, dan total hitungan."""
+    service = DataTeknisService(db)
+    query = await service.get_filtered_data_teknis_stmt(
+        search=search, olt=olt, profile=profile, vlan=vlan, 
+        onu_power_min=onu_power_min, onu_power_max=onu_power_max
     )
-    count_query = select(func.count(DataTeknisModel.id))
+    
+    # Get total count
+    total_count_stmt = select(func.count()).select_from(query.subquery())
+    total_count = (await db.execute(total_count_stmt)).scalar_one()
 
-    if search:
-        search_term = f"%{search}%"
-        # Apply join for searching
-        query = query.join(PelangganModel, DataTeknisModel.pelanggan_id == PelangganModel.id).where(
-            or_(
-                func.coalesce(PelangganModel.nama, "").ilike(search_term),
-                func.coalesce(DataTeknisModel.id_pelanggan, "").ilike(search_term),
-                func.coalesce(DataTeknisModel.ip_pelanggan, "").ilike(search_term),
-                func.coalesce(DataTeknisModel.sn, "").ilike(search_term),
-            )
-        )
-        # Apply the same join and where clause to the count query
-        count_query = count_query.join(PelangganModel, DataTeknisModel.pelanggan_id == PelangganModel.id).where(
-            or_(
-                func.coalesce(PelangganModel.nama, "").ilike(search_term),
-                func.coalesce(DataTeknisModel.id_pelanggan, "").ilike(search_term),
-                func.coalesce(DataTeknisModel.ip_pelanggan, "").ilike(search_term),
-                func.coalesce(DataTeknisModel.sn, "").ilike(search_term),
-            )
-        )
-    else:
-        # If no search, still join for eager loading but no where clause for the main query
-        query = query.join(DataTeknisModel.pelanggan)
-        # Apply join to count_query as well for consistency
-        count_query = count_query.join(DataTeknisModel.pelanggan)
+    # Apply pagination
+    limit = limit or 50
+    data_query = query.order_by(DataTeknisModel.id.desc()).offset(skip).limit(limit)
+    result = await db.execute(data_query)
+    data_list = list(result.unique().scalars().all())
 
-    # Filter OLT
-    if olt and olt != "Semua":
-        query = query.where(DataTeknisModel.olt == olt)
-        count_query = count_query.where(DataTeknisModel.olt == olt)
-
-    # Filter Profile PPPoE
-    if profile and profile != "Semua":
-        query = query.where(DataTeknisModel.profile_pppoe == profile)
-        count_query = count_query.where(DataTeknisModel.profile_pppoe == profile)
-
-    # Filter VLAN
-    if vlan and vlan != "Semua":
-        query = query.where(DataTeknisModel.id_vlan == vlan)
-        count_query = count_query.where(DataTeknisModel.id_vlan == vlan)
-
-    # Filter ONU Power Range
-    if onu_power_min is not None:
-        query = query.where(DataTeknisModel.onu_power >= onu_power_min)
-        count_query = count_query.where(DataTeknisModel.onu_power >= onu_power_min)
-
-    if onu_power_max is not None:
-        query = query.where(DataTeknisModel.onu_power <= onu_power_max)
-        count_query = count_query.where(DataTeknisModel.onu_power <= onu_power_max)
-
-    # Get total count before applying pagination
-    total_count_result = await db.execute(count_query)
-    total_count = total_count_result.scalar_one()
-
-    # Apply ordering and pagination to the main query
-    query = query.order_by(DataTeknisModel.id.desc())
-    if limit is not None:
-        query = query.offset(skip).limit(limit)
-
-    result = await db.execute(query)
-    data_teknis_list = list(result.unique().scalars().all())
-
-    return DataTeknisResponse(data=data_teknis_list, total_count=total_count)  # type: ignore
+    return DataTeknisResponse(data=data_list, total_count=total_count)
 
 
 @router.get("/available-olt", response_model=List[str])
@@ -292,28 +128,9 @@ async def get_available_olt(
     db: AsyncSession = Depends(get_db),
     current_user: UserModel = Depends(get_current_active_user)
 ):
-    """
-    Mengambil semua OLT/Mikrotik Server yang tersedia untuk filter dropdown.
-    Diubah untuk mengambil dari data_teknis.olt agar sesuai dengan data yang ada.
-    """
-    try:
-        # Ambil semua OLT yang ada di data teknis (sesuai dengan data yang difilter)
-        query = select(DataTeknisModel.olt).where(
-            DataTeknisModel.olt.isnot(None)
-        ).distinct().order_by(DataTeknisModel.olt)
-        result = await db.execute(query)
-        olt_list = result.scalars().all()
-
-        # Menambahkan opsi "Semua" di awal
-        all_options = ["Semua"] + [olt for olt in olt_list if olt]
-
-        return all_options
-    except Exception as e:
-        logger.error(f"Error mengambil data OLT: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Gagal mengambil data OLT: {str(e)}"
-        )
+    """Mengambil semua OLT/Mikrotik Server yang tersedia untuk filter dropdown."""
+    service = DataTeknisService(db)
+    return await service.get_distinct_values("olt")
 
 
 @router.get("/available-profiles", response_model=List[str])
@@ -321,27 +138,9 @@ async def get_available_profiles(
     db: AsyncSession = Depends(get_db),
     current_user: UserModel = Depends(get_current_active_user)
 ):
-    """
-    Mengambil semua Profile PPPoE yang tersedia untuk filter dropdown.
-    """
-    try:
-        # Ambil semua profile PPPoE yang unik dari data teknis
-        query = select(DataTeknisModel.profile_pppoe).where(
-            DataTeknisModel.profile_pppoe.isnot(None)
-        ).distinct().order_by(DataTeknisModel.profile_pppoe)
-        result = await db.execute(query)
-        profiles = result.scalars().all()
-
-        # Menambahkan opsi "Semua" di awal
-        all_options = ["Semua"] + [profile for profile in profiles if profile]
-
-        return all_options
-    except Exception as e:
-        logger.error(f"Error mengambil data profile PPPoE: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Gagal mengambil data profile PPPoE: {str(e)}"
-        )
+    """Mengambil semua Profile PPPoE yang tersedia untuk filter dropdown."""
+    service = DataTeknisService(db)
+    return await service.get_distinct_values("profile_pppoe")
 
 
 @router.get("/available-vlans", response_model=List[str])
@@ -349,27 +148,9 @@ async def get_available_vlans(
     db: AsyncSession = Depends(get_db),
     current_user: UserModel = Depends(get_current_active_user)
 ):
-    """
-    Mengambil semua VLAN yang tersedia untuk filter dropdown.
-    """
-    try:
-        # Ambil semua VLAN yang unik dari data teknis
-        query = select(DataTeknisModel.id_vlan).where(
-            DataTeknisModel.id_vlan.isnot(None)
-        ).distinct().order_by(DataTeknisModel.id_vlan)
-        result = await db.execute(query)
-        vlans = result.scalars().all()
-
-        # Menambahkan opsi "Semua" di awal
-        all_options = ["Semua"] + [vlan for vlan in vlans if vlan]
-
-        return all_options
-    except Exception as e:
-        logger.error(f"Error mengambil data VLAN: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Gagal mengambil data VLAN: {str(e)}"
-        )
+    """Mengambil semua VLAN yang tersedia untuk filter dropdown."""
+    service = DataTeknisService(db)
+    return await service.get_distinct_values("id_vlan")
 
 
 @router.get("/debug-filter-data")
@@ -486,44 +267,13 @@ async def export_data_teknis(
     # PERFORMANCE MONITORING: Log export parameters
     print(f"📊 Exporting data teknis {format}: skip={skip}, limit={limit}, search={search}, olt={olt}")
 
-    query = (
-        select(DataTeknisModel)
-        .options(
-            joinedload(DataTeknisModel.pelanggan).selectinload(PelangganModel.harga_layanan),
-            joinedload(DataTeknisModel.mikrotik_server),
-            joinedload(DataTeknisModel.odp),
-        )
-        .offset(skip)
-        .limit(limit)
+    service = DataTeknisService(db)
+    query = await service.get_filtered_data_teknis_stmt(
+        search=search, olt=olt, profile=profile, vlan=vlan,
+        onu_power_min=onu_power_min, onu_power_max=onu_power_max
     )
-
-    if search:
-        search_term = f"%{search}%"
-        query = query.join(PelangganModel, DataTeknisModel.pelanggan_id == PelangganModel.id).where(
-            or_(
-                func.coalesce(PelangganModel.nama, "").ilike(search_term),
-                func.coalesce(DataTeknisModel.id_pelanggan, "").ilike(search_term),
-                func.coalesce(DataTeknisModel.ip_pelanggan, "").ilike(search_term),
-                func.coalesce(DataTeknisModel.sn, "").ilike(search_term),
-            )
-        )
-
-    if olt and olt != "Semua":
-        query = query.where(DataTeknisModel.olt == olt)
-
-    if profile and profile != "Semua":
-        query = query.where(DataTeknisModel.profile_pppoe == profile)
-
-    if vlan and vlan != "Semua":
-        query = query.where(DataTeknisModel.id_vlan == vlan)
-
-    if onu_power_min is not None:
-        query = query.where(DataTeknisModel.onu_power >= onu_power_min)
-
-    if onu_power_max is not None:
-        query = query.where(DataTeknisModel.onu_power <= onu_power_max)
-
-    query = query.order_by(DataTeknisModel.id.desc())
+    
+    query = query.offset(skip).limit(limit).order_by(DataTeknisModel.id.desc())
 
     result = await db.execute(query)
     data_list = result.scalars().unique().all()
@@ -566,18 +316,12 @@ async def read_data_teknis_by_id(
     db: AsyncSession = Depends(get_db),
     current_user: UserModel = Depends(get_current_active_user)
 ):
-    """
-    Mengambil satu data teknis berdasarkan ID.
-    """
-    # Eager load pelanggan and harga_layanan to prevent MissingGreenlet error
-    db_data_teknis = await db.get(
-        DataTeknisModel,
-        data_teknis_id,
-        options=[joinedload(DataTeknisModel.pelanggan).selectinload(PelangganModel.harga_layanan)]
+    """Mengambil satu data teknis berdasarkan ID."""
+    service = DataTeknisService(db)
+    return await service.get_by_id_with_relations(
+        data_teknis_id, 
+        relations=["pelanggan"]
     )
-    if db_data_teknis is None:
-        raise HTTPException(status_code=404, detail="Data Teknis not found")
-    return db_data_teknis
 
 
 @router.patch("/{data_teknis_id}", response_model=DataTeknisSchema)
@@ -587,52 +331,9 @@ async def update_data_teknis(
     db: AsyncSession = Depends(get_db),
     current_user: UserModel = Depends(get_current_active_user)
 ):
-    """
-    Memperbarui data teknis secara parsial DAN mentrigger update ke Mikrotik.
-    """
-    # Eager load pelanggan with harga_layanan for response serialization, and langganan for Mikrotik trigger
-    db_data_teknis = await db.get(
-        DataTeknisModel,
-        data_teknis_id,
-        options=[
-            joinedload(DataTeknisModel.pelanggan).selectinload(PelangganModel.harga_layanan),
-            joinedload(DataTeknisModel.pelanggan).joinedload(PelangganModel.langganan),
-        ],
-    )
-    if not db_data_teknis:
-        raise HTTPException(status_code=404, detail="Data Teknis not found")
-
-    # Simpan ID Pelanggan (nama secret) LAMA sebelum diubah
-    old_id_pelanggan = db_data_teknis.id_pelanggan
-
-    # Perbarui data di objek SQLAlchemy
-    update_data = data_teknis_update.model_dump(exclude_unset=True)
-    for key, value in update_data.items():
-        setattr(db_data_teknis, key, value)
-
-    # Simpan perubahan ke database
-    db.add(db_data_teknis)
-    await db.commit()
-    await db.refresh(db_data_teknis)
-
-    try:
-        if db_data_teknis.pelanggan and db_data_teknis.pelanggan.langganan:
-            langganan_terkait = db_data_teknis.pelanggan.langganan[0]
-
-            logger.info(f"Mentrigger update Mikrotik untuk Data Teknis ID: {db_data_teknis.id}")
-            # Panggil service dengan argumen baru: nama lama
-            await mikrotik_service.trigger_mikrotik_update(db, langganan_terkait, db_data_teknis, old_id_pelanggan)
-        else:
-            logger.warning(
-                f"Data Teknis ID {db_data_teknis.id} diupdate, "
-                f"tapi tidak ada langganan terkait untuk trigger update Mikrotik."
-            )
-    except Exception as e:
-        logger.error(
-            f"Data teknis ID {db_data_teknis.id} berhasil diupdate di DB, " f"namun GAGAL sinkronisasi ke Mikrotik: {e}"
-        )
-
-    return db_data_teknis
+    """Memperbarui data teknis secara parsial DAN mentrigger update ke Mikrotik."""
+    service = DataTeknisService(db)
+    return await service.update_data_teknis(data_teknis_id, data_teknis_update)
 
 
 @router.delete("/{data_teknis_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -641,36 +342,9 @@ async def delete_data_teknis(
     db: AsyncSession = Depends(get_db),
     current_user: UserModel = Depends(get_current_active_user)
 ):
-    """
-    Menghapus data teknis berdasarkan ID.
-    """
-    db_data_teknis = await db.get(DataTeknisModel, data_teknis_id)
-    if not db_data_teknis:
-        raise HTTPException(status_code=404, detail="Data Teknis not found")
-
-    # Ambil informasi yang dibutuhkan sebelum data dihapus
-    id_pelanggan = db_data_teknis.id_pelanggan
-    mikrotik_server_id = db_data_teknis.mikrotik_server_id
-
-    # Cari server Mikrotik untuk koneksi
-    mikrotik_server = await db.get(MikrotikServerModel, mikrotik_server_id)
-    if mikrotik_server:
-        # Hubung ke Mikrotik dan hapus PPPoE secret
-        try:
-            api, connection = mikrotik_service.get_api_connection(mikrotik_server)
-            if api:
-                mikrotik_service.delete_pppoe_secret(api, id_pelanggan)
-        except Exception as e:
-            logger.error(f"Gagal menghapus PPPoE secret dari Mikrotik: {e}")
-            # Jangan batalkan penghapusan data karena gagal di Mikrotik
-        finally:
-            if connection:
-                # Gunakan connection pooling untuk menutup koneksi
-                mikrotik_pool = mikrotik_service.mikrotik_pool
-                mikrotik_pool.return_connection(connection, mikrotik_server.host_ip, int(mikrotik_server.port))
-
-    await db.delete(db_data_teknis)
-    await db.commit()
+    """Menghapus data teknis berdasarkan ID."""
+    service = DataTeknisService(db)
+    await service.delete_data_teknis(data_teknis_id)
     return None
 
 
@@ -681,43 +355,10 @@ async def check_ip_address(
     db: AsyncSession = Depends(get_db),
     current_user: UserModel = Depends(get_current_active_user)
 ):
-    # 1. Pengecekan ke database (tetap sama)
-    query = select(DataTeknisModel).where(DataTeknisModel.ip_pelanggan == request.ip_address)
-    if request.current_id:
-        query = query.where(DataTeknisModel.id != request.current_id)
-
-    existing_in_db = (await db.execute(query)).scalar_one_or_none()
-
-    if existing_in_db:
-        return IPCheckResponse(
-            is_taken=True,
-            message=f"IP sudah terpakai di database oleh {existing_in_db.id_pelanggan}",
-            owner_id=existing_in_db.id_pelanggan,
-        )
-
-    # 2. Jika tidak ditemukan di DB, cek ke semua server Mikrotik
-    mikrotik_servers_result = await db.execute(select(MikrotikServerModel))
-    all_servers = mikrotik_servers_result.scalars().all()
-
-    for server in all_servers:
-        api, connection = mikrotik_service.get_api_connection(server)
-        if api:
-            try:
-                owner_name = mikrotik_service.check_ip_in_secrets(api, request.ip_address)
-                if owner_name:
-                    return IPCheckResponse(
-                        is_taken=True,
-                        message=f"IP sudah terpakai di Mikrotik '{server.name}' oleh {owner_name}",
-                        owner_id=owner_name,
-                    )
-            finally:
-                if connection:
-                    # Gunakan connection pooling untuk menutup koneksi
-                    mikrotik_pool = mikrotik_service.mikrotik_pool
-                    mikrotik_pool.return_connection(connection, server.host_ip, int(server.port))
-
-    # 3. Jika aman di DB dan di semua Mikrotik, maka IP tersedia
-    return IPCheckResponse(is_taken=False, message="IP tersedia", owner_id=None)
+    """Memeriksa ketersediaan IP address."""
+    service = DataTeknisService(db)
+    is_taken, message, owner_id = await service.check_ip_availability(request.ip_address, request.current_id)
+    return IPCheckResponse(is_taken=is_taken, message=message, owner_id=owner_id)
 
 
 # routers/data_teknis.py
@@ -789,103 +430,7 @@ async def download_csv_template_teknis():
     )
 
 
-@router.get("/export", response_class=StreamingResponse)
-async def export_data_teknis(
-    skip: int = 0,
-    limit: int = Query(default=1000, le=10000, description="Maximum 10,000 records per export with progress indicator"),  # Production-ready
-    search: Optional[str] = None,
-    olt: Optional[str] = None,
-    profile: Optional[str] = None,
-    vlan: Optional[str] = None,
-    onu_power_min: Optional[int] = None,
-    onu_power_max: Optional[int] = None,
-    format: str = Query("csv", description="Export format: csv atau excel"),
-    db: AsyncSession = Depends(get_db),
-    current_user: UserModel = Depends(get_current_active_user)
-):
-    """
-    Mengekspor data teknis ke CSV atau Excel dengan data relasi yang mudah dibaca dan filter.
-    PERFORMANCE OPTIMIZATION: Added pagination to prevent memory issues with large datasets.
-    """
-    # Validate format
-    if format.lower() not in ["csv", "excel", "xlsx"]:
-        raise HTTPException(status_code=400, detail="Format tidak valid. Pilih 'csv' atau 'excel'.")
 
-    # PERFORMANCE MONITORING: Log export parameters
-    print(f"📊 Exporting data teknis {format}: skip={skip}, limit={limit}, search={search}, olt={olt}")
-
-    query = (
-        select(DataTeknisModel)
-        .options(
-            joinedload(DataTeknisModel.pelanggan).selectinload(PelangganModel.harga_layanan),
-            joinedload(DataTeknisModel.mikrotik_server),
-            joinedload(DataTeknisModel.odp),
-        )
-        .offset(skip)
-        .limit(limit)
-    )
-
-    if search:
-        search_term = f"%{search}%"
-        query = query.join(PelangganModel, DataTeknisModel.pelanggan_id == PelangganModel.id).where(
-            or_(
-                func.coalesce(PelangganModel.nama, "").ilike(search_term),
-                func.coalesce(DataTeknisModel.id_pelanggan, "").ilike(search_term),
-                func.coalesce(DataTeknisModel.ip_pelanggan, "").ilike(search_term),
-                func.coalesce(DataTeknisModel.sn, "").ilike(search_term),
-            )
-        )
-
-    if olt and olt != "Semua":
-        query = query.where(DataTeknisModel.olt == olt)
-
-    if profile and profile != "Semua":
-        query = query.where(DataTeknisModel.profile_pppoe == profile)
-
-    if vlan and vlan != "Semua":
-        query = query.where(DataTeknisModel.id_vlan == vlan)
-
-    if onu_power_min is not None:
-        query = query.where(DataTeknisModel.onu_power >= onu_power_min)
-
-    if onu_power_max is not None:
-        query = query.where(DataTeknisModel.onu_power <= onu_power_max)
-
-    query = query.order_by(DataTeknisModel.id.desc())
-
-    result = await db.execute(query)
-    data_list = result.scalars().unique().all()
-
-    if not data_list:
-        raise HTTPException(status_code=404, detail="Tidak ada data teknis untuk diekspor dengan filter yang diberikan.")
-
-    # Prepare data untuk export dengan format yang sesuai (lengkap seperti sebelumnya)
-    export_data = []
-    for d in data_list:
-        export_data.append({
-            "id_pelanggan": d.id_pelanggan,
-            "pelanggan_nama": d.pelanggan.nama if d.pelanggan else "N/A",
-            "email_pelanggan": d.pelanggan.email if d.pelanggan else "N/A",
-            "alamat": d.pelanggan.alamat if d.pelanggan else "N/A",
-            "alamat_2": d.pelanggan.alamat_2 if d.pelanggan else "N/A",
-            "no_telp": d.pelanggan.no_telp if d.pelanggan else "N/A",
-            "ip_pelanggan": d.ip_pelanggan,
-            "profile_pppoe": d.profile_pppoe,
-            "vlan": d.id_vlan,
-            "sn": d.sn,
-            "nama_mikrotik_server": d.mikrotik_server.name if d.mikrotik_server else "N/A",
-            "kode_odp": d.odp.kode_odp if d.odp else "N/A",
-            "port_odp": d.port_odp,
-            "olt_custom": d.olt_custom,
-            "pon": d.pon,
-            "otb": d.otb,
-            "odc": d.odc,
-            "onu_power": d.onu_power,
-            "status": "Aktif" if d.ip_pelanggan else "Tidak Aktif",
-        })
-
-    # Gunakan export utility yang sudah dioptimasi
-    return create_data_teknis_export_response(export_data, format.lower())
 
 
 @router.post("/import/csv")
@@ -894,150 +439,9 @@ async def import_from_csv_teknis(
     db: AsyncSession = Depends(get_db),
     current_user: UserModel = Depends(get_current_active_user)
 ):
-    """
-    Mengimpor data teknis dari file CSV dengan validasi relasi berdasarkan nama/kode.
-    """
-    if not file.filename or not file.filename.lower().endswith(".csv"):
-        raise HTTPException(status_code=400, detail="File harus berformat .csv")
-
-    contents = await file.read()
-    if not contents:
-        raise HTTPException(status_code=400, detail="File kosong.")
-
-    try:
-        encoding = chardet.detect(contents)["encoding"] or "utf-8"
-        content_str = contents.decode(encoding)
-
-        # Hapus BOM jika ada
-        if content_str.startswith("\ufeff"):
-            content_str = content_str.lstrip("\ufeff")
-
-        # --- DETEKSI DELIMITER ---
-        # Cek apakah menggunakan koma (,) atau titik-koma (;)
-        first_line = content_str.split('\n')[0]
-        dialect_delimiter = ","
-        if ";" in first_line and first_line.count(";") > first_line.count(","):
-            dialect_delimiter = ";"
-        
-        # --- PERBAIKAN DI SINI ---
-        # 1. Buat objek DictReader terlebih dahulu dengan delimiter yang terdeteksi
-        reader_object = csv.DictReader(io.StringIO(content_str), delimiter=dialect_delimiter)
-
-        # 2. Cek 'fieldnames' pada objek DictReader
-        if not reader_object.fieldnames:
-            raise HTTPException(status_code=400, detail="Header CSV tidak ditemukan.")
-        
-        # 3. Ubah menjadi list untuk di-loop
-        reader = list(reader_object)
-    except Exception as e:
-        logger.error(f"Gagal membaca atau mem-parsing file CSV: {repr(e)}")
-        raise HTTPException(status_code=400, detail=f"Gagal memproses file CSV: {repr(e)}")
-
-    # --- OPTIMISASI: PRE-FETCH DATA SEBELUM LOOP (MENGHINDARI N+1 QUERY) ---
-    # 1. Kumpulkan semua data unik yang perlu dicari dari CSV
-    emails_to_find = {row.get("email_pelanggan", "").lower().strip() for row in reader if row.get("email_pelanggan")}
-    server_names_to_find = {row.get("olt", "").strip() for row in reader if row.get("olt")}
-    odp_codes_to_find = {row.get("kode_odp", "").strip() for row in reader if row.get("kode_odp")}
-
-    # 2. Lakukan query besar-besaran di luar loop untuk efisiensi
-    # Ambil semua pelanggan yang relevan dalam satu query
-    pelanggan_q = await db.execute(select(PelangganModel).where(func.lower(PelangganModel.email).in_(emails_to_find)))
-    pelanggan_map = {p.email.lower(): p for p in pelanggan_q.scalars().all()}
-
-    # Ambil semua server yang relevan dalam satu query
-    server_q = await db.execute(select(MikrotikServerModel).where(MikrotikServerModel.name.in_(server_names_to_find)))
-    server_map = {s.name: s for s in server_q.scalars().all()}
-
-    # Ambil semua ODP yang relevan dalam satu query
-    odp_q = await db.execute(select(ODPModel).where(ODPModel.kode_odp.in_(odp_codes_to_find)))
-    odp_map = {o.kode_odp: o for o in odp_q.scalars().all()}
-
-    # Ambil semua data teknis yang sudah ada untuk pelanggan yang ditemukan
-    pelanggan_ids_found = [p.id for p in pelanggan_map.values()]
-    existing_teknis_q = await db.execute(
-        select(DataTeknisModel.pelanggan_id).where(DataTeknisModel.pelanggan_id.in_(pelanggan_ids_found))
-    )
-    existing_teknis_pelanggan_ids = set(existing_teknis_q.scalars().all())
-    # --- AKHIR OPTIMISASI ---
-
-    errors = []
-    data_to_create = []
-    processed_emails = set()
-
-    for row_num, row in enumerate(reader, start=2):
-        try:
-            # 1. Validasi format baris menggunakan Pydantic dengan alias 'olt'
-            data_import = DataTeknisImport.model_validate(row)
-            email = data_import.email_pelanggan.lower().strip()
-
-            # 2. Validasi dari data yang sudah di-prefetch (tanpa query baru)
-            pelanggan = pelanggan_map.get(email)
-            if not pelanggan:
-                errors.append(f"Baris {row_num}: Pelanggan dengan email '{email}' tidak ditemukan.")
-                continue
-
-            # Cek duplikasi email di file & apakah pelanggan sudah punya data teknis
-            if email in processed_emails:
-                errors.append(f"Baris {row_num}: Email '{email}' duplikat di dalam file.")
-                continue
-            if pelanggan.id in existing_teknis_pelanggan_ids:
-                errors.append(f"Baris {row_num}: Pelanggan '{pelanggan.nama}' sudah memiliki data teknis.")
-                continue
-
-            # 3. Validasi Relasi ke Mikrotik Server (OLT)
-            mikrotik_server = server_map.get(data_import.nama_mikrotik_server)
-            if not mikrotik_server:
-                errors.append(
-                    f"Baris {row_num}: OLT/Mikrotik Server dengan nama '{data_import.nama_mikrotik_server}' tidak ditemukan."
-                )
-                continue
-
-            # 4. Validasi Relasi ke ODP (jika diisi)
-            odp_id = None
-            if data_import.kode_odp:
-                odp = odp_map.get(data_import.kode_odp)
-                if not odp:
-                    errors.append(f"Baris {row_num}: ODP dengan kode '{data_import.kode_odp}' tidak ditemukan.")
-                    continue
-                odp_id = odp.id
-
-            # 5. Siapkan data untuk disimpan ke database
-            teknis_data_dict = data_import.model_dump(exclude={"email_pelanggan", "nama_mikrotik_server", "kode_odp"})
-
-            teknis_data_dict["pelanggan_id"] = pelanggan.id
-            teknis_data_dict["mikrotik_server_id"] = mikrotik_server.id
-            teknis_data_dict["odp_id"] = odp_id
-
-            # INI BAGIAN PENTING: Simpan NAMA server ke kolom 'olt' untuk ditampilkan
-            teknis_data_dict["olt"] = mikrotik_server.name
-
-            data_to_create.append(DataTeknisModel(**teknis_data_dict))
-            processed_emails.add(email)
-
-        except ValidationError as e:
-            error_details = "; ".join([f"{err['loc'][0]}: {err['msg']}" for err in e.errors()])
-            errors.append(f"Baris {row_num}: {error_details}")
-        except Exception as e:
-            errors.append(f"Baris {row_num}: Terjadi error tak terduga - {repr(e)}")
-
-    if errors:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail={"message": f"Ditemukan {len(errors)} kesalahan.", "errors": errors},
-        )
-
-    if not data_to_create:
-        raise HTTPException(status_code=400, detail="Tidak ada data valid untuk diimpor.")
-
-    try:
-        db.add_all(data_to_create)
-        await db.commit()
-    except Exception as e:
-        await db.rollback()
-        logger.error(f"Database error during import: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Gagal menyimpan ke database: {repr(e)}")
-
-    return {"message": f"Berhasil mengimpor {len(data_to_create)} data teknis baru."}
+    """Mengimpor data teknis dari file CSV dengan validasi relasi."""
+    service = DataTeknisService(db)
+    return await service.import_from_csv(file)
 
 
 # ==========================================================
@@ -1062,86 +466,8 @@ async def get_available_profiles(
     1. Saat EDIT, ia akan menggunakan server yang sudah tersimpan di data teknis.
     2. Saat CREATE, ia akan menggunakan server yang dipilih di form (dikirim via query param).
     """
-    # 1. Ambil paket layanan (tidak berubah)
-    paket = await db.get(PaketLayananModel, paket_layanan_id)
-    if not paket:
-        raise HTTPException(status_code=404, detail="Paket Layanan tidak ditemukan")
-
-    # 2. Coba cari Data Teknis yang sudah ada untuk pelanggan ini (untuk mode EDIT)
-    data_teknis_stmt = select(DataTeknisModel).where(DataTeknisModel.pelanggan_id == pelanggan_id)
-    data_teknis = (await db.execute(data_teknis_stmt)).scalar_one_or_none()
-
-    # 3. Tentukan ID server yang akan digunakan
-    server_id_to_use = None
-    if data_teknis and data_teknis.mikrotik_server_id:
-        # Prioritas 1: Gunakan ID dari data teknis yang sudah ada (mode EDIT)
-        server_id_to_use = data_teknis.mikrotik_server_id
-        logger.info(f"Mode Edit: Menggunakan server ID {server_id_to_use} dari database.")
-    elif mikrotik_server_id:
-        # Prioritas 2: Gunakan ID dari query param (mode CREATE)
-        server_id_to_use = mikrotik_server_id
-        logger.info(f"Mode Create: Menggunakan server ID {server_id_to_use} dari form.")
-    else:
-        # Jika tidak ada data teknis DAN tidak ada ID dari form, kita tidak bisa lanjut.
-        logger.warning(
-            f"Tidak dapat menentukan server Mikrotik untuk pelanggan ID {pelanggan_id}. Data teknis tidak ada dan mikrotik_server_id tidak diberikan."
-        )
-        return []
-
-    # 4. Ambil info server Mikrotik berdasarkan ID yang sudah ditentukan
-    mikrotik_server_info = await db.get(MikrotikServerModel, server_id_to_use)
-    if not mikrotik_server_info:
-        logger.error(f"Server Mikrotik dengan ID {server_id_to_use} tidak ditemukan di database.")
-        raise HTTPException(
-            status_code=404,
-            detail=f"Server Mikrotik untuk pelanggan ini tidak ditemukan.",
-        )
-
-    # --- Logika selanjutnya sama, tapi sekarang menggunakan server yang PASTI BENAR ---
-    kecepatan_str = f"{paket.kecepatan}Mbps"
-
-    api, connection = mikrotik_service.get_api_connection(mikrotik_server_info)
-    if not api:
-        raise HTTPException(
-            status_code=503,
-            detail=f"Tidak dapat terhubung ke server Mikrotik {mikrotik_server_info.name}",
-        )
-
-    try:
-        all_profiles_on_router = mikrotik_service.get_all_ppp_profiles(api)
-        relevant_profiles = [p for p in all_profiles_on_router if kecepatan_str in p]
-
-        if not relevant_profiles:
-            logger.info(f"Tidak ada profile dengan '{kecepatan_str}' ditemukan di Mikrotik.")
-            return []
-
-        # Active connections hanya menampilkan user yang sedang online
-        # PPPoE secrets menampilkan SEMUA user yang terdaftar (online maupun offline)
-        ppp_secrets = mikrotik_service.get_all_ppp_secrets(api)
-        secret_profile_names = [secret.get("profile") for secret in ppp_secrets if "profile" in secret]
-        profile_usage_map = Counter(secret_profile_names)
-
-        response_data = []
-        for profile_name in relevant_profiles:
-            response_data.append(
-                ProfileUsage(
-                    profile_name=profile_name,
-                    usage_count=profile_usage_map.get(profile_name, 0),
-                )
-            )
-
-        response_data.sort(key=lambda x: x.profile_name)
-        return response_data
-
-    except Exception as e:
-        logger.error(f"Terjadi error saat mengambil data profile dari Mikrotik: {e}")
-        raise HTTPException(status_code=500, detail="Gagal memproses data dari Mikrotik.")
-    finally:
-        if connection:
-            logger.info("Menutup koneksi Mikrotik.")
-            # Gunakan connection pooling untuk menutup koneksi
-            mikrotik_pool = mikrotik_service.mikrotik_pool
-            mikrotik_pool.return_connection(connection, mikrotik_server_info.host_ip, int(mikrotik_server_info.port))
+    service = DataTeknisService(db)
+    return await service.get_available_profiles(paket_layanan_id, pelanggan_id, mikrotik_server_id)
 
 
 # Perbarui endpoint lama untuk menjaga kompatibilitas, tapi berikan peringatan
@@ -1205,125 +531,6 @@ async def get_available_profiles_legacy(
 
 @router.get("/last-ip/{mikrotik_server_id}")
 async def get_last_used_ip(mikrotik_server_id: int, db: AsyncSession = Depends(get_db), current_user: UserModel = Depends(get_current_active_user)):
-    """
-    Mendapatkan IP terakhir yang digunakan dari server Mikrotik tertentu.
-    """
-    # Ambil server Mikrotik untuk validasi dan koneksi
-    mikrotik_server = await db.get(MikrotikServerModel, mikrotik_server_id)
-    if not mikrotik_server:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=f"Server Mikrotik dengan id {mikrotik_server_id} tidak ditemukan."
-        )
-
-    # Ambil semua PPP Secrets dari Mikrotik dan ekstrak IP terakhir
-    api, connection = mikrotik_service.get_api_connection(mikrotik_server)
-    if not api:
-        # Jika tidak bisa terhubung ke Mikrotik, kembalikan data dari database
-        query = (
-            select(DataTeknisModel)
-            .where(DataTeknisModel.mikrotik_server_id == mikrotik_server_id)
-            .order_by(DataTeknisModel.ip_pelanggan.desc())
-            .limit(1)
-        )
-
-        result = await db.execute(query)
-        last_data_teknis = result.scalar_one_or_none()
-
-        if last_data_teknis and last_data_teknis.ip_pelanggan:
-            # Ekstrak angka terakhir dari IP
-            ip_parts = last_data_teknis.ip_pelanggan.split(".")
-            last_octet = int(ip_parts[-1]) if len(ip_parts) >= 1 else 0
-
-            return {
-                "last_ip": last_data_teknis.ip_pelanggan,
-                "last_octet": last_octet,
-                "message": f"IP terakhir (dari database): {last_data_teknis.ip_pelanggan}",
-                "server_name": mikrotik_server.name,
-                "source": "database",
-            }
-        else:
-            return {
-                "last_ip": None,
-                "last_octet": 0,
-                "message": f"Belum ada IP yang tercatat di server '{mikrotik_server.name}' (koneksi Mikrotik tidak tersedia)",
-                "server_name": mikrotik_server.name,
-                "source": "database",
-            }
-
-    try:
-        # Ambil semua PPP Secrets dari Mikrotik
-        try:
-            ppp_secrets = mikrotik_service.get_all_ppp_secrets(api)
-
-            if ppp_secrets:
-                # Ekstrak IP yang digunakan dari PPP Secrets
-                active_ips = []
-                for secret in ppp_secrets:
-                    if "remote-address" in secret:
-                        ip = secret["remote-address"]
-                        # Pastikan format IP valid
-                        try:
-                            # Validasi format IP sederhana
-                            ip_parts = ip.split(".")
-                            if len(ip_parts) == 4 and all(part.isdigit() and 0 <= int(part) <= 255 for part in ip_parts):
-                                active_ips.append(ip)
-                        except:
-                            continue  # Lewati jika format IP tidak valid
-
-                if active_ips:
-                    # Urutkan IP berdasarkan angka terakhir (oktet ke-4) secara menurun
-                    active_ips.sort(key=lambda ip: int(ip.split(".")[-1]), reverse=True)
-                    last_ip = active_ips[0]
-
-                    # Ekstrak angka terakhir dari IP
-                    ip_parts = last_ip.split(".")
-                    last_octet = int(ip_parts[-1]) if len(ip_parts) >= 1 else 0
-
-                    return {
-                        "last_ip": last_ip,
-                        "last_octet": last_octet,
-                        "message": f"IP terakhir di PPP Secrets: {last_ip}",
-                        "server_name": mikrotik_server.name,
-                        "source": "mikrotik",
-                    }
-        except Exception as e:
-            logger.error(f"Gagal mengambil PPP Secrets dari Mikrotik: {e}")
-            # Jika gagal mengambil dari Mikrotik, lanjutkan ke database
-
-        # Jika tidak ada PPP Secrets atau tidak ada IP valid, coba dari database
-        query = (
-            select(DataTeknisModel)
-            .where(DataTeknisModel.mikrotik_server_id == mikrotik_server_id)
-            .order_by(DataTeknisModel.ip_pelanggan.desc())
-            .limit(1)
-        )
-
-        result = await db.execute(query)
-        last_data_teknis = result.scalar_one_or_none()
-
-        if last_data_teknis and last_data_teknis.ip_pelanggan:
-            # Ekstrak angka terakhir dari IP
-            ip_parts = last_data_teknis.ip_pelanggan.split(".")
-            last_octet = int(ip_parts[-1]) if len(ip_parts) >= 1 else 0
-
-            return {
-                "last_ip": last_data_teknis.ip_pelanggan,
-                "last_octet": last_octet,
-                "message": f"IP terakhir (dari database): {last_data_teknis.ip_pelanggan}",
-                "server_name": mikrotik_server.name,
-                "source": "database",
-            }
-        else:
-            return {
-                "last_ip": None,
-                "last_octet": 0,
-                "message": f"Belum ada IP aktif di PPP Secrets atau database server '{mikrotik_server.name}'",
-                "server_name": mikrotik_server.name,
-                "source": "mikrotik",
-            }
-
-    finally:
-        if connection:
-            # Gunakan connection pooling untuk menutup koneksi
-            mikrotik_pool = mikrotik_service.mikrotik_pool
-            mikrotik_pool.return_connection(connection, mikrotik_server.host_ip, int(mikrotik_server.port))
+    """Mendapatkan IP terakhir yang digunakan dari server Mikrotik tertentu."""
+    service = DataTeknisService(db)
+    return await service.get_last_used_ip(mikrotik_server_id)

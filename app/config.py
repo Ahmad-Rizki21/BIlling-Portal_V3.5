@@ -178,6 +178,10 @@ class Settings(BaseSettings):
     # HARUS DIUBAH DI PRODUCTION! Pakai Fernet key yang valid
     ENCRYPTION_KEY: str = "default_encryption_key_change_in_production"
 
+    # Prefix untuk semua endpoint API (contoh: "/api")
+    # Digunakan jika aplikasi berjalan di belakang reverse proxy seperti Nginx
+    API_PREFIX: str = "/api"
+
     # ====================================================================
     # KONFIGURASI ALIBABA CLOUD AI
     # ====================================================================

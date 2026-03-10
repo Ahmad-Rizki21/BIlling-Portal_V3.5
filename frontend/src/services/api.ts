@@ -5,21 +5,14 @@ import router from '@/router';
 import { getEncryptedToken, removeEncryptedToken, setEncryptedToken } from '@/utils';
 import { errorStorage, networkErrorRateLimit } from './errorStorage';
 
-// Konfigurasi instance axios
-// const apiClient = axios.create({
-//   // Deteksi environment: Electron app gunakan production server, development gunakan localhost
-//   baseURL: window.electronAPI
-//     ? 'https://billingftth.my.id/api' // Production server untuk Electron app (MENGGUNAKAN /api karena server di-proxy Nginx)
-//     : import.meta.env.PROD
-//       ? '/api' // Build untuk upload ke server
-//       : 'http://127.0.0.1:8000', // Local development
-//   timeout: 30000,
-// });
-
+// Konfigurasi instance axios yang maintainable
 const apiClient = axios.create({
-  // Gunakan environment variable untuk production
-  // baseURL: '/api', // Jika ingin build lalu Upload ke Server
-  baseURL: 'http://127.0.0.1:8000', // Local
+  // Deteksi environment otomatis:
+  baseURL: window.electronAPI
+    ? 'https://billingftth.my.id/api' // Mode Electron: Selalu ke Production
+    : import.meta.env.PROD
+      ? '/api' // Mode Production (Web): Proxy Nginx
+      : 'http://127.0.0.1:8000/api', // Mode Development (Local) - SEKARANG MENGGUNAKAN /api
   timeout: 30000,
 });
 

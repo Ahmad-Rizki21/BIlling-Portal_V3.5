@@ -7,49 +7,24 @@ from fastapi import (
     File,
     Query,
 )
-from pydantic import BaseModel, Field
-from pydantic_core import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
-from sqlalchemy.orm import joinedload, selectinload
 from typing import List, Optional, Dict, Any
-from datetime import datetime, date
+from datetime import date
+from fastapi.responses import StreamingResponse
+import logging
 import io
 import csv
-import chardet
-import re
-from dateutil import parser
-from fastapi.responses import StreamingResponse
-from sqlalchemy import func, or_
 
-from ..models.pelanggan import Pelanggan as PelangganModel
-from ..database import AsyncSessionLocal
-from ..models.mikrotik_server import MikrotikServer as MikrotikServerModel
-from ..models.paket_layanan import PaketLayanan as PaketLayananModel
-from ..services import mikrotik_service
-from ..websocket_manager import manager
-from ..models.user import User as UserModel
-from ..models.role import Role as RoleModel
+from ..database import get_db
 from ..auth import get_current_active_user
-from ..models.odp import ODP as ODPModel
-from ..models.harga_layanan import HargaLayanan as HargaLayananModel
-from ..models.data_teknis import DataTeknis as DataTeknisModel
-from ..models.langganan import Langganan as LanggananModel
-from ..models.invoice import Invoice as InvoiceModel
-from ..models.paket_layanan import PaketLayanan as PaketLayananModel
+from ..models.user import User as UserModel
 from ..schemas.pelanggan import (
     PaginatedPelangganResponse,
-    PaginationInfo,
     Pelanggan as PelangganSchema,
     PelangganCreate,
     PelangganUpdate,
-    PelangganImport,
-    IPCheckRequest,
-    IPCheckResponse,
 )
-import logging
-from ..database import get_db
-from ..middleware.rate_limit import rate_limiter, login_rate_limit
+from ..services.pelanggan_service import PelangganService, get_pelanggan_service
 from ..utils.export import create_pelanggan_export_response
 
 router = APIRouter(
@@ -61,936 +36,232 @@ router = APIRouter(
 logger = logging.getLogger(__name__)
 
 
-async def auto_update_langganan(db: AsyncSession, pelanggan_id: int, old_layanan: str, new_layanan: str, id_brand: str) -> None:
-    """
-    Otomatis update langganan aktif pelanggan ketika layanan diubah
-
-    Logic sederhana:
-    1. Cari langganan aktif untuk pelanggan
-    2. Cari paket layanan yang sesuai dengan layanan baru
-    3. Update langganan ke paket baru dan harga baru
-    """
-    try:
-        # 1. Cari langganan aktif pelanggan
-        # FIX: Include Suspended status so updates apply to suspended users too
-        langganan_query = (
-            select(LanggananModel)
-            .where(LanggananModel.pelanggan_id == pelanggan_id)
-            .where(LanggananModel.status.in_(["Aktif", "Suspended"]))
-            .options(joinedload(LanggananModel.paket_layanan))
-        )
-        langganan_result = await db.execute(langganan_query)
-        # Handle multiple results just in case (e.g. if dirty data), pick the most recent
-        active_langganans = langganan_result.scalars().all()
-        active_langganan = active_langganans[0] if active_langganans else None
-
-        if not active_langganan:
-            logger.warning(f"Pelanggan {pelanggan_id} tidak memiliki langganan aktif atau suspended")
-            return
-
-        old_paket_name = active_langganan.paket_layanan.nama_paket if active_langganan.paket_layanan else "Unknown"
-
-        # 2. Cari paket layanan yang sesuai dengan layanan baru
-        # Prioritas 1: Exact string match
-        paket_query = (
-            select(PaketLayananModel)
-            .where(PaketLayananModel.id_brand == id_brand)
-            .where(PaketLayananModel.nama_paket.ilike(f"%{new_layanan}%"))
-        )
-        paket_result = await db.execute(paket_query)
-        new_paket = paket_result.scalars().first() # Use first() to avoid crash if multiple matches
-
-        if not new_paket:
-            # Coba extract speed dari layanan
-            speed_match = re.search(r'(\d+)\s*Mbps', new_layanan, re.IGNORECASE)
-            if speed_match:
-                speed = speed_match.group(1)
-                # Prioritas 2: Regex match "X Mbps" specifically to avoid "10" matching "100"
-                paket_query_speed = (
-                    select(PaketLayananModel)
-                    .where(PaketLayananModel.id_brand == id_brand)
-                    .where(PaketLayananModel.nama_paket.ilike(f"%{speed} Mbps%"))
-                )
-                paket_result_speed = await db.execute(paket_query_speed)
-                new_paket = paket_result_speed.scalars().first()
-                
-                # Prioritas 3: Loose match if specific "X Mbps" failed
-                if not new_paket:
-                     paket_query_loose = (
-                        select(PaketLayananModel)
-                        .where(PaketLayananModel.id_brand == id_brand)
-                        .where(PaketLayananModel.nama_paket.ilike(f"%{speed}%"))
-                    )
-                     paket_result_loose = await db.execute(paket_query_loose)
-                     new_paket = paket_result_loose.scalars().first()
-
-        if not new_paket:
-            logger.error(f"Tidak menemukan paket untuk layanan '{new_layanan}' (brand: {id_brand})")
-            return
-
-        # 3. Update langganan ke paket baru
-        active_langganan.paket_layanan_id = new_paket.id
-
-        # Update harga dengan pajak dari brand
-        brand_query = select(HargaLayananModel).where(HargaLayananModel.id_brand == id_brand)
-        brand_result = await db.execute(brand_query)
-        brand_info = brand_result.scalar_one_or_none()
-
-        if brand_info:
-            pajak_rate = float(brand_info.pajak) / 100
-            new_harga = round(float(new_paket.harga) * (1 + pajak_rate), 0)
-            active_langganan.harga_awal = new_harga
-
-        db.add(active_langganan)
-        logger.info(f"Update langganan: Pelanggan {pelanggan_id} {old_paket_name} â†’ {new_paket.nama_paket}")
-
-    except Exception as e:
-        logger.error(f"Gagal auto-update langganan pelanggan {pelanggan_id}: {e}", exc_info=True)
-        # Jangan gagalkan update pelanggan utama
-
-
-# --- Skema Respons Baru ---
-class PelangganListResponse(BaseModel):
-    data: List[PelangganSchema]
-    total_count: int
-
-
-# POST /pelanggan - Tambah pelanggan baru
-# Buat nambahin data pelanggan baru ke sistem
-# Request body: data pelanggan (nama, email, no_telp, alamat, dll)
-# Response: data pelanggan yang baru dibuat
-# Validation: cek duplikasi email dan KTP
-# Error handling: rollback transaction kalau ada error, kirim notifikasi ke tim NOC/CS
+# CREATE /pelanggan/ - Membuat pelanggan baru
 @router.post("/", response_model=PelangganSchema, status_code=status.HTTP_201_CREATED)
 async def create_pelanggan(
-    pelanggan: PelangganCreate, db: AsyncSession = Depends(get_db), current_user: UserModel = Depends(get_current_active_user)
+    pelanggan: PelangganCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user),
+    service: PelangganService = Depends(get_pelanggan_service)
 ):
     """
-    Create pelanggan dengan database transaction untuk data consistency.
-    âœ… TRANSACTION-SAFE: Semua operasi atomic atau rollback semua.
+    Membuat pelanggan baru. 
+    Menggunakan service layer untuk business logic dan integrasi notifikasi.
     """
-    try:
-        # 1. Create pelanggan record
-        db_pelanggan = PelangganModel(**pelanggan.model_dump())
-        db.add(db_pelanggan)
-
-        # Flush untuk dapat ID tanpa commit
-        await db.flush()
-        await db.refresh(db_pelanggan, attribute_names=["harga_layanan", "data_teknis"])
-
-        # 2. Prepare notification data (masih dalam transaction)
-        target_roles = ["NOC", "CS", "Admin"]
-        query = select(UserModel.id).join(RoleModel).where(func.lower(RoleModel.name).in_([r.lower() for r in target_roles]))
-        result = await db.execute(query)
-        target_user_ids = result.scalars().all()
-
-        # 3. Prepare notification payload
-        notification_payload = None
-        if target_user_ids:
-            pelanggan_nama = db_pelanggan.nama if db_pelanggan else "N/A"
-            notification_payload = {
-                "type": "new_customer_for_noc",
-                "message": f"Pelanggan baru '{pelanggan_nama}' telah ditambahkan. Segera buatkan Data Teknis.",
-                "timestamp": datetime.now().isoformat(),
-                "data": {
-                    "pelanggan_id": db_pelanggan.id,
-                    "pelanggan_nama": pelanggan_nama,
-                    "alamat": db_pelanggan.alamat,
-                    "no_telp": db_pelanggan.no_telp,
-                    "timestamp": datetime.now().isoformat(),
-                },
-            }
-
-        # Commit transaction
-        await db.commit()
-
-    except Exception as e:
-        # Rollback transaction jika exception terjadi
-        await db.rollback()
-        logger.error(f"âŒ Transaction failed during pelanggan creation: {e}")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Gagal membuat pelanggan: {str(e)}")
-
-    # Kirim notifications setelah transaction berhasil commit
-    # âœ… SAFE: Pelanggan sudah committed, notification failure tidak affect data
-    if notification_payload:
-        try:
-            await manager.broadcast_to_roles(notification_payload, list(target_user_ids))
-            logger.info(f"âœ… Notification sent for new pelanggan: {db_pelanggan.nama}")
-        except Exception as e:
-            logger.warning(f"âš ï¸  Notification failed but pelanggan created: {e}")
-            # Don't raise exception - pelanggan sudah berhasil dibuat
-
-    return db_pelanggan
+    return await service.create_pelanggan(pelanggan.model_dump())
 
 
-# GET /pelanggan - Ambil semua data pelanggan
-# Endpoint ini buat nampilin list pelanggan dengan fitur pencarian dan filter
-# Query parameters:
-# - skip: offset untuk pagination (default: 0)
-# - limit: jumlah data per halaman (default: 15)
-# - search: cari pelanggan berdasarkan nama, email, atau no_telp
-# - alamat: filter berdasarkan alamat
-# - id_brand: filter berdasarkan brand/provider
-# - fields: pilih field yang mau ditampilin (biar response lebih kecil)
-# - for_invoice_selection: kalo true, ambil semua data tanpa limit
-# Response: list pelanggan dengan total count
-# Performance optimization: eager loading biar ga N+1 query
-@router.get("/", response_model=PelangganListResponse)
+# GET /pelanggan/ - Ambil daftar pelanggan dengan filter
+@router.get("/", response_model=List[PelangganSchema])
 async def read_all_pelanggan(
     skip: int = 0,
-    limit: Optional[int] = 15,
+    limit: Optional[int] = Query(default=3000, le=10000),
     search: Optional[str] = None,
     alamat: Optional[str] = None,
     id_brand: Optional[str] = None,
-    layanan: Optional[str] = Query(None, description="Filter berdasarkan tipe layanan (e.g., 'Internet 10 Mbps')"),
-    tgl_instalasi_from: Optional[date] = Query(None, description="Filter tanggal instalasi mulai dari (format: YYYY-MM-DD)"),
-    tgl_instalasi_to: Optional[date] = Query(None, description="Filter tanggal instalasi sampai dengan (format: YYYY-MM-DD)"),
-    fields: Optional[str] = Query(None, description="Comma-separated field names to include (e.g., 'id,nama,email,no_telp')"),
-    for_invoice_selection: bool = False,
-    use_minimal_loading: bool = Query(False, description="Use minimal eager loading for faster response (skips langganan and paket_layanan loading)"),
-    connection_status: Optional[str] = Query(None, description="Filter by connection status: 'unconfigured' (no data teknis), 'configured' (has data teknis)"),
+    layanan: Optional[str] = None,
+    tgl_instalasi_from: Optional[date] = None,
+    tgl_instalasi_to: Optional[date] = None,
+    connection_status: Optional[str] = Query(None, description="configured, unconfigured"),
+    use_minimal_loading: bool = Query(False, description="Loading minimal data (faster)"),
+    for_invoice_selection: bool = Query(False, description="Loading minimal data for invoice selection"),
     db: AsyncSession = Depends(get_db),
     current_user: UserModel = Depends(get_current_active_user),
+    service: PelangganService = Depends(get_pelanggan_service)
 ):
-    """
-    Mengambil daftar pelanggan dengan paginasi, filter, field selection, dan total jumlah data.
-    API Response Optimization: Field filtering untuk mengurangi response size.
-    """
-    # Jika untuk invoice selection, load data dengan limit untuk mencegah overload
-    if for_invoice_selection:
-        # Performance optimization: Batasi maksimal 2000 data untuk invoice selection
-        # untuk mencegah delay saat data pelanggan sudah >1000
-        limit = min(limit if limit is not None else 2000, 2000)
-        skip = 0
-
-    base_query = select(PelangganModel)
-    count_query = select(func.count(PelangganModel.id))
-
-    # Parse field selection untuk response optimization
-    selected_fields = None
-    if fields:
-        selected_fields = [field.strip() for field in fields.split(",") if field.strip()]
-
-    if search:
-        search_term = f"%{search}%"
-        filter_condition = or_(
-            PelangganModel.nama.ilike(search_term),
-            PelangganModel.email.ilike(search_term),
-            PelangganModel.no_telp.ilike(search_term),
-        )
-        base_query = base_query.where(filter_condition)
-        count_query = count_query.where(filter_condition)
-
-    if alamat:
-        base_query = base_query.where(PelangganModel.alamat == alamat)
-        count_query = count_query.where(PelangganModel.alamat == alamat)
-
-    if id_brand:
-        base_query = base_query.where(PelangganModel.id_brand == id_brand)
-        count_query = count_query.where(PelangganModel.id_brand == id_brand)
-
-    if layanan:
-        base_query = base_query.where(PelangganModel.layanan == layanan)
-        count_query = count_query.where(PelangganModel.layanan == layanan)
-
-    if tgl_instalasi_from:
-        base_query = base_query.where(PelangganModel.tgl_instalasi >= tgl_instalasi_from)
-        count_query = count_query.where(PelangganModel.tgl_instalasi >= tgl_instalasi_from)
-
-    if tgl_instalasi_to:
-        base_query = base_query.where(PelangganModel.tgl_instalasi <= tgl_instalasi_to)
-        count_query = count_query.where(PelangganModel.tgl_instalasi <= tgl_instalasi_to)
-
-    if connection_status:
-        if connection_status == "unconfigured":
-            # Filter customers who DO NOT have a DataTeknis record
-            # Use outerjoin and check for NULL id in DataTeknis
-            base_query = base_query.outerjoin(PelangganModel.data_teknis).where(DataTeknisModel.id == None)
-            count_query = count_query.outerjoin(PelangganModel.data_teknis).where(DataTeknisModel.id == None)
-        elif connection_status == "configured":
-            # Filter customers who HAVE a DataTeknis record
-            base_query = base_query.join(PelangganModel.data_teknis)
-            count_query = count_query.join(PelangganModel.data_teknis)
-
-    # Eksekusi query untuk total count
-    total_count_result = await db.execute(count_query)
-    total_count = total_count_result.scalar_one()
-
-    # PERFORMANCE OPTIMIZATION: Conditional eager loading berdasarkan use_minimal_loading dan field selection
-    # Minimal loading untuk invoice selection atau saat use_minimal_loading=True
-    # untuk mencegah query berat saat input data pelanggan
-    if use_minimal_loading or for_invoice_selection:
-        # Minimal loading: Hanya load data_teknis dan harga_layanan
-        # Skip langganan dan paket_layanan untuk performa lebih baik
-        if selected_fields and not any(f in selected_fields for f in ['data_teknis', 'harga_layanan']):
-            # Jika field tidak include relasi, skip eager loading sama sekali
-            data_query = base_query.order_by(PelangganModel.id.desc())
-        else:
-            data_query = base_query.options(
-                joinedload(PelangganModel.data_teknis),
-                joinedload(PelangganModel.harga_layanan),
-                # Skip joinedload(PelangganModel.langganan).joinedload(LanggananModel.paket_layanan)
-            ).order_by(PelangganModel.id.desc())
-    else:
-        # Full loading: Load semua relasi untuk view yang lengkap
-        if selected_fields and not any(f in selected_fields for f in ['data_teknis', 'harga_layanan', 'langganan']):
-            # Jika field tidak include relasi, skip eager loading
-            data_query = base_query.order_by(PelangganModel.id.desc())
-        else:
-            data_query = base_query.options(
-                joinedload(PelangganModel.data_teknis),
-                joinedload(PelangganModel.harga_layanan),
-                selectinload(PelangganModel.langganan).joinedload(LanggananModel.paket_layanan),
-            ).order_by(PelangganModel.id.desc())
-
-    if limit is not None:
-        data_query = data_query.offset(skip).limit(limit)
-
-    result = await db.execute(data_query)
-    # FIX: Tambahkan .unique() untuk collection eager loading
-    pelanggan_list = result.scalars().unique().all()
-
-    # API Response Optimization: Apply field filtering to reduce response size
-    if selected_fields:
-        filtered_data = []
-        for pelanggan in pelanggan_list:
-            filtered_item = {}
-            for field in selected_fields:
-                if hasattr(pelanggan, field):
-                    filtered_item[field] = getattr(pelanggan, field)
-            filtered_data.append(filtered_item)
-        return PelangganListResponse(data=filtered_data, total_count=total_count)
-
-    return PelangganListResponse(data=list(pelanggan_list), total_count=total_count)
+    """Mengambil daftar semua pelanggan dengan berbagai filter pencarian."""
+    filters = {
+        "skip": skip, "limit": limit, "search": search, "alamat": alamat,
+        "id_brand": id_brand, "layanan": layanan,
+        "tgl_instalasi_from": tgl_instalasi_from, "tgl_instalasi_to": tgl_instalasi_to,
+        "connection_status": connection_status, "use_minimal_loading": use_minimal_loading,
+        "for_invoice_selection": for_invoice_selection
+    }
+    data, _ = await service.get_all_pelanggan(filters)
+    return data
 
 
-# GET /pelanggan/export - Export data pelanggan ke CSV atau Excel
-# Buat export data pelanggan ke file dengan format yang dipilih (CSV/Excel) dengan filter yang sama seperti list
-# Query parameters:
-# - skip: offset untuk pagination (default: 0)
-# - limit: maksimal 50,000 records per export (biar ga crash)
-# - search: filter pencarian (sama seperti di list)
-# - alamat: filter berdasarkan alamat
-# - id_brand: filter berdasarkan brand/provider
-# - format: format export (csv atau excel), default csv
-# Response: file export dengan semua field pelanggan
-# Performance optimization: pagination dan eager loading biar ga memory issues
-# Format file: CSV dengan BOM atau Excel dengan formatting, timestamp di filename
+# GET /pelanggan/export - Export data pelanggan ke CSV/Excel
 @router.get("/export", response_class=StreamingResponse)
 async def export_data(
     skip: int = 0,
-    limit: int = Query(default=5000, le=50000, description="Maximum 50,000 records per export"),  # Max 50k records
+    limit: int = 3000,
     search: Optional[str] = None,
     alamat: Optional[str] = None,
     id_brand: Optional[str] = None,
-    format: str = Query("csv", description="Export format: csv atau excel"),
+    layanan: Optional[str] = None,
+    format: str = Query("csv"),
     db: AsyncSession = Depends(get_db),
     current_user: UserModel = Depends(get_current_active_user),
+    service: PelangganService = Depends(get_pelanggan_service)
 ):
-    """
-    Mengekspor data pelanggan ke CSV atau Excel, dengan mempertimbangkan filter yang aktif.
-    PERFORMANCE OPTIMIZATION: Added pagination to prevent memory issues with large datasets.
-    """
-    # Validate format
-    if format.lower() not in ["csv", "excel", "xlsx"]:
-        raise HTTPException(status_code=400, detail="Format tidak valid. Pilih 'csv' atau 'excel'.")
+    """Mengekspor data pelanggan dengan data relasi ke format CSV atau Excel."""
+    filters = {
+        "skip": skip, "limit": min(limit, 10000), "search": search, "alamat": alamat,
+        "id_brand": id_brand, "layanan": layanan, "use_minimal_loading": True
+    }
+    data_list, _ = await service.get_all_pelanggan(filters)
+    
+    # Transform data for export
+    export_data = []
+    for d in data_list:
+        export_data.append({
+            "id": d.id,
+            "no_ktp": d.no_ktp,
+            "nama": d.nama,
+            "email": d.email,
+            "no_telp": d.no_telp,
+            "alamat": d.alamat,
+            "alamat_2": d.alamat_2,
+            "blok": d.blok,
+            "unit": d.unit,
+            "tgl_instalasi": d.tgl_instalasi.strftime('%Y-%m-%d') if d.tgl_instalasi else "",
+            "layanan": d.layanan,
+            "id_brand": d.id_brand,
+            "pppoe_id": d.data_teknis.id_pelanggan if d.data_teknis else "BELUM ADA",
+            "ip_pelanggan": d.data_teknis.ip_pelanggan if d.data_teknis else "BELUM ADA",
+        })
 
-    # PERFORMANCE MONITORING: Log export parameters (sanitized)
-    # Don't log potentially sensitive search terms or addresses
-    print(f"ðŸ“Š Exporting pelanggan {format}: skip={skip}, limit={limit}, id_brand={id_brand}")
-
-    # Apply pagination to prevent memory overload
-    # Optimized: Menambahkan eager loading untuk mencegah N+1 queries
-    query = (
-        select(PelangganModel)
-        .options(
-            joinedload(PelangganModel.harga_layanan),
-            joinedload(PelangganModel.data_teknis),
-            selectinload(PelangganModel.langganan).joinedload(LanggananModel.paket_layanan),
-        )
-        .order_by(PelangganModel.id.desc())
-        .offset(skip)
-        .limit(limit)
-    )
-
-    if search:
-        search_term = f"%{search}%"
-        query = query.where(
-            or_(
-                PelangganModel.nama.ilike(search_term),
-                PelangganModel.email.ilike(search_term),
-                PelangganModel.no_telp.ilike(search_term),
-            )
-        )
-    if alamat:
-        query = query.where(PelangganModel.alamat == alamat)
-    if id_brand:
-        query = query.where(PelangganModel.id_brand == id_brand)
-
-    result = await db.execute(query)
-    # FIX: Tambahkan .unique() untuk collection eager loading
-    pelanggan_list = result.scalars().unique().all()
-
-    # PERFORMANCE MONITORING: Log export results
-    print(f"âœ… Pelanggan export returning {len(pelanggan_list)} records")
-
-    if not pelanggan_list:
-        raise HTTPException(status_code=404, detail="Tidak ada data pelanggan untuk diekspor dengan filter yang diberikan.")
-
-    # Gunakan export utility yang sudah dioptimasi
-    return create_pelanggan_export_response(pelanggan_list, format.lower())
+    return create_pelanggan_export_response(export_data, format.lower())
 
 
-# GET /pelanggan/paginated - Ambil data pelanggan dengan pagination lengkap
-# Sama seperti GET /pelanggan tapi response-nya lebih detail pagination info-nya
-# Query parameters:
-# - skip: offset untuk pagination (min: 0)
-# - limit: jumlah data per halaman (min: 1, max: 100)
-# - search: cari pelanggan berdasarkan nama, email, atau no_telp
-# - alamat: filter berdasarkan alamat
-# - id_brand: filter berdasarkan ID Brand
-# Response: data pelanggan + pagination info (totalItems, currentPage, totalPages, hasNext, hasPrevious)
-# Performance optimization: eager loading untuk prevent N+1 queries
+# GET /pelanggan/paginated - Ambil daftar pelanggan dengan paginasi
 @router.get("/paginated", response_model=PaginatedPelangganResponse)
 async def read_pelanggan_paginated(
-    skip: int = Query(0, ge=0, description="Jumlah items untuk dilewati (offset)"),
-    limit: int = Query(15, ge=1, le=100, description="Jumlah items per halaman (maksimal 100)"),
-    search: Optional[str] = Query(None, description="Filter pencarian berdasarkan nama, email, atau no_telp"),
-    alamat: Optional[str] = Query(None, description="Filter berdasarkan alamat"),
-    id_brand: Optional[str] = Query(None, description="Filter berdasarkan ID Brand"),
+    page: int = Query(1, ge=1),
+    limit: int = Query(15, ge=1, le=100),
+    search: Optional[str] = None,
+    alamat: Optional[str] = None,
+    id_brand: Optional[str] = None,
+    layanan: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
     current_user: UserModel = Depends(get_current_active_user),
+    service: PelangganService = Depends(get_pelanggan_service)
 ):
-    logger.info(f"Mengambil data pelanggan dengan pagination: skip={skip}, limit={limit}")
-
-    try:
-        # OPTIMIZED: Query dengan selective eager loading untuk better performance
-        # Load dasar data pelanggan + yang penting-penting saja untuk list view
-        query = select(PelangganModel).options(
-            selectinload(PelangganModel.harga_layanan),  # Penting untuk brand info
-            selectinload(PelangganModel.data_teknis),   # Penting untuk status koneksi
-            # Langganan hanya di-load jika dibutuhkan (lazy loading untuk performance)
-        )
-
-        if search:
-            search_term = f"%{search}%"
-            query = query.where(
-                or_(
-                    PelangganModel.nama.ilike(search_term),
-                    PelangganModel.email.ilike(search_term),
-                    PelangganModel.no_telp.ilike(search_term),
-                )
-            )
-
-        if alamat:
-            query = query.where(PelangganModel.alamat == alamat)
-
-        if id_brand:
-            query = query.where(PelangganModel.id_brand == id_brand)
-
-        count_query = select(func.count()).select_from(query.order_by(None).subquery())
-        total_result = await db.execute(count_query)
-        total_items = total_result.scalar_one()
-
-        paginated_query = query.offset(skip).limit(limit).order_by(PelangganModel.id.desc())
-        result = await db.execute(paginated_query)
-        # FIX: Tambahkan .unique() untuk collection eager loading
-        pelanggan_list = result.scalars().unique().all()
-
-        total_pages = (total_items + limit - 1) // limit
-        current_page = (skip // limit) + 1 if limit > 0 else 1
-
-        pagination_info = PaginationInfo(
-            totalItems=total_items,
-            currentPage=current_page,
-            itemsPerPage=limit,
-            totalPages=total_pages,
-            hasNext=current_page < total_pages,
-            hasPrevious=current_page > 1,
-            startIndex=skip + 1,
-            endIndex=min(skip + len(pelanggan_list), total_items),
-        )
-
-        response = PaginatedPelangganResponse(
-            data=list(pelanggan_list),
-            pagination=pagination_info,
-            meta={
-                "displayInfo": f"Menampilkan {len(pelanggan_list)} dari {total_items} items (Halaman {current_page} dari {total_pages})"
-            },
-        )
-
-        logger.info(f"Berhasil mengambil {len(pelanggan_list)} pelanggan dari total {total_items}")
-        return response
-
-    except Exception as e:
-        logger.error(f"Gagal mengambil data pelanggan dengan pagination: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Gagal mengambil data pelanggan: {str(e)}",
-        )
+    """Mengambil daftar pelanggan dengan informasi paginasi lengkap."""
+    skip = (page - 1) * limit
+    filters = {
+        "skip": skip, "limit": limit, "search": search, "alamat": alamat,
+        "id_brand": id_brand, "layanan": layanan
+    }
+    data, total_count = await service.get_all_pelanggan(filters)
+    
+    total_pages = (total_count + limit - 1) // limit
+    pagination = {
+        "totalItems": total_count,
+        "currentPage": page,
+        "itemsPerPage": limit,
+        "totalPages": total_pages,
+        "hasNext": page < total_pages,
+        "hasPrevious": page > 1,
+        "startIndex": skip,
+        "endIndex": skip + len(data)
+    }
+    
+    return {"data": data, "pagination": pagination}
 
 
-# GET /pelanggan/{pelanggan_id} - Ambil detail pelanggan berdasarkan ID
-# Buat nampilin detail data pelanggan tertentu
-# Path parameters:
-# - pelanggan_id: ID pelanggan yang mau diambil
-# Response: data pelanggan lengkap dengan relasi (harga_layanan, data_teknis, langganan)
-# Error handling: 404 kalau pelanggan nggak ketemu
-# Performance optimization: eager loading biar ga N+1 query
+# GET /pelanggan/{pelanggan_id} - Ambil satu pelanggan
 @router.get("/{pelanggan_id}", response_model=PelangganSchema)
 async def read_pelanggan_by_id(
-    pelanggan_id: int, db: AsyncSession = Depends(get_db), current_user: UserModel = Depends(get_current_active_user)
+    pelanggan_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user),
+    service: PelangganService = Depends(get_pelanggan_service)
 ):
-    # OPTIMIZED: Query untuk pelanggan individual dengan comprehensive eager loading
-    query = (
-        select(PelangganModel)
-        .where(PelangganModel.id == pelanggan_id)
-        .options(
-            joinedload(PelangganModel.harga_layanan),
-            joinedload(PelangganModel.data_teknis),
-            joinedload(PelangganModel.langganan).joinedload(LanggananModel.paket_layanan),
-        )
-    )
-    result = await db.execute(query)
-    # FIX: Tambahkan .unique() untuk collection eager loading
-    db_pelanggan = result.scalars().unique().one_or_none()
-
-    if not db_pelanggan:
-        raise HTTPException(status_code=404, detail="Pelanggan tidak ditemukan")
-
-    return db_pelanggan
+    """Mengambil data lengkap satu pelanggan berdasarkan ID."""
+    data = await service.get_by_id_with_relations(pelanggan_id, ["harga_layanan", "data_teknis"])
+    if not data:
+        raise HTTPException(status_code=404, detail="Pelanggan not found")
+    return data
 
 
-# PATCH /pelanggan/{pelanggan_id} - Update data pelanggan
-# Buat update data pelanggan yang udah ada
-# Path parameters:
-# - pelanggan_id: ID pelanggan yang mau diupdate
-# Request body: field yang mau diupdate (cuma field yang diisi yang bakal keupdate)
-# Response: data pelanggan setelah diupdate
-# Validation: cek ID Brand dan Mikrotik Server kalau diubah
-# Error handling: 404 kalau pelanggan nggak ketemu, rollback transaction kalau error
-# Transaction safety: semua perubahan atomic atau rollback semua
+# PATCH /pelanggan/{pelanggan_id} - Update pelanggan
 @router.patch("/{pelanggan_id}", response_model=PelangganSchema)
 async def update_pelanggan(
     pelanggan_id: int,
     pelanggan_update: PelangganUpdate,
     db: AsyncSession = Depends(get_db),
     current_user: UserModel = Depends(get_current_active_user),
+    service: PelangganService = Depends(get_pelanggan_service)
 ):
-    """
-    Update pelanggan dengan database transaction untuk data consistency.
-    âœ… TRANSACTION-SAFE: Semua perubahan atomic atau rollback semua.
-    """
-    try:
-        # 1. Get existing pelanggan dengan eager loading
-        query = (
-            select(PelangganModel)
-            .where(PelangganModel.id == pelanggan_id)
-            .options(
-                joinedload(PelangganModel.harga_layanan),
-                joinedload(PelangganModel.data_teknis),
-            )
-        )
-        result = await db.execute(query)
-        db_pelanggan = result.scalar_one_or_none()
-
-        if not db_pelanggan:
-            raise HTTPException(status_code=404, detail="Pelanggan not found")
-
-        # 2. Prepare update data
-        update_data = pelanggan_update.model_dump(exclude_unset=True)
-        update_data.pop("harga_layanan", None)
-
-        # 3. Handle harga_layanan relationship update
-        if "id_brand" in update_data:
-            id_brand = update_data.pop("id_brand")
-            if id_brand:
-                harga_layanan_obj = await db.get(HargaLayananModel, id_brand)
-                if not harga_layanan_obj:
-                    raise HTTPException(
-                        status_code=404,
-                        detail=f"Harga Layanan dengan ID Brand {id_brand} tidak ditemukan.",
-                    )
-                db_pelanggan.harga_layanan = harga_layanan_obj
-            else:
-                # Type: Explicitly set to None for optional relationship
-                db_pelanggan.harga_layanan = None  # type: ignore
-
-        # 4. Handle mikrotik_server relationship update
-        if "mikrotik_server_id" in update_data:
-            mikrotik_server_id = update_data.pop("mikrotik_server_id")
-            if mikrotik_server_id:
-                mikrotik_server_obj = await db.get(MikrotikServerModel, mikrotik_server_id)
-                if not mikrotik_server_obj:
-                    raise HTTPException(
-                        status_code=404,
-                        detail=f"Mikrotik Server dengan ID {mikrotik_server_id} tidak ditemukan.",
-                    )
-                db_pelanggan.mikrotik_server = mikrotik_server_obj
-            else:
-                db_pelanggan.mikrotik_server = None  # type: ignore
-
-        # 5. Apply field updates
-        for key, value in update_data.items():
-            setattr(db_pelanggan, key, value)
-
-        # 6. Auto-update langganan if layanan changed
-        old_layanan = db_pelanggan.layanan
-        new_layanan = update_data.get("layanan")
-
-        if new_layanan:
-            logger.info(f"Auto-update langganan: Pelanggan {pelanggan_id} '{old_layanan}' â†’ '{new_layanan}'")
-
-        if new_layanan:
-            logger.info(f"ðŸ”„ Service update requested: Pelanggan {pelanggan_id} '{old_layanan}' â†’ '{new_layanan}', Brand: {db_pelanggan.id_brand}")
-            await auto_update_langganan(db, pelanggan_id, old_layanan, new_layanan, db_pelanggan.id_brand)
-        else:
-            logger.info(f"â„¹ï¸ No layanan field in update_data")
-
-        # 7. Mark for update
-        db.add(db_pelanggan)
-        await db.flush()  # Validate sebelum commit
-
-        # Commit transaction
-        await db.commit()
-
-        logger.info(f"âœ… Pelanggan {pelanggan_id} updated successfully")
-
-    except Exception as e:
-        # Rollback transaction jika exception terjadi
-        await db.rollback()
-        logger.error(f"âŒ Transaction failed during pelanggan update: {e}")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Gagal update pelanggan: {str(e)}")
-
-    # Refresh data setelah commit untuk response
-    await db.refresh(db_pelanggan, attribute_names=["harga_layanan", "data_teknis"])
-
-    return db_pelanggan
+    """Update detail data pelanggan secara parsial."""
+    return await service.update_pelanggan(pelanggan_id, pelanggan_update.model_dump(exclude_unset=True))
 
 
-# DELETE /pelanggan/{pelanggan_id} - Hapus pelanggan dan semua data terkait
-# Buat hapus pelanggan beserta semua data yang berelasi (cascade delete)
-# Path parameters:
-# - pelanggan_id: ID pelanggan yang mau dihapus
-# Response: 204 No Content (sukses tapi nggak ada response body)
-# Cascade delete: hapus data_teknis, langganan, dan invoice yang berelasi
-# Error handling: 404 kalau pelanggan nggak ketemu, rollback kalau ada error
-# Safety warning: HATI-HATI! Ini akan menghapus semua data terkait pelanggan
+# DELETE /pelanggan/{pelanggan_id} - Hapus pelanggan
 @router.delete("/{pelanggan_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_pelanggan(
-    pelanggan_id: int, db: AsyncSession = Depends(get_db), current_user: UserModel = Depends(get_current_active_user)
+    pelanggan_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user),
+    service: PelangganService = Depends(get_pelanggan_service)
 ):
-    db_pelanggan = await db.get(PelangganModel, pelanggan_id)
-    if not db_pelanggan:
-        raise HTTPException(status_code=404, detail="Pelanggan tidak ditemukan")
-
-    try:
-        logger.info(f"ðŸ”„ Starting cascade delete for pelanggan {pelanggan_id}: {db_pelanggan.nama}")
-
-        # 1. Delete DataTeknis (one-to-one relationship)
-        data_teknis_stmt = select(DataTeknisModel).where(DataTeknisModel.pelanggan_id == pelanggan_id)
-        data_teknis_result = await db.execute(data_teknis_stmt)
-        data_teknis = data_teknis_result.scalar_one_or_none()
-        if data_teknis:
-            await db.delete(data_teknis)
-            logger.info(f"âœ… Deleted DataTeknis for pelanggan {pelanggan_id}")
-
-        # 2. Delete all Langganan (one-to-many relationship)
-        langganan_stmt = select(LanggananModel).where(LanggananModel.pelanggan_id == pelanggan_id)
-        langganan_result = await db.execute(langganan_stmt)
-        langganans = langganan_result.scalars().all()
-        for langganan in langganans:
-            await db.delete(langganan)
-        logger.info(f"âœ… Deleted {len(langganans)} Langganan records for pelanggan {pelanggan_id}")
-
-        # 3. Delete all Invoices (one-to-many relationship)
-        invoice_stmt = select(InvoiceModel).where(InvoiceModel.pelanggan_id == pelanggan_id)
-        invoice_result = await db.execute(invoice_stmt)
-        invoices = invoice_result.scalars().all()
-        for invoice in invoices:
-            await db.delete(invoice)
-        logger.info(f"âœ… Deleted {len(invoices)} Invoice records for pelanggan {pelanggan_id}")
-
-        # 4. Finally delete the pelanggan record
-        await db.delete(db_pelanggan)
-        logger.info(f"âœ… Deleted Pelanggan record for pelanggan {pelanggan_id}")
-
-        # Commit transaksi
-        await db.commit()
-
-        logger.info(f"ðŸŽ‰ Cascade delete completed successfully for pelanggan {pelanggan_id}")
-    except Exception as e:
-        # Rollback transaksi jika ada error
-        await db.rollback()
-        logger.error(f"âŒ Transaction failed during cascade delete: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Gagal menghapus pelanggan dan data terkait: {str(e)}",
-        )
-
+    """Menghapus pelanggan dan semua data terkait (cascade delete)."""
+    await service.delete_pelanggan_cascade(pelanggan_id)
     return None
 
 
-# GET /pelanggan/template/csv - Download template CSV untuk import
-# Buat download file template CSV yang bisa dipakai buat import data pelanggan
-# Response: file CSV dengan header dan contoh data
-# Format file: CSV dengan BOM (biar compatibility dengan Excel)
-# Contoh data: include sample data biar gampang ngikutin format
+# GET /pelanggan/template/csv - Download template import
 @router.get("/template/csv", response_class=StreamingResponse)
-async def download_csv_template(current_user: UserModel = Depends(get_current_active_user)):
+async def download_csv_template():
+    """Men-download template CSV untuk import data pelanggan."""
     output = io.StringIO()
-    output.write("\ufeff")
+    output.write("\ufeff")  # BOM for Excel
     headers = [
-        "Nama",
-        "No KTP",
-        "Email",
-        "No Telepon",
-        "Layanan",
-        "Alamat",
-        "Alamat 2",
-        "Blok",
-        "Unit",
-        "Tanggal Instalasi (YYYY-MM-DD)",
-        "ID Brand",
+        "Nama", "No KTP", "Email", "No Telepon", "Alamat", "Alamat 2",
+        "Blok", "Unit", "Tanggal Instalasi (YYYY-MM-DD)", "Layanan", "ID Brand"
     ]
-    sample_data = [
-        {
-            "Nama": "John Doe",
-            "No KTP": "1234567890123456",
-            "Email": "john.doe@example.com",
-            "No Telepon": "081234567890",
-            "Layanan": "Internet 50 Mbps",
-            "Alamat": "Jl. Contoh No 01",
-            "Alamat 2": "RT 01 RW A",
-            "Blok": "A",
-            "Unit": "12",
-            "Tanggal Instalasi (YYYY-MM-DD)": "2024-01-15",
-            "ID Brand": "ajn-01",
-        },
-    ]
-    writer = csv.DictWriter(output, fieldnames=headers, delimiter=";")
-    writer.writeheader()
-    writer.writerows(sample_data)
-    output.seek(0)
-    response_headers = {"Content-Disposition": 'attachment; filename="template_import_pelanggan.csv"'}
+    writer = io.StringIO()
+    csv_writer = csv.DictWriter(writer, fieldnames=headers, delimiter=";")
+    csv_writer.writeheader()
+    csv_writer.writerow({
+        "Nama": "Budi Santoso",
+        "No KTP": "1234567890123456",
+        "Email": "budi.s@example.com",
+        "No Telepon": "08123456789",
+        "Alamat": "Perumahan Indah",
+        "Alamat 2": "Blok A No 1",
+        "Blok": "A",
+        "Unit": "1",
+        "Tanggal Instalasi (YYYY-MM-DD)": "2024-01-15",
+        "Layanan": "Internet 50 Mbps",
+        "ID Brand": "AJN"
+    })
+    
+    response_headers = {"Content-Disposition": 'attachment; filename="template_pelanggan.csv"'}
     return StreamingResponse(
-        io.BytesIO(output.getvalue().encode("utf-8")),
+        io.BytesIO(writer.getvalue().encode("utf-8")),
         headers=response_headers,
         media_type="text/csv; charset=utf-8",
     )
 
 
-# POST /pelanggan/import - Import data pelanggan dari CSV
-# Buat import data pelanggan dari file CSV
-# Request body: file CSV dengan format yang sesuai template
-# Response: jumlah pelanggan yang berhasil diimport + error message kalau ada
-# Validation:
-# - cek format file (.csv)
-# - cek header CSV
-# - cek duplikasi email dan KTP (dalam file dan di database)
-# - cek format tanggal (YYYY-MM-DD)
-# Error handling: rollback semua data kalau ada error, return detail error per baris
-# Performance: batch insert biar lebih cepat
-# Supported encoding: auto-detect encoding (utf-8, latin1, dll)
+# POST /pelanggan/import - Import data dari CSV
 @router.post("/import")
 async def import_from_csv(
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
     current_user: UserModel = Depends(get_current_active_user),
+    service: PelangganService = Depends(get_pelanggan_service)
 ):
+    """Mengimpor data pelanggan secara massal dari file CSV."""
     if not file.filename or not file.filename.lower().endswith(".csv"):
-        raise HTTPException(status_code=400, detail="File harus berformat .csv")
-
+        raise HTTPException(status_code=400, detail="File must be .csv")
+    
     contents = await file.read()
-    if not contents:
-        raise HTTPException(status_code=400, detail="File kosong.")
-
-    try:
-        encoding = chardet.detect(contents)["encoding"] or "utf-8"
-        content_str = contents.decode(encoding)
-
-        # Hapus BOM jika ada
-        if content_str.startswith("\ufeff"):
-            content_str = content_str.lstrip("\ufeff")
-
-        # --- DETEKSI DELIMITER ---
-        first_line = content_str.split('\n')[0]
-        dialect_delimiter = ","
-        if ";" in first_line and first_line.count(";") > first_line.count(","):
-            dialect_delimiter = ";"
-
-        stream = io.StringIO(content_str)
-        reader = csv.DictReader(stream, delimiter=dialect_delimiter)
-        if not reader.fieldnames:
-            raise HTTPException(status_code=400, detail="Header CSV tidak ditemukan.")
-    except Exception as e:
-        logger.error(f"Gagal membaca atau mem-parsing file CSV: {repr(e)}")
-        raise HTTPException(status_code=400, detail=f"Gagal memproses file CSV: {repr(e)}")
-
-    column_mapping = {
-        "Nama": "nama",
-        "No KTP": "no_ktp",
-        "Email": "email",
-        "No Telepon": "no_telp",
-        "Alamat": "alamat",
-        "Alamat 2": "alamat_2",
-        "Blok": "blok",
-        "Unit": "unit",
-        "Tanggal Instalasi (YYYY-MM-DD)": "tgl_instalasi",
-        "Layanan": "layanan",
-        "ID Brand": "id_brand",
-    }
-
-    new_customers = []
-    new_customers_data = []  # For bulk insert
-    errors = []
-    processed_emails_in_file = set()
-    processed_no_ktp_in_file = set()
-    skipped_rows = 0
-
-    # PERFORMANCE: Use pagination untuk existing data query kalau data terlalu banyak
-    # Ini mencegah memory overload saat sudah ada >100k pelanggan
-    try:
-        existing_emails_q = await db.execute(select(func.lower(PelangganModel.email)))
-        existing_emails_in_db = set(existing_emails_q.scalars().all())
-        existing_no_ktp_q = await db.execute(select(PelangganModel.no_ktp))
-        existing_no_ktp_in_db = set(existing_no_ktp_q.scalars().all())
-    except Exception as e:
-        # Fallback: Query dengan pagination jika memory overload
-        logger.warning("Large dataset detected, using pagination for duplicate check")
-        existing_emails_in_db = set()
-        existing_no_ktp_in_db = set()
-        # Implement pagination query jika perlu (untuk future enhancement)
-
-    for row_num, row in enumerate(reader, start=2):
-        data: Dict[str, Any] = {
-            model_field: row.get(csv_header, "").strip() for csv_header, model_field in column_mapping.items()
-        }
-
-        # Skip baris jika benar-benar kosong (tidak ada data sama sekali)
-        if not any(data.values()):
-            skipped_rows += 1
-            continue
-
-        try:
-            tgl_instalasi_str = data.get("tgl_instalasi")
-            if tgl_instalasi_str:
-                try:
-                    data["tgl_instalasi"] = parser.parse(tgl_instalasi_str).date()
-                except (parser.ParserError, ValueError):
-                    errors.append(f"Baris {row_num}: Format tanggal tidak valid. Gunakan YYYY-MM-DD.")
-                    continue
-            else:
-                data["tgl_instalasi"] = None  # type: ignore
-
-            # ðŸ”’ Ensure proper type casting before schema creation
-            # Convert date string to proper date type if needed
-            tgl_instalasi_value = data.get("tgl_instalasi")
-            if tgl_instalasi_value:
-                if isinstance(tgl_instalasi_value, str):
-                    try:
-                        # Try to parse the date string properly
-                        data["tgl_instalasi"] = datetime.strptime(tgl_instalasi_value, "%Y-%m-%d").date()
-                    except (ValueError, TypeError):
-                        # If parsing fails, set to None
-                        data["tgl_instalasi"] = None
-                # If already date type, keep as is
-                elif isinstance(tgl_instalasi_value, date):
-                    data["tgl_instalasi"] = tgl_instalasi_value
-                else:
-                    data["tgl_instalasi"] = None
-
-            customer_schema = PelangganCreate(**data)
-            email_lower = customer_schema.email.lower()
-            no_ktp = customer_schema.no_ktp
-
-            dummy_ktp_values = ["0000000000000000", "", "N/A", "NULL", "None"]
-
-            if email_lower in processed_emails_in_file:
-                errors.append(f"Baris {row_num}: Email '{customer_schema.email}' duplikat di dalam file CSV.")
-                continue
-            if no_ktp not in dummy_ktp_values and no_ktp in processed_no_ktp_in_file:
-                errors.append(f"Baris {row_num}: No KTP '{no_ktp}' duplikat di dalam file CSV.")
-                continue
-            if email_lower in existing_emails_in_db:
-                errors.append(f"Baris {row_num}: Email '{customer_schema.email}' sudah terdaftar.")
-                continue
-            if no_ktp not in dummy_ktp_values and no_ktp in existing_no_ktp_in_db:
-                errors.append(f"Baris {row_num}: No KTP '{no_ktp}' sudah terdaftar.")
-                continue
-
-            # PERFORMANCE: Collect data for bulk insert instead of creating model objects
-            customer_data = customer_schema.model_dump()
-            new_customers_data.append(customer_data)
-            # Keep PelangganModel for validation compatibility
-            new_customers.append(PelangganModel(**customer_data))
-            processed_emails_in_file.add(email_lower)
-            if no_ktp not in dummy_ktp_values:
-                processed_no_ktp_in_file.add(no_ktp)
-
-        except ValidationError as e:
-            error_details = "; ".join([f"{err['loc'][0]}: {err['msg']}" for err in e.errors()])
-            errors.append(f"Baris {row_num}: {error_details}")
-        except ValueError as e:
-            errors.append(f"Baris {row_num}: {str(e)}")
-        except Exception as e:
-            logger.error(f"Error processing baris {row_num}: {repr(e)}")
-            errors.append(f"Baris {row_num}: Error tak terduga - {repr(e)}")
-
-    if errors:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail={"message": f"Ditemukan {len(errors)} kesalahan.", "errors": errors},
-        )
-
-    if not new_customers:
-        logger.info(f"Import selesai. {skipped_rows} baris di-skip, tidak ada data valid untuk diimpor.")
-        if skipped_rows > 0:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Tidak ada data valid untuk diimpor. {skipped_rows} baris kosong atau tidak lengkap dilewati."
-            )
-        else:
-            raise HTTPException(status_code=400, detail="Tidak ada data valid untuk diimpor.")
-
-    try:
-        # PERFORMANCE: Use bulk insert untuk faster import saat banyak data
-        # bulk_insert_mappings lebih efisien daripada add_all untuk large datasets
-        if len(new_customers_data) > 100:  # Use bulk insert untuk >100 records
-            logger.info(f"Using bulk insert for {len(new_customers_data)} records")
-            await db.execute(
-                PelangganModel.__table__.insert(),
-                new_customers_data
-            )
-        else:
-            # Use regular add_all untuk small datasets (lebih sederhana)
-            db.add_all(new_customers)
-
-        await db.commit()
-        logger.info(f"Import berhasil: {len(new_customers)} pelanggan baru, {skipped_rows} baris di-skip")
-    except Exception as e:
-        await db.rollback()
-        logger.error(f"Database error during import: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Gagal menyimpan ke database: {repr(e)}")
-
-    success_message = f"Sukses! Berhasil mengimpor {len(new_customers)} pelanggan baru."
-    if skipped_rows > 0:
-        success_message += f" {skipped_rows} baris kosong dilewati."
-
-    logger.info(f"Import CSV selesai: {len(new_customers)} berhasil, {len(errors)} error, {skipped_rows} baris kosong dilewati")
-
-    return {"message": success_message}
+    result = await service.bulk_import(contents, file.filename)
+    if not result["success"]:
+        raise HTTPException(status_code=422, detail=result)
+    return result
 
 
-# GET /pelanggan/lokasi/unik - Ambil daftar lokasi unik
-# Buat ngambil list alamat/lokasi pelanggan yang unik (untuk dropdown filter)
-# Response: array of string lokasi pelanggan
-# Use case: buat dropdown filter di frontend
-# Performance: query dengan distinct biar efficient
+# GET /pelanggan/lokasi/unik - Alamat unik
 @router.get("/lokasi/unik", response_model=List[str])
-async def get_unique_lokasi(db: AsyncSession = Depends(get_db), current_user: UserModel = Depends(get_current_active_user)):
-    # OPTIMIZED: Query untuk lokasi unik dengan index hint untuk performance
-    query = select(PelangganModel.alamat).distinct().order_by(PelangganModel.alamat)
-    result = await db.execute(query)
-    lokasi_list = result.scalars().all()
-    return [lokasi for lokasi in lokasi_list if lokasi]
+async def get_unique_lokasi(
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user),
+    service: PelangganService = Depends(get_pelanggan_service)
+):
+    """Ambil daftar lokasi/alamat unik pelanggan untuk filter dropdown."""
+    return await service.get_unique_lokasi()

@@ -47,6 +47,7 @@ from sqlalchemy import select, func
 from ..services import mikrotik_service
 from ..config import settings
 from ..services import xendit_service, mikrotik_service
+from ..services.invoice_service import InvoiceService
 from ..services.payment_callback_service import check_duplicate_callback, log_callback_processing
 from ..services.rate_limiter import create_invoice_with_rate_limit, InvoicePriority
 from ..utils.phone_utils import normalize_phone_for_xendit
@@ -57,61 +58,13 @@ from ..logging_utils import sanitize_log_data
 logger = logging.getLogger("app.routers.invoice")
 
 
-# Helper functions untuk safe date conversion
-def safe_to_datetime(date_obj) -> datetime:
-    """Convert date/datetime ke datetime dengan aman."""
-    if date_obj is None:
-        return datetime.now(timezone.utc)
-
-    if isinstance(date_obj, datetime):
-        return date_obj
-
-    # Handle SQLAlchemy Date object atau Python date
-    try:
-        if hasattr(date_obj, "strftime"):
-            return datetime.combine(date_obj, datetime.min.time())
-        else:
-            # Fallback untuk SQLAlchemy Date
-            return datetime.combine(date_obj, datetime.min.time())
-    except (AttributeError, TypeError):
-        return datetime.now(timezone.utc)
-
-
-def safe_format_date(date_obj, format_str: str = "%Y-%m-%d") -> str:
-    """Format date dengan aman."""
-    if date_obj is None:
-        return ""
-
-    try:
-        if hasattr(date_obj, "strftime"):
-            return date_obj.strftime(format_str)
-        else:
-            # Handle SQLAlchemy Date
-            return str(date_obj)
-    except (AttributeError, TypeError):
-        return str(date_obj) if date_obj else ""
-
-
-def safe_get_day(date_obj) -> int:
-    """Get day dari date dengan aman."""
-    if date_obj is None:
-        return 1
-
-    try:
-        if hasattr(date_obj, "day"):
-            return date_obj.day
-        else:
-            # Handle SQLAlchemy Date - convert dulu
-            dt = safe_to_datetime(date_obj)
-            return dt.day
-    except (AttributeError, TypeError):
-        return 1
-
-
-def safe_relativedelta_operation(date_obj, delta_months: int):
-    """Safe operation untuk relativedelta dengan date/datetime."""
-    dt = safe_to_datetime(date_obj)
-    return dt + relativedelta(months=delta_months)
+from ..utils.date_utils import (
+    safe_to_datetime,
+    safe_format_date,
+    safe_get_day,
+    safe_relativedelta_operation,
+    parse_xendit_datetime
+)
 
 
 router = APIRouter(
@@ -148,45 +101,20 @@ async def get_all_invoices(
 ):
     """Mengambil semua data invoice dengan filter."""
     # OPTIMIZED: Query dengan comprehensive eager loading untuk mencegah semua N+1 problems
-    query = (
-        select(InvoiceModel).join(InvoiceModel.pelanggan)
-        # PERBAIKAN: Eager load semua relasi yang sering diakses bersama invoice
-        # untuk mencegah N+1 queries saat data di-serialize ke response
-        .options(
-            joinedload(InvoiceModel.pelanggan).options(
-                joinedload(PelangganModel.harga_layanan),
-                joinedload(PelangganModel.data_teknis),
-                joinedload(PelangganModel.langganan).joinedload(LanggananModel.paket_layanan),
-            )
-        )
+    invoice_service = InvoiceService()
+    
+    # --- QUERY BUILDING MENGGUNAKAN SERVICE ---
+    query = await invoice_service.get_filtered_invoices_stmt(
+        search=search,
+        status_invoice=status_invoice,
+        start_date=start_date,
+        end_date=end_date,
+        show_active_only=show_active_only
     )
 
-    if search:
-        search_term = f"%{search}%"
-        # Cek apakah search term adalah angka (untuk pelanggan_id)
-        is_numeric_search = search.strip().isdigit()
-
-        query = query.where(
-            or_(
-                InvoiceModel.invoice_number.ilike(search_term),
-                PelangganModel.nama.ilike(search_term),
-                InvoiceModel.id_pelanggan.ilike(search_term),
-                # Tambahkan filter langsung untuk pelanggan_id (BigInteger foreign key)
-                # Ini memperbaiki bug di mana riwayat pembayaran di view langganan tidak muncul
-                InvoiceModel.pelanggan_id == int(search.strip()) if is_numeric_search else False,
-            )
-        )
-
-    if status_invoice:
-        query = query.where(InvoiceModel.status_invoice == status_invoice)
-
-    if start_date:
-        query = query.where(InvoiceModel.tgl_jatuh_tempo >= start_date)
-    if end_date:
-        query = query.where(InvoiceModel.tgl_jatuh_tempo <= end_date)
-
-    # Exclude invoice yang sudah kadaluarsa (lewat 5 hari grace period)
+    # Filter tambahan yang spesifik untuk router ini
     if exclude_expired:
+        # Exclude invoice yang sudah kadaluarsa (lewat 5 hari grace period)
         from datetime import date
         overdue_threshold_date = date.today() - timedelta(days=5)
         query = query.where(
@@ -346,192 +274,12 @@ async def get_all_invoices(
     return result.scalars().unique().all()
 
 
-def parse_xendit_datetime(iso_datetime_str: str) -> datetime:
-    """Fungsi untuk mengkonversi format datetime ISO 8601 dari Xendit."""
-    try:
-        if not iso_datetime_str:
-            pass  # This line was misplaced and caused an IndentationError. It's removed as it didn't have a clear purpose here.
-        if iso_datetime_str.endswith("Z"):
-            iso_datetime_str = iso_datetime_str[:-1] + "+00:00"
-        return datetime.fromisoformat(iso_datetime_str)
-    except (ValueError, TypeError):
-        return datetime.now(timezone.utc)
 
 
 async def _process_successful_payment(db: AsyncSession, invoice: InvoiceModel, payload: dict | None = None):
-    """Fungsi terpusat untuk menangani logika setelah invoice lunas."""
-
-    pelanggan = invoice.pelanggan
-    if not pelanggan or not pelanggan.langganan:
-        logger.error(f"Pelanggan atau langganan tidak ditemukan untuk invoice {invoice.invoice_number}")
-        return
-
-    langganan = pelanggan.langganan[0]
-
-    # Cek apakah langganan sebelumnya berstatus 'Suspended'
-    is_suspended_or_inactive = langganan.status == "Suspended" or not langganan.status
-
-    # Update status invoice (tetap)
-    invoice.status_invoice = "Lunas"
-    if payload:
-        invoice.paid_amount = float(payload.get("paid_amount", invoice.total_harga or 0))
-        paid_at_str = payload.get("paid_at")
-        invoice.paid_at = parse_xendit_datetime(paid_at_str) if paid_at_str else datetime.now(timezone.utc)
-    else:
-        invoice.paid_amount = invoice.total_harga
-        invoice.paid_at = datetime.now(timezone.utc)
-
-    db.add(invoice)
-
-    next_due_date = None
-
-    if langganan.metode_pembayaran == "Prorate":
-        paket = langganan.paket_layanan
-        brand = pelanggan.harga_layanan
-        langganan.metode_pembayaran = "Otomatis"
-        current_due_date = invoice.tgl_jatuh_tempo
-
-        if not paket or not brand:
-            logger.error(f"Data paket/brand tidak lengkap untuk langganan ID {langganan.id}")
-            # Set fallback jika data tidak ada, agar tidak crash
-            current_due_datetime = safe_to_datetime(current_due_date)
-            next_due_datetime = current_due_datetime + relativedelta(months=1)
-            next_due_date = next_due_datetime.date().replace(day=1)
-        else:
-            # Hitung harga normal penuh sebagai pembanding
-            harga_paket = float(paket.harga)
-            pajak_persen = float(brand.pajak)
-            harga_normal_full = harga_paket * (1 + (pajak_persen / 100))
-
-            # Logika Pembeda: Apakah ini tagihan prorate biasa atau gabungan?
-            if float(invoice.total_harga or 0) > (harga_normal_full + 1):
-                # Skenario 1: INI ADALAH TAGIHAN GABUNGAN
-                # Convert Date to datetime untuk relativedelta - handle SQLAlchemy Date
-                current_due_datetime = safe_to_datetime(current_due_date)
-                
-                if current_due_datetime.day == 1:
-                    # Jika jatuh tempo tgl 1 (misal 1 Maret), berarti cover Feb & Maret.
-                    # Next due: 1 April. (Current + 1 bulan)
-                    next_due_datetime = current_due_datetime + relativedelta(months=1)
-                else:
-                    # Jika jatuh tempo tgl 28 (misal 28 Feb), cover Feb & Maret.
-                    # Next due: 1 April. (Current + 2 bulan di-force tanggal 1)
-                    next_due_datetime = current_due_datetime + relativedelta(months=2)
-                
-                next_due_date = next_due_datetime.date().replace(day=1)
-                logger.info(f"Tagihan gabungan terdeteksi. Jatuh tempo berikutnya diatur ke {next_due_date}")
-            else:
-                # Skenario 2: INI ADALAH TAGIHAN PRORATE BIASA
-                # Convert Date to datetime untuk relativedelta - handle SQLAlchemy Date
-                current_due_datetime = safe_to_datetime(current_due_date)
-                
-                if current_due_datetime.day == 1:
-                    # Jika jatuh tempo tgl 1 (misal 1 Maret), ini adalah pembayaran untuk Feb.
-                    # Siklus Maret dimulai 1 Maret. Jadi Next Due tetap 1 Maret (agar tagihan Maret ter-generate/aktif).
-                    next_due_date = current_due_datetime.date()
-                else:
-                    # Jika jatuh tempo tgl 28 (misal 28 Feb), pembayaran Feb.
-                    # Next due: 1 Maret (Current + 1 bulan di-force tanggal 1).
-                    next_due_datetime = current_due_datetime + relativedelta(months=1)
-                    next_due_date = next_due_datetime.date().replace(day=1)
-                    
-                logger.info(f"Tagihan prorate biasa terdeteksi. Jatuh tempo berikutnya diatur ke {next_due_date}")
-
-            # Reset harga langganan ke harga normal untuk bulan-bulan berikutnya
-            langganan.harga_awal = round(harga_normal_full, 0)
-
-    else:  # Skenario 3: Jika sudah Otomatis (PEMBAYARAN BULANAN NORMAL)
-        # FIX LOGIC: Gunakan invoice.tgl_jatuh_tempo sebagai basis perhitungan, BUKAN langganan.tgl_jatuh_tempo.
-        # Menggunakan langganan.tgl_jatuh_tempo (mutable) berisiko jika callback diproses 2x (misal user bayar double klik atau retry),
-        # yang menyebabkan tanggal loncat 2 bulan (Des -> Jan -> Feb).
-        # Dengan pakai invoice.tgl_jatuh_tempo (fixed), hasilnya selalu konsisten (Des + 1 bulan = Jan).
-        current_due_date = invoice.tgl_jatuh_tempo
-        
-        # Fallback safety jika data lama tidak punya tgl_jatuh_tempo
-        if not current_due_date:
-            current_due_date = date.today()
-            logger.warning(f"Invoice {invoice.invoice_number} tidak punya tgl_jatuh_tempo, pakai today: {current_due_date}")
-
-        # Convert Date to datetime untuk relativedelta - handle SQLAlchemy Date
-        current_due_datetime = safe_to_datetime(current_due_date)
-        next_due_datetime = current_due_datetime + relativedelta(months=1)
-        next_due_date = next_due_datetime.date().replace(day=1)
-
-    # Update langganan (tidak berubah)
-    langganan.status = "Aktif"
-    langganan.tgl_jatuh_tempo = next_due_date
-    langganan.tgl_invoice_terakhir = date.today()
-    db.add(langganan)
-
-    # HANYA trigger update Mikrotik jika status sebelumnya adalah 'Suspended'
-    if is_suspended_or_inactive:
-        data_teknis = pelanggan.data_teknis
-        if not data_teknis:
-            logger.error(f"Data Teknis tidak ditemukan untuk pelanggan ID {pelanggan.id}. Mikrotik update dilewati.")
-        else:
-            try:
-                # Panggil fungsi dengan SEMUA argumen yang dibutuhkan
-                await mikrotik_service.trigger_mikrotik_update(
-                    db,
-                    langganan,
-                    data_teknis,
-                    data_teknis.id_pelanggan,  # old_id_pelanggan diisi dengan id saat ini
-                )
-                logger.info(f"Berhasil trigger re-aktivasi Mikrotik untuk langganan ID {langganan.id}")
-
-                # Jika berhasil, set flag pending sync (jika ada) kembali ke False
-                if data_teknis.mikrotik_sync_pending:
-                    data_teknis.mikrotik_sync_pending = False
-                    db.add(data_teknis)
-
-            except Exception as e:
-                # Jika GAGAL, catat error DAN set flag retry menjadi True
-                logger.error(
-                    f"Gagal trigger re-aktivasi Mikrotik untuk langganan ID {langganan.id}: {e}. Menandai untuk dicoba lagi."
-                )
-                data_teknis.mikrotik_sync_pending = True
-                db.add(data_teknis)
-    else:
-        logger.info(f"Langganan ID {langganan.id} sudah Aktif. Mikrotik update dilewati.")
-
-    # Notif ke frontend
-    try:
-        target_roles = ["Admin", "NOC", "Finance"]
-        query = select(UserModel.id).join(RoleModel).where(func.lower(RoleModel.name).in_([r.lower() for r in target_roles]))
-        result = await db.execute(query)
-        target_user_ids = result.scalars().all()
-
-        if target_user_ids:
-            # Pastikan pelanggan sudah di-load dengan benar
-            pelanggan_nama = pelanggan.nama if pelanggan else "N/A"
-            notification_payload = {
-                "type": "new_payment",
-                "message": f"Pembayaran untuk invoice {invoice.invoice_number} dari {pelanggan_nama} telah diterima.",
-                "timestamp": datetime.now().isoformat(),
-                "data": {
-                    "invoice_id": invoice.id,
-                    "invoice_number": invoice.invoice_number,
-                    "pelanggan_nama": pelanggan_nama,
-                    "amount": (float(invoice.total_harga) if invoice.total_harga else 0.0),
-                    "payment_method": invoice.metode_pembayaran or "Unknown",
-                    "timestamp": datetime.now().isoformat(),
-                },
-            }
-            # Menambahkan log ini untuk memastikan user ID ditemukan
-            logger.info(f"Mencoba mengirim notifikasi pembayaran ke user IDs: {target_user_ids}")
-            # Convert ke list untuk broadcast_to_roles
-            user_ids_list = list(target_user_ids)
-            await manager.broadcast_to_roles(notification_payload, user_ids_list)
-            logger.info(f"Notifikasi pembayaran berhasil dikirim untuk invoice {invoice.invoice_number}")
-        else:
-            logger.warning(f"Tidak ada user dengan role Admin/CS yang ditemukan untuk dikirimi notifikasi.")
-
-    except Exception as e:
-        # 🛡️ Graceful degradation: Payment processed but notification failed
-        logger.error(f"⚠️ Payment successful but notification failed for invoice {invoice.invoice_number}: {e}", exc_info=True)
-        # Continue processing - payment is still valid even if notification fails
-
-    logger.info(f"Payment processed successfully for invoice {invoice.invoice_number}")
+    """Fungsi pembantu yang mendelegasikan pemrosesan pembayaran ke InvoiceService."""
+    invoice_service = InvoiceService()
+    await invoice_service.process_payment(db, invoice, payload)
 
 
 # @router.post("/xendit-callback", status_code=status.HTTP_200_OK)
@@ -839,12 +587,9 @@ async def create_reinvoice(
         if not expired_invoice:
             raise HTTPException(status_code=404, detail="Invoice tidak ditemukan")
 
-        # Cari langganan untuk pelanggan ini (TIDAK PEDULI status - bisa Aktif/Suspended/Suspend)
-        # Reinvoice harus bisa dibuat untuk langganan dengan status apapun
+        # Cari langganan untuk pelanggan ini
         langganan = None
         if expired_invoice.pelanggan and expired_invoice.pelanggan.langganan:
-            # Ambil langganan pertama yang ada (biasanya pelanggan hanya punya 1 langganan aktif)
-            # Prioritas: Aktif > Suspended > Suspend > Berhenti
             status_priority = {"Aktif": 1, "Suspended": 2, "Suspend": 3, "Berhenti": 4}
             sorted_langganan = sorted(
                 expired_invoice.pelanggan.langganan,
@@ -856,34 +601,25 @@ async def create_reinvoice(
             raise HTTPException(status_code=404, detail="Tidak ada langganan untuk pelanggan ini")
 
         # Update tanggal jatuh tempo ke bulan depan
-        from datetime import date
-        from dateutil.relativedelta import relativedelta
+        from ..utils.date_utils import safe_relativedelta_operation
+        langganan.tgl_jatuh_tempo = safe_relativedelta_operation(expired_invoice.tgl_jatuh_tempo, 1).date()
 
-        current_due = date.fromisoformat(str(expired_invoice.tgl_jatuh_tempo))
-        new_due = current_due + relativedelta(months=1)
-        langganan.tgl_jatuh_tempo = new_due
-
-        # Buat data invoice generate
-        # generate_manual_invoice akan otomatis menghitung harga berdasarkan metode_pembayaran langganan
-        # (Otomatis = harga penuh, Prorate = harga proporsional)
-        from ..schemas.invoice import InvoiceGenerate
-        invoice_data = InvoiceGenerate(
+        # Generate invoice baru via service
+        invoice_service = InvoiceService()
+        new_invoice = await invoice_service.create_invoice(
+            db=db,
             langganan_id=langganan.id,
             is_reinvoice=True,
             original_invoice_id=expired_invoice_id,
             reinvoice_reason="expired"
         )
 
-        # Generate invoice baru - panggil fungsi yang sudah ada
-        new_invoice = await generate_manual_invoice(invoice_data, db)
-
-        # Update status invoice lama menjadi Expired jika belum
+        # Update status invoice lama menjadi Expired
         if expired_invoice.status_invoice != "Expired":
             expired_invoice.status_invoice = "Expired"
 
         await db.commit()
 
-        # Convert ke dictionary untuk response
         return {
             "message": "Reinvoice berhasil dibuat",
             "new_invoice": {
@@ -904,6 +640,8 @@ async def create_reinvoice(
 
     except HTTPException:
         raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Error creating reinvoice: {e}")
         await db.rollback()
@@ -934,375 +672,21 @@ async def create_reinvoice(
     dependencies=[Depends(has_permission("create_invoices"))],
 )
 async def generate_manual_invoice(invoice_data: InvoiceGenerate, db: AsyncSession = Depends(get_db)):
-    """Membuat satu invoice secara manual berdasarkan langganan_id."""
-    # PERBAIKAN: Query dengan eager loading yang lebih robust untuk mencegah N+1 problems
-    stmt = (
-        select(LanggananModel)
-        .where(LanggananModel.id == invoice_data.langganan_id)
-        .options(
-            joinedload(LanggananModel.pelanggan).options(
-                joinedload(PelangganModel.harga_layanan),
-                joinedload(PelangganModel.data_teknis),
-            ),
-            joinedload(LanggananModel.paket_layanan),
-        )
-    )
-    result = await db.execute(stmt)
-    langganan = result.unique().scalar_one_or_none()
-
-    if not langganan:
-        raise HTTPException(status_code=404, detail=f"Langganan dengan ID {invoice_data.langganan_id} tidak ditemukan")
-
-    # VALIDASI: Periksa apakah pelanggan dari langganan benar-benar ada
-    if not langganan.pelanggan:
-        logger.error(
-            f"Langganan ID {langganan.id} memiliki pelanggan_id {langganan.pelanggan_id} tapi data pelanggan tidak ditemukan di database"
-        )
-        raise HTTPException(
-            status_code=404,
-            detail=f"Pelanggan dengan ID {langganan.pelanggan_id} tidak ditemukan untuk langganan ID {langganan.id}. Data mungkin tidak konsisten.",
-        )
-
-    if langganan.status == "Berhenti":
-        raise HTTPException(
-            status_code=400,
-            detail=f"Gagal membuat invoice. Status langganan untuk pelanggan '{langganan.pelanggan.nama}' adalah 'Berhenti'.",
-        )
-
-    pelanggan = langganan.pelanggan
-    paket = langganan.paket_layanan
-    if not pelanggan or not paket or not pelanggan.harga_layanan or not pelanggan.data_teknis:
-        missing_data = []
-        if not pelanggan:
-            missing_data.append("pelanggan")
-        if not paket:
-            missing_data.append("paket_layanan")
-        if not pelanggan.harga_layanan:
-            missing_data.append("harga_layanan/brand")
-        if not pelanggan.data_teknis:
-            missing_data.append("data_teknis")
-
-        raise HTTPException(
-            status_code=400,
-            detail=f"Data pendukung tidak lengkap untuk langganan ID {langganan.id}: {', '.join(missing_data)}",
-        )
-
-    brand = pelanggan.harga_layanan
-    data_teknis = pelanggan.data_teknis
-
-    if not paket.harga or not brand.pajak:
-        raise HTTPException(status_code=400, detail="Harga paket atau pajak tidak valid")
-
-    # Target jatuh tempo untuk database
-    # Jika Prorate dan jatuh temponya tanggal 1, kita simpan sebagai tanggal terakhir bulan sebelumnya
-    # agar sesuai dengan keinginan Finance (visual 28 Feb bukan 1 Mar)
-    actual_due_date = langganan.tgl_jatuh_tempo
-    if langganan.metode_pembayaran == "Prorate" and actual_due_date.day == 1:
-        from datetime import timedelta
-        actual_due_date = actual_due_date - timedelta(days=1)
-
-    # Check existing invoice - tapi allow jika status expired/kadaluarsa dan ini adalah reinvoice
-    if not invoice_data.is_reinvoice:
-        existing_invoice_stmt = select(InvoiceModel.id).where(
-            InvoiceModel.pelanggan_id == langganan.pelanggan_id,
-            InvoiceModel.tgl_jatuh_tempo == actual_due_date,
-        )
-        existing = (await db.execute(existing_invoice_stmt)).scalar_one_or_none()
-        if existing:
-            raise HTTPException(status_code=409, detail="Invoice untuk periode ini sudah ada.")
-
-    # Handle SQLAlchemy Date untuk formatting
-    jatuh_tempo_date = langganan.tgl_jatuh_tempo
-    jatuh_tempo_str = safe_format_date(jatuh_tempo_date, "%d/%m/%Y")
-    jatuh_tempo_yyyymm = safe_format_date(jatuh_tempo_date, "%Y%m") or "202501"  # Default fallback
-
-    # --- MODIFICATION FOR INVOICE NUMBER ---
-    # 1. Sanitize customer name and address
-    import re
-    nama_pelanggan_singkat = re.sub(r'[^a-zA-Z0-9]', '', pelanggan.nama).upper()
-    alamat_singkat = re.sub(r'[^a-zA-Z0-9]', '', pelanggan.alamat or '').upper()[:10]  # Take only first 10 chars
-    brand_singkat = re.sub(r'[^a-zA-Z0-9]', '', brand.brand or '').upper()
-    # Convert SQLAlchemy Date to Python date for datetime.combine
-    from datetime import date, datetime, timedelta
-    jatuh_tempo_python_date = date.fromisoformat(str(langganan.tgl_jatuh_tempo))
-    
-    # Logic penentuan nama bulan untuk Nomor Invoice
-    # Jika Prorate dan jatuh tempo tgl 1, gunakan bulan sebelumnya untuk penamaan
-    naming_date = jatuh_tempo_python_date
-    if langganan.metode_pembayaran == "Prorate" and naming_date.day == 1:
-        naming_date = naming_date - timedelta(days=1)
-        
-    bulan_tahun = datetime.combine(naming_date, datetime.min.time()).strftime("%B-%Y").upper()
-
-    # 2. Generate ID suffix - gunakan id_pelanggan jika ada, fallback ke invoice.id
-    # Ini mencegah issue "external_id" berujung "None" di Xendit (contoh: .../PARAMA/None)
-    if data_teknis.id_pelanggan:
-        id_suffix = str(data_teknis.id_pelanggan)[-3:]  # 3 digit terakhir id_pelanggan
-    else:
-        # Fallback: gunakan temporary placeholder yang akan diganti setelah invoice dibuat
-        id_suffix = "TMP"
-    
-    # 3. Generate new invoice number in format: BRAND/LAYANAN/NAMA_PELANGGAN/BULAN_TAHUN/ALAMAT_SINGKAT/ID_SUFFIX
-    nomor_invoice = f"{brand_singkat}/ftth/{nama_pelanggan_singkat}/{bulan_tahun}/{alamat_singkat}/{id_suffix}"
-
-    # 4. Check for duplicate invoice number and add timestamp if needed
-    existing_invoice_number = (await db.execute(
-        select(InvoiceModel.id).where(InvoiceModel.invoice_number == nomor_invoice)
-    )).scalar_one_or_none()
-
-    if existing_invoice_number:
-        # Generate nomor unik dengan tambahan timestamp atau random
-        import time
-        timestamp = str(int(time.time()))[-6:]  # 6 digit terakhir timestamp
-        nomor_invoice = f"{nomor_invoice}/{timestamp}"
-    # --- END OF MODIFICATION ---
-
-    # Ambil total harga langsung dari data langganan yang sudah dihitung (prorate + PPN).
-    total_harga = float(langganan.harga_awal or 0)
-    pajak_persen = float(brand.pajak or 0)
-
-    # Karena Xendit butuh nilai pajak terpisah, kita hitung mundur dari total harga.
-    # 1. Cari harga dasar sebelum pajak.
-    harga_dasar = total_harga / (1 + (pajak_persen / 100))
-
-    # 2. Hitung nilai pajak berdasarkan selisih total harga dan harga dasar.
-    # Gunakan pembulatan untuk konsistensi.
-    pajak = round(total_harga - harga_dasar)
-
-    # Pastikan harga dasar untuk item di Xendit juga konsisten.
-    harga_dasar = total_harga - pajak
-
-    # Simpan harga sebelum diskon untuk reference
-    total_harga_sebelum_diskon = total_harga
-
-    # Cek diskon aktif untuk cluster pelanggan
-    diskon_applied = None
-    diskon_id = None
-    diskon_persen = None
-    diskon_amount = None
-
-    # Gunakan alamat sebagai cluster untuk diskon
-    cluster_to_check = pelanggan.alamat if pelanggan.alamat and pelanggan.alamat.strip() else None
-
-    # Prorate users TIDAK mendapatkan diskon
-    if langganan.metode_pembayaran == "Prorate":
-        logger.info(f"⚠️ Invoice manual untuk pelanggan {pelanggan.nama} (ID: {pelanggan.id}) menggunakan Prorate - Diskon tidak diterapkan")
-    elif cluster_to_check:
-        # Cari diskon aktif untuk cluster ini
-        tanggal_hari_ini = date.today()
-        diskon_query = (
-            select(DiskonModel)
-            .where(DiskonModel.cluster == cluster_to_check)
-            .where(DiskonModel.is_active == True)
-            .where(
-                (DiskonModel.tgl_mulai.is_(None)) | (DiskonModel.tgl_mulai <= tanggal_hari_ini)
-            )
-            .where(
-                (DiskonModel.tgl_selesai.is_(None)) | (DiskonModel.tgl_selesai >= tanggal_hari_ini)
-            )
-            .order_by(DiskonModel.persentase_diskon.desc())
-        )
-        diskon_result = await db.execute(diskon_query)
-        diskon_applied = diskon_result.scalar_one_or_none()
-
-    if diskon_applied:
-        diskon_id = diskon_applied.id
-        diskon_persen = float(diskon_applied.persentase_diskon)
-        diskon_amount = math.floor((total_harga_sebelum_diskon * diskon_persen / 100) + 0.5)
-        total_harga = total_harga_sebelum_diskon - diskon_amount
-        logger.info(f"💰 Diskon {diskon_persen}% (Rp {diskon_amount:,.0f}) diterapkan untuk invoice manual pelanggan {pelanggan.nama} - Cluster: {cluster_to_check}")
-
-    # Tentukan tipe invoice
-    invoice_type = "manual"
-    if invoice_data.is_reinvoice:
-        invoice_type = "reinvoice"
-
-    new_invoice_data = {
-            "invoice_number": nomor_invoice,
-            "pelanggan_id": pelanggan.id,
-            "id_pelanggan": data_teknis.id_pelanggan,
-            "brand": brand.brand,
-            "total_harga": total_harga,
-            "no_telp": pelanggan.no_telp,
-            "email": pelanggan.email,
-            "tgl_invoice": date.today(),
-            "tgl_jatuh_tempo": actual_due_date, # Menggunakan actual_due_date yang sudah disesuaikan (misal 28 Feb)
-            "status_invoice": "Belum Dibayar",
-            # Tipe invoice
-            "invoice_type": invoice_type,
-            # Menambahkan field reinvoice tracking
-            "is_reinvoice": invoice_data.is_reinvoice if hasattr(invoice_data, 'is_reinvoice') else False,
-            "original_invoice_id": invoice_data.original_invoice_id if hasattr(invoice_data, 'original_invoice_id') else None,
-            "reinvoice_reason": invoice_data.reinvoice_reason if hasattr(invoice_data, 'reinvoice_reason') else None,
-            # Diskon fields
-            "diskon_id": diskon_id,
-            "diskon_persen": diskon_persen,
-            "diskon_amount": diskon_amount,
-            "harga_sebelum_diskon": total_harga_sebelum_diskon if diskon_applied else None,
-        }
-
-    db_invoice = InvoiceModel(**new_invoice_data)
-    db.add(db_invoice)
-    await db.flush()
-    
-    # Jika menggunakan placeholder TMP (karena id_pelanggan None), ganti dengan invoice.id
-    if id_suffix == "TMP":
-        # Update invoice_number dengan invoice.id yang sebenarnya
-        id_suffix_final = str(db_invoice.id)[-3:].zfill(3)  # 3 digit terakhir, pad dengan 0 jika perlu
-        db_invoice.invoice_number = f"{brand_singkat}/ftth/{nama_pelanggan_singkat}/{bulan_tahun}/{alamat_singkat}/{id_suffix_final}"
-        logger.warning(f"⚠️ id_pelanggan is None for {pelanggan.nama}, using invoice.id instead: {db_invoice.invoice_number}")
-
-
+    invoice_service = InvoiceService()
     try:
-        deskripsi_xendit = ""
-        # Handle SQLAlchemy Date untuk formatting
-        due_date_obj = db_invoice.tgl_jatuh_tempo
-        jatuh_tempo_str_lengkap = safe_format_date(due_date_obj, "%d/%m/%Y")
-
-        if langganan.metode_pembayaran == "Prorate":
-
-            # Hitung harga normal untuk perbandingan
-            harga_normal_full = float(paket.harga) * (1 + (float(brand.pajak or 0) / 100))
-
-            # Define invoice_date and due_date before they are referenced
-            invoice_date_obj = db_invoice.tgl_invoice
-            due_date_obj = db_invoice.tgl_jatuh_tempo
-
-            # Convert ke Python date/datetime dengan aman
-            invoice_date = safe_to_datetime(invoice_date_obj) if invoice_date_obj else datetime.now()
-            due_date = safe_to_datetime(due_date_obj) if due_date_obj else datetime.now()
-
-            # FIX: Untuk Prorate, periode harus dihitung berdasarkan due_date (tgl_jatuh_tempo)
-            # karena due_date adalah akhir dari periode yang ditagihkan
-            # Mulai periode = due_date - 1 bulan + 1 hari (awal bulan)
-            # Akhir periode = due_date (tanggal jatuh tempo)
-            due_date_only = due_date.date() if hasattr(due_date, 'date') else due_date
-
-            # Cek apakah ini invoice pertama (pelanggan baru)
-            # Invoice pertama: tgl_invoice sama dengan tgl mulai langganan (bukan tanggal 1)
-            is_first_invoice = invoice_date.day != 1
-
-            if is_first_invoice:
-                # Invoice pertama: gunakan tgl_invoice sebagai mulai periode
-                periode_start = invoice_date
-                
-                # Jika jatuh tempo tanggal 1, user ingin display-nya akhir bulan sebelumnya (misal 28 Feb)
-                # agar tidak membingungkan pelanggan (seolah-olah 1 hari di bulan baru)
-                if due_date.day == 1:
-                    periode_end = due_date - timedelta(days=1)
-                else:
-                    periode_end = due_date
-            else:
-                # Invoice berikutnya: mulai dari tanggal 1 bulan due_date
-                # Pastikan due_date adalah datetime
-                if due_date.day == 1:
-                    # Jika jatuh tempo tgl 1, anggap periode layanan adalah bulan SEBELUMNYA full
-                    # Contoh: Jatuh tempo 1 Mar, layanan 1-28 Feb
-                    periode_end = due_date - timedelta(days=1)
-                    periode_start = periode_end.replace(day=1)
-                else:
-                    # Jika jatuh tempo tgl 28, layanan 1-28 bulan itu
-                    periode_start = due_date.replace(day=1)
-                    periode_end = due_date
-
-            # Cek apakah ini invoice gabungan
-            if float(db_invoice.total_harga or 0) > (harga_normal_full + 1):
-                # INI TAGIHAN GABUNGAN
-                # Periode pertama (prorate): dari invoice_date sampai akhir bulan itu
-                periode_prorate_end = invoice_date.replace(day=1) + relativedelta(months=1, days=-1)
-                periode_prorate_str = safe_format_date(periode_prorate_end, "%B %Y")
-
-                # Periode kedua (bulan penuh): bulan berikutnya
-                periode_berikutnya_start = periode_prorate_end + relativedelta(days=1)
-                periode_berikutnya_end = periode_berikutnya_start + relativedelta(months=1, days=-1)
-
-                deskripsi_xendit = (
-                    f"Biaya internet up to {paket.kecepatan} Mbps. "
-                    f"Periode {invoice_date.day}-{periode_prorate_end.day} {periode_prorate_str} + "
-                    f"Periode {safe_format_date(periode_berikutnya_end, '%B %Y')}"
-                )
-            else:
-                # INI TAGIHAN PRORATE BIASA
-                # Generate deskripsi yang cerdas menangani perbedaan bulan/tahun
-                if periode_start.month == periode_end.month and periode_start.year == periode_end.year:
-                    # Case 1: Dalam satu bulan (e.g. 6-28 Februari 2026)
-                    periode_str = safe_format_date(periode_end, "%B %Y")
-                    period_desc = f"Periode Tgl {periode_start.day}-{periode_end.day} {periode_str}"
-                elif periode_start.year == periode_end.year:
-                     # Case 2: Beda bulan, tahun sama (e.g. 6 Februari - 1 Maret 2026)
-                     start_month = safe_format_date(periode_start, "%B")
-                     end_month_year = safe_format_date(periode_end, "%B %Y")
-                     period_desc = f"Periode Tgl {periode_start.day} {start_month} - {periode_end.day} {end_month_year}"
-                else:
-                     # Case 3: Beda tahun
-                     start_full = safe_format_date(periode_start, "%d %B %Y")
-                     end_full = safe_format_date(periode_end, "%d %B %Y")
-                     period_desc = f"Periode Tgl {start_full} - {end_full}"
-
-                deskripsi_xendit = (
-                    f"Biaya berlangganan internet up to {paket.kecepatan} Mbps, "
-                    f"{period_desc}"
-                )
-
-        else:  # Otomatis
-            deskripsi_xendit = (
-                f"Biaya berlangganan internet up to {paket.kecepatan} Mbps "
-                f"jatuh tempo pembayaran tanggal {jatuh_tempo_str_lengkap}"
-            )
-
-        # Format nomor telepon untuk Xendit (tanpa '+')
-        no_telp_bersih = ""
-        if pelanggan.no_telp:
-            # Gunakan helper universal yang handle semua format: 08xx, 62xx, +62xx, 8xx
-            no_telp_bersih = normalize_phone_for_xendit(pelanggan.no_telp)
-
-        no_telp_xendit = no_telp_bersih if no_telp_bersih else None
-
-        # Kirim deskripsi yang sudah dinamis ke Xendit dengan rate limiting
-        # Determine priority based on customer type
-        priority = InvoicePriority.NORMAL
-        if hasattr(pelanggan, 'is_vip') and getattr(pelanggan, 'is_vip', False):
-            priority = InvoicePriority.HIGH
-        elif hasattr(pelanggan, 'tipe') and getattr(pelanggan, 'tipe', '') == 'bulk':
-            priority = InvoicePriority.LOW
-
-        xendit_response = await create_invoice_with_rate_limit(
-            invoice=db_invoice,
-            pelanggan=pelanggan,
-            paket=paket,
-            deskripsi_xendit=deskripsi_xendit,
-            pajak=pajak,
-            no_telp_xendit=no_telp_xendit or "",
-            priority=priority
+        new_invoice = await invoice_service.create_invoice(
+            db=db,
+            langganan_id=invoice_data.langganan_id,
+            is_reinvoice=getattr(invoice_data, 'is_reinvoice', False),
+            original_invoice_id=getattr(invoice_data, 'original_invoice_id', None),
+            reinvoice_reason=getattr(invoice_data, 'reinvoice_reason', None)
         )
-
-        db_invoice.payment_link = xendit_response.get("short_url", xendit_response.get("invoice_url"))
-        db_invoice.xendit_id = xendit_response.get("id")
-        db_invoice.xendit_external_id = xendit_response.get("external_id")
-        await db.commit()
-        await db.refresh(db_invoice)
+        return new_invoice
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        await db.rollback()
-        logger.error(f"Gagal membuat invoice di Xendit: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Gagal membuat invoice di Xendit: {str(e)}")
-
-    # FIX: Eager load pelanggan sebelum return untuk menghindari MissingGreenlet error
-    # saat FastAPI serialize response
-    stmt_reload = (
-        select(InvoiceModel)
-        .where(InvoiceModel.id == db_invoice.id)
-        .options(
-            joinedload(InvoiceModel.pelanggan).options(
-                joinedload(PelangganModel.harga_layanan),
-                joinedload(PelangganModel.langganan).joinedload(LanggananModel.paket_layanan),
-                joinedload(PelangganModel.data_teknis),
-            )
-        )
-    )
-    result_reload = await db.execute(stmt_reload)
-    db_invoice_loaded = result_reload.unique().scalar_one()
-
-    return db_invoice_loaded
+        logger.error(f"Error generating manual invoice: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # POST /invoices/{invoice_id}/mark-as-paid - Tandai invoice lunas manual
@@ -1329,9 +713,10 @@ async def generate_manual_invoice(invoice_data: InvoiceGenerate, db: AsyncSessio
     dependencies=[Depends(has_permission("edit_invoices"))],
 )
 async def mark_invoice_as_paid(invoice_id: int, payload: MarkAsPaidRequest, db: AsyncSession = Depends(get_db)):
-    """Menandai sebuah invoice sebagai lunas secara manual."""
-    # PERBAIKAN: Eager load semua relasi yang dibutuhkan oleh _process_successful_payment
-    # untuk menghindari N+1 query dan membuat proses lebih efisien.
+    """Menandai sebuah invoice sebagai lunas secara manual via dashboard."""
+    invoice_service = InvoiceService()
+    
+    # Load invoice dengan relasi lengkap
     stmt = (
         select(InvoiceModel)
         .where(InvoiceModel.id == invoice_id)
@@ -1351,9 +736,10 @@ async def mark_invoice_as_paid(invoice_id: int, payload: MarkAsPaidRequest, db: 
     if invoice.status_invoice == "Lunas":
         raise HTTPException(status_code=400, detail="Invoice ini sudah lunas.")
 
+    # 1. Update metode pembayaran dari input dashboard
     invoice.metode_pembayaran = payload.metode_pembayaran
 
-    # SAFETY NET: Simpan status original untuk potensi Mikrotik rollback
+    # 2. Simpan status original untuk potensi rollback Mikrotik
     _original_status = None
     _rollback_langganan = None
     _rollback_data_teknis = None
@@ -1362,41 +748,41 @@ async def mark_invoice_as_paid(invoice_id: int, payload: MarkAsPaidRequest, db: 
         _original_status = _rollback_langganan.status
         _rollback_data_teknis = getattr(invoice.pelanggan, 'data_teknis', None)
 
-    await _process_successful_payment(db, invoice)
+    # 3. Proses pembayaran via centralized service
+    # Ini menghitung jatuh tempo berikutnya & update Mikrotik
+    await invoice_service.process_payment(db, invoice)
 
     try:
         await db.commit()
         await db.refresh(invoice)
     except Exception as commit_error:
         await db.rollback()
-        logger.error(f"❌ Commit gagal saat mark-as-paid untuk invoice {invoice_id}: {commit_error}")
-        # Rollback Mikrotik jika unsuspend sudah dilakukan
+        logger.error(f"❌ Commit gagal saat manual mark-as-paid {invoice_id}: {commit_error}")
+        
+        # SAFETY NET: Rollback Mikrotik jika update berhasil tapi commit DB gagal
         if _original_status == "Suspended" and _rollback_langganan and _rollback_data_teknis:
             try:
                 _rollback_langganan.status = "Suspended"
                 await mikrotik_service.trigger_mikrotik_update(
                     db, _rollback_langganan, _rollback_data_teknis, _rollback_data_teknis.id_pelanggan
                 )
-                logger.info(f"✅ Mikrotik rollback successful for langganan ID {_rollback_langganan.id}")
+                logger.info(f"✅ Mikrotik rollback successful for {invoice.invoice_number}")
             except Exception as rollback_error:
                 logger.error(f"❌ CRITICAL: Mikrotik rollback FAILED: {rollback_error}")
                 _rollback_data_teknis.mikrotik_sync_pending = True
                 try:
-                    db.add(_rollback_data_teknis)
-                    await db.commit()
-                except Exception:
-                    pass
-        raise HTTPException(status_code=500, detail="Gagal menyimpan perubahan pembayaran.")
+                    db.add(_rollback_data_teknis); await db.commit()
+                except Exception: pass
+                
+        raise HTTPException(status_code=500, detail="Gagal menyimpan status lunas.")
 
-    # Clear sidebar cache untuk update badge count
+    # 4. Clear cache UI
     try:
         from .dashboard import clear_sidebar_cache
         clear_sidebar_cache()
-    except ImportError:
-        pass  # Fallback jika import gagal
+    except ImportError: pass
 
-    logger.info(f"Invoice {invoice.invoice_number} ditandai lunas secara manual via {payload.metode_pembayaran}")
-    
+    logger.info(f"✅ Invoice {invoice.invoice_number} lunas manual via {payload.metode_pembayaran}")
     return invoice
 
 
