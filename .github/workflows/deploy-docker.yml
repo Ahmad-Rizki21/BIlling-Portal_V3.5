@@ -21,6 +21,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Get Tag Name
+        id: slug
+        run: echo "tag=$(echo ${GITHUB_REF#refs/heads/} | sed 's/\//-/g')" >> $GITHUB_OUTPUT
+
       - name: Log in to the Container registry
         if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
@@ -43,7 +47,7 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: |
             ${{ steps.meta-backend.outputs.tags }}
-            ghcr.io/${{ env.IMAGE_NAME }}-backend:${{ github.ref_name }}
+            ghcr.io/${{ env.IMAGE_NAME }}-backend:${{ steps.slug.outputs.tag }}
           labels: ${{ steps.meta-backend.outputs.labels }}
 
       - name: Extract metadata (tags, labels) for Frontend
@@ -60,7 +64,7 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: |
             ${{ steps.meta-frontend.outputs.tags }}
-            ghcr.io/${{ env.IMAGE_NAME }}-frontend:${{ github.ref_name }}
+            ghcr.io/${{ env.IMAGE_NAME }}-frontend:${{ steps.slug.outputs.tag }}
           labels: ${{ steps.meta-frontend.outputs.labels }}
 
   deploy:
@@ -90,12 +94,16 @@ jobs:
     if: github.ref == 'refs/heads/optimization/v5.0' && github.event_name == 'push'
 
     steps:
+      - name: Get Tag Name
+        id: slug
+        run: echo "tag=$(echo ${GITHUB_REF#refs/heads/} | sed 's/\//-/g')" >> $GITHUB_OUTPUT
+
       - name: Deploy to Local Staging VM
         run: |
           cd ~/billing-staging
 
           # Tentukan tag berdasarkan branch
-          export IMAGE_TAG=${{ github.ref_name }}
+          export IMAGE_TAG=${{ steps.slug.outputs.tag }}
 
           # Login ke GHCR
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
