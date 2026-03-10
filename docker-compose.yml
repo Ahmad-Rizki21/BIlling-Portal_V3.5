@@ -12,6 +12,11 @@ services:
       - "3307:3306"
     volumes:
       - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DATABASE_PASSWORD:-root}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   backend:
     image: ghcr.io/${REPO_NAME:-ahmad-rizki21/billing-portal_v3.5}-backend:${IMAGE_TAG:-latest}
@@ -23,7 +28,8 @@ services:
     environment:
       - DATABASE_URL=mysql+aiomysql://root:${MYSQL_ROOT_PASSWORD:-root}@db:3306/jelantik_billing
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     ports:
       - "8000:8000"
 
