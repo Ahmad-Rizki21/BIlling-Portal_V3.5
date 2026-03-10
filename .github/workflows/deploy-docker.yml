@@ -23,7 +23,9 @@ jobs:
 
       - name: Get Tag Name
         id: slug
-        run: echo "tag=$(echo ${GITHUB_REF#refs/heads/} | sed 's/\//-/g')" >> $GITHUB_OUTPUT
+        run: |
+          echo "tag=$(echo ${GITHUB_REF#refs/heads/} | sed 's/\//-/g')" >> $GITHUB_OUTPUT
+          echo "repo=$(echo ${{ github.repository }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
 
       - name: Log in to the Container registry
         if: github.event_name != 'pull_request'
@@ -37,7 +39,7 @@ jobs:
         id: meta-backend
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-backend
+          images: ${{ env.REGISTRY }}/${{ steps.slug.outputs.repo }}-backend
 
       - name: Build and push Backend Docker image
         uses: docker/build-push-action@v5
@@ -47,14 +49,14 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: |
             ${{ steps.meta-backend.outputs.tags }}
-            ghcr.io/${{ env.IMAGE_NAME }}-backend:${{ steps.slug.outputs.tag }}
+            ghcr.io/${{ steps.slug.outputs.repo }}-backend:${{ steps.slug.outputs.tag }}
           labels: ${{ steps.meta-backend.outputs.labels }}
 
       - name: Extract metadata (tags, labels) for Frontend
         id: meta-frontend
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-frontend
+          images: ${{ env.REGISTRY }}/${{ steps.slug.outputs.repo }}-frontend
 
       - name: Build and push Frontend Docker image
         uses: docker/build-push-action@v5
@@ -64,7 +66,7 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: |
             ${{ steps.meta-frontend.outputs.tags }}
-            ghcr.io/${{ env.IMAGE_NAME }}-frontend:${{ steps.slug.outputs.tag }}
+            ghcr.io/${{ steps.slug.outputs.repo }}-frontend:${{ steps.slug.outputs.tag }}
           labels: ${{ steps.meta-frontend.outputs.labels }}
 
   deploy:
@@ -96,21 +98,24 @@ jobs:
     steps:
       - name: Get Tag Name
         id: slug
-        run: echo "tag=$(echo ${GITHUB_REF#refs/heads/} | sed 's/\//-/g')" >> $GITHUB_OUTPUT
+        run: |
+          echo "tag=$(echo ${GITHUB_REF#refs/heads/} | sed 's/\//-/g')" >> $GITHUB_OUTPUT
+          echo "repo=$(echo ${{ github.repository }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
 
       - name: Deploy to Local Staging VM
         run: |
           cd ~/billing-staging
 
-          # Tentukan tag berdasarkan branch
+          # Tentukan variabel untuk docker compose
           export IMAGE_TAG=${{ steps.slug.outputs.tag }}
+          export REPO_NAME=${{ steps.slug.outputs.repo }}
 
           # Login ke GHCR
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-          # Tarik image terbaru & jalankan dengan tag spesifik
-          IMAGE_TAG=$IMAGE_TAG docker compose pull
-          IMAGE_TAG=$IMAGE_TAG docker compose up -d
+          # Tarik image terbaru & jalankan (Gunakan variabel env agar docker-compose.yml bisa baca)
+          IMAGE_TAG=$IMAGE_TAG REPO_NAME=$REPO_NAME docker compose pull
+          IMAGE_TAG=$IMAGE_TAG REPO_NAME=$REPO_NAME docker compose up -d
 
           # Bersihkan image lama
           docker image prune -f

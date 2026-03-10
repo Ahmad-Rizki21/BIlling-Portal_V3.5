@@ -14,7 +14,7 @@ services:
       - mysql_data:/var/lib/mysql
 
   backend:
-    image: ghcr.io/ahmad-rizki21/billing-portal_v3.5-backend:latest
+    image: ghcr.io/${REPO_NAME:-ahmad-rizki21/billing-portal_v3.5}-backend:${IMAGE_TAG:-latest}
     build: .
     container_name: billing-backend
     restart: always
@@ -29,7 +29,7 @@ services:
 
 
   frontend:
-    image: ghcr.io/ahmad-rizki21/billing-portal_v3.5-frontend:latest
+    image: ghcr.io/${REPO_NAME:-ahmad-rizki21/billing-portal_v3.5}-frontend:${IMAGE_TAG:-latest}
     build:
       context: ./frontend
     container_name: billing-frontend
