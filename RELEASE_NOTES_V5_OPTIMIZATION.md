@@ -148,6 +148,15 @@ Update ini **TIDAK** mengubah:
 **Masalah**: Logika webhook Xendit dan pengelolaan riwayat pembayaran masih tercampur di router, menyulitkan unit testing dan pemeliharaan integrasi eksternal.
 **Saran**: Pembuatan `PaymentService` untuk memisahkan validasi signature Xendit, otomasi pencatatan histori pembayaran, dan pemicuan status lunas pada invoice secara atomic.
 
+### 2. Integrasi WhatsApp API (Prioritas: MENENGAH - TINGGI)
+
+**Fitur**: Menggabungkan layanan WhatsApp Gateway API resmi / pihak ketiga ke dalam sistem notifikasi.
+**Saran Implementasi**:
+
+- **Automated Reminders**: Notifikasi otomatis via pesan WhatsApp H-3, H-1, dan hari-H jatuh tempo tagihan.
+- **Payment Link Delivery**: Mengirimkan Link Pembayaran Xendit langsung ke WhatsApp pelanggan untuk memudahkan pelanggan dalam melakukan checkout (Tap n Pay).
+- **Modul `NotificationService`**: Membuat _service layer_ terpusat khusus mengurus pengiriman pesan (WA/Email).
+
 ---
 
 **Versi:** 5.0-beta-refactored  
