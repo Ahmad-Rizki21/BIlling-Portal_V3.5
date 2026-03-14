@@ -101,7 +101,7 @@
           <!-- Title -->
           <div v-if="!rail || isMobile" class="title-wrapper">
             <h1 class="app-title">Artacom Ftth</h1>
-            <p class="app-subtitle">Portal Customer V3</p>
+            <p class="app-subtitle">Portal Customer V4</p>
           </div>
 
           <!-- Toggle Button -->
