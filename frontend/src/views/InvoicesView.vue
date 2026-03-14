@@ -3,7 +3,7 @@
     <div class="invoice-header mb-8 pa-6 rounded-xl">
       <div class="d-flex flex-column flex-md-row align-start align-md-center gap-4">
         <div class="header-content d-flex align-center">
-          <div class="icon-container me-4">
+          <div class="header-icon-box me-4">
             <v-icon size="32" color="white">mdi-receipt-text-outline</v-icon>
           </div>
           <div>
@@ -30,143 +30,263 @@
       </div>
     </div>
 
-    <v-row class="mb-6">
-      <v-col cols="12" sm="6" md="3">
-        <v-card class="stats-card pa-4" elevation="2">
+    <v-row class="mb-4 mb-md-6 g-2 g-md-4">
+      <v-col cols="6" sm="6" md="3">
+        <v-card class="stats-card pa-3 pa-md-4" elevation="2">
           <div class="d-flex align-center">
-            <div class="stats-icon success me-3">
-              <v-icon color="success">mdi-check-circle</v-icon>
+            <div class="stats-icon success me-2 me-md-3">
+              <v-icon color="success" size="20" class="d-md-none">mdi-check-circle</v-icon>
+              <v-icon color="success" class="d-none d-md-flex">mdi-check-circle</v-icon>
             </div>
             <div>
-              <div class="text-h6 font-weight-bold">{{ getPaidCount() }}</div>
-              <div class="text-caption text-medium-emphasis">Invoice Lunas</div>
+              <div class="text-subtitle-1 text-md-h6 font-weight-bold">{{ getPaidCount() }}</div>
+              <div class="text-caption text-medium-emphasis text-truncate">Invoice Lunas</div>
             </div>
           </div>
         </v-card>
       </v-col>
-      <v-col cols="12" sm="6" md="3">
-        <v-card class="stats-card pa-4" elevation="2">
+      <v-col cols="6" sm="6" md="3">
+        <v-card class="stats-card pa-3 pa-md-4" elevation="2">
           <div class="d-flex align-center">
-            <div class="stats-icon warning me-3">
-              <v-icon color="warning">mdi-clock-outline</v-icon>
+            <div class="stats-icon warning me-2 me-md-3">
+              <v-icon color="warning" size="20" class="d-md-none">mdi-clock-outline</v-icon>
+              <v-icon color="warning" class="d-none d-md-flex">mdi-clock-outline</v-icon>
             </div>
             <div>
-              <div class="text-h6 font-weight-bold">{{ getPendingCount() }}</div>
-              <div class="text-caption text-medium-emphasis">Belum Dibayar</div>
+              <div class="text-subtitle-1 text-md-h6 font-weight-bold">{{ getPendingCount() }}</div>
+              <div class="text-caption text-medium-emphasis text-truncate">Belum Dibayar</div>
             </div>
           </div>
         </v-card>
       </v-col>
-      <v-col cols="12" sm="6" md="3">
-        <v-card class="stats-card pa-4" elevation="2">
+      <v-col cols="6" sm="6" md="3">
+        <v-card class="stats-card pa-3 pa-md-4" elevation="2">
           <div class="d-flex align-center">
-            <div class="stats-icon error me-3">
-              <v-icon color="error">mdi-alert-circle</v-icon>
+            <div class="stats-icon error me-2 me-md-3">
+              <v-icon color="error" size="20" class="d-md-none">mdi-alert-circle</v-icon>
+              <v-icon color="error" class="d-none d-md-flex">mdi-alert-circle</v-icon>
             </div>
             <div>
-              <div class="text-h6 font-weight-bold">{{ getOverdueCount() }}</div>
-              <div class="text-caption text-medium-emphasis">Kadaluarsa</div>
+              <div class="text-subtitle-1 text-md-h6 font-weight-bold">{{ getOverdueCount() }}</div>
+              <div class="text-caption text-medium-emphasis text-truncate">Kadaluarsa</div>
             </div>
           </div>
         </v-card>
       </v-col>
-      <v-col cols="12" sm="6" md="3">
-        <v-card class="stats-card pa-4" elevation="2">
+      <v-col cols="6" sm="6" md="3">
+        <v-card class="stats-card pa-3 pa-md-4" elevation="2">
           <div class="d-flex align-center">
-            <div class="stats-icon primary me-3">
-              <v-icon color="primary">mdi-receipt-text</v-icon>
+            <div class="stats-icon primary me-2 me-md-3">
+              <v-icon color="primary" size="20" class="d-md-none">mdi-receipt-text</v-icon>
+              <v-icon color="primary" class="d-none d-md-flex">mdi-receipt-text</v-icon>
             </div>
             <div>
-              <div class="text-h6 font-weight-bold">
+              <div class="text-subtitle-1 text-md-h6 font-weight-bold text-truncate">
                 {{ totalCount > invoices.length ? `${invoices.length}/${totalCount}` : invoices.length }}
               </div>
-              <div class="text-caption text-medium-emphasis">Total Invoice</div>
+              <div class="text-caption text-medium-emphasis text-truncate">Total Invoice</div>
             </div>
           </div>
         </v-card>
       </v-col>
     </v-row>
 
-    <v-card class="filter-card mb-6" elevation="0">
-      <div class="d-flex flex-wrap align-center gap-4 pa-4">
+    <!-- Filter Card - Modern Redesign (Compact) -->
+    <v-card class="filter-card mb-4 mb-md-6" elevation="0">
+      <!-- Primary Search Row -->
+      <div class="filter-primary-row">
         <v-text-field
           v-model="searchQuery"
-          label="Cari (No. Invoice, Nama, ID)"
+          placeholder="Cari (No. Invoice, Nama, ID)..."
           prepend-inner-icon="mdi-magnify"
-          variant="outlined"
+          variant="solo-filled"
           density="comfortable"
           hide-details
-          class="flex-grow-1"
-          style="min-width: 250px;"
-        ></v-text-field>
-
-        <v-select
-          v-model="selectedStatus"
-          :items="statusOptions"
-          label="Filter Status"
-          variant="outlined"
-          density="comfortable"
-          hide-details
-          clearable
-          class="flex-grow-1"
-          style="min-width: 180px;"
-        ></v-select>
-
-        <v-text-field
-          v-model="startDate"
-          label="Dari Tanggal"
-          type="date"
-          variant="outlined"
-          density="comfortable"
-          hide-details
-          clearable
-          class="flex-grow-1"
-          style="min-width: 180px;"
+          class="filter-search-field"
+          flat
         ></v-text-field>
         
-        <v-text-field
-          v-model="endDate"
-          label="Sampai Tanggal"
-          type="date"
-          variant="outlined"
-          density="comfortable"
-          hide-details
-          clearable
-          class="flex-grow-1"
-          style="min-width: 180px;"
-        ></v-text-field>
-
-        <v-switch
-          v-model="showPaidInvoices"
-          color="success"
-          label="Tampilkan Lunas & Kadaluarsa"
-          hide-details
-          density="comfortable"
-          class="flex-grow-0 ms-md-4"
-        ></v-switch>
-        <v-select
-          v-model="selectedLimit"
-          :items="limitOptions"
-          item-title="title"
-          item-value="value"
-          label="Tampilkan"
-          variant="outlined"
-          density="comfortable"
-          hide-details
-          class="flex-grow-0"
-          style="min-width: 120px;"
-        ></v-select>
-
         <v-btn
-            variant="text"
-            @click="resetFilters"
-            class="text-none"
+          :color="showAdvancedFilters ? 'primary' : undefined"
+          :variant="showAdvancedFilters ? 'tonal' : 'outlined'"
+          @click="showAdvancedFilters = !showAdvancedFilters"
+          class="filter-toggle-btn text-none"
+          :prepend-icon="showAdvancedFilters ? 'mdi-filter-minus' : 'mdi-filter-plus'"
+          size="large"
         >
-          Reset Filter
+          <span class="d-none d-sm-inline">Filter</span>
+          <v-badge
+            v-if="activeFilterCount > 0"
+            :content="activeFilterCount"
+            color="primary"
+            floating
+            class="filter-badge"
+          ></v-badge>
         </v-btn>
-
       </div>
+
+      <!-- Active Filter Chips -->
+      <v-expand-transition>
+        <div v-if="activeFilterCount > 0" class="filter-active-chips">
+          <div class="d-flex align-center flex-wrap gap-2">
+            <v-icon size="16" class="text-medium-emphasis mr-1">mdi-filter-check</v-icon>
+            <span class="text-caption text-medium-emphasis font-weight-medium mr-2">Filter aktif:</span>
+            
+            <v-chip
+              v-if="selectedStatus"
+              closable
+              size="small"
+              color="primary"
+              variant="tonal"
+              class="filter-chip"
+              @click:close="selectedStatus = null"
+            >
+              <v-icon start size="14">mdi-tag-outline</v-icon>
+              {{ selectedStatus }}
+            </v-chip>
+            
+            <v-chip
+              v-if="startDate || endDate"
+              closable
+              size="small"
+              color="blue"
+              variant="tonal"
+              class="filter-chip"
+              @click:close="startDate = null; endDate = null"
+            >
+              <v-icon start size="14">mdi-calendar-range</v-icon>
+              {{ startDate || '...' }} — {{ endDate || '...' }}
+            </v-chip>
+
+            <v-chip
+              v-if="showPaidInvoices"
+              closable
+              size="small"
+              color="success"
+              variant="tonal"
+              class="filter-chip"
+              @click:close="showPaidInvoices = false"
+            >
+              <v-icon start size="14">mdi-eye-check</v-icon>
+              Semua (Lunas & Kadaluarsa)
+            </v-chip>
+
+            <v-btn
+              variant="text"
+              size="x-small"
+              color="error"
+              class="text-none ml-1"
+              @click="resetFilters"
+              prepend-icon="mdi-close-circle-outline"
+            >
+              Hapus Semua
+            </v-btn>
+          </div>
+        </div>
+      </v-expand-transition>
+
+      <!-- Advanced Filters Panel -->
+      <v-expand-transition>
+        <div v-show="showAdvancedFilters" class="filter-advanced-panel">
+          <v-divider class="mb-4"></v-divider>
+          
+          <div class="filter-grid">
+            <!-- Filter Status -->
+            <div class="filter-grid-item">
+              <label class="filter-label">
+                <v-icon size="16" class="mr-1">mdi-tag-outline</v-icon>
+                Status
+              </label>
+              <v-select
+                v-model="selectedStatus"
+                :items="statusOptions"
+                placeholder="Semua Status"
+                variant="outlined"
+                density="compact"
+                hide-details
+                clearable
+                class="filter-input"
+              ></v-select>
+            </div>
+
+            <!-- Filter Tampilkan -->
+            <div class="filter-grid-item">
+              <label class="filter-label">
+                <v-icon size="16" class="mr-1">mdi-format-list-numbered</v-icon>
+                Tampilkan
+              </label>
+              <v-select
+                v-model="selectedLimit"
+                :items="limitOptions"
+                item-title="title"
+                item-value="value"
+                variant="outlined"
+                density="compact"
+                hide-details
+                class="filter-input"
+              ></v-select>
+            </div>
+
+            <!-- Filter Tanggal - Date Range -->
+            <div class="filter-grid-item filter-grid-item-wide">
+              <label class="filter-label">
+                <v-icon size="16" class="mr-1">mdi-calendar-range</v-icon>
+                Rentang Tanggal
+              </label>
+              <div class="d-flex gap-2 align-center">
+                <v-text-field
+                  v-model="startDate"
+                  type="date"
+                  label="Dari"
+                  variant="outlined"
+                  density="compact"
+                  hide-details
+                  clearable
+                  class="filter-input"
+                ></v-text-field>
+                <v-icon size="18" class="text-medium-emphasis flex-shrink-0">mdi-arrow-right</v-icon>
+                <v-text-field
+                  v-model="endDate"
+                  type="date"
+                  label="Sampai"
+                  variant="outlined"
+                  density="compact"
+                  hide-details
+                  clearable
+                  class="filter-input"
+                ></v-text-field>
+              </div>
+            </div>
+
+            <!-- Toggle Switch -->
+            <div class="filter-grid-item filter-grid-item-wide">
+              <v-switch
+                v-model="showPaidInvoices"
+                color="success"
+                label="Tampilkan Lunas & Kadaluarsa"
+                hide-details
+                density="comfortable"
+              ></v-switch>
+            </div>
+          </div>
+
+          <!-- Filter Actions -->
+          <div class="filter-actions">
+            <v-btn
+              variant="text"
+              @click="resetFilters"
+              class="text-none"
+              prepend-icon="mdi-refresh"
+              color="medium-emphasis"
+              size="small"
+            >
+              Reset Semua Filter
+            </v-btn>
+          </div>
+        </div>
+      </v-expand-transition>
     </v-card>
+
 
     <v-card class="invoice-table-card" elevation="3">
       <div class="table-header pa-4 pa-sm-6">
@@ -204,9 +324,7 @@
           </v-btn>
         </div>
       </v-expand-transition>
-      
-      <!-- PERUBAHAN DIMULAI DI SINI -->
-      
+            
       <!-- Tampilan Tabel untuk Desktop (Medium ke atas) -->
       <div class="responsive-table-container d-none d-md-block">
         <v-data-table
@@ -519,7 +637,6 @@
           </v-card>
         </div>
       </div>
-      <!-- PERUBAHAN SELESAI DI SINI -->
 
     </v-card>
 
@@ -849,6 +966,17 @@ const limitOptions = ref([
   { title: 'Semua', value: 1000 }
 ]);
 const totalCount = ref(0);
+const showAdvancedFilters = ref(false);
+
+const activeFilterCount = computed(() => {
+  let count = 0;
+  if (selectedStatus.value) count++;
+  if (startDate.value) count++;
+  if (endDate.value) count++;
+  if (showPaidInvoices.value) count++;
+  return count;
+});
+
 
 // const newInvoice = ref({
 //   pelanggan_id: null,
@@ -1197,6 +1325,8 @@ function resetFilters() {
   selectedStatus.value = null;
   startDate.value = null;
   endDate.value = null;
+  showPaidInvoices.value = false;
+  selectedLimit.value = 10;
 }
 
 const handleNewNotification = (event: Event) => {
@@ -1657,7 +1787,7 @@ async function fetchSpecificLangganan(id: number) {
   background: linear-gradient(135deg, #4338ca 0%, #6366f1 100%);
 }
 
-.icon-container {
+.header-icon-box {
   width: 56px;
   height: 56px;
   background: rgba(255, 255, 255, 0.2);
@@ -1666,6 +1796,10 @@ async function fetchSpecificLangganan(id: number) {
   align-items: center;
   justify-content: center;
   backdrop-filter: blur(10px);
+}
+
+.header-icon-box::before {
+  content: none !important;
 }
 
 /* ============================================
@@ -1723,12 +1857,96 @@ async function fetchSpecificLangganan(id: number) {
 }
 
 .filter-card .d-flex {
-  padding: 28px 32px !important;
-  gap: 20px !important;
+  padding: 12px !important;
+  gap: 12px !important;
+}
+
+/* Primary Search Row */
+.filter-primary-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+}
+
+.filter-search-field {
+  flex: 1;
+}
+
+.filter-search-field :deep(.v-field) {
+  border-radius: 12px !important;
+  background: rgba(var(--v-theme-on-surface), 0.04) !important;
+  min-height: 48px;
+}
+
+.filter-toggle-btn {
+  border-radius: 12px !important;
+  min-width: 48px;
+  height: 48px !important;
+  font-weight: 600;
+  position: relative;
+  flex-shrink: 0;
+}
+
+/* Active Filter Chips */
+.filter-active-chips {
+  padding: 0 20px 14px 20px;
+}
+
+.filter-chip {
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+/* Advanced Filters Panel */
+.filter-advanced-panel {
+  padding: 0 20px 20px 20px;
+}
+
+.filter-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.filter-grid-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.filter-grid-item-wide {
+  grid-column: span 2;
+}
+
+.filter-label {
+  display: flex;
+  align-items: center;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: rgba(var(--v-theme-on-surface), 0.7);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.filter-input :deep(.v-field) {
+  border-radius: 10px !important;
+}
+
+.filter-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(var(--v-theme-outline-variant), 0.5);
 }
 
 .filter-card .v-text-field {
-  min-width: 320px !important;
+  min-width: unset !important;
+}
+
+.filter-card .v-select {
+  min-width: unset !important;
 }
 
 .filter-card .v-text-field :deep(.v-field) {
@@ -1939,6 +2157,26 @@ async function fetchSpecificLangganan(id: number) {
 .stats-icon.warning { background: rgba(255, 152, 0, 0.1); }
 .stats-icon.error { background: rgba(244, 67, 54, 0.1); }
 .stats-icon.primary { background: rgba(103, 58, 183, 0.1); }
+
+@media (max-width: 600px) {
+  .stats-card {
+    padding: 12px !important;
+  }
+  .stats-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+  }
+  .text-subtitle-1 {
+    font-size: 0.9rem !important;
+  }
+  .filter-grid {
+    grid-template-columns: 1fr;
+  }
+  .filter-grid-item-wide {
+    grid-column: span 1;
+  }
+}
 
 /* Invoice Table Card */
 .invoice-table-card {

@@ -253,138 +253,279 @@
       </v-card>
     </v-dialog>
 
-        <v-card class="filter-card mb-6" elevation="0">
-  <div class="d-flex flex-wrap align-center gap-4 pa-4">
-    <v-text-field
-      v-model="searchQuery"
-      label="Cari Nama Pelanggan"
-      prepend-inner-icon="mdi-magnify"
-      variant="outlined"
-      :density="fieldDensity"
-      hide-details
-      clearable
-      class="flex-grow-1"
-      style="min-width: 250px;"
-    ></v-text-field>
-
-    <v-select
-      v-model="selectedAlamat"
-      :items="alamatOptions"
-      label="Filter Alamat"
-      prepend-inner-icon="mdi-map-marker"
-      variant="outlined"
-      density="comfortable"
-      hide-details
-      clearable
-      class="flex-grow-1"
-      style="min-width: 200px;"
-    ></v-select>
-
-    <v-select
-      v-model="selectedPaket"
-      :items="uniquePaketLayananOptions"
-      item-title="nama_paket"
-      item-value="id"
-      label="Filter Paket Layanan"
-      prepend-inner-icon="mdi-wifi-star"
-      variant="outlined"
-      density="comfortable"
-      hide-details
-      clearable
-      class="flex-grow-1"
-      style="min-width: 200px;"
-    ></v-select>
-
-    <v-select
-      v-model="selectedStatus"
-      :items="statusOptions"
-      label="Filter Status"
-      prepend-inner-icon="mdi-list-status"
-      variant="outlined"
-      density="comfortable"
-      hide-details
-      clearable
-      class="flex-grow-1"
-      style="min-width: 180px;"
-    ></v-select>
-
-    
-  
-    <!-- Jatuh Tempo Dari -->
-    <v-menu v-model="menuJatuhTempoStart" :close-on-content-click="false" location="bottom start" offset="8">
-      <template v-slot:activator="{ props }">
+    <!-- Filter Card - Modern Redesign (Matched with PelangganView) -->
+    <v-card class="filter-card mb-4 mb-md-6" elevation="0">
+      <!-- Primary Search Row -->
+      <div class="filter-primary-row">
         <v-text-field
-          :model-value="formatDateForDisplay(selectedJatuhTempoStart)"
-          label="Jatuh Tempo Dari"
-          prepend-inner-icon="mdi-calendar-start"
-          readonly
-          v-bind="props"
-          variant="outlined"
+          v-model="searchQuery"
+          :placeholder="mobile ? 'Cari langganan...' : 'Cari berdasarkan nama pelanggan...'"
+          prepend-inner-icon="mdi-magnify"
+          variant="solo-filled"
           density="comfortable"
           hide-details
-          clearable
-          class="flex-grow-1"
-          @click:clear="selectedJatuhTempoStart = null"
-          style="min-width: 160px;"
+          class="filter-search-field"
+          flat
+          style="min-width: 0 !important; flex: 1;"
         ></v-text-field>
-      </template>
-      <v-date-picker 
-        v-model="selectedJatuhTempoStart" 
-        @update:model-value="menuJatuhTempoStart = false"
-        color="primary"
-      ></v-date-picker>
-    </v-menu>
+        
+        <v-badge
+          :content="activeFilterCount"
+          :model-value="activeFilterCount > 0"
+          color="primary"
+          offset-x="4"
+          offset-y="4"
+          class="filter-badge-wrapper"
+        >
+          <v-btn
+            :color="showAdvancedFilters ? 'primary' : undefined"
+            :variant="showAdvancedFilters ? 'tonal' : 'outlined'"
+            @click="showAdvancedFilters = !showAdvancedFilters"
+            class="filter-toggle-btn text-none"
+            :icon="mobile"
+            :prepend-icon="!mobile ? (showAdvancedFilters ? 'mdi-filter-minus' : 'mdi-filter-plus') : undefined"
+            size="large"
+          >
+            <v-icon v-if="mobile">{{ showAdvancedFilters ? 'mdi-filter-minus' : 'mdi-filter-plus' }}</v-icon>
+            <span class="d-none d-sm-inline">{{ showAdvancedFilters ? 'Tutup Filter' : 'Filter' }}</span>
+          </v-btn>
+        </v-badge>
+      </div>
 
-    <!-- Jatuh Tempo Sampai -->
-    <v-menu v-model="menuJatuhTempoEnd" :close-on-content-click="false" location="bottom start" offset="8">
-      <template v-slot:activator="{ props }">
-        <v-text-field
-          :model-value="formatDateForDisplay(selectedJatuhTempoEnd)"
-          label="Jatuh Tempo Sampai"
-          prepend-inner-icon="mdi-calendar-end"
-          readonly
-          v-bind="props"
-          variant="outlined"
-          density="comfortable"
-          hide-details
-          clearable
-          class="flex-grow-1"
-          @click:clear="selectedJatuhTempoEnd = null"
-          style="min-width: 160px;"
-        ></v-text-field>
-      </template>
-      <v-date-picker 
-        v-model="selectedJatuhTempoEnd" 
-        @update:model-value="menuJatuhTempoEnd = false"
-        color="primary"
-      ></v-date-picker>
-    </v-menu>
+      <!-- Active Filter Chips -->
+      <v-expand-transition>
+        <div v-if="activeFilterCount > 0" class="filter-active-chips">
+          <div class="d-flex align-center flex-wrap gap-2">
+            <v-icon size="16" class="text-medium-emphasis mr-1">mdi-filter-check</v-icon>
+            <span class="text-caption text-medium-emphasis font-weight-medium mr-2">Filter aktif:</span>
+            
+            <v-chip
+              v-if="selectedAlamat"
+              closable
+              size="small"
+              color="primary"
+              variant="tonal"
+              class="filter-chip"
+              @click:close="selectedAlamat = ''"
+            >
+              <v-icon start size="14">mdi-map-marker</v-icon>
+              {{ selectedAlamat }}
+            </v-chip>
+            
+            <v-chip
+              v-if="selectedPaket"
+              closable
+              size="small"
+              color="deep-purple"
+              variant="tonal"
+              class="filter-chip"
+              @click:close="selectedPaket = null"
+            >
+              <v-icon start size="14">mdi-wifi-star</v-icon>
+              {{ paketLayananSelectList.find(p => p.id === selectedPaket)?.nama_paket || 'Paket' }}
+            </v-chip>
+            
+            <v-chip
+              v-if="selectedStatus"
+              closable
+              size="small"
+              color="teal"
+              variant="tonal"
+              class="filter-chip"
+              @click:close="selectedStatus = null"
+            >
+              <v-icon start size="14">mdi-list-status</v-icon>
+              {{ selectedStatus }}
+            </v-chip>
+            
+            <v-chip
+              v-if="selectedJatuhTempoStart || selectedJatuhTempoEnd"
+              closable
+              size="small"
+              color="blue"
+              variant="tonal"
+              class="filter-chip"
+              @click:close="selectedJatuhTempoStart = null; selectedJatuhTempoEnd = null"
+            >
+              <v-icon start size="14">mdi-calendar-range</v-icon>
+              {{ formatDateForDisplay(selectedJatuhTempoStart) || '...' }} — {{ formatDateForDisplay(selectedJatuhTempoEnd) || '...' }}
+            </v-chip>
 
-    <v-select
-      v-model="selectedExportBrand"
-      :items="exportBrandOptions"
-      item-title="title"
-      item-value="value"
-      label="Export Filter Brand"
-      prepend-inner-icon="mdi-domain"
-      variant="outlined"
-      density="comfortable"
-      hide-details
-      clearable
-      class="flex-grow-1"
-      style="min-width: 180px;"
-    ></v-select>
+            <v-chip
+              v-if="selectedExportBrand"
+              closable
+              size="small"
+              color="orange"
+              variant="tonal"
+              class="filter-chip"
+              @click:close="selectedExportBrand = ''"
+            >
+              <v-icon start size="14">mdi-domain</v-icon>
+              {{ exportBrandOptions.find(b => b.value === selectedExportBrand)?.title || 'Brand' }}
+            </v-chip>
 
-    <v-btn
-        variant="text"
-        @click="resetFilters"
-        class="text-none"
-    >
-      <v-icon start>mdi-refresh</v-icon>
-      Reset
-    </v-btn>
-  </div>
-</v-card>
+            <v-btn
+              variant="text"
+              size="x-small"
+              color="error"
+              class="text-none ml-1"
+              @click="resetFilters"
+              prepend-icon="mdi-close-circle-outline"
+            >
+              Hapus Semua
+            </v-btn>
+          </div>
+        </div>
+      </v-expand-transition>
+
+      <!-- Advanced Filters Panel -->
+      <v-expand-transition>
+        <div v-show="showAdvancedFilters" class="filter-advanced-panel">
+          <v-divider class="mb-4"></v-divider>
+          
+          <div class="filter-grid">
+            <!-- Filter Alamat -->
+            <div class="filter-grid-item">
+              <label class="filter-label">
+                <v-icon size="16" class="mr-1">mdi-map-marker</v-icon>
+                Alamat
+              </label>
+              <v-select
+                v-model="selectedAlamat"
+                :items="alamatOptions"
+                placeholder="Semua alamat"
+                variant="outlined"
+                density="compact"
+                hide-details
+                clearable
+                class="filter-input"
+              ></v-select>
+            </div>
+
+            <!-- Filter Paket -->
+            <div class="filter-grid-item">
+              <label class="filter-label">
+                <v-icon size="16" class="mr-1">mdi-wifi-star</v-icon>
+                Paket Layanan
+              </label>
+              <v-select
+                v-model="selectedPaket"
+                :items="uniquePaketLayananOptions"
+                item-title="nama_paket"
+                item-value="id"
+                placeholder="Semua paket"
+                variant="outlined"
+                density="compact"
+                hide-details
+                clearable
+                class="filter-input"
+              ></v-select>
+            </div>
+
+            <!-- Filter Status -->
+            <div class="filter-grid-item">
+              <label class="filter-label">
+                <v-icon size="16" class="mr-1">mdi-list-status</v-icon>
+                Status
+              </label>
+              <v-select
+                v-model="selectedStatus"
+                :items="statusOptions"
+                placeholder="Semua status"
+                variant="outlined"
+                density="compact"
+                hide-details
+                clearable
+                class="filter-input"
+              ></v-select>
+            </div>
+            
+            <!-- Filter Brand (Export) -->
+            <div class="filter-grid-item">
+              <label class="filter-label">
+                <v-icon size="16" class="mr-1">mdi-domain</v-icon>
+                Export Filter Brand
+              </label>
+              <v-select
+                v-model="selectedExportBrand"
+                :items="exportBrandOptions"
+                item-title="title"
+                item-value="value"
+                placeholder="Semua brand"
+                variant="outlined"
+                density="compact"
+                hide-details
+                clearable
+                class="filter-input"
+              ></v-select>
+            </div>
+
+            <!-- Filter Jatuh Tempo - Date Range -->
+            <div class="filter-grid-item filter-grid-item-wide">
+              <label class="filter-label">
+                <v-icon size="16" class="mr-1">mdi-calendar-range</v-icon>
+                Range Jatuh Tempo
+              </label>
+              <div class="d-flex gap-2 align-center">
+                <v-menu v-model="menuJatuhTempoStart" :close-on-content-click="false">
+                  <template v-slot:activator="{ props }">
+                    <v-text-field
+                      :model-value="formatDateForDisplay(selectedJatuhTempoStart)"
+                      placeholder="Dari"
+                      prepend-inner-icon="mdi-calendar-start"
+                      readonly
+                      v-bind="props"
+                      variant="outlined"
+                      density="compact"
+                      hide-details
+                      clearable
+                      class="filter-input flex-grow-1"
+                      @click:clear="selectedJatuhTempoStart = null"
+                    ></v-text-field>
+                  </template>
+                  <v-date-picker v-model="selectedJatuhTempoStart" @update:model-value="menuJatuhTempoStart = false" color="primary"></v-date-picker>
+                </v-menu>
+                
+                <v-icon size="18" class="text-medium-emphasis flex-shrink-0">mdi-arrow-right</v-icon>
+                
+                <v-menu v-model="menuJatuhTempoEnd" :close-on-content-click="false">
+                  <template v-slot:activator="{ props }">
+                    <v-text-field
+                      :model-value="formatDateForDisplay(selectedJatuhTempoEnd)"
+                      placeholder="Sampai"
+                      prepend-inner-icon="mdi-calendar-end"
+                      readonly
+                      v-bind="props"
+                      variant="outlined"
+                      density="compact"
+                      hide-details
+                      clearable
+                      class="filter-input flex-grow-1"
+                      @click:clear="selectedJatuhTempoEnd = null"
+                    ></v-text-field>
+                  </template>
+                  <v-date-picker v-model="selectedJatuhTempoEnd" @update:model-value="menuJatuhTempoEnd = false" color="primary"></v-date-picker>
+                </v-menu>
+              </div>
+            </div>
+          </div>
+
+          <!-- Filter Actions -->
+          <div class="filter-actions">
+            <v-btn
+              variant="text"
+              @click="resetFilters"
+              class="text-none"
+              prepend-icon="mdi-refresh"
+              color="medium-emphasis"
+              size="small"
+            >
+              Reset Semua Filter
+            </v-btn>
+          </div>
+        </div>
+      </v-expand-transition>
+    </v-card>
 
     <v-card elevation="3" class="rounded-lg">
       <v-card-title class="d-flex align-center pa-4 pa-sm-6 bg-grey-lighten-5">
@@ -1845,6 +1986,18 @@ const selectedJatuhTempoStart = ref<Date | null>(null);
 const selectedJatuhTempoEnd = ref<Date | null>(null);
 const menuJatuhTempoStart = ref(false);
 const menuJatuhTempoEnd = ref(false);
+
+const showAdvancedFilters = ref(false);
+const activeFilterCount = computed(() => {
+  let count = 0;
+  if (selectedAlamat.value) count++;
+  if (selectedPaket.value) count++;
+  if (selectedStatus.value) count++;
+  if (selectedJatuhTempoStart.value) count++;
+  if (selectedJatuhTempoEnd.value) count++;
+  if (selectedExportBrand.value) count++;
+  return count;
+});
 
 function toISODateString(date: Date): string {
     const year = date.getFullYear();
@@ -5987,5 +6140,160 @@ function showSnackbar(text: string, color: 'success' | 'error' | 'warning') {
 .format-info {
   background-color: rgba(var(--v-theme-surface-variant), 0.3) !important;
 }
+
+/* Filter Card - Modern Redesigned (Same as PelangganView) */
+.filter-card {
+  border-radius: 16px;
+  border: 1px solid rgba(var(--v-theme-primary), 0.12);
+  background: rgb(var(--v-theme-surface));
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+}
+
+.filter-primary-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+}
+
+.filter-search-field {
+  flex: 1;
+}
+
+.filter-search-field :deep(.v-field) {
+  border-radius: 12px !important;
+  background: rgba(var(--v-theme-on-surface), 0.04) !important;
+  min-height: 48px;
+}
+
+.filter-search-field :deep(.v-field--focused) {
+  background: rgba(var(--v-theme-primary), 0.04) !important;
+}
+
+.filter-toggle-btn {
+  border-radius: 12px !important;
+  min-width: 48px;
+  height: 48px !important;
+  font-weight: 600;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.filter-badge :deep(.v-badge__badge) {
+  font-size: 0.65rem;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+}
+
+.filter-active-chips {
+  padding: 0 20px 14px 20px;
+}
+
+.filter-chip {
+  font-weight: 500;
+  letter-spacing: 0;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.filter-chip:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+.filter-advanced-panel {
+  padding: 0 20px 20px 20px;
+}
+
+.filter-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.filter-grid-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.filter-grid-item-wide {
+  grid-column: span 2;
+}
+
+.filter-label {
+  display: flex;
+  align-items: center;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: rgba(var(--v-theme-on-surface), 0.7);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.filter-input :deep(.v-field) {
+  border-radius: 10px !important;
+}
+
+.filter-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(var(--v-theme-outline-variant), 0.5);
+}
+
+@media (max-width: 600px) {
+  .filter-grid {
+    grid-template-columns: 1fr;
+  }
+  .filter-grid-item-wide {
+    grid-column: span 1;
+  }
+}
+
+/* FIX: Ensure filter button is visible and not cut off on mobile */
+.filter-primary-row {
+  display: flex !important;
+  flex-wrap: nowrap !important;
+  align-items: center !important;
+  gap: 12px;
+  padding: 16px 20px;
+}
+
+.filter-search-field {
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+}
+
+.filter-badge-wrapper {
+  flex-shrink: 0 !important;
+}
+
+.filter-toggle-btn {
+  min-width: 48px !important;
+  height: 48px !important;
+  border-radius: 12px !important;
+  flex-shrink: 0 !important;
+}
+
+@media (max-width: 600px) {
+  .filter-primary-row {
+    padding: 12px !important;
+    gap: 8px !important;
+  }
+  
+  .filter-search-field {
+    max-width: calc(100% - 56px) !important; /* Guarantee 56px for the button area */
+  }
+  
+  .filter-toggle-btn {
+    min-width: 48px !important;
+    width: 48px !important;
+    padding: 0 !important;
+  }
+}
+
 
 </style>
