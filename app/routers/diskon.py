@@ -21,14 +21,16 @@ from fastapi import (
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+from sqlalchemy import func, distinct
 from typing import List, Optional
 from datetime import datetime, date
+import logging
 
 from ..models.diskon import Diskon as DiskonModel
 from ..database import get_db
 from ..auth import get_current_active_user
 from ..models.user import User as UserModel
-import logging
+from ..models.pelanggan import Pelanggan as PelangganModel
 
 logger = logging.getLogger(__name__)
 
@@ -92,7 +94,7 @@ class DiskonListResponse(BaseModel):
 # ====================================================================
 
 
-async def check_active_diskon_for_cluster(db: AsyncSession, cluster: str, tanggal: date = None) -> Optional[DiskonModel]:
+async def check_active_diskon_for_cluster(db: AsyncSession, cluster: str, tanggal: Optional[date] = None) -> Optional[DiskonModel]:
     """
     Cek apakah ada diskon aktif untuk cluster tertentu pada tanggal tertentu.
     Returns diskon dengan persentase terbesar jika ada multiple diskon aktif.
@@ -149,9 +151,9 @@ async def get_all_diskon(
             query = query.where(DiskonModel.is_active == is_active)
 
         # Hitung total
-        count_query = select(func.count()).select_from(query.subquery())
+        count_query = select(func.count(DiskonModel.id)).select_from(query.subquery())
         total_result = await db.execute(count_query)
-        total = total_result.scalar()
+        total = total_result.scalar() or 0
 
         # Apply pagination
         offset = (page - 1) * page_size
@@ -327,7 +329,7 @@ async def delete_diskon(
     db: AsyncSession = Depends(get_db),
     current_user: UserModel = Depends(get_current_active_user),
 ):
-    """Hapus diskon (soft delete dengan set is_active=False)"""
+    """Hapus diskon dari database"""
     try:
         # Cari diskon
         query = select(DiskonModel).where(DiskonModel.id == diskon_id)
@@ -340,11 +342,11 @@ async def delete_diskon(
                 detail=f"Diskon dengan ID {diskon_id} tidak ditemukan"
             )
 
-        # Soft delete - set is_active ke False
-        diskon.is_active = False
+        # Hard delete - hapus dari database
+        await db.delete(diskon)
         await db.commit()
 
-        logger.info(f"Diskon ID {diskon_id} deactivated by user {current_user.email}")
+        logger.info(f"Diskon ID {diskon_id} deleted by user {current_user.email}")
         return None
     except HTTPException:
         raise
@@ -402,9 +404,6 @@ async def get_cluster_list(
     Endpoint ini lebih efisien untuk dropdown cluster tanpa perlu load semua data pelanggan.
     """
     try:
-        from ..models.pelanggan import Pelanggan as PelangganModel
-        from sqlalchemy import distinct
-        
         # Query untuk mendapatkan alamat unik yang tidak null
         query = (
             select(distinct(PelangganModel.alamat))
@@ -424,7 +423,3 @@ async def get_cluster_list(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Gagal mendapatkan daftar cluster: {str(e)}"
         )
-
-
-# Import func untuk count query
-from sqlalchemy import func

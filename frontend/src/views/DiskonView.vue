@@ -296,7 +296,7 @@
               <v-col cols="12" sm="6">
                 <v-text-field
                   v-model="editedItem.tgl_mulai"
-                  label="Tanggal Mulai (Opsional)"
+                  label="Tanggal Mulai (Wajib)"
                   type="date"
                   variant="outlined"
                   prepend-inner-icon="mdi-calendar-start"
@@ -305,7 +305,7 @@
               <v-col cols="12" sm="6">
                 <v-text-field
                   v-model="editedItem.tgl_selesai"
-                  label="Tanggal Selesai (Opsional)"
+                  label="Tanggal Selesai (Wajib)"
                   type="date"
                   variant="outlined"
                   prepend-inner-icon="mdi-calendar-end"
