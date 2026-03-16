@@ -1418,6 +1418,7 @@ async function fetchPelanggan(isLoadMore = false, preservePage = false) {
     const skip = (currentPage - 1) * itemsPerPage.value;
     params.append('skip', String(skip));
     params.append('limit', String(itemsPerPage.value));
+    params.append('use_minimal_loading', 'true');
 
     // Fetch data with total count (the backend already returns this in the response)
     const response = await apiClient.get(`/pelanggan/?${params.toString()}`);

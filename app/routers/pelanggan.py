@@ -52,10 +52,10 @@ async def create_pelanggan(
 
 
 # GET /pelanggan/ - Ambil daftar pelanggan dengan filter
-@router.get("/", response_model=List[PelangganSchema])
+@router.get("/", response_model=Dict[str, Any])
 async def read_all_pelanggan(
-    skip: int = 0,
-    limit: Optional[int] = Query(default=3000, le=10000),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(default=50, le=1000),
     search: Optional[str] = None,
     alamat: Optional[str] = None,
     id_brand: Optional[str] = None,
@@ -77,8 +77,8 @@ async def read_all_pelanggan(
         "connection_status": connection_status, "use_minimal_loading": use_minimal_loading,
         "for_invoice_selection": for_invoice_selection
     }
-    data, _ = await service.get_all_pelanggan(filters)
-    return data
+    data, total_count = await service.get_all_pelanggan(filters)
+    return {"data": data, "total_count": total_count}
 
 
 # GET /pelanggan/export - Export data pelanggan ke CSV/Excel
