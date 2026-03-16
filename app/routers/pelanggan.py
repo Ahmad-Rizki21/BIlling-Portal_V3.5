@@ -23,6 +23,7 @@ from ..schemas.pelanggan import (
     Pelanggan as PelangganSchema,
     PelangganCreate,
     PelangganUpdate,
+    PelangganListResponse,
 )
 from ..services.pelanggan_service import PelangganService, get_pelanggan_service
 from ..utils.export import create_pelanggan_export_response
@@ -52,7 +53,7 @@ async def create_pelanggan(
 
 
 # GET /pelanggan/ - Ambil daftar pelanggan dengan filter
-@router.get("/", response_model=Dict[str, Any])
+@router.get("/", response_model=PelangganListResponse)
 async def read_all_pelanggan(
     skip: int = Query(0, ge=0),
     limit: int = Query(default=50, le=1000),
