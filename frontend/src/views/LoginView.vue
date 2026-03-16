@@ -1,8 +1,21 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import axios, { type AxiosError } from 'axios';
+import { 
+  Mail, 
+  Key, 
+  Eye, 
+  EyeOff, 
+  AlertCircle, 
+  Loader2, 
+  RefreshCw, 
+  ChevronLeft, 
+  Shield, 
+  CheckCircle, 
+  Info 
+} from 'lucide-vue-next';
 
 // Definisikan tipe untuk respons error dari backend
 interface ErrorResponse {
@@ -25,11 +38,13 @@ const rememberMe = ref(false); // Untuk checkbox remember me
 const showPassword = ref(false); // Untuk toggle password visibility
 
 // Load remembered email on component mount
-const rememberedEmail = localStorage.getItem('remember_email');
-if (rememberedEmail) {
-  email.value = rememberedEmail;
-  rememberMe.value = true;
-}
+onMounted(() => {
+  const rememberedEmail = localStorage.getItem('remember_email');
+  if (rememberedEmail) {
+    email.value = rememberedEmail;
+    rememberMe.value = true;
+  }
+});
 
 // Toggle password visibility
 function togglePasswordVisibility() {
@@ -121,7 +136,7 @@ function backToLogin() {
         <div class="w-full max-w-md mx-auto">
           <div class="logo-header mb-4">
             <h2 class="text-lg font-semibold text-black pb-1 border-b-2 border-gray-300 inline-block">
-              {{ showForgotPassword ? 'Reset Password' : 'Login please' }}
+              {{ showForgotPassword ? 'Atur Ulang Kata Sandi' : 'Silakan Login' }}
             </h2>
             <div v-if="!showForgotPassword" class="logo-container">
               <img
@@ -141,16 +156,16 @@ function backToLogin() {
             <!-- Email Input -->
             <div class="mb-6">
               <label class="form-label">
-                Email Address
+                Alamat Email
               </label>
               <div class="relative form-input input-group">
                 <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <i class="lucide lucide-mail text-base text-gray-400 input-icon"></i>
+                  <Mail class="w-5 h-5 text-gray-400" />
                 </div>
                 <input
                   type="email"
                   v-model="email"
-                  placeholder="Enter your email address"
+                  placeholder="Masukkan alamat email Anda"
                   class="input-field w-full pl-10 pr-10 py-3"
                   :class="{ 'border-[var(--primary-color)]': email.length > 0 }"
                 />
@@ -162,34 +177,36 @@ function backToLogin() {
                   ></div>
                 </div>
               </div>
-              <div v-if="email && !email.includes('@')" class="mt-1 text-xs text-red-500">
-                Please enter a valid email address
+              <div v-if="email && !email.includes('@')" class="mt-1 text-xs" style="color: #dc2626 !important; font-weight: 500;">
+                Mohon masukkan alamat email yang valid
               </div>
             </div>
 
             <!-- Password Input -->
             <div class="mb-4">
               <label class="form-label">
-                Password
+                Kata Sandi
               </label>
               <div class="relative form-input input-group">
                 <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <i class="lucide lucide-key text-base text-gray-400 input-icon"></i>
+                  <Key class="w-5 h-5 text-gray-400" />
                 </div>
                 <input
                   :type="showPassword ? 'text' : 'password'"
                   v-model="password"
-                  placeholder="Enter your password"
-                  class="input-field w-full pl-10 pr-10 py-3"
+                  placeholder="Masukkan kata sandi Anda"
+                  class="input-field w-full pl-10 pr-12 py-3"
                   :class="{ 'border-[var(--primary-color)]': password.length > 0 }"
                 />
-                <div class="absolute inset-y-0 right-0 pr-3 flex items-center">
+                <div class="absolute inset-y-0 right-0 flex items-center pr-3 z-20">
                   <button
                     type="button"
                     @click="togglePasswordVisibility"
-                    class="text-gray-400 hover:text-[var(--primary-color)] focus:outline-none transition-colors duration-200"
+                    class="p-2 text-gray-600 hover:text-[var(--primary-color)] focus:outline-none transition-colors duration-200"
+                    style="color: #4b5563 !important;"
                   >
-                    <i :class="showPassword ? 'lucide lucide-eye-off' : 'lucide lucide-eye'" class="text-base"></i>
+                    <Eye v-if="!showPassword" class="w-5 h-5" />
+                    <EyeOff v-else class="w-5 h-5" />
                   </button>
                 </div>
               </div>
@@ -200,8 +217,8 @@ function backToLogin() {
                   :style="{ width: password.length > 0 ? Math.min((password.length / 8) * 100, 100) + '%' : '0%' }"
                 ></div>
               </div>
-              <div v-if="password.length > 0 && password.length < 6" class="mt-1 text-xs text-red-500">
-                Password should be at least 6 characters
+              <div v-if="password.length > 0 && password.length < 6" class="mt-1 text-xs" style="color: #dc2626 !important; font-weight: 500;">
+                Kata sandi minimal 6 karakter
               </div>
             </div>
 
@@ -214,33 +231,34 @@ function backToLogin() {
                 id="remember"
               />
               <label for="remember" class="ml-2 text-sm text-black cursor-pointer">
-                Remember me
+                Ingat Saya
               </label>
             </div>
 
             <div v-if="error" class="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
               <div class="flex items-center">
-                <i class="lucide lucide-alert-circle text-base mr-2"></i>
+                <AlertCircle class="w-5 h-5 mr-2" />
                 {{ error }}
               </div>
             </div>
 
             <button
               type="submit"
-              class="w-full rounded font-medium flex items-center justify-center hover:opacity-90 transition-opacity duration-200"
+              :disabled="loading"
+              class="w-full rounded font-medium flex items-center justify-center hover:opacity-90 transition-all duration-200 disabled:opacity-70 disabled:cursor-not-allowed"
               style="
                 background: #0d2691;
                 color: white;
                 padding: 12px 24px;
                 font-size: 16px;
-                font-weight: 500;
+                font-weight: 600;
                 border: none;
-                min-height: 48px;
+                min-height: 52px;
                 box-shadow: 0 4px 14px rgba(13, 38, 145, 0.3);
-                transition: all 0.2s ease;
               "
             >
-              LOG IN
+              <Loader2 v-if="loading" class="animate-spin w-5 h-5 mr-2" />
+              {{ loading ? 'SABAR LAGI LOGIN...' : 'MASUK' }}
             </button>
           </form>
 
@@ -252,18 +270,18 @@ function backToLogin() {
                 @click="backToLogin"
                 class="flex items-center text-[var(--text-secondary)] hover:text-[var(--primary-color)] transition-colors text-sm"
               >
-                <i class="lucide lucide-chevron-left text-base mr-1"></i>
-                Back to login
+                <ChevronLeft class="w-4 h-4 mr-1" />
+                Kembali ke login
               </button>
             </div>
 
             <div class="mb-5">
               <div class="flex items-center input-border bg-white rounded px-3 py-2.5 shadow-sm">
-                <i class="lucide lucide-mail text-base text-gray-400 mr-3"></i>
+                <Mail class="w-5 h-5 text-gray-400 mr-3" />
                 <input
                   type="email"
                   v-model="resetEmail"
-                  placeholder="Your email address"
+                  placeholder="Alamat email Anda"
                   :disabled="loading"
                   class="flex-1 outline-none text-gray-700 bg-transparent placeholder-gray-400 text-sm"
                   required
@@ -273,11 +291,11 @@ function backToLogin() {
 
             <div class="mb-5">
               <div class="flex items-center input-border bg-white rounded px-3 py-2.5 shadow-sm">
-                <i class="lucide lucide-key text-base text-gray-400 mr-3"></i>
+                <Key class="w-5 h-5 text-gray-400 mr-3" />
                 <input
                   type="password"
                   v-model="newPassword"
-                  placeholder="New password"
+                  placeholder="Kata sandi baru"
                   :disabled="loading"
                   class="flex-1 outline-none text-gray-700 bg-transparent placeholder-gray-400 text-sm"
                   required
@@ -287,11 +305,11 @@ function backToLogin() {
 
             <div class="mb-5">
               <div class="flex items-center input-border bg-white rounded px-3 py-2.5 shadow-sm">
-                <i class="lucide lucide-shield text-base text-gray-400 mr-3"></i>
+                <Shield class="w-5 h-5 text-gray-400 mr-3" />
                 <input
                   type="text"
                   v-model="resetToken"
-                  placeholder="Reset token"
+                  placeholder="Token reset"
                   :disabled="loading"
                   class="flex-1 outline-none text-gray-700 bg-transparent placeholder-gray-400 text-sm"
                   required
@@ -301,14 +319,14 @@ function backToLogin() {
 
             <div v-if="error" class="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
               <div class="flex items-center">
-                <i class="lucide lucide-alert-circle text-base mr-2"></i>
+                <AlertCircle class="w-5 h-5 mr-2" />
                 {{ error }}
               </div>
             </div>
 
             <div v-if="successMessage" class="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">
               <div class="flex items-center">
-                <i class="lucide lucide-check-circle text-base mr-2"></i>
+                <CheckCircle class="w-5 h-5 mr-2" />
                 {{ successMessage }}
               </div>
             </div>
@@ -316,27 +334,21 @@ function backToLogin() {
             <button
               type="submit"
               :disabled="loading"
-              class="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded font-medium transition-all flex items-center justify-center"
+              class="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded font-medium transition-all flex items-center justify-center disabled:opacity-70"
             >
-              <i class="lucide lucide-refresh-cw text-base mr-2"></i>
-              <span v-if="loading" class="inline-flex items-center">
-                <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                Processing...
-              </span>
-              <span v-else>Reset Password</span>
+              <RefreshCw v-if="!loading" class="w-5 h-5 mr-2" />
+              <Loader2 v-else class="animate-spin w-5 h-5 mr-2" />
+              <span>{{ loading ? 'Memproses...' : 'Atur Ulang Kata Sandi' }}</span>
             </button>
           </form>
 
           <!-- Security Notice for Reset Password -->
           <div v-if="showForgotPassword" class="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
             <div class="flex">
-              <i class="lucide lucide-info text-base text-blue-600 mr-2 flex-shrink-0 mt-0.5"></i>
+              <Info class="w-5 h-5 text-blue-600 mr-2 flex-shrink-0 mt-0.5" />
               <div class="text-sm text-blue-800">
-                <p class="font-medium mb-1">Security Notice</p>
-                <p class="text-xs">Remember your new password well, as there is no OTP when logging back in.</p>
+                <p class="font-medium mb-1">Pemberitahuan Keamanan</p>
+                <p class="text-xs">Ingat kata sandi baru Anda dengan baik, karena tidak ada OTP saat login kembali.</p>
               </div>
             </div>
           </div>
@@ -437,6 +449,13 @@ function backToLogin() {
   --card-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
 }
 
+/* Base Typography */
+.min-h-screen {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
 /* Template Base Styles */
 .gradient-bg {
   background: #f0f2f5;
@@ -494,30 +513,12 @@ button[type="submit"] {
 }
 
 /* Button text visibility fix */
-button[type="submit"],
-button[type="submit"] *,
-button[type="submit"] i,
-button[type="submit"] span,
-button[type="submit"]::before,
-button[type="submit"]::after {
-  color: white !important;
-  opacity: 1 !important;
-  visibility: visible !important;
-  text-shadow: none !important;
-}
-
-button[type="submit"] .lucide {
+button[type="submit"] {
   color: white !important;
 }
 
-/* Global button fix */
-* button {
+button[type="submit"] * {
   color: white !important;
-}
-
-/* Text inside button fix */
-button * {
-  color: inherit !important;
 }
 
 /* Enhanced Form Styling */
@@ -545,67 +546,33 @@ button * {
 }
 
 .input-group {
-  background: linear-gradient(145deg, #ffffff, #f8fafc);
+  position: relative;
+  background: #ffffff;
   border-radius: 12px;
-  box-shadow:
-    0 4px 8px rgba(0, 0, 0, 0.1),
-    0 1px 2px rgba(0, 0, 0, 0.05),
-    inset 0 1px 2px rgba(255, 255, 255, 0.9);
   border: 2px solid #e5e7eb;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.input-group:hover {
-  border-color: #d1d5db;
-  box-shadow:
-    0 8px 16px rgba(0, 0, 0, 0.12),
-    0 4px 8px rgba(0, 0, 0, 0.08),
-    inset 0 1px 2px rgba(255, 255, 255, 0.9),
-    0 0 0 1px rgba(255, 255, 255, 0.5);
+  transition: all 0.3s ease;
+  overflow: hidden;
+  display: flex !important;
+  align-items: center !important;
 }
 
 .input-group:focus-within {
   border-color: var(--primary-color);
-  box-shadow:
-    0 12px 24px rgba(13, 38, 145, 0.15),
-    0 6px 12px rgba(13, 38, 145, 0.1),
-    inset 0 1px 2px rgba(255, 255, 255, 0.9),
-    0 0 0 3px rgba(13, 38, 145, 0.1);
+  box-shadow: 0 0 0 4px rgba(13, 38, 145, 0.1);
 }
 
 .input-field {
-  background: white !important;
-  border: 3px solid #e5e7eb !important;
-  border-radius: 12px !important;
+  background: transparent !important;
+  border: none !important;
   padding: 12px 16px !important;
   font-size: 14px !important;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
-  box-shadow:
-    inset 0 2px 4px rgba(0, 0, 0, 0.06),
-    0 4px 8px rgba(0, 0, 0, 0.1),
-    0 1px 2px rgba(0, 0, 0, 0.05) !important;
   position: relative !important;
-}
-
-.input-field:hover {
-  border-color: #d1d5db !important;
-  box-shadow:
-    inset 0 2px 4px rgba(0, 0, 0, 0.06),
-    0 8px 16px rgba(0, 0, 0, 0.12),
-    0 4px 8px rgba(0, 0, 0, 0.08),
-    0 0 0 1px rgba(255, 255, 255, 0.5) !important;
-  transform: translateY(-1px) !important;
+  z-index: 5;
 }
 
 .input-field:focus {
-  border-color: var(--primary-color) !important;
-  box-shadow:
-    inset 0 2px 4px rgba(0, 0, 0, 0.06),
-    0 12px 24px rgba(13, 38, 145, 0.15),
-    0 6px 12px rgba(13, 38, 145, 0.1),
-    0 0 0 4px rgba(13, 38, 145, 0.1) !important;
   outline: none !important;
-  transform: translateY(-2px) !important;
 }
 
 .input-icon {
