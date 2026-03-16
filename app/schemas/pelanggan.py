@@ -611,6 +611,14 @@ class PaginatedPelangganResponse(BaseModel):
         from_attributes = True
 
 
+class PelangganListResponse(BaseModel):
+    data: List[Pelanggan]
+    total_count: int
+
+    class Config:  # type: ignore
+        from_attributes = True
+
+
 # ====================================================================
 # SKEMA BARU: CEK IP ADDRESS
 # ====================================================================
