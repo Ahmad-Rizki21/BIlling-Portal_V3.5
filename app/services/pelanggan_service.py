@@ -214,9 +214,13 @@ class PelangganService(BaseService):
                 else:
                     db_pelanggan.mikrotik_server = None # type: ignore
 
-            # Update other fields
+            # Update other fields (ONLY actual columns, skip relationships)
+            # This prevents 'dict' object has no attribute '_sa_instance_state' error
+            # when extra fields like 'harga_layanan' are sent from frontend as dicts
+            columns = {c.name for c in PelangganModel.__table__.columns}
             for key, value in update_data.items():
-                setattr(db_pelanggan, key, value)
+                if key in columns:
+                    setattr(db_pelanggan, key, value)
 
             # Auto-update langganan if service changed
             if new_layanan and new_layanan != old_layanan:

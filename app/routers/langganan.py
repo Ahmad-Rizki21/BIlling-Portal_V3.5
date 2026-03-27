@@ -34,7 +34,6 @@ from ..schemas.langganan import (
 )
 from ..schemas.pelanggan import Pelanggan as PelangganSchema
 from ..utils.export import create_langganan_export_response, create_langganan_multi_sheet_export_response
-from ..services.langganan_service import LanggananService
 
 router = APIRouter(prefix="/langganan", tags=["Langganan"])
 
@@ -52,6 +51,50 @@ def format_phone_number(phone_number: str) -> str:
     """
     from ..utils.phone_utils import normalize_phone_display
     return normalize_phone_display(phone_number)
+
+
+async def apply_diskon_to_langganan_price(langganan: LanggananModel, db: AsyncSession) -> float:
+    """
+    Apply diskon secara dynamic ke harga langganan.
+    Jika ada diskon aktif untuk cluster pelanggan, harga diskon dikembalikan.
+    Jika tidak ada diskon, harga normal dikembalikan.
+
+    CATATAN: User dengan metode pembayaran Prorate TIDAK mendapatkan diskon.
+    """
+    if not langganan.harga_awal or not langganan.pelanggan:
+        return langganan.harga_awal or 0.0
+
+    # Prorate users TIDAK mendapatkan diskon
+    if langganan.metode_pembayaran == "Prorate":
+        return float(langganan.harga_awal)
+
+    # Cek diskon aktif untuk cluster pelanggan
+    tanggal_hari_ini = date_class.today()
+
+    # Gunakan alamat sebagai cluster
+    cluster_to_check = langganan.pelanggan.alamat if langganan.pelanggan.alamat and langganan.pelanggan.alamat.strip() else None
+
+    if not cluster_to_check:
+        return langganan.harga_awal
+
+    # Cari diskon aktif untuk cluster ini
+    diskon_query = (
+        select(DiskonModel)
+        .where(DiskonModel.cluster == cluster_to_check)
+        .where(DiskonModel.is_active == True)
+        .where(
+            (DiskonModel.tgl_mulai.is_(None)) | (DiskonModel.tgl_mulai <= tanggal_hari_ini)
+        )
+        .where(
+            (DiskonModel.tgl_selesai.is_(None)) | (DiskonModel.tgl_selesai >= tanggal_hari_ini)
+        )
+        .order_by(DiskonModel.persentase_diskon.desc())
+    )
+
+    diskon_result = await db.execute(diskon_query)
+    diskon_applied = diskon_result.scalar_one_or_none()
+
+    return calculate_final_price_with_diskon(float(langganan.harga_awal), diskon_applied)
 
 
 def calculate_final_price_with_diskon(harga_asli: float, diskon_applied: Optional[DiskonModel]) -> float:
@@ -92,17 +135,93 @@ async def create_langganan(
     """
     Membuat langganan baru dengan perhitungan harga otomatis di backend.
     Mendukung metode pembayaran 'Otomatis' dan 'Prorate' (biasa atau gabungan).
+
+    VALIDATION PENTING: Langganan hanya bisa dibuat jika pelanggan sudah memiliki data teknis.
+    NOC harus menambahkan data teknis terlebih dahulu sebelum Finance bisa membuat langganan.
     """
-    service = LanggananService()
-    try:
-        created_langganan = await service.create_langganan(db, langganan_data)
-        logger.info(f"LANGGANAN BERHASIL DIBUAT: Finance berhasil membuat langganan untuk (ID: {created_langganan.pelanggan_id})")
-        return created_langganan
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
-    except Exception as e:
-        logger.error(f"Error creating langganan: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+    # 1. Validasi pelanggan ada
+    pelanggan = await db.get(
+        PelangganModel,
+        langganan_data.pelanggan_id,
+        options=[joinedload(PelangganModel.harga_layanan)],
+    )
+    if not pelanggan or not pelanggan.harga_layanan:
+        raise HTTPException(status_code=404, detail="Data Brand pelanggan tidak ditemukan.")
+
+    # 2. VALIDASI UTAMA: Cek apakah pelanggan sudah punya data teknis
+    data_teknis_query = select(DataTeknisModel).where(DataTeknisModel.pelanggan_id == langganan_data.pelanggan_id)
+    data_teknis_result = await db.execute(data_teknis_query)
+    data_teknis = data_teknis_result.scalar_one_or_none()
+
+    if not data_teknis:
+        logger.warning(f"PERCOBAAN LANGGANAN TANPA DATA TEKNIS: Finance mencoba membuat langganan untuk pelanggan ID {langganan_data.pelanggan_id} ({pelanggan.nama}) tanpa data teknis")
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Langganan tidak dapat dibuat. Pelanggan '{pelanggan.nama}' belum memiliki data teknis. "
+                   f"Tim NOC harus menambahkan data teknis terlebih dahulu sebelum membuat langganan."
+        )
+
+    # 3. Validasi paket layanan ada
+    paket = await db.get(PaketLayananModel, langganan_data.paket_layanan_id)
+    if not paket:
+        raise HTTPException(status_code=404, detail="Paket Layanan tidak ditemukan.")
+
+    start_date = langganan_data.tgl_mulai_langganan or date.today()
+
+    harga_paket = float(paket.harga)
+    pajak_persen = float(pelanggan.harga_layanan.pajak)
+    harga_awal_final = 0.0
+    tgl_jatuh_tempo_final = None
+
+    if langganan_data.metode_pembayaran == "Otomatis":
+        harga_awal_final = harga_paket * (1 + (pajak_persen / 100))
+        tgl_jatuh_tempo_final = (start_date + relativedelta(months=1)).replace(day=1)
+
+    elif langganan_data.metode_pembayaran == "Prorate":
+        _, last_day_of_month = monthrange(start_date.year, start_date.month)
+        remaining_days = last_day_of_month - start_date.day + 1
+        if remaining_days < 0:
+            remaining_days = 0
+
+        harga_per_hari = harga_paket / last_day_of_month
+        prorated_price_before_tax = harga_per_hari * remaining_days
+        harga_prorate_final = prorated_price_before_tax * (1 + (pajak_persen / 100))
+
+        if langganan_data.sertakan_bulan_depan:
+            harga_normal_full = harga_paket * (1 + (pajak_persen / 100))
+            harga_awal_final = harga_prorate_final + harga_normal_full
+        else:
+            harga_awal_final = harga_prorate_final
+
+        tgl_jatuh_tempo_final = date(start_date.year, start_date.month, last_day_of_month)
+
+    db_langganan = LanggananModel(
+        pelanggan_id=langganan_data.pelanggan_id,
+        paket_layanan_id=langganan_data.paket_layanan_id,
+        status=langganan_data.status,
+        metode_pembayaran=langganan_data.metode_pembayaran,
+        harga_awal=round(harga_awal_final, 0),
+        tgl_jatuh_tempo=tgl_jatuh_tempo_final,
+        tgl_mulai_langganan=start_date,
+    )
+
+    db.add(db_langganan)
+    await db.commit()
+
+    logger.info(f"LANGGANAN BERHASIL DIBUAT: Finance berhasil membuat langganan untuk pelanggan '{pelanggan.nama}' (ID: {pelanggan.id}) dengan paket '{paket.nama_paket}'")
+
+    query = (
+        select(LanggananModel)
+        .where(LanggananModel.id == db_langganan.id)
+        .options(
+            joinedload(LanggananModel.pelanggan).joinedload(PelangganModel.harga_layanan),
+            joinedload(LanggananModel.paket_layanan),
+        )
+    )
+    result = await db.execute(query)
+    created_langganan = result.scalar_one()
+
+    return created_langganan
 
 
 # GET /langganan - Ambil semua data langganan
@@ -135,20 +254,85 @@ async def get_all_langganan(
     current_user: UserModel = Depends(get_current_active_user)
 ):
     """Mengambil semua langganan dengan opsi filter dan paginasi serta total count."""
-    service = LanggananService()
-    count_query = await service.get_filtered_langganan_stmt(
-        search=search, alamat=alamat, paket_layanan_name=paket_layanan_name, status=status,
-        jatuh_tempo_start=jatuh_tempo_start, jatuh_tempo_end=jatuh_tempo_end, for_invoice_selection=for_invoice_selection
+    base_query = (
+        select(LanggananModel)
+        .join(LanggananModel.pelanggan)
+        .outerjoin(PelangganModel.data_teknis)
+        .options(
+            joinedload(LanggananModel.pelanggan).options(
+                joinedload(PelangganModel.langganan),
+                joinedload(PelangganModel.harga_layanan),
+                joinedload(PelangganModel.data_teknis),
+            ),
+            joinedload(LanggananModel.paket_layanan),
+        )
     )
-    
-    # Extract total count before pagination
-    # We use a subquery approach to count efficiently
-    total_count_stmt = select(func.count()).select_from(count_query.subquery())
-    total_count = (await db.execute(total_count_stmt)).scalar_one()
+    count_query = select(func.count(LanggananModel.id)).join(LanggananModel.pelanggan).outerjoin(PelangganModel.data_teknis)
 
-    # Apply pagination and ordering
-    limit = min(limit, 5000) if limit is not None else 15
-    data_query = count_query.order_by(LanggananModel.id.desc()).offset(skip).limit(limit)
+    if for_invoice_selection:
+        base_query = base_query.where(LanggananModel.status != "Berhenti")
+        count_query = count_query.where(LanggananModel.status != "Berhenti")
+
+    if search:
+        search_term = f"%{search}%"
+        filter_condition = or_(
+            PelangganModel.nama.ilike(search_term),
+            DataTeknisModel.id_pelanggan.ilike(search_term),
+            PelangganModel.no_telp.ilike(search_term),
+            PelangganModel.email.ilike(search_term),
+        )
+        base_query = base_query.where(filter_condition)
+        count_query = count_query.where(filter_condition)
+    if alamat:
+        filter_condition = PelangganModel.alamat.ilike(f"%{alamat}%")
+        base_query = base_query.where(filter_condition)
+        count_query = count_query.where(filter_condition)
+    if paket_layanan_name:
+        join_condition = base_query.join(PaketLayananModel).where(PaketLayananModel.nama_paket == paket_layanan_name)
+        base_query = join_condition
+        count_query = count_query.join(PaketLayananModel).where(PaketLayananModel.nama_paket == paket_layanan_name)
+    if status:
+        filter_condition = LanggananModel.status == status
+        base_query = base_query.where(filter_condition)
+        count_query = count_query.where(filter_condition)
+
+    
+    
+    # Filter berdasarkan tanggal jatuh tempo
+    if jatuh_tempo_start:
+        try:
+            start_date = datetime.strptime(jatuh_tempo_start, "%Y-%m-%d").date()
+            filter_condition = LanggananModel.tgl_jatuh_tempo >= start_date
+            base_query = base_query.where(filter_condition)
+            count_query = count_query.where(filter_condition)
+        except ValueError:
+            # Skip filter jika format tanggal tidak valid
+            pass
+
+    if jatuh_tempo_end:
+        try:
+            end_date = datetime.strptime(jatuh_tempo_end, "%Y-%m-%d").date()
+            filter_condition = LanggananModel.tgl_jatuh_tempo <= end_date
+            base_query = base_query.where(filter_condition)
+            count_query = count_query.where(filter_condition)
+        except ValueError:
+            # Skip filter jika format tanggal tidak valid
+            pass
+
+    # --- OPTIMASI PERFORMANCE: Batasi limit jika terlalu besar (maksimal 5000) ---
+    if limit is not None:
+        limit = min(limit, 5000)
+    else:
+        limit = 15 # Default limit jika None
+
+    # Get total count before applying pagination
+    total_count_result = await db.execute(count_query)
+    total_count = total_count_result.scalar_one()
+
+    # Apply ordering and pagination to the main query
+    data_query = base_query.order_by(LanggananModel.id.desc())
+    if limit is not None:
+        data_query = data_query.offset(skip).limit(limit)
 
     result = await db.execute(data_query)
     langganan_list = result.unique().scalars().all()
@@ -210,6 +394,7 @@ async def get_all_langganan(
         
         # Override harga dengan harga yang sudah diproses diskon
         langganan_dict['harga_awal'] = harga_with_diskon
+        langganan_dict['harga_final'] = harga_with_diskon
         
         # Sertakan status is_new_user jika dihitung
         if hasattr(langganan, 'is_new_user'):
@@ -393,6 +578,7 @@ async def get_new_user_langganans(
         langganan_schema = LanggananSchema.model_validate(langganan)
         langganan_dict = langganan_schema.model_dump()
         langganan_dict['harga_awal'] = harga_with_diskon
+        langganan_dict['harga_final'] = harga_with_diskon
         langganan_dict['is_new_user'] = True
 
         langganan_response_data.append(langganan_dict)
@@ -429,8 +615,7 @@ async def get_langganan_by_id(
         raise HTTPException(status_code=404, detail="Langganan tidak ditemukan")
 
     # Apply diskon secara dynamic ke harga
-    service = LanggananService()
-    harga_with_diskon = await service.apply_diskon_to_price(db, langganan)
+    harga_with_diskon = await apply_diskon_to_langganan_price(langganan, db)
 
     # Create response dict dan override harga_awal
     langganan_dict = LanggananSchema.model_validate(langganan).model_dump(mode='python')
@@ -455,15 +640,61 @@ async def update_langganan(
     current_user: UserModel = Depends(get_current_active_user)
 ):
     """Memperbarui data langganan berdasarkan ID."""
-    service = LanggananService()
-    try:
-        updated_langganan = await service.update_langganan(db, langganan_id, langganan_update)
-        return updated_langganan
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        logger.error(f"Error updating langganan: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+    db_langganan = await db.get(LanggananModel, langganan_id)
+    if not db_langganan:
+        raise HTTPException(status_code=404, detail="Langganan tidak ditemukan")
+
+    update_data = langganan_update.model_dump(exclude_unset=True)
+
+    # Jika status diubah menjadi "Berhenti", isi tgl_berhenti secara otomatis dan simpan riwayat
+    if "status" in update_data and update_data["status"] == "Berhenti":
+        hari_ini = date.today()
+        update_data["tgl_berhenti"] = hari_ini
+
+        # Simpan riwayat tanggal berhenti
+        riwayat_list = []
+        if db_langganan.riwayat_tgl_berhenti:
+            try:
+                riwayat_list = json.loads(db_langganan.riwayat_tgl_berhenti)
+            except (json.JSONDecodeError, TypeError):
+                riwayat_list = []
+
+        # Menambahkan tanggal berhenti baru ke riwayat
+        riwayat_list.append({
+            "tanggal": hari_ini.isoformat(),
+            "alasan": update_data.get("alasan_berhenti", ""),
+            "timestamp": datetime.now().isoformat()
+        })
+
+        # Simpan sebagai JSON string
+        update_data["riwayat_tgl_berhenti"] = json.dumps(riwayat_list)
+
+        logger.info(f"Langganan ID {langganan_id} status diubah menjadi Berhenti, tgl_berhenti diset ke {hari_ini}, riwayat ditambahkan")
+
+    # Jika status diubah dari "Berhenti" ke status lain, kosongkan tgl_berhenti tapi RIWAYAT TETAP DISIMPAN
+    elif "status" in update_data and update_data["status"] != "Berhenti" and db_langganan.status == "Berhenti":
+        update_data["tgl_berhenti"] = None
+        # RIWAYAT TIDAK DIHAPUS, tetap disimpan untuk histori
+        logger.info(f"Langganan ID {langganan_id} status diubah dari Berhenti, tgl_berhenti dikosongkan, riwayat tetap dipertahankan")
+
+    for key, value in update_data.items():
+        setattr(db_langganan, key, value)
+
+    db.add(db_langganan)
+    await db.commit()
+
+    query = (
+        select(LanggananModel)
+        .where(LanggananModel.id == db_langganan.id)
+        .options(
+            joinedload(LanggananModel.pelanggan).joinedload(PelangganModel.harga_layanan),
+            joinedload(LanggananModel.paket_layanan),
+        )
+    )
+    result = await db.execute(query)
+    updated_langganan = result.scalar_one()
+
+    return updated_langganan
 
 
 # DELETE /langganan/{langganan_id} - Hapus langganan
@@ -533,16 +764,31 @@ async def calculate_langganan_price(
     if not paket:
         raise HTTPException(status_code=404, detail="Paket Layanan tidak ditemukan.")
 
-    service = LanggananService()
-    harga_awal_final, tgl_jatuh_tempo_final = service.calculate_price_and_due_date(
-        harga_paket=float(paket.harga),
-        pajak_persen=float(pelanggan.harga_layanan.pajak),
-        metode_pembayaran=request_data.metode_pembayaran,
-        start_date=request_data.tgl_mulai
-    )
+    start_date = request_data.tgl_mulai
+
+    harga_paket = float(paket.harga)
+    pajak_persen = float(pelanggan.harga_layanan.pajak)
+    harga_awal_final = 0.0
+    tgl_jatuh_tempo_final = None
+
+    if request_data.metode_pembayaran == "Otomatis":
+        harga_awal_final = harga_paket * (1 + (pajak_persen / 100))
+        tgl_jatuh_tempo_final = (start_date + relativedelta(months=1)).replace(day=1)
+
+    elif request_data.metode_pembayaran == "Prorate":
+        _, last_day_of_month = monthrange(start_date.year, start_date.month)
+        remaining_days = last_day_of_month - start_date.day + 1
+
+        if remaining_days < 0:
+            remaining_days = 0
+
+        harga_per_hari = harga_paket / last_day_of_month
+        prorated_price_before_tax = harga_per_hari * remaining_days
+        harga_awal_final = prorated_price_before_tax * (1 + (pajak_persen / 100))
+        tgl_jatuh_tempo_final = date(start_date.year, start_date.month, last_day_of_month)
 
     return LanggananCalculateResponse(
-        harga_awal=harga_awal_final, tgl_jatuh_tempo=tgl_jatuh_tempo_final
+        harga_awal=round(harga_awal_final, 0), tgl_jatuh_tempo=tgl_jatuh_tempo_final  # type: ignore
     )
 
 

@@ -19,11 +19,14 @@ class PelangganCreate(BaseModel):
     email: EmailStr = Field(..., description="Email (wajib)")
     id_brand: Optional[str] = Field(None, description="ID Brand (opsional)")
     layanan: Optional[str] = Field(None, description="Layanan (opsional)")
+    brand_default: Optional[str] = Field(None, description="Brand default (opsional)")
+    alamat_custom: Optional[str] = Field(None, description="Alamat custom (opsional)")
+    mikrotik_server_id: Optional[int] = Field(None, description="ID Server Mikrotik (opsional)")
 
-    # Konfigurasi untuk memungkinkan nilai kosong pada field opsional
+    # Konfigurasi untuk menolak field yang tidak didefinisikan
     class Config:  # type: ignore
-        # Izinkan field yang tidak didefinisikan dalam model
-        extra = "allow"
+        # Abaikan field yang tidak didefinisikan dalam model (mencegah error relasi)
+        extra = "ignore"
         # Izinkan assignment nilai
         validate_assignment = True
 
@@ -265,6 +268,9 @@ class PelangganUpdate(BaseModel):
     email: Optional[EmailStr] = None
     id_brand: Optional[str] = None
     layanan: Optional[str] = None
+    brand_default: Optional[str] = None
+    alamat_custom: Optional[str] = None
+    mikrotik_server_id: Optional[int] = None
 
     # Apply same validators for update, but only when values are provided
     @validator("no_ktp", pre=True)
@@ -362,8 +368,8 @@ class PelangganUpdate(BaseModel):
 
     class Config:  # type: ignore
         from_attributes = True
-        # Izinkan field yang tidak didefinisikan dalam model
-        extra = "allow"
+        # Abaikan field yang tidak didefinisikan dalam model (prevent error relasi)
+        extra = "ignore"
         # Izinkan assignment nilai
         validate_assignment = True
 
@@ -580,8 +586,8 @@ class PelangganImport(BaseModel):
                 "layanan": "Internet",
             }
         }
-        # Izinkan field yang tidak didefinisikan dalam model
-        extra = "allow"
+        # Abaikan field yang tidak didefinisikan dalam model
+        extra = "ignore"
         # Izinkan assignment nilai
         validate_assignment = True
 

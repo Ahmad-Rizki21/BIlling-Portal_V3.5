@@ -2563,41 +2563,24 @@ async function confirmBulkDelete() {
 
 const alamatOptions = ref<string[]>([]);
 
-// Fungsi untuk mengambil semua alamat dari database
+// Fungsi untuk mengambil semua alamat unik dari database
 async function fetchAlamatOptions() {
-  // Skip endpoint yang menyebabkan error 405, langsung ambil dari data pelanggan
   try {
-    // Ambil pelanggan dengan parameter untuk mendapatkan semua data yang mungkin dibutuhkan
-    const response = await apiClient.get('/pelanggan/?limit=10000');
+    // Gunakan limit=1000 (batas maksimal yang diizinkan backend)
+    const response = await apiClient.get('/pelanggan/?limit=1000&use_minimal_loading=true');
     const pelangganData = response.data.data || response.data;
     
     if (Array.isArray(pelangganData)) {
       const allAlamat = pelangganData
-        .map(pelanggan => pelanggan.alamat || '')
-        .filter(alamat => typeof alamat === 'string' && alamat.trim() !== '');
-      alamatOptions.value = [...new Set(allAlamat)].sort();
-    } else {
-      // Jika tidak mendapatkan format data yang diharapkan, gunakan data dari langgananList sebagai fallback
-      if (langgananList.value && Array.isArray(langgananList.value) && langgananList.value.length > 0) {
-        const allAlamat = langgananList.value
-          .map(item => item.pelanggan?.alamat || '')
-          .filter(alamat => typeof alamat === 'string' && alamat.trim() !== '');
-        alamatOptions.value = [...new Set(allAlamat)].sort();
-      } else {
-        alamatOptions.value = [];
-      }
-    }
-  } catch (error) {
-    console.warn("Gagal mengambil alamat dari pelanggan, menggunakan data lokal:", error);
-    // Fallback ke data lokal dari langgananList
-    if (langgananList.value && Array.isArray(langgananList.value) && langgananList.value.length > 0) {
-      const allAlamat = langgananList.value
-        .map(item => item.pelanggan?.alamat || '')
-        .filter(alamat => typeof alamat === 'string' && alamat.trim() !== '');
-      alamatOptions.value = [...new Set(allAlamat)].sort();
+        .map((pelanggan: any) => pelanggan.alamat || '')
+        .filter((alamat: string) => typeof alamat === 'string' && alamat.trim() !== '');
+      alamatOptions.value = [...new Set(allAlamat)].sort() as string[];
     } else {
       alamatOptions.value = [];
     }
+  } catch (error) {
+    console.warn("Gagal mengambil alamat dari pelanggan:", error);
+    alamatOptions.value = [];
   }
 }
 
