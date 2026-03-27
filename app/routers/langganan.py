@@ -394,6 +394,7 @@ async def get_all_langganan(
         
         # Override harga dengan harga yang sudah diproses diskon
         langganan_dict['harga_awal'] = harga_with_diskon
+        langganan_dict['harga_final'] = harga_with_diskon
         
         # Sertakan status is_new_user jika dihitung
         if hasattr(langganan, 'is_new_user'):
@@ -577,6 +578,7 @@ async def get_new_user_langganans(
         langganan_schema = LanggananSchema.model_validate(langganan)
         langganan_dict = langganan_schema.model_dump()
         langganan_dict['harga_awal'] = harga_with_diskon
+        langganan_dict['harga_final'] = harga_with_diskon
         langganan_dict['is_new_user'] = True
 
         langganan_response_data.append(langganan_dict)
