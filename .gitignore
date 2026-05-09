@@ -223,9 +223,8 @@ ai-notes/
 conversation/
 
 # --- Local Development Scripts ---
-scripts/local-*.sh
-scripts/dev-*.py
-scripts/debug-*.py
+scripts/
+
 
 # --- Documentation Drafts ---
 DRAFT_*.md
