@@ -197,10 +197,39 @@ function formatCurrency(value: number | null | undefined): string {
 
 async function copyPaymentLink() {
   if (!props.invoice?.payment_link) return;
+  
+  const text = props.invoice.payment_link;
+  const copyToClipboard = async (str: string) => {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(str);
+      return true;
+    } else {
+      const textArea = document.createElement("textarea");
+      textArea.value = str;
+      textArea.style.position = "fixed";
+      textArea.style.left = "-999999px";
+      textArea.style.top = "-999999px";
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      try {
+        document.execCommand('copy');
+        textArea.remove();
+        return true;
+      } catch (err) {
+        textArea.remove();
+        return false;
+      }
+    }
+  };
+
   try {
-    await navigator.clipboard.writeText(props.invoice.payment_link);
-    // Bisa tambahkan notifikasi snackbar di sini jika diinginkan
-    alert('Link pembayaran disalin!');
+    const success = await copyToClipboard(text);
+    if (success) {
+      alert('Link pembayaran disalin!');
+    } else {
+      throw new Error();
+    }
   } catch (err) {
     alert('Gagal menyalin link.');
   }

@@ -162,9 +162,10 @@ async def create_data_teknis(
         # Panggil fungsi trigger setelah data berhasil disimpan
         await mikrotik_service.trigger_mikrotik_create(db, db_data_teknis)
     except Exception as e:
-        # Jika gagal membuat secret, jangan batalkan proses.
-        # Cukup catat errornya. Data teknis tetap berhasil dibuat.
-        logger.error(f"Data teknis ID {data_teknis_id} berhasil disimpan, " f"namun gagal membuat secret di Mikrotik: {e}")
+        # Jika gagal membuat secret, tandai untuk sync pending agar di-retry otomatis oleh background job
+        logger.error(f"Data teknis ID {data_teknis_id} berhasil disimpan, namun gagal membuat secret di Mikrotik: {e}. Menandai untuk retry.")
+        db_data_teknis.mikrotik_sync_pending = True
+        await db.commit()
 
     # Re-query TERAKHIR dengan eager loading penuh tepat sebelum return
     # untuk menghindari MissingGreenlet error saat Pydantic serialize response.

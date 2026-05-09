@@ -406,9 +406,37 @@ async function copyResult() {
 
   const resultText = calculationResult.value.detail_perhitungan;
 
+  const copyToClipboardFallback = async (str: string) => {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(str);
+      return true;
+    } else {
+      const textArea = document.createElement("textarea");
+      textArea.value = str;
+      textArea.style.position = "fixed";
+      textArea.style.left = "-999999px";
+      textArea.style.top = "-999999px";
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      try {
+        document.execCommand('copy');
+        textArea.remove();
+        return true;
+      } catch (err) {
+        textArea.remove();
+        return false;
+      }
+    }
+  };
+
   try {
-    await navigator.clipboard.writeText(resultText.trim());
-    console.log('Hasil berhasil disalin ke clipboard');
+    const success = await copyToClipboardFallback(resultText.trim());
+    if (success) {
+      console.log('Hasil berhasil disalin ke clipboard');
+    } else {
+      throw new Error();
+    }
   } catch (error) {
     console.error('Gagal menyalin hasil:', error);
   }

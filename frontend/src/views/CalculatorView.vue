@@ -411,7 +411,7 @@ function resetCalculation() {
 async function copyResult() {
   if (!calculationResult.value) return;
 
-  let resultText = `
+  const resultText = `
 Hasil Kalkulasi Harga Prorate:
 Brand: ${selectedBrand.value?.brand}
 Paket: ${filteredPaketList.value.find(p => p.id === selectedPaket.value)?.nama_paket}
@@ -419,23 +419,45 @@ Periode: ${calculationResult.value.periode_hari} hari
 Harga Dasar: ${formatCurrency(calculationResult.value.harga_dasar_prorate)}
 Pajak: ${formatCurrency(calculationResult.value.pajak)}
 Total: ${formatCurrency(calculationResult.value.total_harga_prorate)}
-`;
-
-  // Add next month info if included
-  if (includeNextMonth.value && calculationResult.value.total_bulan_depan_dengan_ppn !== null) {
-    resultText += `
+`.trim() + (includeNextMonth.value && calculationResult.value.total_bulan_depan_dengan_ppn !== null ? `
 Harga Bulan Depan (Dengan PPN):
 - Harga Dasar: ${formatCurrency(calculationResult.value.harga_bulan_depan || 0)}
 - PPN (${selectedBrand.value?.pajak || 0}%): ${formatCurrency(calculationResult.value.ppn_bulan_depan || 0)}
 - Total Bulan Depan: ${formatCurrency(calculationResult.value.total_bulan_depan_dengan_ppn || 0)}
 Total Keseluruhan: ${formatCurrency(calculationResult.value.total_keseluruhan || 0)}
-`;
-  }
+` : '');
+
+  const copyToClipboardFallback = async (str: string) => {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(str);
+      return true;
+    } else {
+      const textArea = document.createElement("textarea");
+      textArea.value = str;
+      textArea.style.position = "fixed";
+      textArea.style.left = "-999999px";
+      textArea.style.top = "-999999px";
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      try {
+        document.execCommand('copy');
+        textArea.remove();
+        return true;
+      } catch (err) {
+        textArea.remove();
+        return false;
+      }
+    }
+  };
 
   try {
-    await navigator.clipboard.writeText(resultText.trim());
-    // You can add a toast notification here
-    console.log('Hasil berhasil disalin ke clipboard');
+    const success = await copyToClipboardFallback(resultText.trim());
+    if (success) {
+      console.log('Hasil berhasil disalin ke clipboard');
+    } else {
+      throw new Error();
+    }
   } catch (error) {
     console.error('Gagal menyalin hasil:', error);
   }

@@ -622,10 +622,8 @@ async def handle_xendit_callback(
         raise HTTPException(status_code=400, detail="External ID tidak ditemukan di payload")
 
     # Check for duplicate callback
+    # Kita cek dulu, tapi hasilnya kita pakai nanti setelah cari invoice-nya
     is_duplicate = await check_duplicate_callback(db, xendit_id or external_id, external_id, idempotency_key or "")
-    if is_duplicate:
-        logger.info(f"Duplicated callback received and ignored: xendit_id={xendit_id}, external_id={external_id}")
-        return {"message": "Callback already processed"}
 
     brand_prefix = None
     try:
@@ -646,6 +644,7 @@ async def handle_xendit_callback(
             "jakinet",
             "nagrak",
             "artacom",
+            "jelantiknagrak",
         ]:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -671,32 +670,40 @@ async def handle_xendit_callback(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid callback token")
 
     # Log callback processing to prevent duplicates
-    logged = await log_callback_processing(
-        db,
-        xendit_id or external_id,  # Use xendit_id if available, otherwise use external_id
-        external_id,
-        xendit_status,
-        payload,
-        idempotency_key or "",
-    )
-
-    # If logging failed, it means another process already handled this callback
+    # Jika terdeteksi duplikat TAPI invoice belum lunas, kita pakai force_log=True
+    # (Pengecekan lunas ada di bawah, jadi kita log dulu jika bukan duplikat murni)
+    logged = True
+    if not is_duplicate:
+        logged = await log_callback_processing(
+            db,
+            xendit_id or external_id,
+            external_id,
+            xendit_status,
+            payload,
+            idempotency_key or "",
+            force_log=False
+        )
+    
     if not logged:
         logger.info(
-            f"Callback already processed by another concurrent request: xendit_id={xendit_id}, external_id={external_id}"
+            f"Callback already being processed by another concurrent request: xendit_id={xendit_id}, external_id={external_id}"
         )
         return {"message": "Callback already processed"}
 
     # Proceed with normal processing
     # Buat filter conditions untuk query invoice
     # Cari berdasarkan xendit_external_id terlebih dahulu, kemudian fallback ke invoice_number
-    filter_conditions = [InvoiceModel.xendit_external_id == external_id, InvoiceModel.invoice_number == external_id]
+    # Optimized query: Case-insensitive and trimmed search
+    clean_external_id = external_id.strip()
+    filter_conditions = [
+        func.lower(InvoiceModel.xendit_external_id) == clean_external_id.lower(),
+        func.lower(InvoiceModel.invoice_number) == clean_external_id.lower()
+    ]
 
     # Logging tambahan untuk debugging
-    logger.info(f"Searching for invoice with external_id: {external_id}")
+    logger.info(f"Searching for invoice with external_id: {clean_external_id}")
 
-    # Optimasi query dengan menggunakan joinedload untuk relasi yang sering digunakan bersama
-    # Ini akan menghindari N+1 query problem
+    # Optimasi query...
     stmt = (
         select(InvoiceModel)
         .join(InvoiceModel.pelanggan)
@@ -724,24 +731,29 @@ async def handle_xendit_callback(
             logger.info("No similar invoices found")
 
     if not invoice:
-        logger.warning(f"Invoice with external_id {external_id} not found, but callback is valid.")
-        return {"message": "Callback valid, invoice not found."}
+        logger.warning(f"Invoice with external_id {external_id} not found. Returning 404 to trigger retry.")
+        # Kita kembalikan 404 biar Xendit retry. Karena kita belum commit log, retry akan diproses lagi.
+        raise HTTPException(status_code=404, detail="Invoice tidak ditemukan")
+
+    # Sekarang kita cek apakah ini duplikat yang SUDAH lunas
+    if is_duplicate and invoice.status_invoice == "Lunas":
+        logger.info(f"Invoice {invoice.invoice_number} already has status Lunas and log exists, callback ignored.")
+        return {"message": "Invoice already processed"}
+    
+    # Jika terdeteksi duplikat TAPI invoice BELUM lunas, kita log ulang untuk record retry
+    if is_duplicate and invoice.status_invoice != "Lunas":
+        logger.info(f"Duplicate callback detected but invoice {invoice.invoice_number} is NOT Lunas. Retrying processing.")
+        await log_callback_processing(
+            db,
+            xendit_id or external_id,
+            external_id,
+            xendit_status,
+            payload,
+            idempotency_key or "",
+            force_log=True  # Force log because we checked status and it's not lunas
+        )
 
     if invoice.status_invoice == "Lunas":
-        # Still check if this callback was already logged for idempotency tracking
-        # This can happen if the invoice status was updated but the callback logging failed
-        callback_exists = await check_duplicate_callback(db, xendit_id or external_id, external_id, idempotency_key or "")
-        if not callback_exists:
-            # If no callback record exists, create one for tracking purposes
-            await log_callback_processing(
-                db,
-                xendit_id or external_id,  # Use xendit_id if available, otherwise use external_id
-                external_id,
-                xendit_status,
-                payload,
-                idempotency_key or "",
-            )
-
         logger.info(f"Invoice {invoice.invoice_number} already has status Lunas, callback ignored.")
         return {"message": "Invoice already processed"}
 
@@ -1019,8 +1031,9 @@ async def generate_manual_invoice(invoice_data: InvoiceGenerate, db: AsyncSessio
     # --- MODIFICATION FOR INVOICE NUMBER ---
     # 1. Sanitize customer name and address
     import re
+    from ..utils.invoice_utils import generate_alamat_singkat
     nama_pelanggan_singkat = re.sub(r'[^a-zA-Z0-9]', '', pelanggan.nama).upper()
-    alamat_singkat = re.sub(r'[^a-zA-Z0-9]', '', pelanggan.alamat or '').upper()[:10]  # Take only first 10 chars
+    alamat_singkat = generate_alamat_singkat(pelanggan.alamat, pelanggan.blok, pelanggan.unit)
     brand_singkat = re.sub(r'[^a-zA-Z0-9]', '', brand.brand or '').upper()
     # Convert SQLAlchemy Date to Python date for datetime.combine
     from datetime import date, datetime, timedelta

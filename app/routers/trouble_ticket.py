@@ -49,6 +49,7 @@ from ..schemas.trouble_ticket import (
     TicketPriorityEnum,
     TicketCategoryEnum,
 )
+from ..services.whatsapp_service import send_whatsapp_message, get_technician_phone
 
 router = APIRouter(
     prefix="/trouble-tickets",
@@ -286,6 +287,32 @@ async def create_trouble_ticket(
             ["NOC", "CS", "Admin"]
         )
 
+        # 📱 KIRIM WHATSAPP KE TEKNISI (Jika ada yang ditugaskan)
+        if ticket.assigned_to:
+            try:
+                # Ambil nomor WA teknisi dari system_settings
+                tech_phone = await get_technician_phone(db, ticket.assigned_to)
+                if tech_phone:
+                    # Ambil deskripsi atau gunakan default jika kosong
+                    tech_description = ticket.description if ticket.description and ticket.description.strip() else "Tidak ada deskripsi tambahan."
+                    
+                    wa_message = (
+                        f"🔔 *TIKET GANGGUAN BARU*\n\n"
+                        f"No Tiket: *{ticket_number}*\n"
+                        f"Judul: {ticket.title}\n"
+                        f"Pelanggan: *{pelanggan.nama}*\n"
+                        f"No HP: {pelanggan.no_telp or '-'}\n\n"
+                        f"*Deskripsi:*\n{tech_description}\n\n"
+                        f"Segera cek dashboard untuk detailnya. Semangat!"
+                    )
+                    # Kirim via background task agar tidak menghambat response API
+                    background_tasks.add_task(send_whatsapp_message, tech_phone, wa_message)
+                    logger.info(f"📱 WhatsApp task added for technician ID {ticket.assigned_to} at {tech_phone}")
+                else:
+                    logger.warning(f"⚠️ No WhatsApp number found for technician ID {ticket.assigned_to} in system_settings (Key: TECHNICIAN_PHONE_ID_{ticket.assigned_to})")
+            except Exception as wa_error:
+                logger.error(f"❌ Error preparing WhatsApp notification: {wa_error}")
+
         logger.info(f"✅ Trouble Ticket created: {ticket_number} by {current_user.name}")
 
         # Load relasi lengkap untuk response
@@ -519,9 +546,11 @@ async def update_trouble_ticket(
                 detail=f"Trouble Ticket dengan ID {ticket_id} tidak ditemukan"
             )
 
-        # Track status change untuk history
+        # Track changes for notification
         old_status = ticket.status
+        old_assigned_to = ticket.assigned_to
         status_changed = False
+        assignment_changed = False
 
         # Update data
         update_data = ticket_update.model_dump(exclude_unset=True)
@@ -542,6 +571,8 @@ async def update_trouble_ticket(
 
         # Apply other updates
         for key, value in update_data.items():
+            if key == "assigned_to" and value != old_assigned_to:
+                assignment_changed = True
             setattr(ticket, key, value)
 
         # Update timestamp
@@ -595,6 +626,35 @@ async def update_trouble_ticket(
             )
 
         logger.info(f"✅ Trouble Ticket {ticket_id} updated by {current_user.name}")
+
+        # 📱 KIRIM WHATSAPP KE TEKNISI BARU (Jika ada perubahan penugasan)
+        if assignment_changed and ticket.assigned_to:
+            try:
+                # Ambil nomor WA teknisi dari system_settings
+                tech_phone = await get_technician_phone(db, ticket.assigned_to)
+                if tech_phone:
+                    # Ambil data pelanggan untuk info di WA
+                    from ..models.pelanggan import Pelanggan as PelangganModel
+                    pelanggan_res = await db.execute(select(PelangganModel).where(PelangganModel.id == ticket.pelanggan_id))
+                    pelanggan = pelanggan_res.scalar_one_or_none()
+                    
+                    # Ambil deskripsi atau gunakan default jika kosong
+                    tech_description = ticket.description if ticket.description and ticket.description.strip() else "Tidak ada deskripsi tambahan."
+                    
+                    wa_message = (
+                        f"🛠️ *PENUGASAN TIKET BARU*\n\n"
+                        f"Halo, Anda telah ditugaskan untuk tiket:\n"
+                        f"No Tiket: *{ticket.ticket_number}*\n"
+                        f"Judul: {ticket.title}\n"
+                        f"Pelanggan: *{pelanggan.nama if pelanggan else '-'}*\n"
+                        f"No HP: {pelanggan.no_telp if pelanggan else '-'}\n\n"
+                        f"*Deskripsi:*\n{tech_description}\n\n"
+                        f"Mohon segera diproses. Terima kasih!"
+                    )
+                    background_tasks.add_task(send_whatsapp_message, tech_phone, wa_message)
+                    logger.info(f"📱 Assignment WhatsApp task added for technician ID {ticket.assigned_to}")
+            except Exception as wa_error:
+                logger.error(f"❌ Error sending assignment WA: {wa_error}")
 
         # Load relasi lengkap untuk response
         result = await db.execute(

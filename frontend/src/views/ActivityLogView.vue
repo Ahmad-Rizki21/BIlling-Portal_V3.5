@@ -713,10 +713,36 @@ function getValueTypeColor(type: string): string {
 }
 
 async function copyToClipboard(text: string) {
+  const copyToClipboardFallback = async (str: string) => {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(str);
+      return true;
+    } else {
+      const textArea = document.createElement("textarea");
+      textArea.value = str;
+      textArea.style.position = "fixed";
+      textArea.style.left = "-999999px";
+      textArea.style.top = "-999999px";
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      try {
+        document.execCommand('copy');
+        textArea.remove();
+        return true;
+      } catch (err) {
+        textArea.remove();
+        return false;
+      }
+    }
+  };
+
   try {
-    await navigator.clipboard.writeText(text);
-    // Show toast notification here if you have one
-    console.log('Copied to clipboard!');
+    const success = await copyToClipboardFallback(text);
+    if (success) {
+      // Show toast notification here if you have one
+      console.log('Copied to clipboard!');
+    }
   } catch (err) {
     console.error('Failed to copy:', err);
   }

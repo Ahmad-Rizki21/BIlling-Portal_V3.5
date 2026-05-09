@@ -1482,9 +1482,39 @@ async function copyPaymentLink(link: string | null | undefined) {
     showSnackbar('Tidak ada link pembayaran', 'warning');
     return;
   }
+  
+  // Fallback copy function for non-secure origins
+  const copyToClipboard = async (text: string) => {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } else {
+      const textArea = document.createElement("textarea");
+      textArea.value = text;
+      textArea.style.position = "fixed";
+      textArea.style.left = "-999999px";
+      textArea.style.top = "-999999px";
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      try {
+        document.execCommand('copy');
+        textArea.remove();
+        return true;
+      } catch (err) {
+        textArea.remove();
+        return false;
+      }
+    }
+  };
+
   try {
-    await navigator.clipboard.writeText(link);
-    showSnackbar('Link pembayaran berhasil disalin!', 'success');
+    const success = await copyToClipboard(link);
+    if (success) {
+      showSnackbar('Link pembayaran berhasil disalin!', 'success');
+    } else {
+      throw new Error('Fallback failed');
+    }
   } catch (err) {
     showSnackbar('Gagal menyalin link', 'error');
   }
@@ -1704,7 +1734,7 @@ const debouncedLanggananSearch = debounce(async (query: string) => {
   isSearchingLangganan.value = true;
   try {
     const response = await apiClient.get<any>(
-      `/langganan/?for_invoice_selection=true&limit=20&search=${encodeURIComponent(query)}`
+      `/langganan/?for_invoice_selection=true&limit=100&search=${encodeURIComponent(query)}`
     );
     const data = Array.isArray(response.data) ? response.data : response.data.data;
     

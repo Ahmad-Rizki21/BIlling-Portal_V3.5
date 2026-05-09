@@ -348,7 +348,33 @@
               @click:close="selectedJatuhTempoStart = null; selectedJatuhTempoEnd = null"
             >
               <v-icon start size="14">mdi-calendar-range</v-icon>
-              {{ formatDateForDisplay(selectedJatuhTempoStart) || '...' }} — {{ formatDateForDisplay(selectedJatuhTempoEnd) || '...' }}
+              JT: {{ formatDateForDisplay(selectedJatuhTempoStart) || '...' }} — {{ formatDateForDisplay(selectedJatuhTempoEnd) || '...' }}
+            </v-chip>
+
+            <v-chip
+              v-if="selectedCreatedAtStart || selectedCreatedAtEnd"
+              closable
+              size="small"
+              color="purple"
+              variant="tonal"
+              class="filter-chip"
+              @click:close="selectedCreatedAtStart = null; selectedCreatedAtEnd = null"
+            >
+              <v-icon start size="14">mdi-account-clock</v-icon>
+              Reg: {{ formatDateForDisplay(selectedCreatedAtStart) || '...' }} — {{ formatDateForDisplay(selectedCreatedAtEnd) || '...' }}
+            </v-chip>
+
+            <v-chip
+              v-if="selectedBlok"
+              closable
+              size="small"
+              color="cyan"
+              variant="tonal"
+              class="filter-chip"
+              @click:close="selectedBlok = null"
+            >
+              <v-icon start size="14">mdi-office-building</v-icon>
+              {{ selectedBlok }}
             </v-chip>
 
             <v-chip
@@ -401,6 +427,28 @@
                 class="filter-input"
               ></v-select>
             </div>
+
+            <!-- Filter Blok/Tower (muncul saat alamat = Pulogebang) -->
+            <v-expand-transition>
+              <div v-if="showBlokFilter" class="filter-grid-item">
+                <label class="filter-label">
+                  <v-icon size="16" class="mr-1">mdi-office-building</v-icon>
+                  Blok / Tower
+                </label>
+                <v-select
+                  v-model="selectedBlok"
+                  :items="blokFilterOptions"
+                  item-title="title"
+                  item-value="value"
+                  placeholder="Semua blok"
+                  variant="outlined"
+                  density="compact"
+                  hide-details
+                  clearable
+                  class="filter-input"
+                ></v-select>
+              </div>
+            </v-expand-transition>
 
             <!-- Filter Paket -->
             <div class="filter-grid-item">
@@ -461,7 +509,7 @@
             </div>
 
             <!-- Filter Jatuh Tempo - Date Range -->
-            <div class="filter-grid-item filter-grid-item-wide">
+            <div class="filter-grid-item">
               <label class="filter-label">
                 <v-icon size="16" class="mr-1">mdi-calendar-range</v-icon>
                 Range Jatuh Tempo
@@ -486,8 +534,6 @@
                   <v-date-picker v-model="selectedJatuhTempoStart" @update:model-value="menuJatuhTempoStart = false" color="primary"></v-date-picker>
                 </v-menu>
                 
-                <v-icon size="18" class="text-medium-emphasis flex-shrink-0">mdi-arrow-right</v-icon>
-                
                 <v-menu v-model="menuJatuhTempoEnd" :close-on-content-click="false">
                   <template v-slot:activator="{ props }">
                     <v-text-field
@@ -505,6 +551,53 @@
                     ></v-text-field>
                   </template>
                   <v-date-picker v-model="selectedJatuhTempoEnd" @update:model-value="menuJatuhTempoEnd = false" color="primary"></v-date-picker>
+                </v-menu>
+              </div>
+            </div>
+
+            <!-- Filter Tanggal Registrasi - Date Range -->
+            <div class="filter-grid-item">
+              <label class="filter-label">
+                <v-icon size="16" class="mr-1">mdi-account-plus</v-icon>
+                Range Tanggal Registrasi
+              </label>
+              <div class="d-flex gap-2 align-center">
+                <v-menu v-model="menuCreatedAtStart" :close-on-content-click="false">
+                  <template v-slot:activator="{ props }">
+                    <v-text-field
+                      :model-value="formatDateForDisplay(selectedCreatedAtStart)"
+                      placeholder="Dari"
+                      prepend-inner-icon="mdi-calendar-start"
+                      readonly
+                      v-bind="props"
+                      variant="outlined"
+                      density="compact"
+                      hide-details
+                      clearable
+                      class="filter-input flex-grow-1"
+                      @click:clear="selectedCreatedAtStart = null"
+                    ></v-text-field>
+                  </template>
+                  <v-date-picker v-model="selectedCreatedAtStart" @update:model-value="menuCreatedAtStart = false" color="purple"></v-date-picker>
+                </v-menu>
+                
+                <v-menu v-model="menuCreatedAtEnd" :close-on-content-click="false">
+                  <template v-slot:activator="{ props }">
+                    <v-text-field
+                      :model-value="formatDateForDisplay(selectedCreatedAtEnd)"
+                      placeholder="Sampai"
+                      prepend-inner-icon="mdi-calendar-end"
+                      readonly
+                      v-bind="props"
+                      variant="outlined"
+                      density="compact"
+                      hide-details
+                      clearable
+                      class="filter-input flex-grow-1"
+                      @click:clear="selectedCreatedAtEnd = null"
+                    ></v-text-field>
+                  </template>
+                  <v-date-picker v-model="selectedCreatedAtEnd" @update:model-value="menuCreatedAtEnd = false" color="purple"></v-date-picker>
                 </v-menu>
               </div>
             </div>
@@ -1057,7 +1150,7 @@
                   <div class="font-weight-medium d-flex align-center">
                     <span class="flex-grow-1">{{ item.raw.nama }}</span>
                     <v-chip
-                      v-if="editedIndex === -1 || isPelangganBaru(item.raw.id)"
+                      v-if="isPelangganBaru(item.raw.id)"
                       size="x-small"
                       color="success"
                       variant="elevated"
@@ -1982,21 +2075,49 @@ const selectedAlamat = ref('');
 const selectedPaket = ref<number | null>(null);
 const selectedStatus = ref<string | null>(null);
 const selectedExportBrand = ref(''); // Brand filter khusus untuk export
+const selectedBlok = ref<string | null>(null); // Filter Blok/Tower (khusus Rusun Pulogebang)
 const selectedJatuhTempoStart = ref<Date | null>(null);
 const selectedJatuhTempoEnd = ref<Date | null>(null);
+const selectedCreatedAtStart = ref<Date | null>(null);
+const selectedCreatedAtEnd = ref<Date | null>(null);
 const menuJatuhTempoStart = ref(false);
 const menuJatuhTempoEnd = ref(false);
+const menuCreatedAtStart = ref(false);
+const menuCreatedAtEnd = ref(false);
 
 const showAdvancedFilters = ref(false);
 const activeFilterCount = computed(() => {
   let count = 0;
   if (selectedAlamat.value) count++;
+  if (selectedBlok.value) count++;
   if (selectedPaket.value) count++;
   if (selectedStatus.value) count++;
   if (selectedJatuhTempoStart.value) count++;
   if (selectedJatuhTempoEnd.value) count++;
+  if (selectedCreatedAtStart.value) count++;
+  if (selectedCreatedAtEnd.value) count++;
   if (selectedExportBrand.value) count++;
   return count;
+});
+
+// Opsi Blok/Tower untuk filter (khusus Rusun Pulogebang)
+const blokFilterOptions = computed(() => {
+  return [
+    { title: 'Tower', value: 'Tower' },
+    { title: 'A', value: 'A' },
+    { title: 'B', value: 'B' },
+    { title: 'C', value: 'C' },
+    { title: 'D', value: 'D' },
+    { title: 'E', value: 'E' },
+    { title: 'F', value: 'F' },
+    { title: 'G', value: 'G' },
+    { title: 'H', value: 'H' },
+  ];
+});
+
+// Tampilkan filter Blok hanya saat alamat mengandung 'Pulogebang'
+const showBlokFilter = computed(() => {
+  return selectedAlamat.value && selectedAlamat.value.toLowerCase().includes('pulogebang');
 });
 
 function toISODateString(date: Date): string {
@@ -2427,10 +2548,13 @@ async function fetchLangganan(isLoadMore = false, explicitPage: number | null = 
     const params = new URLSearchParams();
     if (searchQuery.value) params.append('search', searchQuery.value);
     if (selectedAlamat.value && selectedAlamat.value.trim() !== '') params.append('alamat', selectedAlamat.value.trim());
+    if (selectedBlok.value) params.append('blok', selectedBlok.value);
     if (selectedPaket.value) params.append('paket_layanan_id', String(selectedPaket.value));
     if (selectedStatus.value) params.append('status', selectedStatus.value);
-      if (selectedJatuhTempoStart.value) params.append('jatuh_tempo_start', toISODateString(selectedJatuhTempoStart.value));
+    if (selectedJatuhTempoStart.value) params.append('jatuh_tempo_start', toISODateString(selectedJatuhTempoStart.value));
     if (selectedJatuhTempoEnd.value) params.append('jatuh_tempo_end', toISODateString(selectedJatuhTempoEnd.value));
+    if (selectedCreatedAtStart.value) params.append('created_at_start', toISODateString(selectedCreatedAtStart.value));
+    if (selectedCreatedAtEnd.value) params.append('created_at_end', toISODateString(selectedCreatedAtEnd.value));
 
     // --- LOGIKA KUNCI: Tambahkan paginasi ---
     // Determine page number based on the context
@@ -2531,8 +2655,15 @@ const applyFilters = debounce(() => {
 }, 500); // Tunda 500ms
 
 // Perhatikan perubahan pada filter dan panggil fungsi applyFilters
-watch([searchQuery, selectedAlamat, selectedPaket, selectedStatus, selectedJatuhTempoStart, selectedJatuhTempoEnd], () => {
+watch([searchQuery, selectedAlamat, selectedBlok, selectedPaket, selectedStatus, selectedJatuhTempoStart, selectedJatuhTempoEnd, selectedCreatedAtStart, selectedCreatedAtEnd], () => {
   applyFilters();
+});
+
+// Auto-reset blok filter ketika alamat berubah dan bukan Pulogebang
+watch(selectedAlamat, (newAlamat) => {
+  if (!newAlamat || !newAlamat.toLowerCase().includes('pulogebang')) {
+    selectedBlok.value = null;
+  }
 });
 
 
@@ -2650,11 +2781,14 @@ const exportBrandOptions = computed(() => {
 function resetFilters() {
   searchQuery.value = '';
   selectedAlamat.value = '';
+  selectedBlok.value = null;
   selectedPaket.value = null;
   selectedStatus.value = null;
   selectedExportBrand.value = '';
   selectedJatuhTempoStart.value = null;
   selectedJatuhTempoEnd.value = null;
+  selectedCreatedAtStart.value = null;
+  selectedCreatedAtEnd.value = null;
 }
 // ============================================
 
@@ -2669,8 +2803,8 @@ async function fetchPelangganForSelect() {
     if (response.data && Array.isArray(response.data.data)) {
       pelangganSelectList.value = response.data.data;
 
-      // Background: Update cache untuk semua pelanggan
-      updatePelangganBaruCache();
+      // Update cache untuk semua pelanggan (await agar cache siap sebelum render)
+      await updatePelangganBaruCache();
     } else {
       console.error("Struktur data pelanggan dari API tidak sesuai. Properti 'data' tidak ditemukan atau bukan array:", response.data);
       pelangganSelectList.value = [];
@@ -2683,13 +2817,13 @@ async function fetchPelangganForSelect() {
 
 // Fungsi untuk mengupdate cache pelanggan baru secara asynchronous
 async function updatePelangganBaruCache() {
-  // Clear cache lama
-  pelangganBaruCache.clear();
-
   try {
     // Load semua langganan tanpa pagination untuk checking yang akurat
     const response = await apiClient.get('/langganan/?limit=10000');
     const allLangganan = response.data.data || response.data;
+
+    // Buat Map baru (reactive update triggernya dari sini)
+    const newCache = new Map<number, boolean>();
 
     if (Array.isArray(allLangganan)) {
       // Buat Set dari semua pelanggan_id yang sudah ada langganan
@@ -2698,24 +2832,29 @@ async function updatePelangganBaruCache() {
       // Update cache untuk semua pelanggan
       pelangganSelectList.value.forEach(pelanggan => {
         const isNew = !existingPelangganIds.has(pelanggan.id);
-        pelangganBaruCache.set(pelanggan.id, isNew);
+        newCache.set(pelanggan.id, isNew);
       });
     } else {
       // Fallback: gunakan data dari current page
       const existingPelangganIds = new Set(langgananList.value.map(l => l.pelanggan_id));
       pelangganSelectList.value.forEach(pelanggan => {
         const isNew = !existingPelangganIds.has(pelanggan.id);
-        pelangganBaruCache.set(pelanggan.id, isNew);
+        newCache.set(pelanggan.id, isNew);
       });
     }
+
+    // Assign new Map ke reactive ref → trigger Vue reactivity
+    pelangganBaruCache.value = newCache;
   } catch (error) {
     console.warn('Gagal mengupdate cache pelanggan baru, menggunakan fallback:', error);
     // Fallback: gunakan data dari current page
+    const newCache = new Map<number, boolean>();
     const existingPelangganIds = new Set(langgananList.value.map(l => l.pelanggan_id));
     pelangganSelectList.value.forEach(pelanggan => {
       const isNew = !existingPelangganIds.has(pelanggan.id);
-      pelangganBaruCache.set(pelanggan.id, isNew);
+      newCache.set(pelanggan.id, isNew);
     });
+    pelangganBaruCache.value = newCache;
   }
 }
 
@@ -2732,9 +2871,15 @@ async function fetchPaketLayananForSelect() {
   }
 }
 
-function openDialog(item?: Langganan) {
+async function openDialog(item?: Langganan) {
   editedIndex.value = item ? langgananList.value.findIndex(l => l.id === item.id) : -1;
   editedItem.value = item ? { ...item } : { ...defaultItem };
+
+  // Saat mode Tambah Baru, refresh cache agar dropdown pelanggan selalu akurat
+  if (!item) {
+    await updatePelangganBaruCache();
+  }
+
   dialog.value = true;
 }
 
@@ -2858,26 +3003,22 @@ async function confirmDelete() {
 //   );
 // }
 
-// Cache untuk hasil pengecekan pelanggan
-const pelangganBaruCache = new Map<number, boolean>();
+// Cache untuk hasil pengecekan pelanggan (REACTIVE agar Vue bisa detect perubahan)
+const pelangganBaruCache = ref<Map<number, boolean>>(new Map());
 
 // Fungsi: Cek apakah pelanggan benar-benar baru (belum pernah ada invoice/langganan sama sekali)
 function isPelangganBaru(pelangganId: number): boolean {
   if (!pelangganId) return false;
 
-  // Cek cache dulu
-  if (pelangganBaruCache.has(pelangganId)) {
-    return pelangganBaruCache.get(pelangganId)!;
+  // Cek reactive cache (diisi oleh updatePelangganBaruCache yang fetch SEMUA langganan)
+  if (pelangganBaruCache.value.has(pelangganId)) {
+    return pelangganBaruCache.value.get(pelangganId)!;
   }
 
-  // Cek di langgananList yang sudah dimuat (current page)
-  const hasLanggananSebelumnya = langgananList.value.some(l => l.pelanggan_id === pelangganId);
-
-  // Cache hasilnya
-  pelangganBaruCache.set(pelangganId, !hasLanggananSebelumnya);
-
-  // Jika belum pernah ada langganan sama sekali, ini adalah pelanggan benar-benar baru
-  return !hasLanggananSebelumnya;
+  // Fallback: Jika cache belum siap, cek di langgananList yang sudah dimuat (current page)
+  // Default: anggap BUKAN pelanggan baru sampai cache terkonfirmasi
+  // Ini mencegah false positive yang menampilkan pelanggan lama sebagai "USER BARU"
+  return false;
 }
 
 
@@ -3075,6 +3216,9 @@ async function exportLangganan(format = 'csv') {
     if (selectedAlamat.value && selectedAlamat.value.trim() !== '') {
       params.append('alamat', selectedAlamat.value.trim());
     }
+    if (selectedBlok.value) {
+      params.append('blok', selectedBlok.value);
+    }
     if (selectedPaket.value) {
       params.append('paket_layanan_name', String(selectedPaket.value));
     }
@@ -3089,6 +3233,12 @@ async function exportLangganan(format = 'csv') {
     }
     if (selectedJatuhTempoEnd.value) {
       params.append('jatuh_tempo_end', toISODateString(selectedJatuhTempoEnd.value));
+    }
+    if (selectedCreatedAtStart.value) {
+      params.append('created_at_start', toISODateString(selectedCreatedAtStart.value));
+    }
+    if (selectedCreatedAtEnd.value) {
+      params.append('created_at_end', toISODateString(selectedCreatedAtEnd.value));
     }
     // Tambahkan parameter untuk format export
     params.append('format', format);
@@ -3139,6 +3289,12 @@ async function exportMultiSheet() {
     }
     if (selectedJatuhTempoEnd.value) {
       params.append('jatuh_tempo_end', toISODateString(selectedJatuhTempoEnd.value));
+    }
+    if (selectedCreatedAtStart.value) {
+      params.append('created_at_start', toISODateString(selectedCreatedAtStart.value));
+    }
+    if (selectedCreatedAtEnd.value) {
+      params.append('created_at_end', toISODateString(selectedCreatedAtEnd.value));
     }
 
     // Default limit 5000, max 10000

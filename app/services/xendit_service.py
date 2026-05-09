@@ -234,15 +234,20 @@ async def create_xendit_invoice(
 
     # Gunakan format yang SAMA dengan invoice_number agar konsisten
     import re
+    from ..utils.invoice_utils import generate_alamat_singkat
     nama_user = re.sub(r'[^a-zA-Z0-9]', '', pelanggan.nama).upper()
-    lokasi_singkat = re.sub(r'[^a-zA-Z0-9]', '', pelanggan.alamat or '').upper()[:10]
+    lokasi_singkat = generate_alamat_singkat(pelanggan.alamat, pelanggan.blok, pelanggan.unit)
 
     # Format tanggal yang konsisten dengan invoice_number
     bulan_tahun = invoice.tgl_jatuh_tempo.strftime("%B-%Y").upper()  # type: ignore
 
     # External ID menggunakan format yang sama dengan invoice_number untuk konsistensi
     # Ini akan menghasilkan ID yang konsisten antara Portal JAKINET dan Dashboard Xendit
-    payload["external_id"] = f"{brand_prefix}/ftth/{nama_user}/{bulan_tahun}/{lokasi_singkat}/{invoice.id}"
+    if invoice.invoice_number:
+        payload["external_id"] = invoice.invoice_number
+    else:
+        # Fallback jika invoice_number kosong (data lama)
+        payload["external_id"] = f"{brand_prefix}/ftth/{nama_user}/{bulan_tahun}/{lokasi_singkat}/{invoice.id}"
 
     logger.info(f"Payload yang dikirim ke Xendit: {json.dumps(payload, indent=2)}")
 

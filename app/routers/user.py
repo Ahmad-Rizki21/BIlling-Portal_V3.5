@@ -309,3 +309,47 @@ async def reset_password(email: str, new_password: str, token: str, db: AsyncSes
     await db.commit()
 
     return {"message": "Password berhasil diatur ulang. Silakan login dengan password baru."}
+
+
+@router.patch("/{user_id}/phone")
+async def update_user_phone(
+    user_id: int,
+    phone: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user)
+):
+    """
+    Update nomor telepon teknisi tanpa migrasi database.
+    Nomor disimpan di tabel system_settings.
+    """
+    from ..models.system_setting import SystemSetting
+    
+    # 1. Pastikan user ada
+    db_user = await db.get(UserModel, user_id)
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User tidak ditemukan")
+        
+    setting_key = f"TECHNICIAN_PHONE_ID_{user_id}"
+    
+    # 2. Cari atau buat setting baru
+    stmt = select(SystemSetting).where(SystemSetting.setting_key == setting_key)
+    result = await db.execute(stmt)
+    db_setting = result.scalar_one_or_none()
+    
+    if db_setting:
+        db_setting.setting_value = phone
+    else:
+        db_setting = SystemSetting(setting_key=setting_key, setting_value=phone)
+        db.add(db_setting)
+        
+    await db.commit()
+    
+    return {
+        "status": "success",
+        "message": f"Berhasil mengatur nomor WhatsApp untuk {db_user.name}",
+        "data": {
+            "user_id": user_id,
+            "name": db_user.name,
+            "phone": phone
+        }
+    }

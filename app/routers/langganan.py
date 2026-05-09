@@ -11,7 +11,7 @@ from dateutil.relativedelta import relativedelta
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ValidationError, Field
-from sqlalchemy import func, or_
+from sqlalchemy import func, or_, case
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import joinedload
@@ -243,10 +243,13 @@ async def create_langganan(
 async def get_all_langganan(
     search: Optional[str] = None,
     alamat: Optional[str] = None,
+    blok: Optional[str] = None,
     paket_layanan_name: Optional[str] = None,
     status: Optional[str] = None,
     jatuh_tempo_start: Optional[str] = None,
     jatuh_tempo_end: Optional[str] = None,
+    created_at_start: Optional[str] = None,
+    created_at_end: Optional[str] = None,
     for_invoice_selection: bool = False,
     skip: int = 0,
     limit: Optional[int] = 15,
@@ -287,6 +290,10 @@ async def get_all_langganan(
         filter_condition = PelangganModel.alamat.ilike(f"%{alamat}%")
         base_query = base_query.where(filter_condition)
         count_query = count_query.where(filter_condition)
+    if blok:
+        filter_condition = PelangganModel.blok.ilike(f"%{blok}%")
+        base_query = base_query.where(filter_condition)
+        count_query = count_query.where(filter_condition)
     if paket_layanan_name:
         join_condition = base_query.join(PaketLayananModel).where(PaketLayananModel.nama_paket == paket_layanan_name)
         base_query = join_condition
@@ -319,6 +326,26 @@ async def get_all_langganan(
             # Skip filter jika format tanggal tidak valid
             pass
 
+    # Filter berdasarkan tanggal registrasi (created_at)
+    if created_at_start:
+        try:
+            start_date = datetime.strptime(created_at_start, "%Y-%m-%d")
+            filter_condition = LanggananModel.created_at >= start_date
+            base_query = base_query.where(filter_condition)
+            count_query = count_query.where(filter_condition)
+        except ValueError:
+            pass
+
+    if created_at_end:
+        try:
+            # Set to end of day
+            end_date = datetime.strptime(created_at_end, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
+            filter_condition = LanggananModel.created_at <= end_date
+            base_query = base_query.where(filter_condition)
+            count_query = count_query.where(filter_condition)
+        except ValueError:
+            pass
+
     # --- OPTIMASI PERFORMANCE: Batasi limit jika terlalu besar (maksimal 5000) ---
     if limit is not None:
         limit = min(limit, 5000)
@@ -330,7 +357,18 @@ async def get_all_langganan(
     total_count = total_count_result.scalar_one()
 
     # Apply ordering and pagination to the main query
-    data_query = base_query.order_by(LanggananModel.id.desc())
+    if search:
+        search_lower = search.lower().strip()
+        data_query = base_query.order_by(
+            case(
+                (func.trim(func.lower(PelangganModel.nama)) == search_lower, 0),
+                (func.lower(PelangganModel.nama).like(f"{search_lower}%"), 1),
+                else_=2
+            ),
+            LanggananModel.id.desc()
+        )
+    else:
+        data_query = base_query.order_by(LanggananModel.id.desc())
     if limit is not None:
         data_query = data_query.offset(skip).limit(limit)
 
@@ -347,12 +385,28 @@ async def get_all_langganan(
         invoice_counts_result = await db.execute(invoice_counts_stmt)
         invoice_counts_map = {pid: count for pid, count in invoice_counts_result}
 
+        # Cek juga di invoices_archive (pelanggan lama yang invoice-nya sudah diarsipkan)
+        from sqlalchemy import text as sa_text
+        archive_counts_result = await db.execute(
+            sa_text("SELECT pelanggan_id, COUNT(*) as cnt FROM invoices_archive WHERE pelanggan_id IN :pids GROUP BY pelanggan_id"),
+            {"pids": tuple(pelanggan_ids) if len(pelanggan_ids) > 1 else (tuple(pelanggan_ids) + (0,))}
+        )
+        archive_counts_map = {row[0]: row[1] for row in archive_counts_result}
+
         for langganan in langganan_list:
             pelanggan = langganan.pelanggan
             is_new_user = False
 
-            if pelanggan and len(pelanggan.langganan) == 1:
-                if invoice_counts_map.get(pelanggan.id, 0) == 0:
+            # New User HANYA jika:
+            # 1. Status langganan = Aktif (bukan Suspended/Berhenti)
+            # 2. Pelanggan hanya punya 1 langganan
+            # 3. Tidak punya invoice di tabel invoices
+            # 4. Tidak punya invoice di tabel invoices_archive (bukan pelanggan lama)
+            if (pelanggan 
+                and langganan.status == "Aktif"
+                and len(pelanggan.langganan) == 1
+                and invoice_counts_map.get(pelanggan.id, 0) == 0
+                and archive_counts_map.get(pelanggan.id, 0) == 0):
                     is_new_user = True
 
             langganan.is_new_user = is_new_user
@@ -423,11 +477,14 @@ async def get_all_langganan(
 async def export_langganan(
     search: Optional[str] = None,
     alamat: Optional[str] = None,
+    blok: Optional[str] = None,
     paket_layanan_name: Optional[str] = None,
     status: Optional[str] = None,
     brand: Optional[str] = None,
     jatuh_tempo_start: Optional[str] = None,
     jatuh_tempo_end: Optional[str] = None,
+    created_at_start: Optional[str] = None,
+    created_at_end: Optional[str] = None,
     format: str = Query("csv", description="Export format: csv atau excel"),
     db: AsyncSession = Depends(get_db),
     current_user: UserModel = Depends(get_current_active_user)
@@ -450,6 +507,8 @@ async def export_langganan(
         query = query.where(PelangganModel.nama.ilike(f"%{search}%"))
     if alamat:
         query = query.where(PelangganModel.alamat.ilike(f"%{alamat}%"))
+    if blok:
+        query = query.where(PelangganModel.blok.ilike(f"%{blok}%"))
     if paket_layanan_name:
         query = query.join(PaketLayananModel).where(PaketLayananModel.nama_paket == paket_layanan_name)
     if status:
@@ -477,6 +536,21 @@ async def export_langganan(
             # Skip filter jika format tanggal tidak valid
             pass
 
+    # Filter berdasarkan tanggal registrasi untuk export
+    if created_at_start:
+        try:
+            start_date = datetime.strptime(created_at_start, "%Y-%m-%d")
+            query = query.where(LanggananModel.created_at >= start_date)
+        except ValueError:
+            pass
+
+    if created_at_end:
+        try:
+            end_date = datetime.strptime(created_at_end, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
+            query = query.where(LanggananModel.created_at <= end_date)
+        except ValueError:
+            pass
+
     query = query.order_by(LanggananModel.id.desc())
 
     result = await db.execute(query)
@@ -494,6 +568,7 @@ async def export_langganan(
             "pelanggan_email": (langganan.pelanggan.email if langganan.pelanggan else "N/A"),
             "pelanggan_no_telp": (format_phone_number(langganan.pelanggan.no_telp) if langganan.pelanggan and langganan.pelanggan.no_telp else "N/A"),
             "pelanggan_alamat": (langganan.pelanggan.alamat if langganan.pelanggan else "N/A"),
+            "pelanggan_blok": (langganan.pelanggan.blok if langganan.pelanggan else "N/A"),
             "paket_nama": (langganan.paket_layanan.nama_paket if langganan.paket_layanan else "N/A"),
             "paket_harga": (langganan.paket_layanan.harga if langganan.paket_layanan else 0),
             "status_langganan": langganan.status,
@@ -524,6 +599,8 @@ async def get_new_user_langganans(
 
     # Strategi: LEFT JOIN langganan -> pelanggan -> invoice, lalu filter invoice.id IS NULL
     # Ini lebih akurat daripada NOT IN (yang bisa bermasalah dengan NULL values)
+    # FIX: New User HANYA untuk pelanggan dengan status Aktif (bukan Suspended)
+    # Suspended = pelanggan lama yang belum bayar, BUKAN pelanggan baru
     query = (
         select(LanggananModel)
         .join(LanggananModel.pelanggan)
@@ -535,13 +612,26 @@ async def get_new_user_langganans(
             ),
             joinedload(LanggananModel.paket_layanan),
         )
-        .where(LanggananModel.status.in_(["Aktif", "Suspended"]))
+        .where(LanggananModel.status == "Aktif")  # FIX: Hanya Aktif, bukan Suspended
         .where(InvoiceModel.id == None)  # Hanya pelanggan yang TIDAK punya invoice sama sekali
         .order_by(LanggananModel.id.desc())
     )
 
     result = await db.execute(query)
     langganan_list = result.unique().scalars().all()
+
+    # Filter tambahan: Exclude pelanggan lama yang punya invoice di archive
+    # (pelanggan yang di-reactivate setelah berhenti sebelumnya)
+    from sqlalchemy import text as sa_text
+    if langganan_list:
+        pelanggan_ids = {l.pelanggan_id for l in langganan_list}
+        archive_check = await db.execute(
+            sa_text("SELECT pelanggan_id FROM invoices_archive WHERE pelanggan_id IN :pids GROUP BY pelanggan_id"),
+            {"pids": tuple(pelanggan_ids) if len(pelanggan_ids) > 1 else (tuple(pelanggan_ids) + (0,))}
+        )
+        archived_pelanggan_ids = {row[0] for row in archive_check}
+        # Hanya ambil pelanggan yang BENAR-BENAR baru (tidak ada di archive)
+        langganan_list = [l for l in langganan_list if l.pelanggan_id not in archived_pelanggan_ids]
 
     # Tandai semua sebagai new user
     for langganan in langganan_list:
@@ -1695,6 +1785,11 @@ async def sync_suspended_to_mikrotik(
             except Exception as e:
                 error_msg = str(e)
                 logger.error(f"❌ Sync FAILED: Langganan ID {langganan.id}, Pelanggan: {langganan.pelanggan.nama}, Error: {error_msg}")
+                
+                # Tandai untuk retry otomatis jika gagal
+                data_teknis.mikrotik_sync_pending = True
+                db.add(data_teknis)
+                
                 failed_details.append({
                     "langganan_id": langganan.id,
                     "pelanggan_nama": langganan.pelanggan.nama,

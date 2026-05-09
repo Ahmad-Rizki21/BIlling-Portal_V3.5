@@ -44,14 +44,21 @@ async def check_duplicate_callback(db: AsyncSession, xendit_id: str, external_id
 
 
 async def log_callback_processing(
-    db: AsyncSession, xendit_id: str, external_id: str, status: str, callback_data: dict = {}, idempotency_key: str = ""
+    db: AsyncSession,
+    xendit_id: str,
+    external_id: str,
+    status: str,
+    callback_data: dict = {},
+    idempotency_key: str = "",
+    force_log: bool = False,
 ) -> bool:
     """
     Log the callback processing to prevent duplicates.
     Returns True if successfully logged, False if already exists (duplicate).
+    Set force_log=True to skip duplicate check and always log (useful for retries).
     """
-    # First check for duplicates
-    if await check_duplicate_callback(db, xendit_id, external_id, idempotency_key):
+    # First check for duplicates unless forced
+    if not force_log and await check_duplicate_callback(db, xendit_id, external_id, idempotency_key):
         return False
 
     try:
@@ -71,19 +78,19 @@ async def log_callback_processing(
             callback_data=callback_data_str,
         )
         db.add(callback_log)
-        await db.commit()
+        # REMOVED: db.commit() 
+        # Biarkan caller yang memutus commit untuk atomisitas dengan update status invoice
         logger.info(
-            f"Callback logged successfully: xendit_id={xendit_id}, external_id={external_id}, idempotency_key={idempotency_key}"
+            f"Callback added to session: xendit_id={xendit_id}, external_id={external_id}, idempotency_key={idempotency_key}"
         )
         return True
     except IntegrityError:
         # If there's an integrity error, it means another process created the same record
-        await db.rollback()
-        logger.info(f"Callback already processed by another process: xendit_id={xendit_id}, external_id={external_id}")
+        # No need to rollback here if we want to preserve other changes, but usually okay
+        logger.info(f"Callback already processed (IntegrityError): xendit_id={xendit_id}, external_id={external_id}")
         return False
     except Exception as e:
-        await db.rollback()
-        logger.error(f"Error logging callback: {str(e)}")
+        logger.error(f"Error adding callback log to session: {str(e)}")
         raise
 
 

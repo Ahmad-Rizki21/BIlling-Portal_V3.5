@@ -16,7 +16,7 @@ from datetime import date, datetime, timedelta
 from sqlalchemy import Date as SQLDate
 
 from dateutil.relativedelta import relativedelta
-from sqlalchemy import update
+from sqlalchemy import and_, or_, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.ext.asyncio import async_sessionmaker
 from sqlalchemy.engine import Result
@@ -45,6 +45,7 @@ logger = logging.getLogger("app.jobs")
 
 
 import re
+from .utils.invoice_utils import generate_alamat_singkat
 
 # ... (rest of the imports)
 
@@ -109,7 +110,7 @@ async def generate_single_invoice(db: AsyncSession, langganan: LanggananModel) -
         # 1. Sanitize and prepare customer name and address
         import calendar
         nama_pelanggan_singkat = re.sub(r'[^a-zA-Z0-9]', '', pelanggan.nama).upper()
-        alamat_singkat = re.sub(r'[^a-zA-Z0-9]', '', pelanggan.alamat or '').upper()
+        alamat_singkat = generate_alamat_singkat(pelanggan.alamat, pelanggan.blok, pelanggan.unit)
         brand_singkat = re.sub(r'[^a-zA-Z0-9]', '', brand.brand or '').upper()
 
         # 2. Format untuk bulan-tahun BERDASARKAN JATUH TEMPO
@@ -573,6 +574,54 @@ async def job_suspend_services() -> None:
             if is_retroactive_day:
                 logger.info(f"🔍 Retroactive mode: mencari pelanggan yang belum disuspend dari tanggal 5")
 
+            # FIX BUG: Exclude pelanggan yang SUDAH BAYAR (punya invoice Lunas) untuk periode yang sama.
+            #
+            # BUG LAMA: end_of_prev_month (misal 30 April) dalam filter Lunas juga mencocokkan
+            # invoice Prorate bulan SEBELUMNYA (April Prorate dgn tgl_jatuh_tempo=30 April).
+            # Akibatnya, user yang punya invoice April Prorate Lunas (tgl_jatuh_tempo=30 April)
+            # SALAH dianggap sudah bayar untuk Mei, padahal invoice Mei-nya (tgl_jatuh_tempo=1 Mei)
+            # masih Belum Dibayar/Kadaluarsa.
+            #
+            # FIX: Untuk end_of_prev_month dan tgl_invoice check, hanya anggap "sudah bayar" jika
+            # user TIDAK punya invoice belum bayar di target_due_date. Jika punya keduanya
+            # (Lunas di end_of_prev_month + unpaid di target_due_date), maka Lunas tersebut
+            # adalah untuk periode SEBELUMNYA, bukan periode ini.
+
+            # Sub-subquery: pelanggan yang punya invoice BELUM BAYAR tepat di target_due_date
+            has_unpaid_at_target = (
+                select(InvoiceModel.pelanggan_id)
+                .where(
+                    InvoiceModel.tgl_jatuh_tempo == target_due_date,
+                    InvoiceModel.status_invoice.in_(["Belum Dibayar", "Expired", "Kadaluarsa"]),
+                )
+                .distinct()
+            )
+
+            paid_pelanggan_subquery = (
+                select(InvoiceModel.pelanggan_id)
+                .where(
+                    InvoiceModel.status_invoice == "Lunas",
+                    or_(
+                        # Case 1: Lunas invoice dgn tgl_jatuh_tempo tepat di target → pasti bayar periode ini
+                        InvoiceModel.tgl_jatuh_tempo == target_due_date,
+                        # Case 2: Lunas invoice dgn tgl_jatuh_tempo = end_of_prev_month (Prorate)
+                        # HANYA anggap "bayar" jika TIDAK punya invoice unpaid di target_due_date
+                        # Jika punya unpaid di target_due_date, berarti Lunas ini untuk periode LAMA
+                        and_(
+                            InvoiceModel.tgl_jatuh_tempo == end_of_prev_month,
+                            InvoiceModel.pelanggan_id.notin_(has_unpaid_at_target),
+                        ),
+                        # Case 3: Lunas invoice yang dibuat di bulan billing saat ini
+                        # Juga hanya jika tidak punya unpaid di target_due_date
+                        and_(
+                            InvoiceModel.tgl_invoice >= target_due_date,
+                            InvoiceModel.pelanggan_id.notin_(has_unpaid_at_target),
+                        ),
+                    ),
+                )
+                .distinct()
+            )
+
             id_stmt = (
                 select(LanggananModel.id)
                 .join(
@@ -583,6 +632,8 @@ async def job_suspend_services() -> None:
                     InvoiceModel.tgl_jatuh_tempo.in_([target_due_date, end_of_prev_month]),
                     LanggananModel.status == "Aktif",
                     InvoiceModel.status_invoice.in_(["Belum Dibayar", "Expired", "Kadaluarsa"]),
+                    # EXCLUDE pelanggan yang sudah punya invoice LUNAS di periode ini
+                    LanggananModel.pelanggan_id.notin_(paid_pelanggan_subquery),
                 )
                 .distinct()
             )
@@ -606,6 +657,62 @@ async def job_suspend_services() -> None:
 
                 for langganan in overdue_batch:
                     suspend_type = "RETROACTIVE" if is_retroactive_day else "SCHEDULED"
+
+                    # SAFETY CHECK: Double-check apakah pelanggan ini benar-benar belum bayar.
+                    # Ini penting untuk menghindari race condition dimana pelanggan bayar
+                    # antara waktu query awal dan waktu eksekusi suspend per-record.
+                    #
+                    # FIX: Cek dulu apakah ada invoice UNPAID di target_due_date.
+                    # Jika ada, maka Lunas di end_of_prev_month bukan untuk periode ini.
+                    has_unpaid_check = (
+                        select(InvoiceModel.id)
+                        .where(
+                            InvoiceModel.pelanggan_id == langganan.pelanggan_id,
+                            InvoiceModel.tgl_jatuh_tempo == target_due_date,
+                            InvoiceModel.status_invoice.in_(["Belum Dibayar", "Expired", "Kadaluarsa"]),
+                        )
+                        .limit(1)
+                    )
+                    user_has_unpaid = (await db.execute(has_unpaid_check)).scalar_one_or_none()
+
+                    # Build paid check query based on whether user has unpaid at target
+                    if user_has_unpaid:
+                        # User punya unpaid di target_due_date
+                        # → Hanya anggap "bayar" jika ada Lunas tepat di target_due_date
+                        # → Lunas di end_of_prev_month adalah untuk periode LAMA, abaikan
+                        paid_check_stmt = (
+                            select(InvoiceModel.id)
+                            .where(
+                                InvoiceModel.pelanggan_id == langganan.pelanggan_id,
+                                InvoiceModel.status_invoice == "Lunas",
+                                InvoiceModel.tgl_jatuh_tempo == target_due_date,
+                            )
+                            .limit(1)
+                        )
+                    else:
+                        # User TIDAK punya unpaid di target_due_date
+                        # → Cek semua kemungkinan Lunas (termasuk Prorate)
+                        paid_check_stmt = (
+                            select(InvoiceModel.id)
+                            .where(
+                                InvoiceModel.pelanggan_id == langganan.pelanggan_id,
+                                InvoiceModel.status_invoice == "Lunas",
+                                or_(
+                                    InvoiceModel.tgl_jatuh_tempo == target_due_date,
+                                    InvoiceModel.tgl_jatuh_tempo == end_of_prev_month,
+                                    InvoiceModel.tgl_invoice >= target_due_date,
+                                ),
+                            )
+                            .limit(1)
+                        )
+                    paid_invoice = (await db.execute(paid_check_stmt)).scalar_one_or_none()
+                    if paid_invoice:
+                        logger.info(
+                            f"✅ SKIP SUSPEND: Pelanggan {langganan.pelanggan.nama} (Langganan ID: {langganan.id}) "
+                            f"sudah memiliki invoice LUNAS untuk periode ini. Tidak perlu di-suspend."
+                        )
+                        continue
+
                     logger.warning(f"⚠️ {suspend_type} SUSPEND: Melakukan suspend layanan untuk Langganan ID: {langganan.id} - Pelanggan: {langganan.pelanggan.nama}")
 
                     data_teknis = langganan.pelanggan.data_teknis
@@ -655,9 +762,13 @@ async def job_suspend_services() -> None:
                         logger.info(f"🔄 [STEP 2/2] Update database untuk Langganan ID: {langganan.id}...")
                         
                         # Update invoice menjadi kadaluarsa
+                        # FIX: Batasi hanya pada invoice yang jatuh tempo di periode ini,
+                        # BUKAN semua invoice milik pelanggan. Sebelumnya query ini terlalu luas
+                        # sehingga bisa menimpa invoice bulan depan yang sudah di-generate.
                         update_invoice_stmt = (
                             update(InvoiceModel)
                             .where(InvoiceModel.pelanggan_id == langganan.pelanggan_id)
+                            .where(InvoiceModel.tgl_jatuh_tempo.in_([target_due_date, end_of_prev_month]))
                             .where(InvoiceModel.status_invoice.in_(["Belum Dibayar", "Expired", "Kadaluarsa"]))
                             .values(status_invoice="Kadaluarsa")
                         )

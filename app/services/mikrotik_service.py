@@ -180,13 +180,11 @@ def update_pppoe_secret(api, old_id_pelanggan: str, data_teknis: DataTeknisModel
 
         if not target_secret:
             logger.warning(
-                f"PPPoE secret untuk nama lama '{old_id_pelanggan}' tidak ditemukan di Mikrotik. Mencoba mencari dengan nama baru '{data_teknis.id_pelanggan}'."
+                f"PPPoE secret untuk '{old_id_pelanggan}' tidak ditemukan di Mikrotik. Melakukan pembuatan baru (upsert)."
             )
-            # Coba cari dengan nama baru sebagai fallback (jika nama tidak diubah)
-            target_secret = ppp_secrets.get(name=data_teknis.id_pelanggan)
-            if not target_secret:
-                logger.error(f"PPPoE secret '{data_teknis.id_pelanggan}' tetap tidak ditemukan. Update dibatalkan.")
-                raise Exception(f"PPPoE secret '{data_teknis.id_pelanggan}' tidak ditemukan di Mikrotik.")
+            # Langsung panggil fungsi create untuk melakukan upsert
+            create_pppoe_secret(api, data_teknis)
+            return
 
         # 2. Ambil ID internal dari secret yang ditemukan
         secret_id = target_secret[0]["id"]
@@ -270,7 +268,7 @@ async def trigger_mikrotik_update(
         # FIX: Return connection ke pool jika ada, mencegah connection leak
         if connection:
             mikrotik_pool.return_connection(connection, mikrotik_server_info.host_ip, int(mikrotik_server_info.port))
-        return
+        raise Exception(f"Gagal koneksi ke Mikrotik Server {mikrotik_server_info.name} ({mikrotik_server_info.host_ip})")
 
     try:
         # Panggil fungsi update yang sudah diperbaiki dengan argumen baru
@@ -372,7 +370,7 @@ async def trigger_mikrotik_create(db: AsyncSession, data_teknis: DataTeknisModel
 
     api, connection = get_api_connection(mikrotik_server_info)
     if not api:
-        return
+        raise Exception(f"Gagal koneksi ke Mikrotik Server {mikrotik_server_info.name} ({mikrotik_server_info.host_ip})")
 
     try:
         create_pppoe_secret(api, data_teknis)

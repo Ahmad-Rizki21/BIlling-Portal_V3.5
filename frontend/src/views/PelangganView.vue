@@ -785,13 +785,15 @@
                           Blok
                           <span class="required-flag text-error">*</span>
                         </label>
-                        <v-text-field 
+                        <v-combobox
                           v-model="editedItem.blok" 
+                          :items="editedItem.alamat === 'Rusun Pulogebang' ? pulogebangBlokOptions : []"
                           :rules="[rules.required]" 
                           variant="outlined"
                           class="elegant-input"
                           density="comfortable"
-                        ></v-text-field>
+                          placeholder="Pilih atau ketik Blok/Tower"
+                        ></v-combobox>
                       </div>
                     </v-col>
                     <v-col cols="12" md="6">
@@ -1302,6 +1304,18 @@ const layananOptions = ref([
   'Internet 30 Mbps',
   'Internet 50 Mbps'
 ]);
+
+const pulogebangBlokOptions = [
+  'Tower',
+  'A',
+  'B',
+  'C',
+  'D',
+  'E',
+  'F',
+  'G',
+  'H'
+];
 
 // --- VALIDATION RULES ---
 const rules = {

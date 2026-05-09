@@ -56,6 +56,7 @@ class PelangganInLangganan(BaseModel):
     id: int = Field(..., gt=0, description="ID pelanggan")
     nama: str = Field(..., min_length=1, max_length=100, description="Nama pelanggan")
     alamat: str = Field(..., min_length=1, max_length=200, description="Alamat pelanggan")
+    blok: Optional[str] = Field(None, max_length=191, description="Blok/Tower pelanggan")
     no_telp: Optional[str] = Field(None, max_length=50, description="Nomor telepon pelanggan")
     id_brand: Optional[str] = Field(None, max_length=50, description="ID Brand pelanggan")
     harga_layanan: Optional[HargaLayananInPelanggan] = None

@@ -182,6 +182,13 @@ class Settings(BaseSettings):
     # KONFIGURASI ALIBABA CLOUD AI
     # ====================================================================
     ALIBABA_CLOUD_API_KEY: str = ""  # Diambil dari .env
+    
+    # ====================================================================
+    # KONFIGURASI WATZAP API
+    # ====================================================================
+    WATZAP_API_KEY: str = ""
+    WATZAP_NUMBER_KEY: str = ""
+    WATZAP_ACCESS_TOKEN: str = ""
 
 
     @property
